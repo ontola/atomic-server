@@ -5,18 +5,16 @@ on:
   workflow_dispatch:
     inputs:
       github_hosted:
-        description: Run full Main and downstream SaaS validation on GitHub-hosted runners
+        description: Use hosted CI for a trekmeester batch (other manual runs always use hosted)
         type: boolean
         default: false
       runner:
-        description: Heavy CI runner (default follows repository configuration)
+        description: Use github-hosted for a trekmeester batch (other manual runs always use hosted)
         type: choice
         default: default
         options: [default, github-hosted]
 
-
-
-# Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
+# Feature-branch pushes do not trigger CI. Trekmeester dispatches full validation
 # on a temporary branch containing the exact PR heads to test together.
 # A newer push supersedes validation of the previous develop commit. Tags run
 # to completion, and per-ref groups isolate manually dispatched PR batches.
@@ -25,21 +23,21 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
-# Heavy CI runs on GitHub-hosted only when explicitly selected, never as a
-# retry after a red test suite.
+# Runner selection happens before execution; a failed suite never automatically
+# switches to the other runner.
 #
 # Flow:
 #   1. Pick runner — hosted control job selects the heavy CI runner
 #   2. Main (Mancave) XOR Main (GitHub) — one path, not failure-failover
 #   3. Main — hosted aggregator for the required status check
 #
-# Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
-# selector and result jobs use hosted runners to avoid queueing a few seconds
-# of control work behind long Mancave builds. If Mancave is offline, heavy CI
-# queues; select github_hosted for one dispatched run, or set the repository-wide
-# CI_RUNNER_OVERRIDE = ["ubuntu-latest"] to explicitly use hosted runners.
-
-
+# Pushes and trekmeester/* batch dispatches default to Mancave for its warm cache.
+# Other manual dispatches always use hosted runners. The branch prefix identifies
+# the coordination lane, not an authenticated person/chat; workers still need an
+# explicit user exception to dispatch, as described in AGENT_WORKFLOW.md.
+# The selector and result jobs use hosted runners. If Mancave is offline,
+# select either hosted input for one trekmeester dispatch.
+# CI_RUNNER_OVERRIDE = ["ubuntu-latest"] remains the repository-wide override.
 # Deployments retain their existing runners.
 #
 # The old variable name, CI_RUNNER, is set to ["ubuntu-latest"] on purpose.
@@ -66,6 +64,7 @@ jobs:
           DISPATCH_RUNNER: ${{ inputs.runner }}
           EVENT_NAME: ${{ github.event_name }}
           HOSTED_INPUT: ${{ github.event.inputs.github_hosted || 'false' }}
+          REF: ${{ github.ref }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -76,10 +75,19 @@ jobs:
             exit 0
           fi
 
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$REF" in
+              refs/heads/trekmeester/?*) ;;
+              *)
+                echo "Manual run outside the trekmeester batch lane — using hosted runners"
+                echo "host=hosted" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          fi
+
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && { [ "$HOSTED_INPUT" = "true" ] || [ "$DISPATCH_RUNNER" = "github-hosted" ]; }; then
-            echo "Explicit dispatch input — forcing GitHub-hosted for this run"
-
-
+            echo "Explicit dispatch input — using hosted runners for Main and downstream"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
           fi

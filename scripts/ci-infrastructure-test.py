@@ -2,6 +2,7 @@
 """Exercise the real routing/gate shell and Docker preflight failure behavior."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -37,29 +38,61 @@ class WorkflowTests(unittest.TestCase):
 
     def test_actual_selection_shell_preserves_defaults_and_trust_boundary(self):
         cases = [
-            ("push", "false", "", "mancave"),
-            ("push", "true", "", "mancave"),
-            ("workflow_dispatch", "", "", "mancave"),
-            ("workflow_dispatch", "false", "", "mancave"),
-            ("workflow_dispatch", "true", "", "hosted"),
-            ("workflow_dispatch", "false", '["ubuntu-latest"]', "hosted"),
-            ("pull_request", "true", '["self-hosted"]', "hosted"),
-            ("pull_request_target", "false", '["self-hosted"]', "hosted"),
+            ("push", "refs/heads/develop", "false", "default", "", "mancave"),
+            ("push", "refs/heads/develop", "true", "github-hosted", "", "mancave"),
+            ("push", "refs/tags/v0.41.0", "false", "default", "", "mancave"),
+            ("push", "refs/tags/v0.41.0", "true", "github-hosted", '["ubuntu-latest"]', "hosted"),
+            ("pull_request", "refs/heads/trekmeester/batch", "false", "self-hosted", '["self-hosted"]', "hosted"),
+            ("pull_request_target", "refs/heads/trekmeester/batch", "true", "default", '["self-hosted"]', "hosted"),
         ]
-        cases = [(*case, "default") for case in cases] + [
-            ("workflow_dispatch", "false", "", "hosted", "github-hosted"),
-            ("push", "false", "", "mancave", "github-hosted"),
-            ("pull_request", "false", "", "hosted", "self-hosted"),
-        ]
-        for event, requested, override, expected, runner in cases:
-            with self.subTest(event=event, requested=requested, override=override), tempfile.TemporaryDirectory() as directory:
+        # Both supported inputs select hosted for trekmeester. Every other
+        # manual ref stays hosted even when inputs are absent or overridden.
+        for ref, reserved in [
+            ("refs/heads/trekmeester/batch", True),
+            ("refs/heads/codex/feature", False),
+            ("refs/heads/develop", False),
+            ("refs/heads/trekmeester", False),
+            ("refs/heads/trekmeester/", False),
+            ("refs/heads/trekmeester-other/batch", False),
+            ("refs/tags/trekmeester/batch", False),
+            ("refs/tags/v0.41.0", False),
+            ("", False),
+        ]:
+            for requested, runner in [
+                ("", ""), ("false", "default"), ("true", "default"),
+                ("false", "github-hosted"), ("true", "github-hosted"),
+                ("false", "self-hosted"),
+            ]:
+                for override in ["", '["self-hosted"]', '["ubuntu-latest"]']:
+                    hosted = (
+                        not reserved or requested == "true" or
+                        runner == "github-hosted" or override == '["ubuntu-latest"]'
+                    )
+                    expected = "hosted" if hosted else "mancave"
+                    cases.append(("workflow_dispatch", ref, requested, runner, override, expected))
+        for event, ref, requested, runner, override, expected in cases:
+            with self.subTest(event=event, ref=ref, requested=requested, runner=runner, override=override), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 result = self.run_shell(shell(job(MAIN, "pick")), {
-                    "EVENT_NAME": event, "HOSTED_INPUT": requested, "DISPATCH_RUNNER": runner,
+                    "EVENT_NAME": event, "REF": ref, "HOSTED_INPUT": requested, "DISPATCH_RUNNER": runner,
                     "FORCE_RUNNER": override, "GITHUB_OUTPUT": str(output),
                 })
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.read_text().strip(), f"host={expected}")
+
+    def test_manual_image_publisher_also_reserves_mancave_for_trekmeester(self):
+        source = (ROOT / ".github/workflows/publish-develop-image.yml").read_text()
+        expression = re.search(r"runs-on: \$\{\{ (.+) \}\}", job(source, "publish"))[1]
+        expression = expression.replace("!startsWith", "not startsWith").replace("&&", "and").replace("||", "or")
+        for ref in ["refs/heads/codex/fix", "refs/heads/develop", "refs/tags/trekmeester/batch", "refs/heads/trekmeester-other/batch", "refs/heads/trekmeester/batch"]:
+            for override in ["", '["self-hosted", "Linux", "X64"]', '["ubuntu-latest"]']:
+                with self.subTest(ref=ref, override=override):
+                    actual = eval(expression.replace("github.ref", repr(ref)).replace("vars.CI_RUNNER_OVERRIDE", repr(override)), {
+                        "__builtins__": {}, "fromJSON": json.loads,
+                        "startsWith": lambda value, prefix: value.lower().startswith(prefix.lower()),
+                    })
+                    expected = json.loads(override or '["self-hosted", "Linux", "X64"]') if ref == "refs/heads/trekmeester/batch" else ["ubuntu-latest"]
+                    self.assertEqual(actual, expected)
 
     def test_actual_gate_requires_both_suites_for_every_trusted_runner(self):
         for event in ["push", "workflow_dispatch"]:

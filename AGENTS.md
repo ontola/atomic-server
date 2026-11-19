@@ -91,9 +91,16 @@ introduce a `main` branch, treat `master` as production, or add a job that
 fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
 branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
+**Shared CI belongs to trekmeester.** Other agents run local checks, publish their
+PR and hand it to trekmeester for batch validation. Do not manually dispatch or
+rerun shared CI unless the user explicitly requests an exception for this work.
+That exception must use GitHub-hosted runners, never Mancave. Trekmeester may
+use either runner. This applies to workflow dispatches, reruns and equivalent
+API calls; access to GitHub credentials is not permission to start CI.
+
 Short-lived agent sessions: read [`AGENT_WORKFLOW.md`](./AGENT_WORKFLOW.md)
-first. It covers dispatching CI on a PR branch, the paired atomic-saas branch,
-plugin pin candidates, build and check gotchas, and decisions already made.
+first. It covers CI ownership, authorized dispatches, the paired atomic-saas
+branch, plugin pin candidates, build gotchas, and decisions already made.
 
 **Stop the vite dev server before any git operation that rewrites files** — a
 rebase, a branch switch, a `git checkout -- .`. See below for why.

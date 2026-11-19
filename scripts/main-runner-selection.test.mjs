@@ -17,10 +17,13 @@ const shell = body
   .map(line => line.replace(/^ {10}/, ''))
   .join('\n');
 
-for (const [name, event, input, override, expected, runner = 'default'] of [
+for (const [
+  name, event, input, override, expected,
+  runner = 'default', ref = 'refs/heads/trekmeester/batch',
+] of [
   ['push retains the default self-hosted lane', 'push', 'false', '', 'mancave'],
   [
-    'ordinary dispatch retains the default lane',
+    'trekmeester dispatch retains the default lane',
     'workflow_dispatch',
     'false',
     '',
@@ -34,7 +37,7 @@ for (const [name, event, input, override, expected, runner = 'default'] of [
     'hosted',
   ],
   [
-    'dispatch without the new input remains compatible',
+    'trekmeester dispatch without the new input remains compatible',
     'workflow_dispatch',
     '',
     '',
@@ -92,6 +95,78 @@ for (const [name, event, input, override, expected, runner = 'default'] of [
     'hosted',
     'self-hosted',
   ],
+  [
+    'worker dispatch defaults to hosted',
+    'workflow_dispatch',
+    'false',
+    '',
+    'hosted',
+    'default',
+    'refs/heads/codex/fix',
+  ],
+  [
+    'worker dispatch overrides private runner configuration',
+    'workflow_dispatch',
+    'false',
+    '["self-hosted"]',
+    'hosted',
+    'default',
+    'refs/heads/codex/fix',
+  ],
+  [
+    'worker dispatch without inputs stays hosted',
+    'workflow_dispatch',
+    '',
+    '["self-hosted"]',
+    'hosted',
+    '',
+    'refs/heads/codex/fix',
+  ],
+  [
+    'worker dispatch with runner choice stays hosted',
+    'workflow_dispatch',
+    'false',
+    '["self-hosted"]',
+    'hosted',
+    'github-hosted',
+    'refs/heads/codex/fix',
+  ],
+  [
+    'manual develop validation stays hosted',
+    'workflow_dispatch',
+    'false',
+    '',
+    'hosted',
+    'default',
+    'refs/heads/develop',
+  ],
+  [
+    'similar branch name cannot use the reserved lane',
+    'workflow_dispatch',
+    'false',
+    '',
+    'hosted',
+    'default',
+    'refs/heads/trekmeester-other/batch',
+  ],
+  [
+    'a tag cannot use the reserved branch lane',
+    'workflow_dispatch',
+    'false',
+    '',
+    'hosted',
+    'default',
+    'refs/tags/trekmeester/batch',
+  ],
+  [
+    'an empty batch name cannot use the reserved lane',
+    'workflow_dispatch',
+    'false',
+    '',
+    'hosted',
+    'default',
+    'refs/heads/trekmeester/',
+  ],
 ]) {
   test(name, () => {
     const temp = mkdtempSync(join(tmpdir(), 'atomic-runner-selection-'));
@@ -102,6 +177,7 @@ for (const [name, event, input, override, expected, runner = 'default'] of [
         env: {
           ...process.env,
           EVENT_NAME: event,
+          REF: ref,
           HOSTED_INPUT: input,
           DISPATCH_RUNNER: runner,
           FORCE_RUNNER: override,
