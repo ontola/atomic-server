@@ -630,13 +630,21 @@ export class AtomicServer {
       this.typedocPublish(netlifyAuthToken, publishDocs),
       this.rustBuild(false, 'x86_64-unknown-linux-musl', true).sync(),
       this.jsTest(),
-      this.jsTestIntegration(),
+      this.rustBuildSlim().sync(),
+      this.wasmBuild().sync(),
       this.flutterTest(),
       (async () => {
         await this.rustClippy();
         await this.rustTest();
       })(),
     ]);
+
+    // Real-server SDK interactions also have bounded response deadlines. A
+    // cold plugin runtime compilation in afterCommit exceeded the unchanged
+    // 90 s integration limit while the hosted runner was compiling/testing
+    // Rust and running JS suites. Prebuild its artefacts above, but execute
+    // these interactions after that CPU contention, just like browser E2E.
+    await this.jsTestIntegration();
 
     await this.endToEnd(
       netlifyAuthToken,

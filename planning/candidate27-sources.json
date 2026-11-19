@@ -1134,7 +1134,8 @@
     "Two identical browser-peer regression function bodies arrived through overlapping receipt branches. Retain each full assertion body once, removing duplicate definitions that prevented all-target Rust compilation.",
     "The later-edit/earlier-ACK sidebar fixture disables the unrelated real WebSocket via public connect:false while preserving explicit online state, both versions, both controlled ACKs and every original warning assertion.",
     "Main CI minimal-light Clippy exposed an unguarded plugin_runtime handler module. Match its existing wasm-plugins route/dependency gate and gate embedded_asset with its sole plugin-UI caller. Enabled runtime behavior and minimal route availability remain unchanged; no feature or test gate is disabled.",
-    "Expose workflow_dispatch for the existing Flutter validation jobs so a Rust-only candidate checkpoint can validate all required lanes on the exact same SHA; existing push/PR filters and all jobs remain enabled."
+    "Expose workflow_dispatch for the existing Flutter validation jobs so a Rust-only candidate checkpoint can validate all required lanes on the exact same SHA; existing push/PR filters and all jobs remain enabled.",
+    "Hosted Main at a07e446 exposed CPU contention in the real-server afterCommit integration test (90 s timeout while Rust builds/checks, JS and Flutter ran concurrently). Keep its slim server and WASM compilation parallel, then execute the unchanged SDK integration suite after CPU checks and before the unchanged full browser E2E suite. No deadlines, assertions, suites, production APIs or runtime policies are weakened. A phase-order regression verifies both interactions are deferred and SDK completion gates browser E2E."
   ],
   "validation": {
     "status": "Local minimal-light regression check passes; normal hook validates the compatibility follow-up. All four required remote workflows must validate the new exact head before a checkpoint tag.",
@@ -1260,6 +1261,30 @@
       "status": "pass",
       "command": "cargo clippy --locked -p atomic-server --no-deps --all-targets --no-default-features --features light -- -D warnings",
       "coverage": "No-default plugin-free build and all targets; two matching feature gates preserve default plugin functionality."
+    },
+    "remote_ci_a07": {
+      "sha": "a07e446c3da327a19f14e1717a085c12087e924b",
+      "main": "https://github.com/ontola/atomic-server/actions/runs/44492806277",
+      "main_status": "failed: sole real-server afterCommit integration test timed out at 90 s; remaining 11 integration files passed, one existing skip. Later pipeline branches cancelled, not claimed green.",
+      "table": "https://github.com/ontola/atomic-server/actions/runs/44492810392",
+      "shared_ui": "https://github.com/ontola/atomic-server/actions/runs/44492818723",
+      "flutter": "https://github.com/ontola/atomic-server/actions/runs/44492822720",
+      "table_shared_ui_flutter_downstream": "success",
+      "followup": "CI scheduling follow-up requires all four workflows green at its exact published head; no immutable tag or alias has advanced."
+    },
+    "ci_scheduling_regressions": {
+      "status": "pass",
+      "tests": 18,
+      "coverage": "Dagger phase ordering and unchanged E2E budgets/runner selection."
+    },
+    "real_server_sdk_integration": {
+      "status": "pass",
+      "files_passed": 12,
+      "files_existing_skip": 1,
+      "tests_passed": 33,
+      "tests_existing_skip": 1,
+      "duration_seconds": 224.73,
+      "runtime": "Own fresh enabled-plugin server with required embedded wasm32-wasip2 runtime (1203 KB). Original afterCommit test and 90 s deadline unchanged."
     }
   },
   "selection": {

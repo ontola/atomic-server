@@ -39,6 +39,11 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
     return { sync: async () => calls.push('e2eBuild') };
   };
 
+  pipeline.rustBuildSlim = () => ({
+    sync: async () => calls.push('sdkServerBuild'),
+  });
+  pipeline.wasmBuild = () => ({ sync: async () => calls.push('sdkWasmBuild') });
+
   let endToEndArgs;
   pipeline.endToEnd = async (...args) => (endToEndArgs = args);
 
@@ -61,7 +66,7 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
   assert.deepEqual(calls, []);
 });
 
-test('ci builds E2E in parallel but starts browsers only after the other checks finish', async () => {
+test('ci prebuilds servers in parallel but serializes SDK and browser interactions after CPU checks', async () => {
   const pipeline = new AtomicServer(source());
   const started = [];
   const gates = new Map();
@@ -77,6 +82,8 @@ test('ci builds E2E in parallel but starts browsers only after the other checks 
     'rustClippy',
     'rustTest',
     'e2eBuild',
+    'sdkServerBuild',
+    'sdkWasmBuild',
   ]) {
     let release;
     const promise = new Promise(resolve => (release = resolve));
@@ -88,26 +95,38 @@ test('ci builds E2E in parallel but starts browsers only after the other checks 
   }
 
   pipeline.rustBuild = () => ({ sync: pipeline.e2eBuild });
+  pipeline.rustBuildSlim = () => ({ sync: pipeline.sdkServerBuild });
+  pipeline.wasmBuild = () => ({ sync: pipeline.sdkWasmBuild });
   pipeline.endToEnd = async () => started.push('endToEnd');
   const result = pipeline.ci('token');
   await turn();
   assert.deepEqual(
     new Set(started),
-    new Set([...gates.keys()].filter(name => name !== 'rustTest')),
+    new Set(
+      [...gates.keys()].filter(
+        name => name !== 'rustTest' && name !== 'jsTestIntegration',
+      ),
+    ),
   );
 
   gates.get('rustClippy')();
   await turn();
   assert.equal(started.includes('rustTest'), true);
   for (const [name, release] of gates)
-    if (name !== 'flutterTest' && name !== 'e2eBuild') release();
+    if (!['flutterTest', 'e2eBuild', 'jsTestIntegration'].includes(name))
+      release();
   await turn();
   assert.equal(started.includes('endToEnd'), false);
 
   gates.get('e2eBuild')();
   await turn();
   assert.equal(started.includes('endToEnd'), false);
+  assert.equal(started.includes('jsTestIntegration'), false);
   gates.get('flutterTest')();
+  await turn();
+  assert.equal(started.at(-1), 'jsTestIntegration');
+  assert.equal(started.includes('endToEnd'), false);
+  gates.get('jsTestIntegration')();
   assert.equal(await result, 'CI pipeline completed successfully');
   assert.equal(started.at(-1), 'endToEnd');
 });
