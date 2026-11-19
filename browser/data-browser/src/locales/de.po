@@ -3661,6 +3661,9 @@ msgstr ""
 "Erstellt über `/app/dev-drive` für lokale Entwicklung und E2E-Tests. Du kannst diese Daten über „Testdaten bereinigen“ auf `/app/prunetests` entfernen.\n"
 "\n"
 "{0}"
+"Erstellt über `/app/dev-drive` für lokale Entwicklung und E2E-Tests. Du kannst diese Daten über „Testdaten bereinigen“ auf `/app/prunetests` entfernen.\n"
+"\n"
+"{0}"
 
 #: src/routes/AboutRoute.tsx
 msgid "Atomic Data Browser"
@@ -8779,6 +8782,10 @@ msgstr ""
 "Nachrichten: {1}\n"
 "\n"
 ""
+"KI-Chat: {0}\n"
+"Nachrichten: {1}\n"
+"\n"
+""
 
 #. 0: omittedMessages
 #: src/chunks/AI/formatAIChatReport.ts
@@ -8787,6 +8794,9 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"{0} frühere Nachrichten ausgelassen, damit der Bericht passt.\n"
+"\n"
+""
 "{0} frühere Nachrichten ausgelassen, damit der Bericht passt.\n"
 "\n"
 ""
@@ -12461,6 +12471,10 @@ msgid "Nothing here yet."
 msgstr "Noch nichts hier."
 
 #: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Drive-Einstellungen"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server, über den Mitglieder für die kostenlose Browser-Synchronisierung zusammenfinden."
 
@@ -13511,29 +13525,9 @@ msgstr "Dateien sind enthalten. Sie werden auf diesem Gerät verschlüsselt wie 
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleiben erhalten."
 
-#: src/actions/appActions.ts
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Synchronisierung und Geräte"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar"
-msgstr "Symbole in der Seitenleiste anzeigen"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons and pictures next to items in the sidebar"
-msgstr "Symbole und Bilder neben Elementen in der Seitenleiste anzeigen"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0} /{1} {2}"
-msgstr "Verbrauchte Credits: {0} /{1} {2}"
-
-#: src/actions/appActions.ts
-#: src/components/Settings/AccountSettings.tsx
-#: src/components/Settings/AccountSettings.tsx
-msgid "Account & security"
-msgstr "Konto und Sicherheit"
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Dieses Secret gehört zu einem anderen Agenten. Füge das Secret ein, das du gerade für dieses Konto gespeichert hast."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"
@@ -13544,12 +13538,23 @@ msgid "Your name, avatar and signing out."
 msgstr "Dein Name, Avatar und Abmelden."
 
 #: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Konto und Sicherheit"
+
+#: src/actions/appActions.ts
 msgid "Sign in, recovery, your plan and this device."
 msgstr "Anmelden, Wiederherstellung, dein Tarif und dieses Gerät."
 
 #: src/actions/appActions.ts
 msgid "Your drives and recently visited ones."
 msgstr "Deine Drives und kürzlich besuchte."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisierung und Geräte"
 
 #: src/actions/appActions.ts
 msgid "Where this drive syncs, and connecting a device."
@@ -13591,9 +13596,18 @@ msgstr "Integrationseinstellungen"
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, Katalog und experimentelle Plugins."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Drive-Einstellungen"
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Symbole in der Seitenleiste anzeigen"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Symbole und Bilder neben Elementen in der Seitenleiste anzeigen"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Verbrauchte Credits: {0} /{1} {2}"
 
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"

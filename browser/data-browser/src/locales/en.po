@@ -12464,6 +12464,10 @@ msgid "Nothing here yet."
 msgstr "Nothing here yet."
 
 #: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Drive settings"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server members meet through for free browser sync."
 
@@ -13514,29 +13518,9 @@ msgstr "Files are included. They are encrypted on this device like everything el
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} of old history can be removed. Nothing you can see is lost."
 
-#: src/actions/appActions.ts
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Sync & devices"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar"
-msgstr "Show icons in the sidebar"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons and pictures next to items in the sidebar"
-msgstr "Show icons and pictures next to items in the sidebar"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0} /{1} {2}"
-msgstr "Credits used: {0} /{1} {2}"
-
-#: src/actions/appActions.ts
-#: src/components/Settings/AccountSettings.tsx
-#: src/components/Settings/AccountSettings.tsx
-msgid "Account & security"
-msgstr "Account & security"
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "This secret belongs to a different agent. Paste the secret you just saved for this account."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"
@@ -13547,12 +13531,23 @@ msgid "Your name, avatar and signing out."
 msgstr "Your name, avatar and signing out."
 
 #: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Account & security"
+
+#: src/actions/appActions.ts
 msgid "Sign in, recovery, your plan and this device."
 msgstr "Sign in, recovery, your plan and this device."
 
 #: src/actions/appActions.ts
 msgid "Your drives and recently visited ones."
 msgstr "Your drives and recently visited ones."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sync & devices"
 
 #: src/actions/appActions.ts
 msgid "Where this drive syncs, and connecting a device."
@@ -13594,9 +13589,18 @@ msgstr "Integration settings"
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalog and experimental plugins."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Drive settings"
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Show icons in the sidebar"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Show icons and pictures next to items in the sidebar"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Credits used: {0} /{1} {2}"
 
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"

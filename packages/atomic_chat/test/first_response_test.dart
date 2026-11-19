@@ -130,7 +130,7 @@ void main() {
     // One frame: the question is there, the dots show.
     await tester.pump();
     expect(find.text('Hi'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AtomicSpinner), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 500));
     expect(requests, hasLength(1));

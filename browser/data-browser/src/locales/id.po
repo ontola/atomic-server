@@ -3659,6 +3659,9 @@ msgstr ""
 "Dibuat melalui `/app/dev-drive` untuk pengembangan lokal dan E2E. Anda dapat menghapusnya dengan Bersihkan data pengujian di `/app/prunetests`. \n"
 "\n"
 "{0}"
+"Dibuat melalui `/app/dev-drive` untuk pengembangan lokal dan E2E. Anda dapat menghapusnya dengan Bersihkan data pengujian di `/app/prunetests`. \n"
+"\n"
+"{0}"
 
 #: src/routes/AboutRoute.tsx
 msgid "Atomic Data Browser"
@@ -3710,6 +3713,9 @@ msgid ""
 "            additional instructions/processes that are not always needed when\n"
 "            using this skill."
 msgstr ""
+"Konteks tambahan. Rujuk ini dalam konten utama Anda untuk\n"
+"            instruksi/proses tambahan yang tidak selalu diperlukan saat\n"
+"            menggunakan keterampilan ini."
 "Konteks tambahan. Rujuk ini dalam konten utama Anda untuk\n"
 "            instruksi/proses tambahan yang tidak selalu diperlukan saat\n"
 "            menggunakan keterampilan ini."
@@ -8780,6 +8786,10 @@ msgstr ""
 "Pesan: {1}\n"
 "\n"
 ""
+"Obrolan AI: {0}\n"
+"Pesan: {1}\n"
+"\n"
+""
 
 #. 0: omittedMessages
 #: src/chunks/AI/formatAIChatReport.ts
@@ -8788,6 +8798,9 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"{0} pesan sebelumnya dihilangkan agar laporan muat.\n"
+"\n"
+""
 "{0} pesan sebelumnya dihilangkan agar laporan muat.\n"
 "\n"
 ""
@@ -12461,6 +12474,10 @@ msgid "Nothing here yet."
 msgstr "Belum ada apa pun di sini."
 
 #: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Pengaturan drive"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server tempat anggota bertemu untuk sinkronisasi browser gratis."
 
@@ -13503,29 +13520,9 @@ msgstr "Berkas disertakan. Berkas dienkripsi di perangkat ini seperti yang lainn
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang hilang."
 
-#: src/actions/appActions.ts
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Sinkronisasi dan perangkat"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar"
-msgstr "Tampilkan ikon di bilah samping"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons and pictures next to items in the sidebar"
-msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0} /{1} {2}"
-msgstr "Kredit terpakai: {0} /{1} {2}"
-
-#: src/actions/appActions.ts
-#: src/components/Settings/AccountSettings.tsx
-#: src/components/Settings/AccountSettings.tsx
-msgid "Account & security"
-msgstr "Akun dan keamanan"
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"
@@ -13536,12 +13533,23 @@ msgid "Your name, avatar and signing out."
 msgstr "Nama, avatar, dan keluar."
 
 #: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Akun dan keamanan"
+
+#: src/actions/appActions.ts
 msgid "Sign in, recovery, your plan and this device."
 msgstr "Masuk, pemulihan, paket Anda, dan perangkat ini."
 
 #: src/actions/appActions.ts
 msgid "Your drives and recently visited ones."
 msgstr "Drive Anda dan yang baru dikunjungi."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sinkronisasi dan perangkat"
 
 #: src/actions/appActions.ts
 msgid "Where this drive syncs, and connecting a device."
@@ -13583,9 +13591,18 @@ msgstr "Pengaturan integrasi"
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proksi, katalog, dan plugin eksperimental."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Pengaturan drive"
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Tampilkan ikon di bilah samping"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Kredit terpakai: {0} /{1} {2}"
 
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"

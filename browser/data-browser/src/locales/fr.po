@@ -8776,6 +8776,10 @@ msgstr ""
 "Messages : {1}\n"
 "\n"
 ""
+"Discussion avec l’IA : {0}\n"
+"Messages : {1}\n"
+"\n"
+""
 
 #. 0: omittedMessages
 #: src/chunks/AI/formatAIChatReport.ts
@@ -8784,6 +8788,9 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"{0} messages précédents omis pour respecter la taille du rapport.\n"
+"\n"
+""
 "{0} messages précédents omis pour respecter la taille du rapport.\n"
 "\n"
 ""
@@ -12458,6 +12465,10 @@ msgid "Nothing here yet."
 msgstr "Rien ici pour le moment."
 
 #: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Paramètres du drive"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Serveur par lequel les membres se retrouvent pour la synchronisation gratuite entre navigateurs."
 
@@ -13508,29 +13519,9 @@ msgstr "Les fichiers sont inclus. Ils sont chiffrés sur cet appareil comme tout
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} d’ancien historique peuvent être supprimés. Aucun contenu visible ne sera perdu."
 
-#: src/actions/appActions.ts
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Synchronisation et appareils"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar"
-msgstr "Afficher les icônes dans la barre latérale"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons and pictures next to items in the sidebar"
-msgstr "Afficher les icônes et images à côté des éléments de la barre latérale"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0} /{1} {2}"
-msgstr "Crédits utilisés : {0} /{1} {2}"
-
-#: src/actions/appActions.ts
-#: src/components/Settings/AccountSettings.tsx
-#: src/components/Settings/AccountSettings.tsx
-msgid "Account & security"
-msgstr "Compte et sécurité"
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Ce secret appartient à un autre agent. Collez le secret que vous venez d’enregistrer pour ce compte."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"
@@ -13541,12 +13532,23 @@ msgid "Your name, avatar and signing out."
 msgstr "Votre nom, votre avatar et la déconnexion."
 
 #: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Compte et sécurité"
+
+#: src/actions/appActions.ts
 msgid "Sign in, recovery, your plan and this device."
 msgstr "Connexion, récupération, votre forfait et cet appareil."
 
 #: src/actions/appActions.ts
 msgid "Your drives and recently visited ones."
 msgstr "Vos drives et ceux visités récemment."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisation et appareils"
 
 #: src/actions/appActions.ts
 msgid "Where this drive syncs, and connecting a device."
@@ -13588,9 +13590,18 @@ msgstr "Paramètres d'intégration"
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalogue et plugins expérimentaux."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Paramètres du drive"
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Afficher les icônes dans la barre latérale"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Afficher les icônes et images à côté des éléments de la barre latérale"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Crédits utilisés : {0} /{1} {2}"
 
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"

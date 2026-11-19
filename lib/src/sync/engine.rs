@@ -307,6 +307,59 @@ async fn answer_get(
     }
 }
 
+/// The entries of one `GET_MANY_RESULT`: one answer per subject, in request
+/// order, so the client can pair an `ERROR` (which names no subject) with what
+/// it asked. Fetches run a few at a time (`buffered` keeps the order), because
+/// the batch is only worth its frame if it is not slower than the single GETs
+/// it replaces. Once the answers so far hold `budget` bytes, no further subject
+/// is fetched: every remaining entry is an `ERROR` saying so, which keeps the
+/// entry count equal to the subject count.
+async fn answer_get_many(
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    request_id: u16,
+    subjects: &[&str],
+    wire: WireScheme,
+    budget: usize,
+) -> Vec<Vec<u8>> {
+    let mut answers: Vec<Vec<u8>> = Vec::with_capacity(subjects.len());
+    let mut spent = 0usize;
+    // A few at a time, in order. Not a `buffered` stream: boxing one needs a
+    // `Send` future, which the store's futures are not on wasm32.
+    for chunk in subjects.chunks(protocol::GET_MANY_CONCURRENCY) {
+        if spent >= budget {
+            break;
+        }
+        let fetched = futures::future::join_all(
+            chunk
+                .iter()
+                .map(|subject| answer_get(store, agent, request_id, subject, wire)),
+        )
+        .await;
+        for answer in fetched {
+            if spent >= budget {
+                break;
+            }
+            spent += answer.len() + 4;
+            answers.push(answer);
+        }
+    }
+    let message = format!(
+        "GET_MANY size limit of {budget} bytes reached after {} of {} subjects; \
+         ask for the remaining subjects again in a new request",
+        answers.len(),
+        subjects.len()
+    );
+    while answers.len() < subjects.len() {
+        answers.push(protocol::encode_error(
+            request_id,
+            protocol::error_code::RESULT_TOO_LARGE,
+            &message,
+        ));
+    }
+    answers
+}
+
 /// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
 /// applies to its commit monitor.
 pub async fn handle_frame_full(
@@ -364,16 +417,30 @@ pub async fn handle_frame_full_for_caps(
 
         protocol::tag::GET_MANY => {
             if let Some(decoded) = protocol::decode_get_many(payload) {
-                // One answer per subject, in request order (join_all keeps it), so
-                // the client can pair an `ERROR` (which names no subject) with what
-                // it asked. Evaluated concurrently: the batch is only worth its
-                // frame if it is not slower than the single GETs it replaces.
+                if decoded.subjects.len() > protocol::MAX_GET_MANY_SUBJECTS {
+                    return HandleOutput {
+                        frames: vec![protocol::encode_error(
+                            decoded.request_id,
+                            protocol::error_code::RESULT_TOO_LARGE,
+                            &format!(
+                                "GET_MANY names {} subjects; at most {} are allowed per request",
+                                decoded.subjects.len(),
+                                protocol::MAX_GET_MANY_SUBJECTS
+                            ),
+                        )],
+                        ..Default::default()
+                    };
+                }
                 let agent: &crate::agents::ForAgent = agent;
-                let answers =
-                    futures::future::join_all(decoded.subjects.iter().map(|subject| {
-                        answer_get(store, agent, decoded.request_id, subject, wire)
-                    }))
-                    .await;
+                let answers = answer_get_many(
+                    store,
+                    agent,
+                    decoded.request_id,
+                    &decoded.subjects,
+                    wire,
+                    protocol::GET_MANY_RESULT_BUDGET_BYTES,
+                )
+                .await;
                 vec![protocol::encode_get_many_result(
                     decoded.request_id,
                     &answers,
@@ -655,9 +722,6 @@ pub async fn handle_frame_full_for_caps(
     }
 }
 
-/// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
-/// The wire refusal matches `refuse_subscription` in the server so a client
-/// cannot tell the engine path from the monitor's defence-in-depth re-check.
 /// If `resource` points at a blob this store does not hold, record which
 /// (already-admitted) drive the hash belongs to and return the BLOB_REQUEST
 /// frame to send. Recording the drive lets the BLOB_RESPONSE handler gate the
@@ -675,6 +739,9 @@ pub(crate) async fn missing_blob_request(
     Some(protocol::encode_blob_request(&hash))
 }
 
+/// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
+/// The wire refusal matches `refuse_subscription` in the server so a client
+/// cannot tell the engine path from the monitor's defence-in-depth re-check.
 async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent) -> HandleOutput {
     let Ok(subject_str) = std::str::from_utf8(payload) else {
         return HandleOutput {
@@ -689,27 +756,20 @@ async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent)
 
     let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
 
-    let refuse = |reason: &str| HandleOutput {
-        frames: vec![protocol::encode_error(
-            0,
-            protocol::error_code::UNAUTHORIZED_READ,
-            &format!("SUB refused for {subject}: {reason}"),
-        )],
-        ..HandleOutput::default()
-    };
-
     if !subject.is_local() {
         tracing::warn!("can't subscribe to external resource: {subject}");
         return HandleOutput::default();
     }
 
-    let resource = match store.get_resource(&subject).await {
-        Ok(r) => r,
-        Err(_) => return refuse("not readable"),
-    };
-
-    if let Err(e) = crate::hierarchy::check_read(store, &resource, agent).await {
-        return refuse(&e.to_string());
+    if let Err(reason) = readable_subject(store, subject_str, agent).await {
+        return HandleOutput {
+            frames: vec![protocol::encode_error(
+                0,
+                protocol::error_code::UNAUTHORIZED_READ,
+                &format!("SUB refused for {subject}: {reason}"),
+            )],
+            ..HandleOutput::default()
+        };
     }
 
     HandleOutput {
@@ -717,6 +777,29 @@ async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent)
         subscribe: Some(subject_str.to_string()),
         unsubscribe: None,
     }
+}
+
+/// The resource a subscription names, when `agent` may read it. The `Err` is
+/// the reason put on the wire after "<what> refused for <subject>: ". An
+/// absent subject and an unreadable one give the same reason, so a refusal
+/// does not tell an agent without read rights which of the two it hit.
+pub async fn readable_subject(
+    store: &Db,
+    raw: &str,
+    agent: &crate::agents::ForAgent,
+) -> Result<crate::Resource, String> {
+    let subject = crate::Subject::from_raw(raw, store.get_base_domain().as_deref());
+    if !subject.is_local() {
+        return Err("not a resource of this server".to_string());
+    }
+    let resource = store
+        .get_resource(&subject)
+        .await
+        .map_err(|_| "not readable".to_string())?;
+    crate::hierarchy::check_read(store, &resource, agent)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(resource)
 }
 
 /// `UNSUB <subject>`: no rights check — cancelling a subscription you never
@@ -730,6 +813,32 @@ fn handle_unsub(payload: &[u8]) -> HandleOutput {
         },
         Err(_) => HandleOutput::default(),
     }
+}
+
+/// The `host[:port]` of an http(s) URL, lowercased by the URL parser. The port
+/// is only present when it is not the scheme's default. Userinfo, path, query
+/// and fragment never take part.
+fn subject_host(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    Some(match parsed.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_string(),
+    })
+}
+
+/// Whether `origin` (a base domain or request origin, scheme optional) has the
+/// host `host`, as produced by [`subject_host`].
+fn subject_host_matches(origin: &str, host: &str) -> bool {
+    let with_scheme = if origin.contains("://") {
+        origin.to_string()
+    } else {
+        format!("http://{origin}")
+    };
+    subject_host(&with_scheme).is_some_and(|origin_host| origin_host == host)
 }
 
 /// Policy knobs distinguishing a hub ingesting a client's commit from a peer
@@ -922,53 +1031,33 @@ pub async fn ingest_commit(
 
     let incoming_commit = crate::commit::Commit::from_json_map(&incoming)?;
 
-    // Log incoming commit details for debugging
-    if let Some(loro_bytes) = &incoming_commit.loro_update {
-        let doc = crate::loro::AtomicLoroDoc::new();
-        if doc.import_update(loro_bytes).is_ok() {
-            let props = doc.get_all_properties();
-            let prop_summary: Vec<String> = props
-                .keys()
-                .map(|k| k.rsplit('/').next().unwrap_or(k).to_string())
-                .collect();
-            tracing::info!(
-                subject = %incoming_commit.subject,
-                signer = %incoming_commit.signer,
-                properties = ?prop_summary,
-                loro_bytes = loro_bytes.len(),
-                "Incoming commit"
-            );
-        }
-    } else {
-        tracing::info!(
-            subject = %incoming_commit.subject,
-            destroy = ?incoming_commit.destroy,
-            "Incoming commit (no loroUpdate)"
-        );
-    }
+    tracing::debug!(
+        subject = %incoming_commit.subject,
+        signer = %incoming_commit.signer,
+        loro_bytes = incoming_commit.loro_update.as_ref().map(|b| b.len()),
+        destroy = ?incoming_commit.destroy,
+        "Incoming commit"
+    );
 
     if opts.enforce_subject_ownership {
+        let subject = incoming_commit.subject.as_str();
         let is_internal = incoming_commit.subject.is_internal();
         let is_did = incoming_commit.subject.is_did();
-        let matches_base = if let Some(base) = store.get_base_domain() {
-            // The base domain is the origin this store was booted with, scheme
-            // included. Behind a TLS-terminating proxy that is `http://host`
-            // while clients name the resource `https://host/…`: same server,
-            // so compare the host, not the scheme.
-            let host = base
-                .trim_start_matches("http://")
-                .trim_start_matches("https://");
-            incoming_commit.subject.as_str().contains(host)
-        } else {
-            false
-        };
 
-        // Fallback: if it's a local path like http://localhost/ or https://atomicdata.dev/
-        // and it matches the current request's Host, we should also allow it.
-        let is_local_path =
-            !is_did && !is_internal && incoming_commit.subject.as_str().ends_with('/');
+        // An http(s) subject is ours when its host[:port] is the host of this
+        // store's base domain, or of the origin the request came in on. The
+        // scheme is not compared: behind a TLS-terminating proxy the base
+        // domain is `http://host` while clients name the resource
+        // `https://host/…`, same server.
+        let owned_by_host = subject_host(subject).is_some_and(|subject_host| {
+            store
+                .get_base_domain()
+                .iter()
+                .chain(opts.response_origin.iter())
+                .any(|origin| subject_host_matches(origin, &subject_host))
+        });
 
-        if !is_internal && !is_did && !matches_base && !is_local_path {
+        if !is_internal && !is_did && !owned_by_host {
             return Err(
                 "Subject of commit should be sent to other domain - this store can not own this resource."
                     .into(),
@@ -2219,7 +2308,22 @@ pub async fn import_sync_push(
             // here; otherwise the resource must stamp itself into that drive or
             // be the drive root itself. (A peer gains nothing by stamping a NEW
             // resource into a drive it already has write on.)
-            if existing_resource.is_none() {
+            //
+            // An existing subject passed the check above on its stored state,
+            // but the merged state may name another parent: moving it must not
+            // take it out of the admitted drive either.
+            let new_resource = existing_resource.is_none();
+            let reparented = existing_resource.is_some_and(|existing| {
+                existing
+                    .get(crate::urls::PARENT)
+                    .ok()
+                    .map(|v| v.to_string())
+                    != resource
+                        .get(crate::urls::PARENT)
+                        .ok()
+                        .map(|v| v.to_string())
+            });
+            if new_resource || reparented {
                 let mut claimed = resource
                     .get(crate::urls::DRIVE_PROP)
                     .map(|v| v.to_string())
@@ -2246,11 +2350,12 @@ pub async fn import_sync_push(
                 }
                 if normalize(&claimed) != admitted_drive {
                     tracing::warn!(
-                    "import_sync_push: new resource {} resolves to drive {}, not to {} this push was admitted for; skipped",
-                    entry.subject,
-                    claimed,
-                    push.drive
-                );
+                        "import_sync_push: {} {} resolves to drive {}, not to {} this push was admitted for; skipped",
+                        if new_resource { "new resource" } else { "re-parented resource" },
+                        entry.subject,
+                        claimed,
+                        push.drive
+                    );
                     continue;
                 }
             }
@@ -2258,17 +2363,6 @@ pub async fn import_sync_push(
             // Only persist after every scope check succeeds. In particular, a
             // rejected new subject must not leave a snapshot that a later valid
             // import would merge. add_resource_opts stores the validated state.
-            // Log what properties arrived
-            let has_strokes = resource
-                .get("https://atomicdata.dev/ontology/canvas/strokeData")
-                .is_ok();
-            tracing::info!(
-                "  sync imported {}: {} props, has_strokes={}",
-                &entry.subject[..entry.subject.len().min(30)],
-                resource.get_propvals().len(),
-                has_strokes,
-            );
-
             if let Some(index) = staged_by_subject.get(&snapshot_key).copied() {
                 staged[index] = (resource.clone(), Some(snapshot));
             } else {
@@ -2338,13 +2432,6 @@ pub async fn import_sync_push(
         count,
         push.drive
     );
-    for entry in &push.entries {
-        tracing::info!(
-            "  imported: {} ({} bytes)",
-            &entry.subject[..entry.subject.len().min(30)],
-            entry.loro_bytes.len()
-        );
-    }
     Ok((count, blob_requests))
 }
 
@@ -2944,6 +3031,164 @@ mod bootstrap_and_sub_tests {
         );
     }
 
+    /// The pre-merge drive check does not look at where an existing resource
+    /// goes: a sender admitted for its own drive must not be able to re-parent
+    /// one of its resources under a parent in another drive, but may still
+    /// move it within the admitted drive.
+    #[tokio::test]
+    async fn existing_resource_cannot_be_reparented_into_another_drive_by_push() {
+        let db = Db::init_temp("existing_reparent_cross_drive")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let other_drive = crate::test_utils::create_test_drive(&db)
+            .await
+            .unwrap()
+            .to_string();
+        assert_ne!(drive, other_drive);
+        let victim_folder = db
+            .create_resource(crate::urls::FOLDER, &other_drive, "victim", None)
+            .await
+            .unwrap();
+        let own_folder = db
+            .create_resource(crate::urls::FOLDER, &drive, "own", None)
+            .await
+            .unwrap();
+        let subject = db
+            .create_resource(crate::urls::FOLDER, &drive, "mine", None)
+            .await
+            .unwrap();
+
+        let push_with_parent = |db: &Db, parent: &str| {
+            let db = db.clone();
+            let subject = subject.clone();
+            let drive = drive.clone();
+            let parent = parent.to_string();
+            async move {
+                let mut incoming = db.get_resource(&subject.as_str().into()).await.unwrap();
+                incoming
+                    .set_unsafe(
+                        crate::urls::PARENT.into(),
+                        crate::Value::AtomicUrl(parent.as_str().into()),
+                    )
+                    .unwrap();
+                let bytes = incoming.build_state_doc().unwrap().export_snapshot();
+                let frame = protocol::encode_sync_push(
+                    &drive,
+                    &[(subject.as_str(), bytes.as_slice())],
+                    true,
+                );
+                protocol::decode_sync_push(&frame[1..]).unwrap()
+            }
+        };
+        let parent_of = |db: &Db| {
+            let db = db.clone();
+            let subject = subject.clone();
+            async move {
+                db.get_resource(&subject.as_str().into())
+                    .await
+                    .unwrap()
+                    .get(crate::urls::PARENT)
+                    .unwrap()
+                    .to_string()
+            }
+        };
+        let original_parent = parent_of(&db).await;
+
+        let push = push_with_parent(&db, &victim_folder).await;
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "re-parenting into another drive must be skipped");
+        assert_eq!(
+            parent_of(&db).await,
+            original_parent,
+            "the resource must stay under its old parent"
+        );
+
+        let push = push_with_parent(&db, &own_folder).await;
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "moving within the admitted drive is allowed");
+        assert_eq!(parent_of(&db).await, own_folder);
+    }
+
+    /// The hub's ownership gate compares hosts. A subject that merely
+    /// mentions this host (in its query, userinfo or path) or that ends in `/`
+    /// on a foreign host is not ours; the base host and the host the request
+    /// came in on are.
+    #[tokio::test]
+    async fn ownership_gate_compares_hosts_not_substrings() {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+
+        const OWNERSHIP_ERR: &str = "Subject of commit should be sent to other domain - this store can not own this resource.";
+
+        let db = Db::init_temp("ingest_commit_ownership_hosts")
+            .await
+            .unwrap();
+        let (alice, _drive) = db.setup("Alice").await.unwrap();
+        let db = db.clone_with_url("http://atomic.example.de".into());
+
+        // The error the hub gives for a destroy of a subject that does not
+        // exist: anything but the ownership error means the gate let it pass.
+        let outcome = |subject: &'static str, origin: Option<&'static str>| {
+            let db = &db;
+            let alice = &alice;
+            async move {
+                let empty = crate::Resource::new(subject.to_string());
+                let mut builder = CommitBuilder::new(subject.into());
+                builder.destroy(true);
+                let commit = builder.sign(alice, db, &empty).await.unwrap();
+                let json = commit_to_wire_json(&commit, db).await.unwrap();
+                let opts = CommitIngestOpts::hub(None, origin.map(String::from));
+                ingest_commit_json(db, &json, &opts)
+                    .await
+                    .expect_err("nothing to destroy")
+                    .to_string()
+            }
+        };
+
+        for foreign in [
+            "https://evil.example/x?h=atomic.example.de",
+            "https://evil.example/atomic.example.de/x",
+            "https://atomic.example.de@evil.example/x",
+            "https://atomic.example.de.evil.example/x",
+            "https://evil.example/",
+        ] {
+            assert_eq!(
+                outcome(foreign, None).await,
+                OWNERSHIP_ERR,
+                "{foreign} is not on this host"
+            );
+        }
+
+        for own in [
+            "https://atomic.example.de/doc",
+            "http://atomic.example.de/doc",
+            "https://atomic.example.de/",
+        ] {
+            assert_ne!(outcome(own, None).await, OWNERSHIP_ERR, "{own} is ours");
+        }
+
+        // The host the request came in on counts too, and only that host.
+        assert_ne!(
+            outcome(
+                "https://other.example.org/doc",
+                Some("https://other.example.org")
+            )
+            .await,
+            OWNERSHIP_ERR,
+            "a subject on the request origin's host is accepted"
+        );
+        assert_eq!(
+            outcome("https://evil.example/", Some("https://other.example.org")).await,
+            OWNERSHIP_ERR,
+            "a request origin does not open up other hosts"
+        );
+    }
+
     #[tokio::test]
     async fn public_cannot_bootstrap_a_missing_drive_even_on_open() {
         let db = Db::init_temp("oq5_public_open").await.unwrap();
@@ -3065,6 +3310,54 @@ mod bootstrap_and_sub_tests {
 
         let third = protocol::decode_update(&result.frames[2][1..]).unwrap();
         assert_eq!(third.subject, alice_subject);
+    }
+
+    #[tokio::test]
+    async fn get_many_over_the_subject_limit_is_one_error() {
+        let db = Db::init_temp("get_many_limit").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let subjects: Vec<&str> = vec![drive.as_str(); 1001];
+        let frame = protocol::encode_get_many(33, &subjects);
+        let mut agent = ForAgent::from(alice);
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert_eq!(out.frames.len(), 1);
+        assert_eq!(
+            out.frames[0][0],
+            tag::ERROR,
+            "an oversized batch is refused"
+        );
+        let error = protocol::decode_error(&out.frames[0][1..]).unwrap();
+        assert_eq!(error.request_id, 33);
+        assert_eq!(error.code, protocol::error_code::RESULT_TOO_LARGE);
+        assert!(error.message.contains("1000"), "{}", error.message);
+    }
+
+    #[tokio::test]
+    async fn get_many_stops_at_the_byte_budget_and_keeps_the_entry_count() {
+        let db = Db::init_temp("get_many_budget").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let alice_subject = alice.subject.to_string();
+        let agent = ForAgent::from(alice);
+        let subjects = [drive.as_str(), alice_subject.as_str(), drive.as_str()];
+
+        // A budget of one byte is spent by the first answer.
+        let entries = answer_get_many(&db, &agent, 5, &subjects, WireScheme::CANONICAL, 1).await;
+        assert_eq!(entries.len(), subjects.len(), "one entry per subject");
+        assert_eq!(entries[0][0], tag::UPDATE);
+        for entry in &entries[1..] {
+            assert_eq!(entry[0], tag::ERROR);
+            let error = protocol::decode_error(&entry[1..]).unwrap();
+            assert_eq!(error.request_id, 5);
+            assert_eq!(error.code, protocol::error_code::RESULT_TOO_LARGE);
+            assert!(error.message.contains("size limit"), "{}", error.message);
+        }
+        let total: usize = entries.iter().map(|e| e.len()).sum();
+        assert!(total < entries[0].len() + 4 * entries.len() + 1024 + 1);
+
+        // An ample budget answers everything.
+        let entries =
+            answer_get_many(&db, &agent, 5, &subjects, WireScheme::CANONICAL, 1 << 30).await;
+        assert!(entries.iter().all(|e| e[0] == tag::UPDATE));
     }
 
     #[tokio::test]

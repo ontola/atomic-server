@@ -3661,6 +3661,9 @@ msgstr ""
 "Gemaakt via `/app/dev-drive` voor lokale ontwikkeling en E2E. Je kunt deze verwijderen met Testgegevens opschonen op `/app/prunetests`. \n"
 "\n"
 "{0}"
+"Gemaakt via `/app/dev-drive` voor lokale ontwikkeling en E2E. Je kunt deze verwijderen met Testgegevens opschonen op `/app/prunetests`. \n"
+"\n"
+"{0}"
 
 #: src/routes/AboutRoute.tsx
 msgid "Atomic Data Browser"
@@ -3712,6 +3715,9 @@ msgid ""
 "            additional instructions/processes that are not always needed when\n"
 "            using this skill."
 msgstr ""
+"Aanvullende context. Verwijs hiernaar in je hoofdinhoud voor\n"
+"            extra instructies/processen die niet altijd nodig zijn bij\n"
+"            het gebruik van deze skill."
 "Aanvullende context. Verwijs hiernaar in je hoofdinhoud voor\n"
 "            extra instructies/processen die niet altijd nodig zijn bij\n"
 "            het gebruik van deze skill."
@@ -8782,6 +8788,10 @@ msgstr ""
 "Berichten: {1}\n"
 "\n"
 ""
+"AI-chat: {0}\n"
+"Berichten: {1}\n"
+"\n"
+""
 
 #. 0: omittedMessages
 #: src/chunks/AI/formatAIChatReport.ts
@@ -8790,6 +8800,9 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"{0} eerdere berichten weggelaten om in de melding te passen.\n"
+"\n"
+""
 "{0} eerdere berichten weggelaten om in de melding te passen.\n"
 "\n"
 ""
@@ -12464,6 +12477,10 @@ msgid "Nothing here yet."
 msgstr "Hier is nog niets."
 
 #: src/views/Drive/DriveSettingsDialog.tsx
+msgid "Drive settings"
+msgstr "Schijfinstellingen"
+
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Server members meet through for free browser sync."
 msgstr "Server via welke leden elkaar vinden voor gratis browsersynchronisatie."
 
@@ -13514,29 +13531,9 @@ msgstr "Bestanden zijn inbegrepen. Ze worden op dit apparaat versleuteld, net al
 msgid "{0} of old history can be removed. Nothing you can see is lost."
 msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien gaat verloren."
 
-#: src/actions/appActions.ts
-#: src/routes/AppSettings.tsx
-msgid "Sync & devices"
-msgstr "Synchronisatie en apparaten"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar"
-msgstr "Pictogrammen in de zijbalk tonen"
-
-#: src/routes/AppSettings.tsx
-msgid "Show icons and pictures next to items in the sidebar"
-msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
-
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: src/components/AI/AISettings.tsx
-msgid "Credits used: {0} /{1} {2}"
-msgstr "Gebruikte credits: {0} /{1} {2}"
-
-#: src/actions/appActions.ts
-#: src/components/Settings/AccountSettings.tsx
-#: src/components/Settings/AccountSettings.tsx
-msgid "Account & security"
-msgstr "Account en beveiliging"
+#: src/helpers/verifyAgentSecret.ts
+msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
+msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"
@@ -13547,12 +13544,23 @@ msgid "Your name, avatar and signing out."
 msgstr "Je naam, avatar en uitloggen."
 
 #: src/actions/appActions.ts
+#: src/components/Settings/AccountSettings.tsx
+#: src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Account en beveiliging"
+
+#: src/actions/appActions.ts
 msgid "Sign in, recovery, your plan and this device."
 msgstr "Inloggen, herstel, je abonnement en dit apparaat."
 
 #: src/actions/appActions.ts
 msgid "Your drives and recently visited ones."
 msgstr "Je schijven en recent bezochte schijven."
+
+#: src/actions/appActions.ts
+#: src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisatie en apparaten"
 
 #: src/actions/appActions.ts
 msgid "Where this drive syncs, and connecting a device."
@@ -13594,9 +13602,18 @@ msgstr "Integratie-instellingen"
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalogus en experimentele plugins."
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Drive settings"
-msgstr "Schijfinstellingen"
+#: src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Pictogrammen in de zijbalk tonen"
+
+#: src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Gebruikte credits: {0} /{1} {2}"
 
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"

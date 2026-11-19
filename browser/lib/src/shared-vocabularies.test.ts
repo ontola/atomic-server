@@ -4,6 +4,7 @@ import {
   contactSchema,
   moneySchema,
   pipelineSchema,
+  preferencesSchema,
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
   workSchema,
@@ -24,7 +25,8 @@ it('defines each shared property once, under its own versioned vocabulary', () =
     Object.keys(workSchema.properties).length +
       Object.keys(contactSchema.properties).length +
       Object.keys(pipelineSchema.properties).length +
-      Object.keys(moneySchema.properties).length,
+      Object.keys(moneySchema.properties).length +
+      Object.keys(preferencesSchema.properties).length,
   );
 
   for (const id of sharedVocabularyProperties) {
