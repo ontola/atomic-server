@@ -137,19 +137,19 @@ describe('resource sync proof recovery', () => {
     const two = loadedResource(store, 'https://example.com/second');
     memory.snapshots.set(one.subject, snapshot(one));
     memory.snapshots.set(two.subject, snapshot(two));
-    store.getResourceSyncStatus(one);
-    store.getResourceSyncStatus(two);
+    store.getResourceCopies(one);
+    store.getResourceCopies(two);
     expect(memory.getResourceSyncEvidence).not.toHaveBeenCalled();
     const unsubscribe = [one, two].map(resource =>
-      store.subscribeResourceSyncStatus(resource, vi.fn()),
+      store.subscribeResourceCopies(resource, vi.fn()),
     );
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(one).local.state).toBe('confirmed'),
+      expect(store.getResourceCopies(one).local.state).toBe('confirmed'),
     );
-    expect(store.getResourceSyncStatus(two).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(two).local.state).toBe('confirmed');
     expect(memory.getResourceSyncEvidence).toHaveBeenCalledTimes(1);
-    expect(store.getResourceSyncStatus(one).local.confirmedAt).toBeUndefined();
-    expect(store.getResourceSyncStatus(one).server.state).toBe('unknown');
+    expect(store.getResourceCopies(one).local.confirmedAt).toBeUndefined();
+    expect(store.getResourceCopies(one).server.state).toBe('unknown');
     unsubscribe.forEach(stop => stop());
   });
 
@@ -168,7 +168,7 @@ describe('resource sync proof recovery', () => {
     await vi.waitFor(() =>
       expect(first.getSyncStatus().pendingDirtyCount).toBe(0),
     );
-    const originalAt = first.getResourceSyncStatus(resource).server.confirmedAt;
+    const originalAt = first.getResourceCopies(resource).server.confirmedAt;
     expect(memory.receipts.size).toBeGreaterThan(0);
     const second = await scopedStore();
     second.setAgent(first.getAgent());
@@ -178,24 +178,18 @@ describe('resource sync proof recovery', () => {
       resource.subject,
       memory.snapshots.get(resource.subject),
     );
-    const stop = second.subscribeResourceSyncStatus(restored, vi.fn());
+    const stop = second.subscribeResourceCopies(restored, vi.fn());
     await vi.waitFor(() =>
-      expect(second.getResourceSyncStatus(restored).server.state).toBe(
-        'confirmed',
-      ),
+      expect(second.getResourceCopies(restored).server.state).toBe('confirmed'),
     );
-    expect(second.getResourceSyncStatus(restored).server.confirmedAt).toBe(
+    expect(second.getResourceCopies(restored).server.confirmedAt).toBe(
       originalAt,
     );
-    expect(second.getResourceSyncStatus(restored).local.state).toBe(
-      'confirmed',
-    );
+    expect(second.getResourceCopies(restored).local.state).toBe('confirmed');
     await restored.set(core.properties.name, 'Offline edit', false);
     await persist(second, memory.db, restored);
-    expect(second.getResourceSyncStatus(restored).server.state).toBe('pending');
-    expect(second.getResourceSyncStatus(restored).local.state).toBe(
-      'confirmed',
-    );
+    expect(second.getResourceCopies(restored).server.state).toBe('pending');
+    expect(second.getResourceCopies(restored).local.state).toBe('confirmed');
     stop();
   });
 
@@ -219,9 +213,7 @@ describe('resource sync proof recovery', () => {
     await vi.waitFor(() =>
       expect(store.getSyncStatus().pendingDirtyCount).toBe(0),
     );
-    expect(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
+    expect(store.getResourceCopies(resource).server.state).toBe('confirmed');
     memory.putResourceSyncReceipts.mockClear();
     memory.putResourceSyncReceipts.mockResolvedValue(undefined);
     await store.persistState(
@@ -248,7 +240,7 @@ describe('resource sync proof recovery', () => {
     };
     const read = deferred<ResourceSyncEvidence[]>();
     memory.getResourceSyncEvidence.mockReturnValue(read.promise);
-    const stop = store.subscribeResourceSyncStatus(resource, vi.fn());
+    const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
       expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
     );
@@ -258,14 +250,12 @@ describe('resource sync proof recovery', () => {
     await store.postCommit(commit, 'https://example.com/commit');
     read.resolve([previous]);
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(resource).server.state).toBe(
-        'confirmed',
-      ),
+      expect(store.getResourceCopies(resource).server.state).toBe('confirmed'),
     );
     await Promise.resolve();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).local.state).toBe('confirmed');
     expect(
-      store.getResourceSyncStatus(resource).server.confirmedAt,
+      store.getResourceCopies(resource).server.confirmedAt,
     ).toBeGreaterThan(123);
     stop();
   });
@@ -292,8 +282,8 @@ describe('resource sync proof recovery', () => {
         agent: string | undefined;
         serverUrl: string | undefined;
       }[] = [];
-      const stop = store.subscribeResourceSyncStatus(resource, () => {
-        const status = store.getResourceSyncStatus(resource);
+      const stop = store.subscribeResourceCopies(resource, () => {
+        const status = store.getResourceCopies(resource);
         if (!switching) return;
         observations.push({
           agent: store.getAgent()?.subject,
@@ -301,12 +291,12 @@ describe('resource sync proof recovery', () => {
         });
         // A mounted consumer may resubscribe during a status notification.
         // It must not capture old account/destination under the new epoch.
-        reentrantStop ??= store.subscribeResourceSyncStatus(resource, () => {
-          store.getResourceSyncStatus(resource);
+        reentrantStop ??= store.subscribeResourceCopies(resource, () => {
+          store.getResourceCopies(resource);
         });
       });
       await vi.waitFor(() =>
-        expect(store.getResourceSyncStatus(resource).server.state).toBe(
+        expect(store.getResourceCopies(resource).server.state).toBe(
           'confirmed',
         ),
       );
@@ -344,9 +334,7 @@ describe('resource sync proof recovery', () => {
             value.serverUrl === expectedUrl,
         ),
       ).toBe(true);
-      expect(store.getResourceSyncStatus(resource).server.state).toBe(
-        'unknown',
-      );
+      expect(store.getResourceCopies(resource).server.state).toBe('unknown');
       stop();
       reentrantStop?.();
     },
@@ -361,7 +349,7 @@ describe('resource sync proof recovery', () => {
       const resource = loadedResource(store);
       const read = deferred<ResourceSyncEvidence[]>();
       memory.getResourceSyncEvidence.mockReturnValueOnce(read.promise);
-      const stop = store.subscribeResourceSyncStatus(resource, vi.fn());
+      const stop = store.subscribeResourceCopies(resource, vi.fn());
       await vi.waitFor(() =>
         expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
       );
@@ -383,10 +371,8 @@ describe('resource sync proof recovery', () => {
       read.resolve([row]);
       await Promise.resolve();
       await Promise.resolve();
-      expect(store.getResourceSyncStatus(resource).server.state).toBe(
-        'unknown',
-      );
-      expect(store.getResourceSyncStatus(resource).local.state).toBe('unknown');
+      expect(store.getResourceCopies(resource).server.state).toBe('unknown');
+      expect(store.getResourceCopies(resource).local.state).toBe('unknown');
     },
   );
 
@@ -421,9 +407,9 @@ describe('resource sync proof recovery', () => {
     const store = await scopedStore();
     const resource = loadedResource(store);
     store.setClientDb({ isReady: true } as ClientDbWorker);
-    const oldStop = store.subscribeResourceSyncStatus(resource, vi.fn());
+    const oldStop = store.subscribeResourceCopies(resource, vi.fn());
     await Promise.resolve();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).local.state).toBe('unknown');
     oldStop();
     const memory = memoryDb();
     store.setClientDb(memory.db);
@@ -434,13 +420,13 @@ describe('resource sync proof recovery', () => {
         serverReceipt: receipt(resource),
       },
     ]);
-    const stop = store.subscribeResourceSyncStatus(resource, vi.fn());
+    const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
       expect(memory.getResourceSyncEvidence).toHaveBeenCalled(),
     );
     await Promise.resolve();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('unknown');
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).local.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     stop();
   });
 
@@ -457,21 +443,17 @@ describe('resource sync proof recovery', () => {
         serverReceipt: receipt(resource),
       },
     ]);
-    const stop = store.subscribeResourceSyncStatus(resource, vi.fn());
+    const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(resource).server.state).toBe(
-        'confirmed',
-      ),
+      expect(store.getResourceCopies(resource).server.state).toBe('confirmed'),
     );
     stop();
     store.evictResource(resource.subject);
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     const restored = loadedResource(store, resource.subject, bytes);
-    const stopAgain = store.subscribeResourceSyncStatus(restored, vi.fn());
+    const stopAgain = store.subscribeResourceCopies(restored, vi.fn());
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(restored).server.state).toBe(
-        'confirmed',
-      ),
+      expect(store.getResourceCopies(restored).server.state).toBe('confirmed'),
     );
     expect(memory.getResourceSyncEvidence).toHaveBeenCalledTimes(2);
     stopAgain();
@@ -483,13 +465,13 @@ describe('resource sync proof recovery', () => {
     store.setClientDb(memory.db);
     const resource = loadedResource(store);
     memory.getResourceSyncEvidence.mockRejectedValue(new Error('Flush failed'));
-    const stop = store.subscribeResourceSyncStatus(resource, vi.fn());
+    const stop = store.subscribeResourceCopies(resource, vi.fn());
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(resource).local.state).toBe('error'),
+      expect(store.getResourceCopies(resource).local.state).toBe('error'),
     );
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     await persist(store, memory.db, resource);
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).local.state).toBe('confirmed');
     stop();
   });
 
@@ -512,13 +494,13 @@ describe('resource sync proof recovery', () => {
       },
     ]);
     const stop = [one, two].map(resource =>
-      store.subscribeResourceSyncStatus(resource, vi.fn()),
+      store.subscribeResourceCopies(resource, vi.fn()),
     );
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(one).local.state).toBe('confirmed'),
+      expect(store.getResourceCopies(one).local.state).toBe('confirmed'),
     );
-    expect(store.getResourceSyncStatus(one).server.state).toBe('unknown');
-    expect(store.getResourceSyncStatus(two).server.state).toBe('unknown');
+    expect(store.getResourceCopies(one).server.state).toBe('unknown');
+    expect(store.getResourceCopies(two).server.state).toBe('unknown');
     const scope = memory.getResourceSyncEvidence.mock.calls[0][1];
     expect(scope?.agent).toBe(
       store.getAgent()?.subject.replace(/^did:ad:/, 'atomic:'),

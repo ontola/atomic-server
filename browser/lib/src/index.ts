@@ -95,7 +95,6 @@ export * from './chat-log.js';
 export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
-export type { ResourceSyncStatus } from './resource-sync-status.js';
 export type {
   ResourceSyncScope,
   ResourceSyncEvidence,
@@ -453,19 +452,23 @@ export {
 export type { AppPackage } from './app-package.js';
 
 export type {
-  ResourcePeerSyncStatus,
-  ResourcePeerCopy,
-} from './resource-peer-sync-status.js';
-export type {
   BrowserReplicaReceipt,
   ReplicaIdentity,
 } from './peer-receipts.js';
 
+export * from './attachment-manifest.js';
 export type {
+  Copy,
+  CopyState,
+  DestinationCopy,
+  PeerCopy,
+  ResourceCopies,
+} from './resource-copies.js';
+export type {
+  Receipt,
+  ResourceAttachmentEvidence,
+  ResourceAttachmentEvidenceProvider,
   ResourcePeerEvidence,
-  ResourcePeerEvidenceConnection,
-  ResourcePeerEvidenceReceipt,
   ResourcePeerEvidenceProvider,
-} from './resource-peer-evidence.js';
-
-export * from './resource-attachment-evidence.js';
+  SerializedVaultAttachmentReceipt,
+} from './resource-receipts.js';

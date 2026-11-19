@@ -6,8 +6,23 @@ import { core } from './ontologies/core.js';
 import { encodeB64 } from './base64.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { BrowserReplicaReceipt } from './peer-receipts.js';
+import { browserReceipt } from './resource-receipts.js';
 
 const drive = 'atomic:drive';
+const DRIVE = drive;
+const ack = (
+  store: Store,
+  receipt: Omit<BrowserReplicaReceipt, 'drive' | 'peerAgent'> &
+    Partial<BrowserReplicaReceipt>,
+) =>
+  store.acknowledgeReceipt(
+    browserReceipt({
+      drive: DRIVE,
+      peerAgent: 'atomic:agent:peer',
+      ...receipt,
+    })!,
+  );
+
 const source = { storageId: 'a'.repeat(64), generation: 'b'.repeat(64) };
 const replica = { storageId: 'c'.repeat(64), generation: 'd'.repeat(64) };
 
@@ -41,7 +56,7 @@ function setup() {
     version: version(),
     ...changes,
   });
-  const get = () => store.getResourcePeerSyncStatus(resource);
+  const get = () => store.getResourceCopies(resource).peers;
 
   return { store, resource, open, receipt, get, version };
 }
@@ -55,9 +70,7 @@ describe('live resource peer copies', () => {
       connectedCount: 1,
       confirmedCount: 0,
     });
-    h.store.acknowledgeResourcePeerReceipt(
-      h.receipt({ subject: 'atomic:elsewhere' }),
-    );
+    ack(h.store, h.receipt({ subject: 'atomic:elsewhere' }));
     expect(h.get().confirmedCount).toBe(0);
     expect(h.get()).toBe(h.get());
     expect(Object.isFrozen(h.get())).toBe(true);
@@ -68,7 +81,7 @@ describe('live resource peer copies', () => {
     const h = setup();
     h.open();
     const old = h.receipt();
-    h.store.acknowledgeResourcePeerReceipt(old);
+    ack(h.store, old);
     expect(h.get().state).toBe('confirmed');
     h.resource
       .getLoroDoc()!
@@ -76,12 +89,12 @@ describe('live resource peer copies', () => {
       .set(core.properties.name, 'Later');
     expect(h.get().state).toBe('pending');
     h.resource.sealPendingEdits();
-    h.store.acknowledgeResourcePeerReceipt(old);
+    ack(h.store, old);
     expect(h.get().state).toBe('pending');
-    h.store.acknowledgeResourcePeerReceipt(h.receipt({ confirmedAt: 20 }));
+    ack(h.store, h.receipt({ confirmedAt: 20 }));
     expect(h.get().state).toBe('confirmed');
     // A delayed older acknowledgment cannot replace newer coverage/time.
-    h.store.acknowledgeResourcePeerReceipt(old);
+    ack(h.store, old);
     expect(h.get().peers[0].confirmedAt).toBe(20);
     expect(h.get().state).toBe('confirmed');
   });
@@ -91,13 +104,9 @@ describe('live resource peer copies', () => {
     h.open();
     h.open('duplicate');
     h.open('same-browser');
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
-    h.store.acknowledgeResourcePeerReceipt(
-      h.receipt({ connectionId: 'duplicate', confirmedAt: 20 }),
-    );
-    h.store.acknowledgeResourcePeerReceipt(
-      h.receipt({ connectionId: 'same-browser', replica: source }),
-    );
+    ack(h.store, h.receipt());
+    ack(h.store, h.receipt({ connectionId: 'duplicate', confirmedAt: 20 }));
+    ack(h.store, h.receipt({ connectionId: 'same-browser', replica: source }));
     expect(h.get()).toMatchObject({ confirmedCount: 1, connectedCount: 3 });
     expect(h.get().peers).toHaveLength(1);
     expect(h.get().peers[0].confirmedAt).toBe(20);
@@ -107,15 +116,13 @@ describe('live resource peer copies', () => {
     const h = setup();
     h.open();
     h.open('duplicate');
-    h.store.acknowledgeResourcePeerReceipt(h.receipt({ confirmedAt: 30 }));
+    ack(h.store, h.receipt({ confirmedAt: 30 }));
     h.resource
       .getLoroDoc()!
       .getMap('properties')
       .set(core.properties.name, 'Later');
     h.resource.sealPendingEdits();
-    h.store.acknowledgeResourcePeerReceipt(
-      h.receipt({ connectionId: 'duplicate', confirmedAt: 20 }),
-    );
+    ack(h.store, h.receipt({ connectionId: 'duplicate', confirmedAt: 20 }));
     expect(h.get().confirmedCount).toBe(1);
     expect(h.get().peers).toHaveLength(1);
     expect(h.get().peers[0].connectionId).toBe('duplicate');
@@ -124,9 +131,9 @@ describe('live resource peer copies', () => {
   it('removes live proof on departure and ignores a late response from the closed session', () => {
     const h = setup();
     const close = h.open();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     close();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     expect(h.get()).toMatchObject({
       state: 'unknown',
       connectedCount: 0,
@@ -137,11 +144,12 @@ describe('live resource peer copies', () => {
   it('clears receipts immediately on source replacement and cannot reuse another remote generation', () => {
     const h = setup();
     h.open();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     h.store.invalidateResourcePeerSession('connection');
     expect(h.get().state).toBe('unknown');
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
-    h.store.acknowledgeResourcePeerReceipt(
+    ack(h.store, h.receipt());
+    ack(
+      h.store,
       h.receipt({
         subject: 'atomic:other',
         replica: { ...replica, generation: 'e'.repeat(64) },
@@ -159,11 +167,10 @@ describe('live resource peer copies', () => {
       h.store.setAgent(agent);
       h.store.setClientDb(db);
       h.open();
-      h.store.acknowledgeResourcePeerReceipt(h.receipt());
+      ack(h.store, h.receipt());
       const states: string[] = [];
-      const unsubscribe = h.store.subscribeResourcePeerSyncStatus(
-        h.resource,
-        () => states.push(h.get().state),
+      const unsubscribe = h.store.subscribeResourceCopies(h.resource, () =>
+        states.push(h.get().state),
       );
       const epoch = h.store.getPeerSyncGeneration();
 
@@ -176,7 +183,7 @@ describe('live resource peer copies', () => {
       }
 
       expect(h.store.getPeerSyncGeneration()).toBeGreaterThan(epoch);
-      h.store.acknowledgeResourcePeerReceipt(h.receipt());
+      ack(h.store, h.receipt());
       expect(h.get().state).toBe('unknown');
       expect(states.at(-1)).toBe('unknown');
       unsubscribe();
@@ -186,7 +193,7 @@ describe('live resource peer copies', () => {
   it('does not borrow the active drive when resource ancestry is unresolved', () => {
     const h = setup();
     h.open();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     h.resource.removeUnsafe('https://atomicdata.dev/properties/drive');
     void h.resource.set(core.properties.parent, 'atomic:missing-parent', false);
     h.resource.sealPendingEdits();
@@ -211,22 +218,17 @@ describe('live resource peer copies', () => {
     h.resource.removeUnsafe('https://atomicdata.dev/properties/drive');
     void h.resource.set(core.properties.parent, parent.subject, false);
     h.resource.sealPendingEdits();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     expect(h.get().confirmedCount).toBe(1);
   });
 
   it('clears proof on silent eviction and isolates throwing subscribers', () => {
     const h = setup();
     h.open();
-    const unsubscribe = h.store.subscribeResourcePeerSyncStatus(
-      h.resource,
-      () => {
-        throw new Error('view failed');
-      },
-    );
-    expect(() =>
-      h.store.acknowledgeResourcePeerReceipt(h.receipt()),
-    ).not.toThrow();
+    const unsubscribe = h.store.subscribeResourceCopies(h.resource, () => {
+      throw new Error('view failed');
+    });
+    expect(() => ack(h.store, h.receipt())).not.toThrow();
     const removed = vi.fn();
     const stop = h.store.on(StoreEvents.ResourcePeerEvidenceRemoved, removed);
     h.store.evictResource(h.resource.subject, false);
@@ -238,22 +240,19 @@ describe('live resource peer copies', () => {
   it('notifies only the affected resource on later acknowledgments and immediately shows unsaved edits', () => {
     const h = setup();
     h.open();
-    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    ack(h.store, h.receipt());
     const unrelated = new Resource('atomic:unrelated');
     unrelated.setStore(h.store);
     void unrelated.set('https://atomicdata.dev/properties/drive', drive, false);
     unrelated.sealPendingEdits();
     h.store.resources.set(unrelated.subject, unrelated);
     const changed = vi.fn();
-    const stopOther = h.store.subscribeResourcePeerSyncStatus(
-      unrelated,
-      changed,
-    );
+    const stopOther = h.store.subscribeResourceCopies(unrelated, changed);
     const states: string[] = [];
-    const stop = h.store.subscribeResourcePeerSyncStatus(h.resource, () =>
+    const stop = h.store.subscribeResourceCopies(h.resource, () =>
       states.push(h.get().state),
     );
-    h.store.acknowledgeResourcePeerReceipt(h.receipt({ confirmedAt: 30 }));
+    ack(h.store, h.receipt({ confirmedAt: 30 }));
     expect(changed).not.toHaveBeenCalled();
     void h.resource.set(core.properties.name, 'Unsaved', false);
     expect(states.at(-1)).toBe('pending');

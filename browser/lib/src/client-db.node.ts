@@ -1,9 +1,9 @@
+import type { AttachmentManifest } from './attachment-manifest.js';
 import {
   parseResourceAttachmentEvidence,
-  type AttachmentManifest,
   type ResourceAttachmentEvidence,
   type SerializedVaultAttachmentReceipt,
-} from './resource-attachment-evidence.js';
+} from './resource-receipts.js';
 /**
  * Node-side ClientDb: same public surface as `ClientDbWorker`, but runs the
  * WASM module on the main thread (no Worker, no BroadcastChannel, no OPFS).

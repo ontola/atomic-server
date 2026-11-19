@@ -1,8 +1,8 @@
+import type { AttachmentManifest } from './attachment-manifest.js';
 import type {
-  AttachmentManifest,
   ResourceAttachmentEvidence,
   SerializedVaultAttachmentReceipt,
-} from './resource-attachment-evidence.js';
+} from './resource-receipts.js';
 /**
  * Web Worker that hosts the WASM ClientDb.
  * Communicates with the main thread via typed postMessage.

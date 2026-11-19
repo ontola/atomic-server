@@ -1,9 +1,9 @@
+import type { AttachmentManifest } from './attachment-manifest.js';
 import {
   parseResourceAttachmentEvidence,
-  type AttachmentManifest,
   type ResourceAttachmentEvidence,
   type SerializedVaultAttachmentReceipt,
-} from './resource-attachment-evidence.js';
+} from './resource-receipts.js';
 /**
  * ClientDbWorker: typed async wrapper around the WASM ClientDb.
  *

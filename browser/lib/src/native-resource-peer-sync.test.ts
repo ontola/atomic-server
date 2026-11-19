@@ -4,14 +4,29 @@ import { NativeCryptoProvider } from './client-db.native.js';
 import { encodeB64 } from './base64.js';
 import { NativeClientDb, type NativeChannel } from './client-db.native.js';
 import type { ClientDbWorker } from './client-db.js';
-import type { AttachmentManifest } from './resource-attachment-evidence.js';
+import type { AttachmentManifest } from './attachment-manifest.js';
 import { BLOB, INTERNAL_ID } from './urls.js';
 import { core } from './ontologies/core.js';
 import { Resource } from './resource.js';
 import { Store } from './store.js';
+import { browserReceipt } from './resource-receipts.js';
+import type { BrowserReplicaReceipt } from './peer-receipts.js';
 
 const AGENT = 'atomic:agent:source';
 const DRIVE = 'atomic:native-drive';
+const ack = (
+  store: Store,
+  receipt: Omit<BrowserReplicaReceipt, 'drive' | 'peerAgent'> &
+    Partial<BrowserReplicaReceipt>,
+) =>
+  store.acknowledgeReceipt(
+    browserReceipt({
+      drive: DRIVE,
+      peerAgent: 'atomic:agent:peer',
+      ...receipt,
+    })!,
+  );
+
 const SOURCE = { storageId: 'a'.repeat(64), generation: 'b'.repeat(64) };
 const REPLICA = { storageId: 'c'.repeat(64), generation: 'd'.repeat(64) };
 const cleanup: Array<() => void> = [];
@@ -108,7 +123,7 @@ async function fixture(transport: 'iroh' | 'webrtc') {
   let stop: (() => void) | undefined;
 
   const watch = () => {
-    stop ??= store.subscribeResourcePeerSyncStatus(resource, () => {});
+    stop ??= store.subscribeResourceCopies(resource, () => {});
   };
 
   const unsubscribe = () => {
@@ -120,7 +135,7 @@ async function fixture(transport: 'iroh' | 'webrtc') {
     unsubscribe();
     store.setClientDb(undefined);
   });
-  const get = () => store.getResourcePeerSyncStatus(resource);
+  const get = () => store.getResourceCopies(resource).peers;
 
   const respond = (value: unknown) => {
     reply = async () => structuredClone(value);
@@ -170,7 +185,7 @@ describe.each(['iroh', 'webrtc'] as const)(
         storageId: REPLICA.storageId,
         confirmedAt: 100,
       });
-      expect(h.store.getResourceSyncStatus(h.resource).server.state).toBe(
+      expect(h.store.getResourceCopies(h.resource).server.state).toBe(
         'not-configured',
       );
     });
@@ -318,10 +333,7 @@ describe.each(['iroh', 'webrtc'] as const)(
       const before = h.calls.length;
       await vi.advanceTimersByTimeAsync(3000);
       expect(h.calls).toHaveLength(before);
-      const stop = h.store.subscribeResourcePeerSyncStatus(
-        h.resource,
-        () => {},
-      );
+      const stop = h.store.subscribeResourceCopies(h.resource, () => {});
       cleanup.push(stop);
       await h.poll();
       expect(h.get().state).toBe('confirmed');
@@ -372,8 +384,21 @@ describe.each(['iroh', 'webrtc'] as const)(
           confirmedAt: Date.now(),
         },
       ];
-      const contents = () =>
-        h.store.getResourceAttachmentSyncStatus(h.resource);
+
+      const contents = () => {
+        const copies = h.store.getResourceCopies(h.resource);
+
+        return {
+          ...copies,
+          server: copies.server.contents,
+          peers: copies.peers.peers.map(peer => ({
+            ...peer.contents,
+            connectionId: peer.connectionId,
+            storageId: peer.storageId,
+          })),
+        };
+      };
+
       h.respond(data);
       await h.poll();
       expect(contents()).toMatchObject({
@@ -417,8 +442,21 @@ describe.each(['iroh', 'webrtc'] as const)(
       data.connections.push(web);
       h.respond(data);
       await h.poll();
-      const contents = () =>
-        h.store.getResourceAttachmentSyncStatus(h.resource);
+
+      const contents = () => {
+        const copies = h.store.getResourceCopies(h.resource);
+
+        return {
+          ...copies,
+          server: copies.server.contents,
+          peers: copies.peers.peers.map(peer => ({
+            ...peer.contents,
+            connectionId: peer.connectionId,
+            storageId: peer.storageId,
+          })),
+        };
+      };
+
       expect(h.get().confirmedCount).toBe(1);
       expect(contents().peers.every(peer => peer.state !== 'confirmed')).toBe(
         true,
@@ -455,7 +493,7 @@ describe.each(['iroh', 'webrtc'] as const)(
         DRIVE,
         'atomic:agent:browser',
       );
-      h.store.acknowledgeResourcePeerReceipt({
+      ack(h.store, {
         ...h.receipt(),
         drive: DRIVE,
         peerAgent: 'atomic:agent:browser',

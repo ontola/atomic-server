@@ -1,4 +1,5 @@
-import { resourceAttachmentDescriptor } from './resource-attachment-evidence.js';
+import { resourceAttachmentDescriptor } from './attachment-manifest.js';
+import { browserReceipt } from './resource-receipts.js';
 import { authorizeBrowserInvite } from './browser-peer-invite.js';
 import type { Agent } from './agent.js';
 import type { ClientDbWorker } from './client-db.js';
@@ -429,7 +430,7 @@ class BrowserPeerConnection {
   ) {
     this.peerGeneration = store.getPeerSyncGeneration();
     this.peer = new WebRtcPeer({ iceServers: options.iceServers });
-    const receipts = new PeerReceiptRequests({
+    const base = {
       drive: this.options.drive,
       connectionId: this.connectionId,
       current: () => this.current(),
@@ -437,24 +438,34 @@ class BrowserPeerConnection {
         typeof this.db.getReplicaIdentity === 'function'
           ? this.db.getReplicaIdentity(this.options.drive)
           : Promise.resolve(undefined),
-      canSend: subject =>
+      canSend: (subject: string) =>
         this.session === undefined
           ? Promise.resolve(false)
           : this.db.canSendPeerFrame(this.session, subject),
-      send: async bytes => {
+      send: async (bytes: Uint8Array) => {
         const pipe = await this.peer.transport;
         if (this.current()) await pipe.send(bytes);
       },
       onSourceChanged: () =>
         this.store.invalidateResourcePeerSession(this.connectionId),
+    };
+
+    const acknowledge = (receipt: BrowserReplicaReceipt) => {
+      const proof = browserReceipt(receipt);
+      if (proof) this.store.acknowledgeReceipt(proof);
+    };
+
+    const receipts = new PeerReceiptRequests({
+      ...base,
       onReceipt: receipt => {
         if (!this.current()) return;
-        this.store.acknowledgeResourcePeerReceipt(receipt);
+        acknowledge(receipt);
 
         return this.options.onReplicaReceipt?.(receipt);
       },
     });
     const attachmentReceipts = new PeerReceiptRequests({
+      ...base,
       attachmentManifest: subject => {
         const resource = this.store.resources.get(
           this.store.normalizeSubject(subject),
@@ -464,30 +475,8 @@ class BrowserPeerConnection {
           ? resourceAttachmentDescriptor(this.store, resource).manifest
           : undefined;
       },
-      drive: this.options.drive,
-      connectionId: this.connectionId,
-      current: () => this.current(),
-      getSource: () =>
-        typeof this.db.getReplicaIdentity === 'function'
-          ? this.db.getReplicaIdentity(this.options.drive)
-          : Promise.resolve(undefined),
-      canSend: subject =>
-        this.session === undefined
-          ? Promise.resolve(false)
-          : this.db.canSendPeerFrame(this.session, subject),
-      send: async bytes => {
-        const pipe = await this.peer.transport;
-        if (this.current()) await pipe.send(bytes);
-      },
-      onSourceChanged: () =>
-        this.store.invalidateResourcePeerSession(this.connectionId),
       onReceipt: receipt => {
-        if (!this.current()) return;
-        if (receipt.manifest)
-          this.store.acknowledgeResourceAttachmentReceipt({
-            ...receipt,
-            manifest: receipt.manifest,
-          });
+        if (this.current() && receipt.manifest) acknowledge(receipt);
       },
     });
     this.attachmentReceipts = attachmentReceipts;

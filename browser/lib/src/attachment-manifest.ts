@@ -9,46 +9,6 @@ export interface AttachmentManifest {
     readonly chunks: readonly string[];
   }[];
 }
-export interface ResourceAttachmentEvidence {
-  readonly subject: string;
-  readonly version?: string;
-  readonly manifest?: AttachmentManifest;
-  readonly state: 'confirmed' | 'unknown';
-  readonly confirmedAt?: number;
-}
-export interface SerializedVaultAttachmentReceipt {
-  readonly subject: string;
-  readonly manifest: AttachmentManifest;
-  readonly confirmedAt: number;
-}
-export interface ResourceAttachmentEvidenceProvider {
-  getResourceAttachmentEvidence(
-    subjects: string[],
-  ): Promise<ResourceAttachmentEvidence[] | undefined>;
-}
-export type AttachmentCopyStatus = Readonly<{
-  state:
-    | 'confirmed'
-    | 'pending'
-    | 'unknown'
-    | 'unavailable'
-    | 'error'
-    | 'not-configured';
-  confirmedAt?: number;
-  error?: string;
-}>;
-export interface ResourceAttachmentSyncStatus {
-  readonly required: boolean;
-  readonly manifest?: AttachmentManifest;
-  readonly local: AttachmentCopyStatus;
-  readonly server: AttachmentCopyStatus & { readonly url?: string };
-  readonly peers: readonly (AttachmentCopyStatus & {
-    readonly connectionId: string;
-    readonly storageId?: string;
-    readonly generation?: string;
-  })[];
-}
-
 const P = 'https://atomicdata.dev/properties/';
 const HASH = /^[a-f0-9]{64}$/;
 
@@ -211,49 +171,4 @@ export function resourceAttachmentDescriptor(
   return manifest
     ? { required: !!files.length, manifest, dependencies }
     : unknown();
-}
-
-export function parseResourceAttachmentEvidence(
-  value: unknown,
-): ResourceAttachmentEvidence[] | undefined {
-  if (!Array.isArray(value) || value.length > 128) return undefined;
-  const out: ResourceAttachmentEvidence[] = [];
-  const seen = new Set<string>();
-
-  for (const row of value) {
-    if (
-      !row ||
-      typeof row.subject !== 'string' ||
-      !row.subject ||
-      seen.has(row.subject) ||
-      !['confirmed', 'unknown'].includes(row.state)
-    )
-      return undefined;
-    seen.add(row.subject);
-    const manifest =
-      row.manifest === undefined
-        ? undefined
-        : parseAttachmentManifest(row.manifest);
-    if (row.manifest !== undefined && !manifest) return undefined;
-    if (
-      row.state === 'confirmed' &&
-      (!manifest ||
-        typeof row.version !== 'string' ||
-        !row.version ||
-        !Number.isSafeInteger(row.confirmedAt) ||
-        row.confirmedAt < 0)
-    )
-      return undefined;
-    out.push(
-      Object.freeze({
-        subject: row.subject,
-        version: row.version,
-        manifest,
-        state: row.state,
-        confirmedAt: row.confirmedAt,
-      }),
-    );
-  }
-
-  return out;
 }

@@ -1581,9 +1581,7 @@ describe('WSClient resource server receipts', () => {
     socket.receive(
       updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
     );
-    assert(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
+    assert(store.getResourceCopies(resource).server.state).toBe('confirmed');
     const beforeMetadata = serverDoc.oplogVersion();
     serverDoc
       .getMap('properties')
@@ -1595,9 +1593,7 @@ describe('WSClient resource server receipts', () => {
         serverDoc.export({ mode: 'update', from: beforeMetadata }),
       ),
     );
-    assert(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
+    assert(store.getResourceCopies(resource).server.state).toBe('confirmed');
     assert(resource.get(core.properties.description)).toBe('Server metadata');
 
     // A new local op created after the server prepared its message must not be
@@ -1613,7 +1609,7 @@ describe('WSClient resource server receipts', () => {
       .set(core.properties.name, 'Not sent');
     resource.sealPendingEdits();
     socket.receive(updateFrame(resource.subject, incoming));
-    assert(store.getResourceSyncStatus(resource).server.state).toBe('pending');
+    assert(store.getResourceCopies(resource).server.state).toBe('pending');
     assert(resource.get(core.properties.name)).toBe('Not sent');
     client.close();
   });
@@ -1649,7 +1645,7 @@ describe('WSClient resource server receipts', () => {
       socket.receive(updateFrame(resource.subject, bytes));
     }
 
-    assert(store.getResourceSyncStatus(resource).server.state).toBe(
+    assert(store.getResourceCopies(resource).server.state).toBe(
       boundary === 'custom transport' ? 'not-configured' : 'unknown',
     );
     client.close();
@@ -1664,7 +1660,7 @@ describe('WSClient resource server receipts', () => {
     socket.receive(
       updateFrame(resource.subject, serverDoc.export({ mode: 'snapshot' })),
     );
-    assert(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    assert(store.getResourceCopies(resource).server.state).toBe('unknown');
     unsubscribe();
     client.close();
   });

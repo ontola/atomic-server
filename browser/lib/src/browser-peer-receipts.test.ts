@@ -243,10 +243,10 @@ it('automatically confirms current persisted inventory after a paired handshake'
     replica: h.identities[1],
     version,
   });
-  expect(h.left.getResourcePeerSyncStatus(h.resource).confirmedCount).toBe(1);
+  expect(h.left.getResourceCopies(h.resource).peers.confirmedCount).toBe(1);
   expect(Object.isFrozen(h.events[0])).toBe(true);
   links[0].close();
-  expect(h.left.getResourcePeerSyncStatus(h.resource).confirmedCount).toBe(0);
+  expect(h.left.getResourceCopies(h.resource).peers.confirmedCount).toBe(0);
 });
 
 it.each([
@@ -321,12 +321,12 @@ it('keeps a held old-version receipt pending after a newer edit and rejects it a
   h.resource.sealPendingEdits();
   peers[0].deliver(h.held[0]);
   await vi.waitUntil(() => h.events.length === 1);
-  expect(h.left.getResourcePeerSyncStatus(h.resource).state).toBe('pending');
+  expect(h.left.getResourceCopies(h.resource).peers.state).toBe('pending');
   h.left.evictResource(h.resource.subject, false);
   h.left.resources.set(h.resource.subject, h.resource);
   peers[0].deliver(h.held[0]);
   await new Promise(resolve => setTimeout(resolve, 0));
-  expect(h.left.getResourcePeerSyncStatus(h.resource).state).toBe('unknown');
+  expect(h.left.getResourceCopies(h.resource).peers.state).toBe('unknown');
   expect(h.events).toHaveLength(1);
 });
 
@@ -337,7 +337,7 @@ it('keeps older adapters connected and unconfirmed without storage identity or p
   await h.resource.save();
   h.connect(h.right);
   await vi.waitUntil(() => peers[0].sent.some(frame => frame[0] === Tag.SYNC));
-  expect(h.left.getResourcePeerSyncStatus(h.resource)).toMatchObject({
+  expect(h.left.getResourceCopies(h.resource).peers).toMatchObject({
     connectedCount: 1,
     confirmedCount: 0,
     state: 'unknown',
@@ -374,5 +374,5 @@ it('probes an actual signed outgoing commit even when reconciliation inventory e
   peers[0].deliver(h.held[0]);
   await vi.waitUntil(() => h.events.length === 1);
   expect(h.events[0].version).toBe(sentVersion);
-  expect(h.left.getResourcePeerSyncStatus(h.resource).state).toBe('pending');
+  expect(h.left.getResourceCopies(h.resource).peers.state).toBe('pending');
 });

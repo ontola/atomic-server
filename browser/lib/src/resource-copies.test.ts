@@ -78,9 +78,7 @@ describe('resource copy evidence', () => {
       }),
     ).toBe('deduped');
     await vi.waitFor(() =>
-      expect(store.getResourceSyncStatus(resource).local.state).toBe(
-        'confirmed',
-      ),
+      expect(store.getResourceCopies(resource).local.state).toBe('confirmed'),
     );
     expect(changed).not.toHaveBeenCalled();
     unsubscribe();
@@ -95,10 +93,10 @@ describe('resource copy evidence', () => {
     store.setServerConnected(true);
     store.finishDriveSync(resource.subject, 1, Date.now());
 
-    const status = store.getResourceSyncStatus(resource);
+    const status = store.getResourceCopies(resource);
     expect(status.local.state).toBe('unavailable');
     expect(status.server.state).toBe('unknown');
-    expect(store.getResourceSyncStatus(resource)).toBe(status);
+    expect(store.getResourceCopies(resource)).toBe(status);
   });
 
   it('confirms the exact acknowledged version, retains it offline, and excludes another resource', async () => {
@@ -108,19 +106,15 @@ describe('resource copy evidence', () => {
       noParent: true,
     });
     await resource.save();
-    expect(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
+    expect(store.getResourceCopies(resource).server.state).toBe('confirmed');
     store.setServerConnected(false);
-    expect(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
-    expect(store.getResourceSyncStatus(localResource(store)).server.state).toBe(
+    expect(store.getResourceCopies(resource).server.state).toBe('confirmed');
+    expect(store.getResourceCopies(localResource(store)).server.state).toBe(
       'unknown',
     );
 
     await resource.set(core.properties.name, 'New edit', false);
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('pending');
+    expect(store.getResourceCopies(resource).server.state).toBe('pending');
   });
 
   it('an acknowledgement arriving during an edit does not confirm the newer edit', async () => {
@@ -138,7 +132,7 @@ describe('resource copy evidence', () => {
     await resource.set(core.properties.name, 'Typed during send', false);
     response.resolve(commit);
     await sending;
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('pending');
+    expect(store.getResourceCopies(resource).server.state).toBe('pending');
     store.setServerConnected(false);
   });
 
@@ -153,17 +147,17 @@ describe('resource copy evidence', () => {
     await expect(
       store.postCommit(commit, 'https://example.com/commit'),
     ).rejects.toThrow('Refused');
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     await store.postCommit(commit, 'https://other.example/commit');
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     store.setServerConnected(false);
     store.setCommitTransport(async value => value);
     await store.postCommit(commit, 'https://example.com/commit');
-    expect(store.getResourceSyncStatus(resource).server.state).toBe(
+    expect(store.getResourceCopies(resource).server.state).toBe(
       'not-configured',
     );
     store.setCommitTransport(undefined);
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
   });
 
   it('does not reuse receipts or delayed acknowledgements after a destination or identity change', async () => {
@@ -173,7 +167,7 @@ describe('resource copy evidence', () => {
       noParent: true,
     });
     await resource.save();
-    const receipt = store.getResourceSyncStatus(resource);
+    const receipt = store.getResourceCopies(resource);
     expect(receipt.server.state).toBe('confirmed');
     await resource.set(core.properties.name, 'Waiting', false);
     const commit = await resource.signChanges(store.getAgent()!);
@@ -184,14 +178,12 @@ describe('resource copy evidence', () => {
     store.setServerUrl('https://example.com', { connect: false });
     response.resolve(commit);
     await sending;
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
 
     await store.postCommit(commit, 'https://example.com/commit');
-    expect(store.getResourceSyncStatus(resource).server.state).toBe(
-      'confirmed',
-    );
+    expect(store.getResourceCopies(resource).server.state).toBe('confirmed');
     store.setAgent(undefined);
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     store.setServerConnected(false);
   });
 
@@ -201,10 +193,12 @@ describe('resource copy evidence', () => {
       connect: false,
     });
     const resource = localResource(store);
-    const observed: ReturnType<Store['getResourceSyncStatus']>[] = [];
-    const unsubscribe = store.subscribeResourceSyncStatus(resource, () => {
-      observed.push(store.getResourceSyncStatus(resource));
+    const observed: ReturnType<Store['getResourceCopies']>[] = [];
+    const unsubscribe = store.subscribeResourceCopies(resource, () => {
+      observed.push(store.getResourceCopies(resource));
     });
+    // Mounting also resolves the unloaded resource, which notifies once.
+    observed.length = 0;
     const db = database();
     store.setClientDb(db);
     expect(observed[0].local.state).toBe('unknown');
@@ -233,19 +227,19 @@ describe('resource copy evidence', () => {
     store.setClientDb(db);
     const resource = localResource(store);
     const changed = vi.fn();
-    const unsubscribe = store.subscribeResourceSyncStatus(resource, changed);
+    const unsubscribe = store.subscribeResourceCopies(resource, changed);
     const pending = store.persistState(
       db,
       resource.subject,
       '{}',
       snapshot(resource),
     );
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('pending');
+    expect(store.getResourceCopies(resource).local.state).toBe('pending');
     changed.mockClear();
     write.resolve();
     await pending;
     expect(changed).toHaveBeenCalled();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).local.state).toBe('confirmed');
     unsubscribe();
   });
 
@@ -271,7 +265,7 @@ describe('resource copy evidence', () => {
     resource.sealPendingEdits();
     write.resolve();
     await pending;
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('pending');
+    expect(store.getResourceCopies(resource).local.state).toBe('pending');
   });
 
   it('shows local write failures without manufacturing a saved copy', async () => {
@@ -291,7 +285,7 @@ describe('resource copy evidence', () => {
     );
     write.reject(new Error('Disk unavailable'));
     await expect(pending).rejects.toThrow('Disk unavailable');
-    expect(store.getResourceSyncStatus(resource).local).toMatchObject({
+    expect(store.getResourceCopies(resource).local).toMatchObject({
       state: 'error',
       error: 'Disk unavailable',
     });
@@ -314,7 +308,7 @@ describe('resource copy evidence', () => {
     );
     write.resolve();
     await pending;
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).local.state).toBe('confirmed');
 
     const later = deferred<void>();
     vi.mocked(db.putResourceWithSnapshot).mockImplementationOnce(
@@ -330,7 +324,7 @@ describe('resource copy evidence', () => {
     store.setClientDb(database());
     later.resolve();
     await pendingLater;
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).local.state).toBe('unknown');
   });
   it('follows subject renaming and isolates subscribers from the durable write', async () => {
     const store = new Store({
@@ -342,8 +336,8 @@ describe('resource copy evidence', () => {
     store.setClientDb(db);
     const resource = localResource(store);
     const changed = vi.fn();
-    const unsubscribe = store.subscribeResourceSyncStatus(resource, changed);
-    const stopThrowing = store.subscribeResourceSyncStatus(resource, () => {
+    const unsubscribe = store.subscribeResourceCopies(resource, changed);
+    const stopThrowing = store.subscribeResourceCopies(resource, () => {
       throw new Error('subscriber broke');
     });
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -358,7 +352,7 @@ describe('resource copy evidence', () => {
     write.resolve();
     await pending;
     expect(changed).toHaveBeenCalled();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).local.state).toBe('confirmed');
     expect(log).toHaveBeenCalled();
     stopThrowing();
     unsubscribe();
@@ -377,7 +371,7 @@ describe('resource copy evidence', () => {
     store.evictResource(resource.subject);
     response.resolve(commit);
     await sending;
-    expect(store.getResourceSyncStatus(resource).server.state).toBe('unknown');
+    expect(store.getResourceCopies(resource).server.state).toBe('unknown');
     store.setServerConnected(false);
   });
 });
