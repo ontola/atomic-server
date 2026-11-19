@@ -23,7 +23,11 @@ function setup() {
           onEditingChange={setEditing}
           onClick={select}
           onDoubleClick={() => setEditing(true)}
-        />
+        >
+          <span aria-hidden title='Three rows'>
+            3
+          </span>
+        </ViewTab>
         <ViewTab
           name='Read only'
           active={false}
@@ -44,6 +48,7 @@ it('renders without an Atomic store or host theme and delegates selection', () =
   const { select } = setup();
   const tab = screen.getByRole('tab', { name: 'All rows' });
   expect(tab.getAttribute('aria-selected')).toBe('true');
+  expect(tab.contains(screen.getByTitle('Three rows'))).toBe(true);
   fireEvent.click(tab);
   expect(select).toHaveBeenCalledOnce();
   expect(

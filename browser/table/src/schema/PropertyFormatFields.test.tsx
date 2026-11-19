@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { PropertyPrecisionField } from './PropertyPrecisionField.js';
 import { PropertyDateFormatField } from './PropertyDateFormatField.js';
+import { PropertyPrecisionField } from './PropertyPrecisionField.js';
 afterEach(cleanup);
 
 it('retains invalid precision text without truncation, coercion or commit', () => {
@@ -102,4 +102,24 @@ it('isolates date-format radio groups across property drafts and respects read-o
   );
   fireEvent.click(radios[3]);
   expect(change).not.toHaveBeenCalled();
+});
+
+it('keeps the precision draft across host updates and delegates blur', () => {
+  const change = vi.fn(),
+    blur = vi.fn();
+  const props = { label: 'Decimal Places', onChange: change, onBlur: blur };
+  const result = render(<PropertyPrecisionField {...props} value={2} />);
+  const input = screen.getByRole('textbox', {
+    name: 'Decimal Places',
+  }) as HTMLInputElement;
+  fireEvent.change(input, { target: { value: '3' } });
+  expect(change).toHaveBeenCalledOnce();
+  fireEvent.blur(input);
+  expect(blur).toHaveBeenCalledOnce();
+  result.rerender(<PropertyPrecisionField {...props} value={7} />);
+  expect(input.value).toBe('3');
+  expect(change).toHaveBeenCalledWith(3);
+  fireEvent.change(input, { target: { value: '21' } });
+  expect(screen.getByRole('alert').textContent).toContain('whole number');
+  expect(change).toHaveBeenCalledOnce();
 });

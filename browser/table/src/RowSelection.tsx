@@ -1,4 +1,4 @@
-import { Button as SharedButton } from '@tomic/ui/components/Button';
+import { ghostButtonStyles } from '@tomic/ui/components/Button';
 import type { ButtonHTMLAttributes, ComponentType, ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { FaCheck, FaTrash, FaXmark } from 'react-icons/fa6';
@@ -59,7 +59,7 @@ export function TableRowSelectionActions({
   onDelete,
   deleteUnavailable,
   onClear,
-  Button = SharedButton,
+  Button = DefaultButton,
   messages,
 }: TableRowSelectionActionsProps) {
   if (count === 0) return null;
@@ -136,4 +136,12 @@ const Box = styled.button`
   &:hover:not([aria-checked='true']) {
     border-color: ${p => tableTheme(p.theme).colors.main};
   }
+`;
+
+const DefaultButton = styled.button`
+  ${ghostButtonStyles}
+  justify-content: center;
+  height: 1.85rem;
+  width: 1.85rem;
+  padding: 0;
 `;

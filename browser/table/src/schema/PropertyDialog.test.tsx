@@ -13,6 +13,12 @@ import {
   TablePropertyDialog,
   type TablePropertyEditorProps,
 } from './PropertyDialog.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@tomic/ui/components/Dialog/index';
+import { DialogGlobalContextProvider } from '@tomic/ui/components/Dialog/DialogGlobalContextProvider';
 type Draft = { name: Map<string, string> };
 const makeDraft = (name = 'Original'): Draft => ({
   name: new Map([['value', name]]),
@@ -153,8 +159,10 @@ it('guards duplicate submission and cancellation synchronously while a save is p
     />,
   );
   await readyToSave();
+  expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('false');
   fireEvent.submit(screen.getByRole('form'));
   fireEvent.submit(screen.getByRole('form'));
+  expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true');
   fireEvent(
     screen.getByRole('dialog'),
     new Event('cancel', { cancelable: true }),
@@ -382,3 +390,77 @@ it('removes an invalid draft through the same retained retry lifecycle without s
   expect(remove).toHaveBeenCalledTimes(2);
   expect(save).not.toHaveBeenCalled();
 });
+
+it.each(['Cancel', 'Save'])(
+  'restores the underlying dialog after %s unmounts the property dialog',
+  async action => {
+    const dismissUnderlying = vi.fn();
+
+    function Host() {
+      const [underlying, setUnderlying] = useState(false);
+      const [property, setProperty] = useState(false);
+
+      return (
+        <DialogGlobalContextProvider>
+          <button onClick={() => setUnderlying(true)}>Open underlying</button>
+          {underlying && (
+            <Dialog
+              show
+              labelledBy='underlying-title'
+              hideOnboardingFeedback
+              onClose={dismissUnderlying}
+              onClosed={() => {}}
+            >
+              <DialogTitle>
+                <h2 id='underlying-title'>Underlying dialog</h2>
+              </DialogTitle>
+              <DialogContent>
+                <button onClick={() => setProperty(true)}>Edit property</button>
+              </DialogContent>
+            </Dialog>
+          )}
+          <TablePropertyDialog
+            open={property}
+            scope='stacked'
+            title='Edit property'
+            prepare={makeDraft}
+            Editor={Editor}
+            save={async () => {}}
+            onClose={() => setProperty(false)}
+          />
+        </DialogGlobalContextProvider>
+      );
+    }
+
+    render(
+      <StrictMode>
+        <Host />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open underlying' }));
+    const underlying = await screen.findByRole('dialog', {
+      name: 'Underlying dialog',
+    });
+    await waitFor(() =>
+      expect(underlying.getAttribute('data-top-level')).toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit property' }));
+    await readyToSave();
+    await waitFor(() =>
+      expect(underlying.getAttribute('data-top-level')).toBe('false'),
+    );
+    fireEvent.mouseDown(underlying);
+    expect(dismissUnderlying).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: action, exact: true }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Edit property' }),
+      ).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(underlying.getAttribute('data-top-level')).toBe('true'),
+    );
+    fireEvent.mouseDown(underlying);
+    expect(dismissUnderlying).toHaveBeenCalledOnce();
+  },
+);

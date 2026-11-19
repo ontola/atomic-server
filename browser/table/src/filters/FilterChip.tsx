@@ -1,4 +1,3 @@
-import { InputStyled as SharedInput } from '@tomic/ui/components/forms/InputStyles';
 import {
   useState,
   useId,
@@ -10,8 +9,14 @@ import {
 } from 'react';
 import {
   Popover as SharedPopover,
-  PopoverPrimitive as RadixPopover,
+  PopoverTrigger,
 } from '@tomic/ui/components/Popover';
+import { Row, Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { styled } from 'styled-components';
 import { FaXmark } from 'react-icons/fa6';
 import type { TableFilter } from '../views/configuration.js';
@@ -50,7 +55,7 @@ export interface TableFilterChipProps {
     'value' | 'onChange' | 'autoFocus'
   >;
   derivedUnit?: { suffix: string; allowsNow: boolean };
-  renderValueSummary?: (value: string) => ReactNode;
+  renderValueSummary?: (value: string, suffix?: string) => ReactNode;
   hint?: ReactNode;
   unavailable?: boolean;
   disabled?: boolean;
@@ -96,7 +101,7 @@ export function TableFilterChip({
   hint,
   unavailable,
   disabled,
-  Popover = DefaultPopover,
+  Popover = SharedPopover,
   Input,
   Select,
   Wrapper,
@@ -105,14 +110,21 @@ export function TableFilterChip({
   const [open, setOpen] = useState(filter.value === '');
   const titleId = useId();
   const text = { ...defaults, ...messages };
-  const SelectComponent = Select ?? DefaultSelect;
-  const InputComponent = Input ?? DefaultInput;
+  const SelectComponent = Select ?? BasicSelect;
+  const InputComponent = Input ?? InputStyled;
+  const InputContainer = Wrapper ?? InputWrapper;
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
     onOpenChange?.(next);
   };
 
+  // Keep the existing native numeric control for normal values, but do not let
+  // it erase a malformed stored literal before the user can repair it.
+  const numericValue =
+    filter.value === '' ||
+    (/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(filter.value) &&
+      Number.isFinite(Number(filter.value)));
   const input = (
     <InputComponent
       autoFocus
@@ -121,7 +133,8 @@ export function TableFilterChip({
       data-testid='derived-filter-value'
       placeholder={derivedUnit?.allowsNow ? 'yyyy-mm-dd' : '0'}
       inputMode={derivedUnit?.allowsNow ? undefined : 'decimal'}
-      type={derivedUnit?.allowsNow ? 'date' : 'text'}
+      type={derivedUnit?.allowsNow ? 'date' : numericValue ? 'number' : 'text'}
+      step='any'
       value={filter.value}
       onChange={event => onValueChange(event.target.value)}
     />
@@ -146,7 +159,7 @@ export function TableFilterChip({
             {filter.value === '' ? (
               <Muted>…</Muted>
             ) : renderValueSummary ? (
-              renderValueSummary(filter.value)
+              renderValueSummary(filter.value, derivedUnit?.suffix)
             ) : (
               <>
                 {filter.value}
@@ -221,7 +234,7 @@ export function TableFilterChip({
                 )}
                 {!(derivedUnit.allowsNow && filter.value === 'now') && (
                   <ValueRow>
-                    {Wrapper ? <Wrapper>{input}</Wrapper> : input}
+                    <InputContainer>{input}</InputContainer>
                     {derivedUnit.suffix && (
                       <Suffix>{derivedUnit.suffix}</Suffix>
                     )}
@@ -256,9 +269,7 @@ export function TableFilterChip({
   );
 }
 
-const DefaultPopover = SharedPopover;
-
-const ChipTrigger = styled(RadixPopover.Trigger)<{ $active: boolean }>`
+const ChipTrigger = styled(PopoverTrigger)<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -290,26 +301,19 @@ const ChipValue = styled.span`
   text-overflow: ellipsis;
   max-width: 12rem;
 `;
-const Inner = styled.div`
-  display: flex;
-  flex-direction: column;
+const Inner = styled(Column)`
   padding: max(0.75rem, ${p => tableTheme(p.theme).size()});
   gap: max(0.5rem, ${p => tableTheme(p.theme).size()});
   min-width: 18rem;
   max-width: calc(100vw - 2rem);
   box-sizing: border-box;
 `;
-const HeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-`;
-const ValueRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5ch;
-`;
+const HeaderRow = styled(Row).attrs({
+  center: true,
+  justify: 'space-between',
+  gap: '1rem',
+})``;
+const ValueRow = styled(Row).attrs({ center: true, gap: '0.5ch' })``;
 const RemoveButton = styled.button`
   background: none;
   border: none;
@@ -334,27 +338,4 @@ const Suffix = styled.span`
   color: ${p => tableTheme(p.theme).colors.textLight};
   font-size: 0.85rem;
   white-space: nowrap;
-`;
-
-const DefaultInput = styled(SharedInput)`
-  font: inherit;
-  color: inherit;
-  background: ${p => tableTheme(p.theme).colors.bg};
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  min-height: 2.25rem;
-  padding: 0.35rem 0.6rem;
-  min-width: 0;
-  width: 100%;
-`;
-const DefaultSelect = styled.select`
-  font: inherit;
-  color: inherit;
-  background: ${p => tableTheme(p.theme).colors.bg};
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  min-height: 2.25rem;
-  padding: 0.35rem 0.6rem;
-  min-width: 0;
-  width: 100%;
 `;

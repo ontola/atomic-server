@@ -1,14 +1,12 @@
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
+import { TablePropertyDialogFrame } from './PropertyDialog.js';
 import {
   useEffect,
-  useId,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { styled } from 'styled-components';
-import { tableTheme } from '../theme.js';
 import { createTableDraftCommit } from './draftCommit.js';
 
 export interface TableColumnRemovalDialogProps {
@@ -54,8 +52,6 @@ function RemovalIntent({
     controller.getSnapshot,
   );
   const [deleteDefinition, setDeleteDefinition] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
   const text = {
     removeTitle: 'Remove column',
     deleteTitle: 'Delete property',
@@ -69,15 +65,7 @@ function RemovalIntent({
     ...messages,
   };
   const valid = canRemove && (!deleteDefinition || canDeleteDefinition);
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-
-    return () => {
-      controller.invalidate();
-      element?.close();
-    };
-  }, [controller]);
+  useEffect(() => () => controller.invalidate(), [controller]);
 
   const cancel = () => {
     if (!controller.getSnapshot().busy) onClose();
@@ -93,29 +81,37 @@ function RemovalIntent({
   };
 
   return (
-    <RemovalDialog
-      ref={dialog}
-      aria-labelledby={titleId}
-      aria-busy={state.busy}
-      onCancel={event => {
-        event.preventDefault();
-        cancel();
-      }}
-      onKeyDown={event => event.stopPropagation()}
+    <TablePropertyDialogFrame
+      title={deleteDefinition ? text.deleteTitle : text.removeTitle}
+      busy={state.busy}
+      canClose={!state.busy}
+      onCancel={cancel}
+      actions={[
+        {
+          key: 'cancel',
+          label: text.cancel,
+          disabled: state.busy,
+          run: cancel,
+        },
+        {
+          key: 'remove',
+          label: deleteDefinition ? text.delete : text.remove,
+          disabled: state.busy || !valid,
+          run: () => {
+            void confirm();
+          },
+        },
+      ]}
     >
-      <h2 id={titleId}>
-        {deleteDefinition ? text.deleteTitle : text.removeTitle}
-      </h2>
       {children}
       <label style={{ display: 'flex', gap: '0.5rem', marginBlock: '1rem' }}>
-        <input
-          type='checkbox'
+        <Checkbox
           checked={deleteDefinition}
           disabled={state.busy || (!canDeleteDefinition && !deleteDefinition)}
-          onChange={event => {
+          onChange={checked => {
             if (controller.getSnapshot().busy) return;
-            if (event.target.checked && !canDeleteDefinition) return;
-            setDeleteDefinition(event.target.checked);
+            if (checked && !canDeleteDefinition) return;
+            setDeleteDefinition(checked);
             controller.clearError();
           }}
         />
@@ -124,53 +120,6 @@ function RemovalIntent({
       {!valid && <p role='alert'>{text.unavailable}</p>}
       {state.error && <p role='alert'>{state.error.message}</p>}
       {state.busy && <p role='status'>{text.pending}</p>}
-      <footer
-        style={{ display: 'flex', justifyContent: 'end', gap: '0.75rem' }}
-      >
-        <button disabled={state.busy} onClick={cancel}>
-          {text.cancel}
-        </button>
-        <button disabled={state.busy || !valid} onClick={() => void confirm()}>
-          {deleteDefinition ? text.delete : text.remove}
-        </button>
-      </footer>
-    </RemovalDialog>
+    </TablePropertyDialogFrame>
   );
 }
-
-const RemovalDialog = styled.dialog`
-  max-width: min(36rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
-  overflow: auto;
-  box-sizing: border-box;
-  padding: 1.5rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  background: ${p => tableTheme(p.theme).colors.bg};
-  color: ${p => tableTheme(p.theme).colors.text};
-  font:
-    1rem/1.5 system-ui,
-    sans-serif;
-  box-shadow: ${p => tableTheme(p.theme).boxShadowIntense};
-  &::backdrop {
-    background: #0005;
-  }
-  h2 {
-    margin-top: 0;
-    font-size: 1.25rem;
-  }
-  footer button {
-    min-height: 2.25rem;
-    padding: 0.375rem 0.75rem;
-    border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-    border-radius: ${p => tableTheme(p.theme).radius};
-    background: ${p => tableTheme(p.theme).colors.bg1};
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    &:disabled {
-      opacity: 0.55;
-      cursor: default;
-    }
-  }
-`;

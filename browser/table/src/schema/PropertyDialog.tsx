@@ -1,4 +1,16 @@
+import { Button } from '@tomic/ui/components/Button';
 import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@tomic/ui/components/Dialog/index';
+import {
+  DialogContext,
+  DialogGlobalContextProvider,
+} from '@tomic/ui/components/Dialog/DialogGlobalContextProvider';
+import {
+  useContext,
   useEffect,
   useEffectEvent,
   useId,
@@ -9,9 +21,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
-import { styled } from 'styled-components';
 import { createTableDraftCommit } from './draftCommit.js';
-import { tableTheme } from '../theme.js';
 
 export interface TablePropertyEditorProps<Prepared extends object> {
   draft: Prepared;
@@ -83,7 +93,7 @@ function PropertyIntent<Prepared extends object>({
   remove,
   isDraftLocked,
   Editor,
-  Frame = DefaultPropertyFrame,
+  Frame = TablePropertyDialogFrame,
   onClose,
   onDismiss,
   onSaved,
@@ -296,90 +306,63 @@ function PropertyIntent<Prepared extends object>({
   );
 }
 
-function DefaultPropertyFrame({
+export function TablePropertyDialogFrame(
+  props: TablePropertyDialogPresentation,
+) {
+  const { portal } = useContext(DialogContext);
+
+  return portal.current ? (
+    <SharedPropertyFrame {...props} />
+  ) : (
+    <DialogGlobalContextProvider>
+      <SharedPropertyFrame {...props} />
+    </DialogGlobalContextProvider>
+  );
+}
+
+function SharedPropertyFrame({
   title,
   children,
   actions,
   busy,
+  canClose,
   onCancel,
 }: TablePropertyDialogPresentation) {
-  const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-    return () => dialog?.close();
-  }, []);
+  // A standalone dialog's portal is attached during the first commit.
+  if (!mounted) return null;
 
   return (
-    <PropertyModal
-      ref={ref}
-      aria-labelledby={titleId}
+    <Dialog
+      show
+      labelledBy={titleId}
       aria-busy={busy}
-      onKeyDown={event => event.stopPropagation()}
-      onCancel={event => {
-        event.preventDefault();
-        onCancel();
+      hideOnboardingFeedback
+      disableLightDismiss={!canClose}
+      onClose={() => {
+        if (canClose) onCancel();
       }}
+      onClosed={() => {}}
     >
-      <h2 id={titleId}>{title}</h2>
-      {children}
-      <footer>
+      <DialogTitle>
+        <h2 id={titleId}>{title}</h2>
+      </DialogTitle>
+      <DialogContent>{children}</DialogContent>
+      <DialogActions>
         {actions.map(action => (
-          <button
+          <Button
             key={action.key}
             type='button'
             disabled={action.disabled}
             onClick={action.run}
           >
             {action.label}
-          </button>
+          </Button>
         ))}
-      </footer>
-    </PropertyModal>
+      </DialogActions>
+    </Dialog>
   );
 }
-
-const PropertyModal = styled.dialog`
-  max-width: min(36rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
-  overflow: auto;
-  box-sizing: border-box;
-  padding: 1.5rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  background: ${p => tableTheme(p.theme).colors.bg};
-  color: ${p => tableTheme(p.theme).colors.text};
-  font:
-    1rem/1.5 system-ui,
-    sans-serif;
-  box-shadow: ${p => tableTheme(p.theme).boxShadowIntense};
-  &::backdrop {
-    background: #0005;
-  }
-  h2 {
-    margin-top: 0;
-    font-size: 1.25rem;
-  }
-  footer {
-    display: flex;
-    justify-content: end;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-  }
-  footer button {
-    min-height: 2.25rem;
-    padding: 0.375rem 0.75rem;
-    border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-    border-radius: ${p => tableTheme(p.theme).radius};
-    background: ${p => tableTheme(p.theme).colors.bg1};
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    &:disabled {
-      opacity: 0.55;
-      cursor: default;
-    }
-  }
-`;

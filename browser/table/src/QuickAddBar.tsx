@@ -1,4 +1,3 @@
-import { Button as SharedButton } from '@tomic/ui/components/Button';
 import {
   useEffect,
   useMemo,
@@ -10,8 +9,9 @@ import {
 } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
+import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
+import { Button as SharedButton } from '@tomic/ui/components/Button';
 import { createTableQuickAddQueue } from './quickAddQueue.js';
-import { tableTheme } from './theme.js';
 
 export interface TableQuickAddButtonProps {
   children?: ReactNode;
@@ -46,7 +46,7 @@ function QuickAddSession({
   onCreated,
   onError,
   Field = DefaultField,
-  Button = DefaultButton,
+  Button = SharedButton,
 }: TableQuickAddBarProps) {
   const [typed, setTyped] = useState('');
   const queue = useMemo(() => createTableQuickAddQueue(), []);
@@ -113,22 +113,8 @@ const Bar = styled.div`
   padding-block: 0.5rem;
   flex-wrap: wrap;
 `;
-const DefaultField = styled.input`
+const DefaultField = styled(InputStyled)`
   flex: 1;
   min-width: 12rem;
   max-width: 30rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  padding: 0.4rem 0.6rem;
-  color: ${p => tableTheme(p.theme).colors.text};
-  background: ${p => tableTheme(p.theme).colors.bg};
-`;
-const DefaultButton = styled(SharedButton)`
-  font: inherit;
-  padding: 0.4rem 0.6rem;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
 `;

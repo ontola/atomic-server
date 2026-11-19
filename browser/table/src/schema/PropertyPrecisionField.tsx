@@ -1,3 +1,4 @@
+import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { parseInteger } from '../chunks/TablePage/EditorCells/numberInput.js';
 import { UNPARSED } from '../chunks/TablePage/EditorCells/useCommittedText.js';
@@ -41,7 +42,7 @@ export function PropertyPrecisionField({
   useEffect(() => {
     report();
   }, [error]);
-  const Field = Input ?? 'input';
+  const Field = Input ?? InputStyled;
   const ErrorMessage = Error ?? 'span';
 
   return (

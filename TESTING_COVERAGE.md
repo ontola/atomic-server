@@ -1,3 +1,16 @@
+Canonical table controls (candidate28 follow-up): `browser/table/src/schema/PropertyDialog.test.tsx`
+and `ColumnRemovalDialog.test.tsx` assert busy state on the canonical dialog.
+Persistent-provider regressions cover Cancel and successful Save unmounts restoring
+an underlying dialog's rendered stack position and live backdrop handling, including
+Strict Mode. Filter, selection, quick-add and format field tests retain nine portable
+compatibility cases; numeric filters preserve malformed stored text while complete
+numbers use `type=number` and `step=any`. View tabs retain host-supplied children.
+Local validation includes the complete table suite and clean packed UI/table
+consumers (rendering and NodeNext declarations). A separate Chromium component
+fixture exercises desktop/mobile defaults, numeric filters, busy/retry dialogs,
+standalone fallback and shared providers, and underlying-dialog dismissal. This
+fixture does not exercise the full Atomic application or storage backend.
+
 CI infrastructure: `python3 scripts/ci-infrastructure-test.py` exercises the
 actual runner-selection and required-check shell, trusted downstream gating,
 Docker client/daemon failures and bounded timeouts, and stable per-runner Dagger

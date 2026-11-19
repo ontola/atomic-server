@@ -1,4 +1,8 @@
-import { InputStyled as SharedInput } from '@tomic/ui/components/forms/InputStyles';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import {
   useEffect,
   useEffectEvent,
@@ -203,17 +207,12 @@ const Hint = styled.span`
   font-size: 0.8rem;
   color: ${p => tableTheme(p.theme).colors.textLight};
 `;
-const Select = styled.select`
-  padding: 0.4rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  background: ${p => tableTheme(p.theme).colors.bg};
-  color: ${p => tableTheme(p.theme).colors.text};
-`;
-const DefaultInput = styled(SharedInput)`
-  padding: 0.4rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  background: ${p => tableTheme(p.theme).colors.bg};
-  color: ${p => tableTheme(p.theme).colors.text};
-`;
+const Select = BasicSelect;
+
+function DefaultInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <InputWrapper>
+      <InputStyled {...props} />
+    </InputWrapper>
+  );
+}
