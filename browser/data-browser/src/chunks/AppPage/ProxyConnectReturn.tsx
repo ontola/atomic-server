@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { StoreEvents, useStore, type Agent } from '@tomic/react';
 import { getIntegrationProxy } from '@helpers/integrationProxy';
+import { setIntegrationReturnListener } from '@helpers/integrationReturn';
 import { ProxyConnections } from '@helpers/proxyConnections';
 
 /**
@@ -21,21 +22,22 @@ export function ProxyConnectReturn({
   children: ReactNode;
 }): React.JSX.Element {
   const store = useStore();
-  const [pending] = useState(() => {
-    const params = new URLSearchParams(location.search);
-
-    // Settings can hold a proxy value that no longer validates; that is never
-    // a return this browser started.
-    const connections = safely(
-      () =>
-        new ProxyConnections(localStorage, getIntegrationProxy(), () =>
-          store.getAgent(),
-        ),
-    );
-
-    return connections?.isReturn(params) ? { connections, params } : undefined;
-  });
+  const [pending, setPending] = useState<Return | undefined>(() =>
+    returnOf(store, new URLSearchParams(location.search)),
+  );
   const [error, setError] = useState<string>();
+
+  // The Tauri apps connect in the system browser, which comes back as an
+  // `atomic://integrations/return` deep link instead of a page load.
+  useEffect(
+    () =>
+      setIntegrationReturnListener(params => {
+        const found = returnOf(store, params);
+
+        if (found) setPending(found);
+      }),
+    [store],
+  );
 
   useEffect(() => {
     if (!pending) return;
@@ -62,6 +64,28 @@ export function ProxyConnectReturn({
       {error ?? 'Finishing the connection…'}
     </p>
   );
+}
+
+interface Return {
+  connections: ProxyConnections;
+  params: URLSearchParams;
+}
+
+/** `params` as a return this browser started, if it is one. */
+function returnOf(
+  store: ReturnType<typeof useStore>,
+  params: URLSearchParams,
+): Return | undefined {
+  // Settings can hold a proxy value that no longer validates; that is never
+  // a return this browser started.
+  const connections = safely(
+    () =>
+      new ProxyConnections(localStorage, getIntegrationProxy(), () =>
+        store.getAgent(),
+      ),
+  );
+
+  return connections?.isReturn(params) ? { connections, params } : undefined;
 }
 
 /**
