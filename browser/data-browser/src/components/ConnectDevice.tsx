@@ -140,7 +140,7 @@ export function ConnectDevice({
                 : `Scan from your other device to sync with ${serverName}.`}
             </Hint>
             <Centered>
-              <PairingCode nodeDid={pairNodeDid} />
+              <PairingCode nodeDid={pairNodeDid} compact={hideTitle} />
             </Centered>
           </Side>
         )}
