@@ -13,7 +13,7 @@ class PreferenceChoice<T> {
 /// current choice, which opens a menu of [choices]. Follows the preference, so
 /// a change from the web app or another screen shows here, and a tap goes
 /// through [Preference.set] (saved locally, written to the private drive).
-class PreferenceRow<T> extends StatelessWidget {
+class PreferenceRow<T> extends StatefulWidget {
   const PreferenceRow({
     super.key,
     required this.title,
@@ -33,17 +33,28 @@ class PreferenceRow<T> extends StatelessWidget {
   final List<PreferenceChoice<T>>? choices;
 
   @override
+  State<PreferenceRow<T>> createState() => _PreferenceRowState<T>();
+}
+
+class _PreferenceRowState<T> extends State<PreferenceRow<T>> {
+  /// The menu opens from the value on the right, under it, also when the rest
+  /// of the row is tapped.
+  final _menu = GlobalKey<PopupMenuButtonState<T>>();
+
+  @override
   Widget build(BuildContext context) {
+    final w = widget;
+    final preference = w.preference;
     return ValueListenableBuilder<T>(
       valueListenable: preference,
       builder: (context, value, _) {
-        final options = choices;
+        final options = w.choices;
         if (options == null) {
           final on = value as bool;
           return shared.SyncRow(
-            title: title,
-            subtitle: subtitle,
-            icon: icon,
+            title: w.title,
+            subtitle: w.subtitle,
+            icon: w.icon,
             onTap: () => preference.set((!on) as T),
             trailing: Switch(
               value: on,
@@ -55,19 +66,21 @@ class PreferenceRow<T> extends StatelessWidget {
         // web) shows as itself.
         final current = options.firstWhere((o) => o.value == value,
             orElse: () => PreferenceChoice<T>(value, '$value'));
-        return PopupMenuButton<T>(
-          key: ValueKey('preference-${preference.property}'),
-          initialValue: value,
-          onSelected: preference.set,
-          itemBuilder: (_) => [
-            for (final o in options)
-              PopupMenuItem<T>(value: o.value, child: Text(o.label)),
-          ],
-          child: shared.SyncRow(
-            title: title,
-            subtitle: subtitle,
-            icon: icon,
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        return shared.SyncRow(
+          title: w.title,
+          subtitle: w.subtitle,
+          icon: w.icon,
+          onTap: () => _menu.currentState?.showButtonMenu(),
+          trailing: PopupMenuButton<T>(
+            key: _menu,
+            initialValue: value,
+            position: PopupMenuPosition.under,
+            onSelected: preference.set,
+            itemBuilder: (_) => [
+              for (final o in options)
+                PopupMenuItem<T>(value: o.value, child: Text(o.label)),
+            ],
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(current.label),
               const Icon(Icons.arrow_drop_down),
             ]),
