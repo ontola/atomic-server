@@ -527,6 +527,7 @@ Everything else is open to an anonymous socket and gated per subject by
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
 | `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
+| `15` | `RESULT_TOO_LARGE` | A `GET_MANY` entry that was not fetched because the entries before it filled the batch's byte budget (32 MiB). Nothing is wrong with the subject: ask for it again, on its own or in a smaller batch. |
 
 Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
@@ -616,6 +617,12 @@ responder evaluates every subject with the connection's identity, exactly as
 for `GET`, so a batch never reveals more than the same single fetches would.
 The browser chunks a request at 200 subjects and falls back to single `GET`s
 when the capability is absent.
+
+A request may name at most 1000 subjects; a larger one is answered with a
+single `ERROR` carrying its `request_id` and the code `RESULT_TOO_LARGE`. The responder stops fetching once the
+entries so far hold 32 MiB; every remaining entry is then an `ERROR` saying the
+batch's size limit was reached (`RESULT_TOO_LARGE`, 15), so the count still equals the subject count and
+the client asks for those subjects again.
 
 ## Persisted commits
 
@@ -1024,7 +1031,9 @@ Server to client:
 
 The subscriptions register an interest; the updates themselves travel as
 `EPHEMERAL (0x40)`. `SUBSCRIBE_INDEX_STATUS` is answered immediately with
-one `INDEX_STATUS`. `RBSR_ITEMS` returns the drive inventory: every subject
+one `INDEX_STATUS`; for a drive the session may not read, or that this
+server does not hold, that answer is `indexing: false` and nothing is
+registered. `RBSR_ITEMS` returns the drive inventory: every subject
 in `[lo, hi)` (`hi = null` is unbounded) the agent may read, with its version
 vector; the browser uses it to check it holds a complete copy before making
 a drive local-only. The name is left over from the removed range
