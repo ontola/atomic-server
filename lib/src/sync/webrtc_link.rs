@@ -768,10 +768,9 @@ mod tests {
             replies.extend(pump_receipts(&a, &b, false).await);
             let proof = proof_json(&db_a, &file).await;
             if proof["connections"].as_array().unwrap().iter().any(|c| {
-                c["receipts"].as_array().is_some_and(|r| !r.is_empty())
-                    && c["attachmentReceipts"]
-                        .as_array()
-                        .is_some_and(|r| !r.is_empty())
+                let rows = c["receipts"].as_array().unwrap();
+                rows.iter().any(|r| r.get("manifest").is_none())
+                    && rows.iter().any(|r| r.get("manifest").is_some())
             }) {
                 break proof;
             }
@@ -786,7 +785,12 @@ mod tests {
             .unwrap()
             .starts_with("webrtc:"));
         assert_eq!(
-            connection["attachmentReceipts"][0]["manifest"]["files"][0]["hash"],
+            connection["receipts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find_map(|r| r.get("manifest"))
+                .unwrap()["files"][0]["hash"],
             hash.to_hex().to_string()
         );
         assert_eq!(

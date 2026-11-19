@@ -45,7 +45,8 @@ type NativeSnapshot = {
     connectionId: string;
     drive: string;
     peerAgent: string;
-    receipts: NativeReceipt[];
+    receipts: Array<NativeReceipt & { manifest?: AttachmentManifest }>;
+    /** Sent by hosts from before the receipt lists merged. */
     attachmentReceipts?: Array<
       NativeReceipt & { manifest: AttachmentManifest }
     >;
@@ -377,13 +378,13 @@ describe.each(['iroh', 'webrtc'] as const)(
       const manifest: AttachmentManifest = {
         files: [{ subject: h.resource.subject, hash, chunks: [] }],
       };
-      data.connections[0].attachmentReceipts = [
-        {
-          ...h.receipt(),
-          manifest,
-          confirmedAt: Date.now(),
-        },
-      ];
+      const [details] = data.connections[0].receipts;
+      const withContents = {
+        ...h.receipt(),
+        manifest,
+        confirmedAt: Date.now(),
+      };
+      data.connections[0].receipts = [details, withContents];
 
       const contents = () => {
         const copies = h.store.getResourceCopies(h.resource);
@@ -405,11 +406,17 @@ describe.each(['iroh', 'webrtc'] as const)(
         required: true,
         peers: [{ state: 'confirmed' }],
       });
-      delete data.connections[0].attachmentReceipts;
+      data.connections[0].receipts = [details];
       h.respond(data);
       await h.poll();
       expect(h.get().state).toBe('confirmed');
       expect(contents().peers[0].state).toBe('unknown');
+      // An older host reports the same proof under its own list.
+      data.connections[0].attachmentReceipts = [withContents];
+      h.respond(data);
+      await h.poll();
+      expect(contents().peers[0].state).toBe('confirmed');
+      delete data.connections[0].attachmentReceipts;
       data.connections[0].connectionId = 'untrusted:session';
       h.respond(data);
       await h.poll();
@@ -425,19 +432,17 @@ describe.each(['iroh', 'webrtc'] as const)(
       h.resource.sealPendingEdits();
       const data = h.snapshot();
       data.connections[0].connectionId = 'iroh:same-storage:1';
+      const bytes = {
+        ...h.receipt(),
+        confirmedAt: Date.now(),
+        manifest: {
+          files: [{ subject: h.resource.subject, hash, chunks: [] }],
+        },
+      };
       const web = {
         ...data.connections[0],
         connectionId: 'webrtc:same-storage:2',
-        receipts: [] as NativeReceipt[],
-        attachmentReceipts: [
-          {
-            ...h.receipt(),
-            confirmedAt: Date.now(),
-            manifest: {
-              files: [{ subject: h.resource.subject, hash, chunks: [] }],
-            },
-          },
-        ],
+        receipts: [bytes],
       };
       data.connections.push(web);
       h.respond(data);
@@ -461,7 +466,7 @@ describe.each(['iroh', 'webrtc'] as const)(
       expect(contents().peers.every(peer => peer.state !== 'confirmed')).toBe(
         true,
       );
-      web.receipts = [{ ...h.receipt(), confirmedAt: 200 }];
+      web.receipts = [{ ...h.receipt(), confirmedAt: 200 }, bytes];
       h.respond(data);
       await h.poll();
       expect(h.get()).toMatchObject({ connectedCount: 2, confirmedCount: 1 });
