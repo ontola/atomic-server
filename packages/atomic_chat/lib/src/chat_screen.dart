@@ -34,6 +34,7 @@ import 'toast.dart';
 import 'native_views.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'ai_usage.dart';
+import 'ai_sign_up_dialog.dart';
 import 'hosted_ai.dart';
 import 'hosted_voice.dart';
 import 'voice.dart';
@@ -447,7 +448,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _input.removeListener(_inputChanged);
     WidgetsBinding.instance.removeObserver(this);
     _signUpPoll?.cancel();
-    _signUpEmail.dispose();
     _listenSession++;
     _inputInst?.stop();
     if (widget.hostedSpeechInput == null) {
@@ -1147,6 +1147,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _ai = ai;
           _aiLooked = true;
         });
+        if (ai != null) _signedUp();
         // Warm at open: boot the hidden page and read its tools and prompt
         // now, so the first answer does not wait for them.
         if (ai != null && ai.supportsTools) {
@@ -2194,100 +2195,52 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   static const _noAiTitle = 'AI chat needs an atomic.place account';
 
-  /// The sign-up step under the notice: the button, then the email field.
-  bool _signUpOpen = false;
-
-  /// The link is mailed; waiting for it to be opened.
+  /// A sign-up link is mailed: the chat looks for the account until it is
+  /// there.
   bool _signUpSent = false;
-  bool _signUpBusy = false;
-  String? _signUpError;
-  final _signUpEmail = TextEditingController();
   Timer? _signUpPoll;
 
-  Future<void> _sendSignUp() async {
-    final email = _signUpEmail.text.trim();
-    if (email.isEmpty || _signUpBusy) return;
-    setState(() {
-      _signUpBusy = true;
-      _signUpError = null;
+  /// The open sign-up dialog's route, closed once the account is found.
+  Route<void>? _signUpDialog;
+
+  void _signUpMailed() {
+    _signUpSent = true;
+    _signUpPoll?.cancel();
+    _signUpPoll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (_noAi) _lookUpAi(quiet: true);
     });
-    try {
-      await widget.api.signUpForAi(email);
-      if (!mounted) return;
-      setState(() {
-        _signUpBusy = false;
-        _signUpSent = true;
-      });
-      _signUpPoll?.cancel();
-      _signUpPoll = Timer.periodic(const Duration(seconds: 4), (_) {
-        if (_noAi) _lookUpAi(quiet: true);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _signUpBusy = false;
-        _signUpError = e is StateError ? e.message : HostedAi.errorMessage(e);
-      });
+  }
+
+  Future<void> _openSignUp() async {
+    final route = DialogRoute<void>(
+      context: context,
+      builder: (_) => AiSignUpDialog(
+          send: widget.api.signUpForAi, onSent: _signUpMailed),
+    );
+    _signUpDialog = route;
+    await Navigator.of(context).push(route);
+    if (_signUpDialog == route) _signUpDialog = null;
+  }
+
+  /// The account turned up: the dialog that waited for it goes.
+  void _signedUp() {
+    _signUpPoll?.cancel();
+    _signUpSent = false;
+    final route = _signUpDialog;
+    _signUpDialog = null;
+    if (route != null && route.isActive) {
+      Navigator.of(context).removeRoute(route);
     }
   }
 
-  /// Under the notice: Create an account, then the email, then the wait.
+  /// Under the notice: the button that opens [AiSignUpDialog].
   Widget _signUpStep(AppColors c) {
     if (!widget.api.canSignUpForAi) return const SizedBox.shrink();
-    if (_signUpSent) {
-      return Column(children: [
-        Text(
-          'Check your email and open the link. Your drives and documents '
-          'stay as they are.',
-          key: const Key('sign-up-sent'),
-          textAlign: TextAlign.center,
-          style: TextStyle(color: c.textPrimary, height: 1.4),
-        ),
-        const SizedBox(height: 8),
-        Wrap(alignment: WrapAlignment.center, children: [
-          TextButton(
-            key: const Key('sign-up-resend'),
-            onPressed: _signUpBusy ? null : _sendSignUp,
-            child: const Text('Resend'),
-          ),
-          TextButton(
-            key: const Key('sign-up-change'),
-            onPressed: () {
-              _signUpPoll?.cancel();
-              setState(() => _signUpSent = false);
-            },
-            child: const Text('Change email'),
-          ),
-        ]),
-        if (_signUpError != null) ErrorText(_signUpError!),
-      ]);
-    }
-    if (!_signUpOpen) {
-      return FilledButton(
-        key: const Key('sign-up-open'),
-        onPressed: () => setState(() => _signUpOpen = true),
-        child: const Text('Create an atomic.place account'),
-      );
-    }
-    return Column(children: [
-      TextField(
-        key: const Key('sign-up-email'),
-        controller: _signUpEmail,
-        autofocus: true,
-        keyboardType: TextInputType.emailAddress,
-        autofillHints: const [AutofillHints.email],
-        textInputAction: TextInputAction.send,
-        decoration: const InputDecoration(hintText: 'Your email address'),
-        onSubmitted: (_) => _sendSignUp(),
-      ),
-      const SizedBox(height: 8),
-      FilledButton(
-        key: const Key('sign-up-send'),
-        onPressed: _signUpBusy ? null : _sendSignUp,
-        child: const Text('Send'),
-      ),
-      if (_signUpError != null) ErrorText(_signUpError!),
-    ]);
+    return FilledButton(
+      key: const Key('sign-up-open'),
+      onPressed: _openSignUp,
+      child: const Text('Sign in or create an account'),
+    );
   }
 
   /// What a new chat shows without an AI: why, instead of a context picker
