@@ -1031,7 +1031,9 @@ Server to client:
 
 The subscriptions register an interest; the updates themselves travel as
 `EPHEMERAL (0x40)`. `SUBSCRIBE_INDEX_STATUS` is answered immediately with
-one `INDEX_STATUS`. `RBSR_ITEMS` returns the drive inventory: every subject
+one `INDEX_STATUS`; for a drive the session may not read, or that this
+server does not hold, that answer is `indexing: false` and nothing is
+registered. `RBSR_ITEMS` returns the drive inventory: every subject
 in `[lo, hi)` (`hi = null` is unbounded) the agent may read, with its version
 vector; the browser uses it to check it holds a complete copy before making
 a drive local-only. The name is left over from the removed range

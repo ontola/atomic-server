@@ -735,7 +735,11 @@ impl WebSocketConnection {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
                 if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
                     // Same read gate as `SUB`: the drive must exist and this
-                    // session's agent (anonymous included) may read it.
+                    // session's agent (anonymous included) may read it. A
+                    // session that fails it is answered "not indexing" and is
+                    // not registered, instead of with an error: the app asks
+                    // for every drive it shows, also one this server does not
+                    // hold, and the answer tells it nothing about the drive.
                     let drive = drive.to_string();
                     let checked = drive.clone();
                     let store = self.store.clone();
@@ -747,24 +751,21 @@ impl WebSocketConnection {
                                 .map(|_| ())
                         }
                         .into_actor(self)
-                        .map(move |res, actor, ctx| match res {
-                            Ok(()) => {
+                        .map(move |res, actor, ctx| {
+                            let readable = res.is_ok();
+                            if readable {
                                 actor
                                     .index_status_broadcast
                                     .subscribe(drive.clone(), ctx.address());
                                 actor.index_status_subscribed.insert(drive.clone());
-                                let indexing = actor.vector_search_state.is_drive_indexing(&drive);
-                                let payload =
-                                    serde_json::json!({ "drive": drive, "indexing": indexing });
-                                if let Ok(s) = serde_json::to_string(&payload) {
-                                    ctx.text(format!("INDEX_STATUS {s}"));
-                                }
                             }
-                            Err(reason) => ctx.binary(ws_v2::encode_error(
-                                0,
-                                ws_v2::error_code::UNAUTHORIZED_READ,
-                                &format!("SUBSCRIBE_INDEX_STATUS refused for {drive}: {reason}"),
-                            )),
+                            let indexing =
+                                readable && actor.vector_search_state.is_drive_indexing(&drive);
+                            let payload =
+                                serde_json::json!({ "drive": drive, "indexing": indexing });
+                            if let Ok(s) = serde_json::to_string(&payload) {
+                                ctx.text(format!("INDEX_STATUS {s}"));
+                            }
                         }),
                     );
                 }

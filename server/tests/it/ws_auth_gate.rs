@@ -224,8 +224,10 @@ async fn subscription_without_read_right_is_refused_out_loud() {
 }
 
 /// `SUBSCRIBE_INDEX_STATUS` is a read of the drive's indexing state, so it
-/// follows the same gate as `SUB`: refused out loud without read rights,
-/// answered for the owner and for an anonymous session on a public drive.
+/// follows the same gate as `SUB`. Without read rights, and for a drive this
+/// server does not hold, the answer is "not indexing" with no error (the app
+/// asks for every drive it shows); the owner and an anonymous session on a
+/// public drive get the real state.
 #[tokio::test]
 async fn index_status_subscription_is_gated_by_check_read() {
     let port = start_server("ws_gate_index_status");
@@ -244,10 +246,17 @@ async fn index_status_subscription_is_gated_by_check_read() {
     ws.authenticate(&mallory).await.unwrap();
     let mut rx = ws.subscribe();
     ws.send_raw(&subscribe(&drive)).await.unwrap();
-    let err = next_error(&mut rx).await;
-    assert!(
-        err.contains("SUBSCRIBE_INDEX_STATUS refused") && err.contains(&drive),
-        "{err}"
+    let reply = next_text(&mut rx).await;
+    assert_eq!(
+        reply,
+        format!(r#"INDEX_STATUS {{"drive":"{drive}","indexing":false}}"#)
+    );
+    let absent = "did:ad:not-on-this-server";
+    ws.send_raw(&subscribe(absent)).await.unwrap();
+    let reply = next_text(&mut rx).await;
+    assert_eq!(
+        reply,
+        format!(r#"INDEX_STATUS {{"drive":"{absent}","indexing":false}}"#)
     );
 
     let ws_owner = WsClient::connect(&ws_url).await.unwrap();
