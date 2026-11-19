@@ -638,10 +638,7 @@ async fn fetch_body_with_client(
             .map_err(|e| format!("Could not parse HTTP response for {}: {}", url, e))?,
     };
     if status != 200 {
-        let message = format!(
-            "Could not fetch url '{}'. Status: {}",
-            url, status
-        );
+        let message = format!("Could not fetch url '{}'. Status: {}", url, status);
         // 404 and 410 are the server's definitive answer, unlike a 5xx or a
         // network error. Callers use the type to remember it.
         return Err(if status == 404 || status == 410 {
