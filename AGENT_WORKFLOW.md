@@ -19,6 +19,11 @@ more.
   on pushes to `develop`, `v*` tags and `workflow_dispatch` only. To test a PR
   branch, dispatch it: `gh workflow run main.yml --ref <branch>` (or the
   equivalent GitHub API call). A docs-only change needs no dispatch.
+  A dispatch on an ordinary branch is a *light* gate: unit tests, lint,
+  builds and the `@smoke` Playwright subset. The full e2e suite runs on
+  `develop`, `v*` tags and `trekmeester/combined-*` branches. To force it on
+  a PR branch: `gh workflow run main.yml --ref <branch> -f e2e=full`
+  (`-f e2e=light` forces light on a full-by-default ref).
 - **Paired atomic-saas branch.** The `Downstream` job in `main.yml` builds
   ontola/atomic-saas against your commit. It uses an atomic-saas branch with
   the *same name* as yours only if that branch has an open PR; otherwise it
