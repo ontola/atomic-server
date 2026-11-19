@@ -4297,7 +4297,6 @@ msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -13388,10 +13387,6 @@ msgid "Saved as {0}"
 msgstr "Disimpan sebagai {0}"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
-msgstr "Pekerjaanmu tersimpan di perangkat ini. Hubungkan perangkat lain untuk membukanya di sana dan agar tidak hilang."
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Saving your work to your account…"
 msgstr "Menyimpan pekerjaanmu ke akunmu…"
 
@@ -13612,3 +13607,11 @@ msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang h
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Connect another device to open it elsewhere and not lose it."
+msgstr "Pekerjaanmu tersimpan di perangkat ini. Hubungkan perangkat lain untuk membukanya di tempat lain dan agar tidak hilang."
+
+#. 0: ' '; 1: ' '
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "No second device? An account on{0} <0>atomic.place</0>{1} keeps your work too."
+msgstr "Tidak punya perangkat kedua? Akun di{0} <0>atomic.place</0>{1} juga menyimpan pekerjaanmu."

@@ -8,14 +8,10 @@ import { buildTheme } from '../../styling';
 
 const state = vi.hoisted(() => ({
   cookie: true,
-  navigate: vi.fn(),
   toast: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({ toast: { success: state.toast } }));
-vi.mock('../../hooks/useNavigateWithTransition', () => ({
-  useNavigateWithTransition: () => state.navigate,
-}));
 vi.mock('../../helpers/managed/deviceLink', async original => ({
   ...(await original<typeof import('../../helpers/managed/deviceLink')>()),
   canHoldProviderCookie: () => state.cookie,
@@ -54,20 +50,43 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('without a portal offers connecting a device and never the sign-in', () => {
+vi.mock('../../hooks/useConnectDeviceProps', () => ({
+  useConnectDeviceProps: () => ({
+    pairNodeDid: null,
+    showPairing: false,
+    canTakeCode: false,
+    serverName: 'example.com',
+    onAddServer: vi.fn(),
+  }),
+}));
+
+it('without a portal shows the pairing form in place, never the sign-in', () => {
   const onDone = renderContent(null);
 
   expect(screen.queryByText('panel')).toBeNull();
-  act(() => screen.getByText('Connect a device').click());
+  expect(screen.getByTestId('connect-device-add')).toBeTruthy();
+  // The dialog heading already says it.
+  expect(
+    screen.queryByRole('heading', { name: 'Connect a device' }),
+  ).toBeNull();
+  expect(screen.getByText('atomic.place').getAttribute('href')).toBe(
+    'https://atomic.place',
+  );
+  expect(onDone).not.toHaveBeenCalled();
+});
+
+it('without a portal closes once a device link makes the identity linked', () => {
+  const onDone = renderContent(null);
+
+  act(() => writeManagedAccountBinding('ann@example.com', 'did:ad:agent:abc'));
   expect(onDone).toHaveBeenCalled();
-  expect(state.navigate).toHaveBeenCalledWith('/app/sync');
 });
 
 it('with a portal shows the same sign-in panel everywhere else uses', () => {
   renderContent('https://portal.example');
 
   expect(screen.getByText('panel')).toBeTruthy();
-  expect(screen.queryByText('Connect a device')).toBeNull();
+  expect(screen.queryByTestId('connect-device')).toBeNull();
 });
 
 it('uses the browser sign-in where the app cannot hold the cookie', () => {

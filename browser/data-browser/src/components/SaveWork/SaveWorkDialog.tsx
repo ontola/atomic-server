@@ -1,5 +1,6 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { useLocation } from '@tanstack/react-router';
+import { styled } from 'styled-components';
 import { toast } from 'react-hot-toast';
 import {
   Dialog,
@@ -19,8 +20,9 @@ import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import { noteManagedSessionChanged } from '../../helpers/managed/session';
 import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
 import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { paths } from '../../routes/paths';
+import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
+import { ConnectDevice } from '../ConnectDevice';
+import { ATOMIC_PLACE_WEBSITE } from '../Logo';
 import { subscribeSaveWorkDialog } from './saveWorkDialogState';
 
 /**
@@ -41,12 +43,22 @@ export function SaveWorkContent({
   portalUrl: string | null;
   onDone: () => void;
 }): JSX.Element {
-  const navigate = useNavigateWithTransition();
+  const connectDeviceProps = useConnectDeviceProps();
   const linked = useIsLinkedToAccount();
   const [signedIn, setSignedIn] = useState(false);
   // Bumped by Try again; each value is one wait for the account to adopt us.
   const [attempt, setAttempt] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
+
+  // Without a portal, pairing a device is what links this identity, so close
+  // once that happens while the dialog is open (not if it already was).
+  const linkedOnOpen = useRef(linked);
+
+  useEffect(() => {
+    if (portalUrl || linked === linkedOnOpen.current) return;
+
+    if (linked) onDone();
+  }, [portalUrl, linked, onDone]);
 
   useEffect(() => {
     if (!signedIn || !linked) return;
@@ -75,18 +87,17 @@ export function SaveWorkContent({
     return (
       <Column gap='1rem'>
         <p>
-          Your work is saved on this device. To open it on other devices and not
-          lose it, connect another device.
+          Your work is saved on this device. Connect another device to open it
+          elsewhere and not lose it.
         </p>
-        <Button
-          data-testid='save-work-connect'
-          onClick={() => {
-            onDone();
-            navigate(paths.sync);
-          }}
-        >
-          Connect a device
-        </Button>
+        <ConnectDevice {...connectDeviceProps} hideTitle />
+        <Muted>
+          No second device? An account on{' '}
+          <a href={ATOMIC_PLACE_WEBSITE} target='_blank' rel='noopener'>
+            atomic.place
+          </a>{' '}
+          keeps your work too.
+        </Muted>
       </Column>
     );
   }
@@ -174,3 +185,9 @@ export function SaveWorkDialogHost(): JSX.Element {
     </Dialog>
   );
 }
+
+const Muted = styled.p`
+  margin: 0;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.82rem;
+`;

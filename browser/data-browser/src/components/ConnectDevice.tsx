@@ -37,6 +37,8 @@ interface ConnectDeviceProps {
   /** The address a browser tab reads from, named when showing its code. */
   serverName: string;
   onAddServer: (url: string) => void;
+  /** Leave out the heading when the surrounding screen already says it. */
+  hideTitle?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export function ConnectDevice({
   canTakeCode,
   serverName,
   onAddServer,
+  hideTitle,
 }: ConnectDeviceProps): JSX.Element {
   const [input, setInput] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -113,8 +116,13 @@ export function ConnectDevice({
   }
 
   return (
-    <Section id={SECTION_ID} tabIndex={-1} data-testid='connect-device'>
-      <Title>Connect a device</Title>
+    <Section
+      id={SECTION_ID}
+      tabIndex={-1}
+      data-testid='connect-device'
+      $embedded={hideTitle}
+    >
+      {!hideTitle && <Title>Connect a device</Title>}
       <Note>
         {showPairing
           ? 'Codes only route. Your key still decides what syncs.'
@@ -183,8 +191,8 @@ export function ConnectDevice({
   );
 }
 
-const Section = styled.section`
-  margin-bottom: 2rem;
+const Section = styled.section<{ $embedded?: boolean }>`
+  margin-bottom: ${p => (p.$embedded ? 0 : '2rem')};
   scroll-margin-top: 1rem;
 
   &:focus {

@@ -4299,7 +4299,6 @@ msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 #: src/components/ConnectDevice.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/routes/SyncRoute.tsx
@@ -13396,10 +13395,6 @@ msgid "Saved as {0}"
 msgstr "Opgeslagen als {0}"
 
 #: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Your work is saved on this device. To open it on other devices and not lose it, connect another device."
-msgstr "Je werk staat op dit apparaat. Verbind een ander apparaat om het ook daar te openen en het niet kwijt te raken."
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Saving your work to your account…"
 msgstr "Je werk wordt opgeslagen in je account…"
 
@@ -13623,3 +13618,11 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
 
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your work is saved on this device. Connect another device to open it elsewhere and not lose it."
+msgstr "Je werk staat op dit apparaat. Verbind een ander apparaat om het elders te openen en het niet kwijt te raken."
+
+#. 0: ' '; 1: ' '
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "No second device? An account on{0} <0>atomic.place</0>{1} keeps your work too."
+msgstr "Geen tweede apparaat? Een account op{0} <0>atomic.place</0>{1} bewaart je werk ook."

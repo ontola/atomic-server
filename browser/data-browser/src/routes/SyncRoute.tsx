@@ -139,6 +139,7 @@ import {
 import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
+import { useConnectDeviceProps } from '../hooks/useConnectDeviceProps';
 import { serverURLStorage } from '../helpers/serverURLStorage';
 
 export const SyncRoute = createRoute({
@@ -1226,6 +1227,13 @@ function SyncPage() {
     store.isLiveSyncedDrive(status.drive) &&
     !embeddedActive &&
     !isOriginWithoutNode(status.serverUrl);
+  const connectDeviceProps = useConnectDeviceProps({
+    serverNodeId,
+    serverUrl: status.serverUrl ?? '',
+    serverPairingAllowed:
+      showServerConn &&
+      (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true),
+  });
   const pairedPeers = isNode ? knownPeers : [];
   // A browser is not a node, so it cannot pair with a device itself. But the
   // server it reads from can — and reports who, over `/server`. So a phone
@@ -2423,18 +2431,7 @@ function SyncPage() {
             only, and safe to leave on screen. The section itself always
             renders, in the same place, because adding a device is always
             possible; only the "show this device" half is gated. */}
-        <ConnectDevice
-          pairNodeDid={pairNodeId ? rawToNodeDid(pairNodeId) : null}
-          showPairing={
-            !!pairNodeId &&
-            (isNode ||
-              (showServerConn &&
-                (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true)))
-          }
-          canTakeCode={isNode}
-          serverName={serverLabel(status.serverUrl ?? '')}
-          onAddServer={setServer}
-        />
+        <ConnectDevice {...connectDeviceProps} />
 
         {/* Developer: diagnostics + advanced toggles, tucked away. */}
         <DevDetails>
