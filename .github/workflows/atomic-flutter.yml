@@ -1,5 +1,6 @@
 name: Atomic Flutter package
 on:
+  workflow_dispatch:
   pull_request:
     paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'browser/**', '.github/workflows/atomic-flutter.yml']
   push:

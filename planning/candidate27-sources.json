@@ -1133,7 +1133,8 @@
     "Preserve the established SDK root isLoopbackHost export from urls.ts (reserved *.localhost and127/8 behavior). The newer receipt-specific strict helper remains included and directly used by its private modules; its explicit barrel re-export cannot shadow the existing public API.",
     "Two identical browser-peer regression function bodies arrived through overlapping receipt branches. Retain each full assertion body once, removing duplicate definitions that prevented all-target Rust compilation.",
     "The later-edit/earlier-ACK sidebar fixture disables the unrelated real WebSocket via public connect:false while preserving explicit online state, both versions, both controlled ACKs and every original warning assertion.",
-    "Main CI minimal-light Clippy exposed an unguarded plugin_runtime handler module. Match its existing wasm-plugins route/dependency gate and gate embedded_asset with its sole plugin-UI caller. Enabled runtime behavior and minimal route availability remain unchanged; no feature or test gate is disabled."
+    "Main CI minimal-light Clippy exposed an unguarded plugin_runtime handler module. Match its existing wasm-plugins route/dependency gate and gate embedded_asset with its sole plugin-UI caller. Enabled runtime behavior and minimal route availability remain unchanged; no feature or test gate is disabled.",
+    "Expose workflow_dispatch for the existing Flutter validation jobs so a Rust-only candidate checkpoint can validate all required lanes on the exact same SHA; existing push/PR filters and all jobs remain enabled."
   ],
   "validation": {
     "status": "Local minimal-light regression check passes; normal hook validates the compatibility follow-up. All four required remote workflows must validate the new exact head before a checkpoint tag.",
@@ -1199,7 +1200,7 @@
       "SharedUI": "success",
       "Flutter": "success",
       "failure_url": "https://github.com/ontola/atomic-server/actions/runs/44485485910/job/135427818381",
-      "new_exact_head": "All required workflows pending redispatch."
+      "new_exact_head": "All four workflows validate the final follow-up head; Flutter now supports manual dispatch for candidate checkpoints."
     },
     "embed_first_use": {
       "gzip_bytes": 966900,
