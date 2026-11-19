@@ -15,7 +15,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::json_schema::{check_plan, EnsuredOntology, OntologyPlan};
+use super::{
+    compat::fingerprint,
+    json_schema::{check_plan, EnsuredOntology, OntologyPlan},
+};
 use crate::{errors::AtomicResult, property_identity::property_id};
 
 /// Field order is alphabetical on purpose: it is the order of the text form.
@@ -25,6 +28,10 @@ pub struct Lockfile {
     /// Class shortname to subject. Empty until the ontology has been pushed.
     #[serde(default)]
     pub classes: BTreeMap<String, String>,
+    /// `b3-{hex}`, see [`fingerprint`]: a hash of the schema's contract when it
+    /// was locked. Absent in lockfiles from before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
     /// The subject of the Ontology resource.
     pub ontology: String,
     /// Property shortname to `atomic:prop:{hex}`.
@@ -49,18 +56,21 @@ impl Lockfile {
         }
         Ok(Lockfile {
             classes,
+            fingerprint: Some(fingerprint(plan, ontology)?),
             ontology: ontology.to_string(),
             properties,
         })
     }
 
-    /// The lockfile of an ontology that [`super::json_schema::ensure_ontology`] made or found.
-    pub fn from_ensured(ensured: &EnsuredOntology) -> Lockfile {
-        Lockfile {
+    /// The lockfile of an ontology that [`super::json_schema::ensure_ontology`]
+    /// made or found from `plan`.
+    pub fn from_ensured(ensured: &EnsuredOntology, plan: &OntologyPlan) -> AtomicResult<Lockfile> {
+        Ok(Lockfile {
             classes: ensured.classes.clone(),
+            fingerprint: Some(fingerprint(plan, &ensured.ontology)?),
             ontology: ensured.ontology.clone(),
             properties: ensured.properties.clone(),
-        }
+        })
     }
 
     pub fn parse(text: &str) -> AtomicResult<Lockfile> {
@@ -74,12 +84,47 @@ impl Lockfile {
         text
     }
 
-    /// Fails unless this lockfile still describes `plan`. Every property of
-    /// the plan must be pinned to the ID its current ontology, shortname and
-    /// datatype give, and nothing else may be pinned. A class the lockfile
-    /// knows must still be in the plan; a class it does not know yet is fine,
-    /// that is what a push adds.
+    /// Fails unless this lockfile still describes `plan`: [`Self::check_identities`],
+    /// and the fingerprint must match when the lockfile has one.
     pub fn check(&self, plan: &OntologyPlan) -> AtomicResult<()> {
+        self.check_identities(plan)?;
+        if let Some(pinned) = &self.fingerprint {
+            let now = fingerprint(plan, &self.ontology)?;
+            if *pinned != now {
+                return Err(format!(
+                    "The lockfile does not match the schema:\n- the schema changed since it was locked \
+                     (fingerprint {pinned}, now {now}); run `schema diff` to see how"
+                )
+                .into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Fails unless every property of the plan is pinned to the ID its current
+    /// ontology, shortname and datatype give, and nothing else is pinned. A
+    /// class the lockfile knows must still be in the plan; a class it does not
+    /// know yet is fine, that is what a push adds. Other edits to the schema
+    /// pass: that is what `schema diff` and a push are for. This is the check
+    /// of `schema check`, where a property the lockfile lacks means it is stale;
+    /// see [`Self::check_pinned`] for a push.
+    pub fn check_identities(&self, plan: &OntologyPlan) -> AtomicResult<()> {
+        self.check_identities_with(plan, false)
+    }
+
+    /// Like [`Self::check_identities`], but a property that is in the plan and
+    /// not yet in the lockfile is fine, that is what a push adds. A pinned
+    /// property whose ID changed, or that or a class that is no longer in the
+    /// plan, still fails.
+    pub fn check_pinned(&self, plan: &OntologyPlan) -> AtomicResult<()> {
+        self.check_identities_with(plan, true)
+    }
+
+    fn check_identities_with(
+        &self,
+        plan: &OntologyPlan,
+        allow_new_properties: bool,
+    ) -> AtomicResult<()> {
         let expected = Lockfile::from_plan(plan, &self.ontology, BTreeMap::new())?;
         let mut problems = Vec::new();
 
@@ -92,6 +137,7 @@ impl Lockfile {
                      shortname or datatype makes a new property and leaves the old one behind. \
                      Change it back, or re-lock to accept the new property"
                 )),
+                None if allow_new_properties => {}
                 None => problems.push(format!(
                     "property '{shortname}' is in the schema but not in the lockfile ({id})"
                 )),
@@ -158,6 +204,11 @@ mod tests {
                 case["lockfile"].as_str().unwrap(),
                 "{name}"
             );
+            assert_eq!(
+                lock.fingerprint.as_deref(),
+                Some(case["fingerprint"].as_str().unwrap()),
+                "{name}"
+            );
             assert_eq!(Lockfile::parse(&lock.to_canonical_string()).unwrap(), lock);
             lock.check(&plan_of(case)).unwrap();
         }
@@ -179,6 +230,12 @@ mod tests {
             error.contains(&changed.classes[1].properties[1].shortname),
             "{error}"
         );
+        // Also on a push: the old property would be left behind.
+        assert!(lock
+            .check_pinned(&changed)
+            .unwrap_err()
+            .to_string()
+            .contains("shortname or datatype makes a new property"));
     }
 
     #[test]
@@ -198,6 +255,13 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("not in the lockfile"));
+        assert!(lock
+            .check_identities(&grown)
+            .unwrap_err()
+            .to_string()
+            .contains("not in the lockfile"));
+        // A push adds the new property.
+        lock.check_pinned(&grown).unwrap();
         let mut shrunk = plan.clone();
         shrunk.classes[0].properties.clear();
         shrunk.classes[0].requires.clear();
@@ -207,6 +271,38 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("no longer in the schema"));
+        assert!(lock
+            .check_pinned(&shrunk)
+            .unwrap_err()
+            .to_string()
+            .contains("no longer in the schema"));
+    }
+
+    #[test]
+    fn a_lockfile_without_fingerprint_still_parses_and_writes_the_same() {
+        let old = "{\n  \"classes\": {},\n  \"ontology\": \"x\",\n  \"properties\": {}\n}\n";
+        let lock = Lockfile::parse(old).unwrap();
+        assert_eq!(lock.fingerprint, None);
+        assert_eq!(lock.to_canonical_string(), old);
+    }
+
+    #[test]
+    fn check_reports_a_changed_contract_but_check_identities_does_not() {
+        let plan = plan_of(&fixture()["cases"][0]);
+        let lock = Lockfile::from_plan(&plan, "atomic:ontologyGenesis", BTreeMap::new()).unwrap();
+        lock.check(&plan).unwrap();
+
+        let mut tighter = plan.clone();
+        tighter.classes[0].requires.push("email".into());
+        let error = lock.check(&tighter).unwrap_err().to_string();
+        assert!(error.contains("changed since it was locked"), "{error}");
+        assert!(error.contains("`schema diff`"), "{error}");
+        lock.check_identities(&tighter).unwrap();
+
+        // Without a fingerprint there is nothing to compare.
+        let mut bare = lock.clone();
+        bare.fingerprint = None;
+        bare.check(&tighter).unwrap();
     }
 
     #[test]
