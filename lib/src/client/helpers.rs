@@ -639,8 +639,8 @@ async fn fetch_body_with_client(
     };
     if status != 200 {
         let message = format!(
-            "Could not fetch url '{}'. Status: {}. Body: {}",
-            url, status, body
+            "Could not fetch url '{}'. Status: {}",
+            url, status
         );
         // 404 and 410 are the server's definitive answer, unlike a 5xx or a
         // network error. Callers use the type to remember it.
