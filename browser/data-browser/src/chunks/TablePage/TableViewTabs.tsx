@@ -496,7 +496,15 @@ function ViewTab({
   const [storedKind] = useString(resource, dataBrowser.properties.viewKind);
   const currentKind = normalizeViewKind(storedKind);
   const ownType = viewTypeKey(storedKind);
-  const name = subject ? title || 'Untitled view' : (fallbackName ?? 'View');
+  const storedName = subject
+    ? title || 'Untitled view'
+    : (fallbackName ?? 'View');
+  const name =
+    currentKind === 'syncable-collection' &&
+    (storedName === /* @wc-ignore */ 'Browse' ||
+      storedName === /* @wc-ignore */ 'Syncable Collection')
+      ? 'Collection'
+      : storedName;
   const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 
   const [editing, setEditing] = useState(false);

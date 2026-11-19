@@ -327,7 +327,10 @@ function setupProxy() {
   );
   const rememberKeyedPrincipal = vi.fn(async () => undefined);
   const proxy = {
-    listKeyed: vi.fn(async () => [{ connection_id: slot }]),
+    listKeyed: vi.fn(async () => [
+      { connection_id: slot, platform: context.platform },
+    ]),
+    canReconnectKeyed: vi.fn(async () => true),
     activeKeyedConnection: vi.fn(async () => 'active'),
     readKeyed,
     rememberKeyedPrincipal,
@@ -525,6 +528,98 @@ it('resolves moved child provenance by source identity and revokes it when its s
 });
 
 describe('catalog-derived host relay', () => {
+  it('exposes only sanitized connection metadata and native reconnect eligibility', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    vi.mocked(proxy.listKeyed).mockResolvedValue([
+      {
+        connection_id: slot,
+        platform: context.platform,
+        label: '  Account\nname\u0000  ',
+        delegations: [],
+      },
+      {
+        connection_id: 'x'.repeat(43),
+        platform: context.platform,
+        label: 'x'.repeat(200),
+        delegations: [],
+      },
+    ]);
+    vi.mocked(proxy.canReconnectKeyed).mockImplementation(
+      async (_platform, id) => id === slot,
+    );
+    const transport = syncProxyTransport(
+      proxy,
+      {
+        ...context,
+        kind: 'platform',
+        connectionId: undefined,
+        principal: undefined,
+      },
+      () => undefined,
+      { document: doc },
+    );
+    await expect(transport.connections!(context.platform)).resolves.toEqual([
+      {
+        connectionId: slot,
+        platform: context.platform,
+        label: 'Accountname',
+        canReconnect: true,
+      },
+      {
+        connectionId: 'x'.repeat(43),
+        platform: context.platform,
+        label: 'x'.repeat(120),
+        canReconnect: false,
+      },
+    ]);
+    expect(readKeyed).not.toHaveBeenCalled();
+    const scoped = syncProxyTransport(proxy, selected(doc), () => undefined, {
+      document: doc,
+    });
+    await expect(scoped.connections!(context.platform)).resolves.toHaveLength(
+      1,
+    );
+    vi.mocked(proxy.listKeyed).mockClear();
+    const publicTransport = syncProxyTransport(
+      proxy,
+      {
+        ...context,
+        kind: 'principal',
+        principal: { kind: 'public' },
+        connectionId: undefined,
+      },
+      () => undefined,
+      { document: doc },
+    );
+    await expect(
+      publicTransport.connections!(context.platform),
+    ).resolves.toEqual([]);
+    expect(proxy.listKeyed).not.toHaveBeenCalled();
+  });
+
+  it('revokes connection metadata when the session changes during eligibility lookup', async () => {
+    const doc = apiDocument();
+    const { proxy } = setupProxy();
+    let current = true;
+    vi.mocked(proxy.canReconnectKeyed).mockImplementationOnce(async () => {
+      current = false;
+
+      return true;
+    });
+    const transport = syncProxyTransport(
+      proxy,
+      selected(doc),
+      () => {
+        if (!current) throw new Error('Session changed');
+      },
+      { document: doc },
+    );
+    await expect(transport.connections!(context.platform)).rejects.toThrow(
+      'Session changed',
+    );
+  });
+
   it('constructs while paused and blocks provider requests until resumed', async () => {
     const doc = apiDocument();
     const { proxy, readKeyed } = setupProxy();

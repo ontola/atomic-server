@@ -33,6 +33,17 @@ const same = (left, right) =>
   JSON.stringify(canonicalValue(left)) ===
   JSON.stringify(canonicalValue(right));
 
+class PrincipalAuthorizationError extends Error {
+  constructor(connectionId, expired) {
+    super(
+      expired
+        ? 'This connection has expired. Connect the account again to restore access.'
+        : 'This connection could not authorize its account. Connect again to restore access.',
+    );
+    this.connectionId = connectionId;
+  }
+}
+
 /** Catalog interpretation belongs to Syncables; all I/O uses the shared app store. */
 export function createSyncApp(store, context) {
   const root = context.subject;
@@ -147,11 +158,12 @@ export function createSyncApp(store, context) {
 
   const legacyMatches = new Map();
 
-  async function legacyNode(key, config) {
+  async function legacyNode(key, config, existingSubject) {
     const desired = JSON.parse(key);
     const matches = [];
 
     for (const alias of context.legacySources ?? []) {
+      if (alias.subject === existingSubject) continue;
       if (
         alias.kind !== desired.kind ||
         !same(alias.collection, desired.collection) ||
@@ -227,6 +239,10 @@ export function createSyncApp(store, context) {
           row.get(property('syncable-node-kind')) !== kind)
       )
         throw new Error('The source identity does not match its resource');
+      if (await legacyNode(key, config, row.subject))
+        throw new Error(
+          'This account or collection has conflicting saved sources. Review its migration before syncing; all saved data was retained.',
+        );
 
       return row;
     }
@@ -276,7 +292,7 @@ export function createSyncApp(store, context) {
     let browse;
 
     for (const [name, kind] of [
-      ['Browse', 'syncable-collection'],
+      ['Collection', 'syncable-collection'],
       ['Table', 'table'],
       ['Sync', 'syncables'],
     ]) {
@@ -321,6 +337,29 @@ export function createSyncApp(store, context) {
       throw new Error(
         'Review the historical source warnings before creating another sync destination',
       );
+
+    if (
+      kind === 'principal' &&
+      JSON.parse(key).principal.kind === 'authenticated'
+    ) {
+      for (const alias of context.legacySources ?? []) {
+        if (alias.kind !== 'principal' || alias.principal) continue;
+        const previous = await store.getResource(alias.subject);
+        const config = previous.get(property('syncable-source-config'));
+        const adopted =
+          !previous.error &&
+          config?.version === 2 &&
+          config.principal?.kind === 'authenticated' &&
+          previous.hasClasses(klass('syncable-principal')) &&
+          previous.get(property('syncable-source-key')) ===
+            identity({ kind: 'principal', principal: config.principal });
+        if (!adopted)
+          throw new Error(
+            'Reconnect the saved account before creating another account. Its existing data has been retained.',
+          );
+      }
+    }
+
     row = await store.newResource({
       parent,
       isA,
@@ -362,6 +401,12 @@ export function createSyncApp(store, context) {
       query,
       ...(body !== undefined ? { body } : {}),
     });
+
+    if (request.purpose === 'principal' && response.status === 401)
+      throw new PrincipalAuthorizationError(
+        connectionId,
+        response.body?.error === 'credential_refresh_failed',
+      );
 
     return {
       status: response.status,
@@ -789,34 +834,63 @@ export function createSyncApp(store, context) {
   }
 
   async function storedPrincipals() {
-    return (await resources({ property: core.parent, value: root })).filter(
-      row => row.hasClasses(klass('syncable-principal')),
-    );
+    const saved = (
+      await resources({ property: core.parent, value: root })
+    ).filter(row => row.hasClasses(klass('syncable-principal')));
+
+    for (const alias of context.legacySources ?? []) {
+      if (
+        alias.kind !== 'principal' ||
+        saved.some(row => row.subject === alias.subject)
+      )
+        continue;
+      const row = await store.getResource(alias.subject);
+      if (!row.error) saved.push(row);
+    }
+
+    return saved;
   }
 
   async function discoverPrincipals() {
-    const connected = await store.proxy.connections({
+    const connections = await store.proxy.connections({
       platform: context.platform,
     });
     const saved = await storedPrincipals();
-    const known = new Set(
-      saved.map(
-        row => row.get(property('syncable-source-config'))?.connectionId,
-      ),
-    );
+    const known = new Set();
     const errors = [];
+    const authorizationRequired = [];
 
-    for (const connection of connected) {
+    for (const row of saved) {
+      const config = row.get(property('syncable-source-config'));
+      if (config?.version !== 2 || config.principal?.kind !== 'authenticated')
+        continue;
+      known.add(config.connectionId);
+
+      try {
+        await findNode(
+          identity({ kind: 'principal', principal: config.principal }),
+          tableClass,
+          'principal',
+          config,
+        );
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    for (const connection of connections) {
       if (known.has(connection.connectionId)) continue;
 
       try {
         await openPrincipal(connection.connectionId, false);
       } catch (error) {
-        errors.push(String(error?.message ?? error));
+        if (error instanceof PrincipalAuthorizationError)
+          authorizationRequired.push({ ...connection, error });
+        else errors.push(error);
       }
     }
 
-    if (errors.length) throw new Error(errors.join('; ').slice(0, 1024));
+    return { connections, authorizationRequired, errors };
   }
 
   return {
@@ -863,9 +937,10 @@ export async function view({ root, store }) {
   document.head.append(style);
 
   const showError = reason => {
-    root.querySelector('[role=alert]')?.remove();
+    root.querySelector('[data-sync-error]')?.remove();
     const message = el('p', String(reason?.message ?? reason), 'error');
     message.setAttribute('role', 'alert');
+    message.setAttribute('data-sync-error', '');
     root.prepend(message);
   };
 
@@ -899,16 +974,20 @@ export async function view({ root, store }) {
       });
 
   if (context.kind === 'platform') {
+    let discovery;
+    const errors = [];
+
     try {
-      await app.discoverPrincipals();
+      discovery = await app.discoverPrincipals();
+      errors.push(...discovery.errors);
     } catch (error) {
-      showError(error);
+      errors.push(error);
     }
 
     try {
       await app.openPublic(false);
     } catch (error) {
-      showError(error);
+      errors.push(error);
     }
 
     const principals = await app.storedPrincipals();
@@ -917,16 +996,18 @@ export async function view({ root, store }) {
         principal.get(context.schema.properties['syncable-source-config'])
           ?.principal?.kind === 'public',
     );
+
+    const connect = async connectionId => {
+      const result = await store.proxy.connect({
+        platform: context.platform,
+        ...(connectionId ? { connectionId } : {}),
+      });
+      if (result?.status === 'connected')
+        await app.openPrincipal(result.connectionId);
+    };
+
     root.append(el('h3', 'Connected principals'));
-    controls.append(
-      button('Connect account', async () => {
-        const result = await store.proxy.connect({
-          platform: context.platform,
-        });
-        if (result?.status === 'connected')
-          await app.openPrincipal(result.connectionId);
-      }),
-    );
+    controls.append(button('Connect account', () => connect()));
     if (!hasPublic) controls.append(button('Public', () => app.openPublic()));
     root.append(controls);
     for (const principal of principals)
@@ -935,7 +1016,48 @@ export async function view({ root, store }) {
           store.ui.openResource(principal.subject),
         ),
       );
+    if (
+      discovery?.connections.length === 0 &&
+      principals.every(
+        principal =>
+          principal.get(context.schema.properties['syncable-source-config'])
+            ?.principal?.kind === 'public',
+      )
+    )
+      root.append(el('p', 'No accounts connected yet.', 'muted'));
+
+    for (const connection of discovery?.authorizationRequired ?? []) {
+      const notice = el('section', undefined, 'error');
+      notice.setAttribute('role', 'alert');
+      notice.append(
+        el('h4', connection.label || 'Connection needs attention'),
+        el('p', connection.error.message),
+        el('p', 'Saved accounts and collections are retained.', 'muted'),
+        button(
+          connection.canReconnect === true
+            ? 'Reconnect connection'
+            : 'Connect account again',
+          () =>
+            connect(
+              connection.canReconnect === true
+                ? connection.connectionId
+                : undefined,
+            ),
+        ),
+      );
+      root.append(notice);
+    }
+
     root.append(...warnings());
+    if (errors.length)
+      showError(
+        new Error(
+          errors
+            .map(error => String(error?.message ?? error))
+            .join('; ')
+            .slice(0, 1024),
+        ),
+      );
 
     return;
   }

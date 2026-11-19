@@ -1300,6 +1300,9 @@ This does not yet prove restoration of the user's private staging workspace.
   signed drive queries for moved sources, complete unique page coverage,
   proxy/platform/ancestry checks, unique
   personal-repository aliases, ambiguity reporting and unchanged manual locations.
+  Verified typed browser provenance can adopt a historical account across
+  connection slots; display names never establish identity. Cached numeric proof
+  requires an unambiguous durable provider namespace. Conflicts retain both sources.
 - `builtinSyncApp.test.ts`, `builtinSyncIdentity.test.ts` and
   `syncableSource.test.ts` use the actual `syncables/browser` library and composed
   IAP fixtures. They cover typed principal identity, canonical source keys,
@@ -1313,6 +1316,16 @@ This does not yet prove restoration of the user's private staging workspace.
   A paused Sync view can mount its Resume controls while provider reads and
   execution starts remain blocked; pause is rechecked after pending reads.
   Host-held connection keys and user signing reuse the existing AppFrame bridge.
+  Root recovery validates the requested owned slot and rechecks source/session
+  authority. Legacy reconnect eligibility is read-only; explicit reconnect alone
+  prepares cached identity proof, and the OAuth return must verify a fresh typed
+  identity before replacing the logical slot's credential.
+- `builtinSyncApp.test.ts` covers genuinely empty accounts, expired orphan slots
+  alongside saved principals, per-slot recovery, retained historical data and
+  visibility of unrelated failures. The browser regression checks actual signed
+  slot replacement and cached collection navigation after a principal 401.
+- `TableViewTabs.test.tsx` covers Collection tabs and historical Browse labels
+  without rewriting stored or custom view names; screenshots verify its distinct icon.
 - `syncableApiSchema.test.ts` covers catalog-derived Atomic class/property
   provisioning, stable schema identities across branding changes, safe immutable
   datatype changes, read-only lookup and delayed bootstrap cancellation.

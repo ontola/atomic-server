@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { findSchema, pluginSchema } from '@tomic/lib';
+import { core, findSchema, pluginSchema } from '@tomic/lib';
 import {
   prepareDocument,
   describeCollections,
+  describeAuthenticatedPrincipals,
   type QuerySelection,
 } from 'syncables/browser';
 import {
@@ -28,6 +29,7 @@ import {
 import { ShowRoute } from '../../routes/ShowRoute';
 import { fetchSyncableDocument } from './syncableDocument';
 import { syncableApiSchema } from './syncableApiSchema';
+import { sourceConfigFingerprint } from './builtinSyncIdentity.js';
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
@@ -41,6 +43,7 @@ const executionKey = (drive: string, table: string) =>
 
 /** Only installation/schema bootstrap and capability composition live here.
  * The bundled app owns provider discovery and Atomic data reconciliation. */
+// @wc-ignore
 export async function appProfile(
   store: Store,
   drive: string,
@@ -109,6 +112,7 @@ export async function appProfile(
     document,
     querySelection: metadata.querySelection as QuerySelection | undefined,
   };
+  const principalDescriptions = describeAuthenticatedPrincipals(document);
   context = canonicalSyncAppContext(context, trusted);
   const installationApp = await findSyncablePlatform(store, {
     drive,
@@ -131,8 +135,62 @@ export async function appProfile(
     properties: p,
     collections: describeCollections(document),
     currentSourceIsLegacy: context.kind === 'legacy',
+    principalDescriptions,
+    principalProvenance: async slot => {
+      assertCurrent();
+      const proof = await proxy.keyedPrincipalProvenance(
+        context.platform,
+        slot,
+      );
+      assertCurrent();
+
+      return proof;
+    },
   });
   assertCurrent();
+
+  const legacyReconnectPrincipal = async (slot: string) => {
+    const candidates = legacy.sources.filter(
+      alias =>
+        alias.kind === 'principal' &&
+        alias.connectionId === slot &&
+        alias.principal?.kind === 'authenticated',
+    );
+    if (candidates.length !== 1) return;
+    const alias = candidates[0];
+    if (!alias.sourceKey || !alias.localId || !alias.sourceConfigFingerprint)
+      return;
+    const row = await store.getResource(alias.subject);
+
+    const assertAliasCurrent = () => {
+      assertCurrent();
+      assertSyncAppDrive(store, drive, alias.subject);
+      if (
+        row.get(p['syncable-source-key']) !== alias.sourceKey ||
+        row.get(core.properties.localId) !== alias.localId ||
+        sourceConfigFingerprint(row.get(p['syncable-source-config'])) !==
+          alias.sourceConfigFingerprint
+      )
+        throw new Error(
+          'The saved account source changed; reopen the integration App',
+        );
+    };
+
+    assertAliasCurrent();
+    const principal = alias.principal;
+    if (principal?.kind !== 'authenticated') return;
+    const eligible = await proxy.canReconnectLegacyKeyed(
+      context.platform,
+      slot,
+      principal,
+      principalDescriptions,
+    );
+    assertAliasCurrent();
+
+    return eligible
+      ? { principal, assertCurrent: assertAliasCurrent }
+      : undefined;
+  };
 
   if (context.kind === 'legacy') {
     const error = new Error(
@@ -166,10 +224,17 @@ export async function appProfile(
       worker,
     },
     access: { root: table, signal, assertCurrent },
-    proxy: syncProxyTransport(proxy, context, assertCurrent, trusted, () => {
-      if (status().paused === true)
-        throw new Error('Resume this collection before syncing');
-    }),
+    proxy: syncProxyTransport(
+      proxy,
+      context,
+      assertCurrent,
+      trusted,
+      () => {
+        if (status().paused === true)
+          throw new Error('Resume this collection before syncing');
+      },
+      async slot => !!(await legacyReconnectPrincipal(slot)),
+    ),
     execution: async action => {
       assertCurrent();
 
@@ -196,42 +261,91 @@ export async function appProfile(
     },
     ...(!worker && context.mode !== 'public'
       ? {
-          connect: async (platform: string) => {
+          connect: async (platform: string, requestedConnectionId?: string) => {
             assertCurrent();
             if (platform !== context.platform)
               throw new Error('Wrong integration platform');
+            if (
+              requestedConnectionId !== undefined &&
+              (typeof requestedConnectionId !== 'string' ||
+                !/^[A-Za-z0-9_-]{43}$/.test(requestedConnectionId))
+            )
+              throw new Error('Invalid saved connection');
+            if (
+              context.connectionId &&
+              requestedConnectionId !== undefined &&
+              requestedConnectionId !== context.connectionId
+            )
+              throw new Error('Wrong source connection');
             const scope = { drive, app: table, appAgent: actorSubject };
+            const connectionId = context.connectionId ?? requestedConnectionId;
 
-            if (context.connectionId) {
-              if (
-                !(await proxy.canReconnectKeyed(
-                  context.platform,
-                  context.connectionId,
-                ))
-              )
-                throw new Error(
-                  'Open the integration App to reconnect this account',
-                );
+            if (connectionId) {
+              if (!context.connectionId) {
+                if (context.kind !== 'platform')
+                  throw new Error('Connect accounts from the integration App');
+                const rows = await proxy.listKeyed(platform);
+                assertCurrent();
+                if (
+                  !rows.some(
+                    row =>
+                      row.connection_id === connectionId &&
+                      row.platform === platform,
+                  )
+                )
+                  throw new Error('Unknown saved connection');
+              }
+
+              const canReconnect = await proxy.canReconnectKeyed(
+                context.platform,
+                connectionId,
+              );
               assertCurrent();
 
-              return proxy.startKeyedReconnect(
+              if (!canReconnect) {
+                const legacyReconnect =
+                  await legacyReconnectPrincipal(connectionId);
+                if (legacyReconnect) {
+                  await proxy.prepareLegacyKeyedReconnect(
+                    context.platform,
+                    connectionId,
+                    legacyReconnect.principal,
+                    principalDescriptions,
+                    legacyReconnect.assertCurrent,
+                  );
+                  assertCurrent();
+                } else
+                  throw new Error(
+                    'Open the integration App to reconnect this account',
+                  );
+              }
+
+              assertCurrent();
+
+              const handoff = await proxy.startKeyedReconnect(
                 scope,
                 context.platform,
-                context.connectionId,
+                connectionId,
                 location.href,
                 'Atomic Syncables',
               );
+              assertCurrent();
+
+              return handoff;
             }
 
             if (context.kind !== 'platform')
               throw new Error('Connect accounts from the integration App');
 
-            return proxy.startKeyed(
+            const handoff = await proxy.startKeyed(
               scope,
               platform,
               location.href,
               'Atomic Syncables',
             );
+            assertCurrent();
+
+            return handoff;
           },
         }
       : {}),

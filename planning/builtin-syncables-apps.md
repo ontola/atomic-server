@@ -1,5 +1,25 @@
 # Built-in Syncables: shared CI handoff
 
+## Completed follow-up (2026-11-19)
+
+- Canonical `github` catalog published by atomic-plugins PR #748, merged as
+  `91a2c7418b64092aa90277b17148bb359690d978`. SaaS deployment 44545754328
+  from `18cc23d2c1b151efb8d4d2c5c5a958b7cbeeb99e` passed and serves only the
+  new provider ID. All other 16 profiles and the composed API bytes are unchanged.
+  Michiel explicitly permits reconnecting all old GitHub clients; no route alias
+  or credential/source migration is supplied for the provider rename.
+- Principal HTTP 401s get per-slot recovery; genuinely empty accounts get an empty
+  state. Saved accounts/data and unrelated errors remain visible. Explicit legacy
+  reconnect uses verified cached identity and verifies fresh identity on return.
+- Verified typed identity can reuse a historical account across slots. Existing
+  conflicting entries remain intact for review or the approved reinstall; no
+  resources were merged or deleted automatically.
+- Collection replaces the generated Browse label, with a distinct icon. Historical
+  default labels are presented consistently without rewriting stored/custom names.
+  All six translation catalogs were settled through Vite and reviewed.
+- The proposed [flat collection/filter model](flat-syncable-collections.md) is
+  documented separately. Its storage and per-filter sync behavior are not built.
+
 ## Remaining work
 
 - [ ] Trekmeester runs full shared server CI on the final PR #2522 head, reviews
@@ -23,20 +43,21 @@
 
 ## Local acceptance
 
-- 2,858 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
+- 2,889 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
   scoped checks and final pre-commit lint/format are required before publishing.
-- Matching optimized native build with the plugin runtime: 13/13 Chromium
+- Matching optimized native build with the plugin runtime: 14/14 Chromium
   journeys pass, one worker, zero retries, no skips/flakes. Includes ten existing
   Apps journeys plus authenticated selected hierarchy/background sync/pause and
-  reconnect, Public migration and 21-page pagination, and an unrelated Notebook API.
-- Report: `.e2e-runs/2026-11-19T13-17-04.382Z-VixFsq/{report,run}.json`.
+  reconnect, expired orphan-slot recovery, Public migration/21-page pagination,
+  and an unrelated Notebook API.
+- Report: `.e2e-runs/2026-11-19T14-36-30.123Z-lq9pmP/{report,run}.json`.
   Desktop and mobile screenshots captured and shared in the implementation chat.
   Records are invented; this is not a fresh live GitHub OAuth acceptance run.
-- The report records pre-commit HEAD `b65b9b231`; the tested worktree also included
-  the final migration-coverage and paused-mount fixes. Application source and tests
+- The report records pre-commit HEAD `058cc9020`; the tested worktree also included
+  the follow-up recovery, identity-proof and Collection-label fixes. Application source and tests
   remained frozen after the build/run; only documentation/handoff notes followed.
 - Tested executable SHA-256:
-  `64ad894b74fe4509cd5ad6d462bbbee47b5479fc48d7c0d98e059da295700837`.
+  `cf0c0a45253e50223e74eac9dd8938bc652cf99bf9551db06a76280f3e501bd8`.
   Localhost port 52771 uses that private executable with the existing drive.
   HTTP health and host-app/Sync-app bytes match the tested embedded assets.
 - A pre-existing date-formula test fails in Europe/Amsterdam and passes in UTC;

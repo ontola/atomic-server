@@ -1,6 +1,7 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
 import { Agent, JSCryptoProvider, decodeB64 } from '@tomic/react';
+import { describeAuthenticatedPrincipals } from 'syncables/browser';
 import {
   CAPABILITY_TTL_SECONDS,
   ProxyConnections,
@@ -620,6 +621,16 @@ describe('ProxyConnections', () => {
       subject: 100,
     };
     expect(await connections.canReconnectKeyed('pets', slot)).toBe(false);
+    const proofBefore = storage.values();
+    const callsBefore = fixture.calls.length;
+    expect(await connections.keyedPrincipalProvenance('pets', slot)).toEqual({
+      legacyNumericSubject: 100,
+    });
+    expect(
+      await connections.keyedPrincipalProvenance('other', slot),
+    ).toBeUndefined();
+    expect(storage.values()).toBe(proofBefore);
+    expect(fixture.calls).toHaveLength(callsBefore);
     await expect(
       connections.rememberKeyedPrincipal(
         'pets',
@@ -635,7 +646,57 @@ describe('ProxyConnections', () => {
       'currentPrincipal',
     );
     expect(await connections.canReconnectKeyed('pets', slot)).toBe(true);
+    expect(await connections.keyedPrincipalProvenance('pets', slot)).toEqual({
+      principal,
+    });
     expect(storage.values()).not.toContain('githubUserId');
+  });
+
+  it('keeps string principal provenance typed and owner scoped', async () => {
+    const storage = new MemoryStorage();
+    const fixture = fakeProxy(true);
+    const connections = new ProxyConnections(
+      storage,
+      ORIGIN,
+      user,
+      fixture.http,
+    );
+    const slot = (
+      await connections.finish(
+        callback(
+          await connections.startKeyed(
+            SCOPE,
+            'pets',
+            `${PAGE}/x`,
+            'Pets',
+            PAGE,
+          ),
+        ),
+      )
+    ).connectionId!;
+    const principal = {
+      kind: 'authenticated' as const,
+      namespace: 'https://identity.example',
+      subject: '100',
+    };
+    await connections.rememberKeyedPrincipal(
+      'pets',
+      slot,
+      principal,
+      'currentPrincipal',
+    );
+    const before = storage.values();
+    expect(await connections.keyedPrincipalProvenance('pets', slot)).toEqual({
+      principal,
+    });
+    const other = new ProxyConnections(
+      storage,
+      ORIGIN,
+      () => new Agent(new JSCryptoProvider('B'.repeat(42) + 'E')),
+      fixture.http,
+    );
+    expect(await other.keyedPrincipalProvenance('pets', slot)).toBeUndefined();
+    expect(storage.values()).toBe(before);
   });
 
   it.each(['calendar-service', 'github-issues'])(
@@ -707,12 +768,87 @@ describe('ProxyConnections', () => {
         );
       expect(await connections.canReconnectKeyed(platform, slot)).toBe(false);
       await expect(reconnect()).rejects.toThrow('verified account');
-      await connections.rememberKeyedPrincipal(
+      const marker = Array.from(
+        { length: storage.length },
+        (_, index) => storage.key(index)!,
+      ).find(key => key.startsWith('atomic-proxy-keyed-v1:'))!;
+      storage.setItem(
+        marker,
+        JSON.stringify({ platform, githubUserId: '100' }),
+      );
+      const descriptions = describeAuthenticatedPrincipals(document);
+      const saved = storage.values();
+      const calls = proxy.calls.length;
+      expect(
+        await connections.canReconnectLegacyKeyed(
+          platform,
+          slot,
+          principal,
+          descriptions,
+        ),
+      ).toBe(true);
+      expect(
+        await connections.canReconnectLegacyKeyed(
+          platform,
+          slot,
+          { ...principal, subject: '100' },
+          descriptions,
+        ),
+      ).toBe(false);
+
+      for (const invalid of [
+        [...descriptions, ...descriptions],
+        descriptions.map(description => ({
+          ...description,
+          identifier: { ...description.identifier, reassigned: true },
+        })),
+        descriptions.map(description => ({
+          ...description,
+          identifier: { ...description.identifier, scope: 'client' as const },
+        })),
+      ]) {
+        expect(
+          await connections.canReconnectLegacyKeyed(
+            platform,
+            slot,
+            principal,
+            invalid,
+          ),
+        ).toBe(false);
+        await expect(
+          connections.prepareLegacyKeyedReconnect(
+            platform,
+            slot,
+            principal,
+            invalid,
+            () => undefined,
+          ),
+        ).rejects.toThrow('unambiguous');
+      }
+
+      expect(storage.values()).toBe(saved);
+      expect(proxy.calls).toHaveLength(calls);
+      await expect(
+        connections.prepareLegacyKeyedReconnect(
+          platform,
+          slot,
+          principal,
+          descriptions,
+          () => {
+            throw new Error('Session changed');
+          },
+        ),
+      ).rejects.toThrow('Session changed');
+      expect(storage.values()).toBe(saved);
+      await connections.prepareLegacyKeyedReconnect(
         platform,
         slot,
         principal,
-        'currentPrincipal',
+        descriptions,
+        () => undefined,
       );
+      expect(proxy.calls).toHaveLength(calls);
+      expect(storage.values()).not.toContain('githubUserId');
       await expect(
         connections.rememberKeyedPrincipal(
           platform,

@@ -443,6 +443,7 @@ export function syncProxyTransport(
   assertSessionCurrent: () => void,
   trusted: TrustedSyncableCatalog,
   assertProviderReadAllowed: () => void = () => undefined,
+  canReconnectLegacy: (slot: string) => Promise<boolean> = async () => false,
 ): ProxyHost {
   const assertCurrent = () => {
     assertSessionCurrent();
@@ -645,13 +646,32 @@ export function syncProxyTransport(
       const rows = await proxy.listKeyed(platform);
       assertCurrent();
 
-      return rows
-        .filter(
-          row =>
-            context.kind === 'platform' ||
-            row.connection_id === context.connectionId,
-        )
-        .map(row => ({ connectionId: row.connection_id, platform }));
+      const connections = await Promise.all(
+        rows
+          .filter(
+            row =>
+              context.kind === 'platform' ||
+              row.connection_id === context.connectionId,
+          )
+          .map(async row => ({
+            connectionId: row.connection_id,
+            platform,
+            ...(typeof row.label === 'string' && row.label.trim()
+              ? {
+                  label: row.label
+                    .replace(/\p{Cc}/gu, '')
+                    .trim()
+                    .slice(0, 120),
+                }
+              : {}),
+            canReconnect:
+              (await proxy.canReconnectKeyed(platform, row.connection_id)) ||
+              (await canReconnectLegacy(row.connection_id)),
+          })),
+      );
+      assertCurrent();
+
+      return connections;
     },
     request: async (input, signal) => {
       assertReadCurrent();

@@ -13938,3 +13938,7 @@ msgstr "Open integration App"
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 msgstr "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Collection"
+msgstr "Collection"

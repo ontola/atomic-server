@@ -10,9 +10,15 @@ import {
   subjectsReferToSameResource,
   type Store,
 } from '@tomic/lib';
-import type { CollectionDescription } from 'syncables/browser';
+import type {
+  AuthenticatedPrincipalDescription,
+  CollectionDescription,
+} from 'syncables/browser';
+import type { KeyedPrincipalProvenance } from '@helpers/proxyConnections';
 import {
   sourceConfigFingerprint,
+  principalIdentity,
+  type SyncablePrincipal,
   type LegacySourceAlias,
 } from './builtinSyncIdentity.js';
 import {
@@ -56,6 +62,12 @@ export interface SyncableLegacyOptions {
   appDataProperty?: string;
   /** Enables discovery when opening an otherwise unlinked historical source. */
   currentSourceIsLegacy?: boolean;
+  /** The configured proxy's current declared identity metadata. */
+  principalDescriptions?: AuthenticatedPrincipalDescription[];
+  /** Host-held browser provenance, never an Atomic label or iframe assertion. */
+  principalProvenance?: (
+    slot: string,
+  ) => Promise<KeyedPrincipalProvenance | undefined>;
 }
 export interface SyncableLegacyResult {
   sources: LegacySourceAlias[];
@@ -451,6 +463,72 @@ export async function collectSyncableLegacySources(
   if (!historical.size && !flatIssues.size)
     return { sources, warnings: [...warnings] };
 
+  const principals = new Map<string, SyncablePrincipal>();
+
+  if (options.principalProvenance) {
+    const descriptions = options.principalDescriptions ?? [];
+
+    for (const slot of new Set(
+      [...historical.values()].flatMap(old => (old.slot ? [old.slot] : [])),
+    )) {
+      const proof = await options.principalProvenance(slot);
+      if (!proof) continue;
+      const durable = descriptions.filter(
+        description =>
+          description.identifier.stable === true &&
+          description.identifier.reassigned === false,
+      );
+
+      if (proof.principal) {
+        const declared = durable.filter(
+          description =>
+            description.namespace === proof.principal!.namespace &&
+            (description.identifier.scope === 'provider' ||
+              !!proof.principal!.clientContext),
+        );
+        if (declared.length === 1)
+          principals.set(slot, principalIdentity(proof.principal));
+        else
+          warn(
+            'A saved account identity does not match an unambiguous current catalog declaration.',
+          );
+      } else if (proof.legacyNumericSubject !== undefined) {
+        const declared = durable.filter(
+          description => description.identifier.scope === 'provider',
+        );
+        if (
+          declared.length === 1 &&
+          Number.isSafeInteger(proof.legacyNumericSubject)
+        ) {
+          principals.set(slot, {
+            kind: 'authenticated',
+            namespace: declared[0].namespace,
+            subject: proof.legacyNumericSubject,
+          });
+        } else
+          warn(
+            'A saved numeric account identity has no unambiguous provider namespace.',
+          );
+      }
+    }
+  }
+
+  const sameAccess = (
+    old: HistoricalRow,
+    slot: string | undefined,
+    principal?: SyncablePrincipal,
+  ) => {
+    if (old.slot === slot) return true;
+    const expected = old.slot && principals.get(old.slot);
+    const actual = principal ?? (slot && principals.get(slot));
+
+    return (
+      !!expected &&
+      !!actual &&
+      sourceConfigFingerprint(expected) === sourceConfigFingerprint(actual)
+    );
+  };
+
   const bySubject = new Map<string, LegacySourceAlias>(modern);
 
   const parentOf = (
@@ -463,7 +541,7 @@ export async function collectSyncableLegacySources(
     const matches = [...historical.values()].filter(
       candidate =>
         candidate.key.kind === kind &&
-        candidate.slot === old.slot &&
+        sameAccess(old, candidate.slot) &&
         candidate.public === old.public &&
         (!field ||
           (integer(candidate.config[field]) !== undefined &&
@@ -475,7 +553,7 @@ export async function collectSyncableLegacySources(
     if (
       !matches.length &&
       direct &&
-      direct.connectionId === old.slot &&
+      sameAccess(old, direct.connectionId, direct.principal) &&
       (kind === 'organizations'
         ? direct.kind === 'collection' &&
           direct.collection?.resource === 'githubOrganization'
@@ -493,7 +571,7 @@ export async function collectSyncableLegacySources(
           (kind === 'organizations' || kind === 'repositories'
             ? 'collection'
             : 'record') &&
-        candidate.connectionId === old.slot &&
+        sameAccess(old, candidate.connectionId, candidate.principal) &&
         (field
           ? candidate.remoteId === integer(old.config[field])
           : candidate.subject === actual),
@@ -518,7 +596,12 @@ export async function collectSyncableLegacySources(
       localId: old.row.get(core.properties.localId) as string,
       ...(old.public
         ? { principal: { kind: 'public' as const } }
-        : { connectionId: old.slot }),
+        : {
+            connectionId: old.slot,
+            ...(old.slot && principals.has(old.slot)
+              ? { principal: principals.get(old.slot)! }
+              : {}),
+          }),
       ...value,
     };
     sources.push(alias);
@@ -627,9 +710,10 @@ export async function collectSyncableLegacySources(
     if (
       !ownerRow ||
       (owner
-        ? owner.slot !== old.slot || owner.config.ownerId !== old.config.ownerId
+        ? !sameAccess(old, owner.slot) ||
+          owner.config.ownerId !== old.config.ownerId
         : !adoptedOwner ||
-          adoptedOwner.connectionId !== old.slot ||
+          !sameAccess(old, adoptedOwner.connectionId, adoptedOwner.principal) ||
           adoptedOwner.remoteId !== integer(old.config.ownerId))
     )
       continue;
@@ -825,9 +909,8 @@ export async function collectSyncableLegacySources(
         name: table.collection.name,
         resource: table.collection.resource,
       },
-      ...(table.principal
-        ? { principal: table.principal }
-        : { connectionId: table.connectionId }),
+      ...(table.connectionId ? { connectionId: table.connectionId } : {}),
+      ...(table.principal ? { principal: table.principal } : {}),
       parentSourceSubject: parent as string,
       remoteId,
       remoteIdProperty: p['syncable-issue-number'],

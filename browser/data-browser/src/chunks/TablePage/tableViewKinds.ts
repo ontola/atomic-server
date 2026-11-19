@@ -7,6 +7,7 @@ import {
   FaChartPie,
   FaRegCircleDot,
   FaPlug,
+  FaLayerGroup,
 } from 'react-icons/fa6';
 
 /**
@@ -72,7 +73,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   dashboard: 'Dashboard',
   issues: 'Issues',
   syncables: 'Sync',
-  'syncable-collection': 'Syncable Collection',
+  'syncable-collection': 'Collection',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -83,5 +84,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   dashboard: FaChartPie,
   issues: FaRegCircleDot,
   syncables: FaPlug,
-  'syncable-collection': FaTable,
+  'syncable-collection': FaLayerGroup,
 };

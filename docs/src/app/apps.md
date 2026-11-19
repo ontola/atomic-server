@@ -40,7 +40,7 @@ personal-owner rows. Choose **Open collection**, then **Sync now** in its
 **Sync** tab to import its rows. The Repositories collection imports repositories
 available to the connected account.
 
-Use **+** to add **Syncable Collection** to a table. This native view shows saved
+Use **+** to add **Collection** to a table. This native view shows saved
 fields and **Open** actions. An organization opens its saved Repositories table;
 a repository opens its saved **Issues and pull requests** table. Choose **Sync
 now** there to fetch that selected collection. Opening or returning to a native
@@ -58,16 +58,21 @@ and blocks refreshes until you resume. Paused status survives a reload; open the
 **Sync** tab and choose **Resume** to enable syncing again. The **Sync** tab
 contains controls and status; the **Table** tab follows the schema derived from
 the API description.
-**Syncable Collection** reads saved Atomic data and remains available during an
+**Collection** reads saved Atomic data and remains available during an
 import or a provider outage. Changes you make in Atomic stay in your drive.
 An interrupted import retains accepted rows. Moving a table within the same
 drive retains its source identity.
 
-For an older installation, choose **Open GitHub** from **Apps** to upgrade its
-existing root in place and remove the extra Accounts navigation level. Migration
-retains resource subjects and saved data; ambiguous historical bindings are
-reported rather than guessed. Existing GitHub-specific view tabs open the
-generic collection view; new tabs use **Syncable Collection**.
+The canonical catalog identifier is now `github`. Installations and other clients
+using the historical `github-issues` identifier need reinstalling or reconnecting.
+Stored Atomic resources are retained; the rename does not automatically remove
+them. Historical GitHub-specific view tabs still open the native Collection view.
+
+Within an installation, migration uses verified account identity to preserve
+existing resources across connection changes. It never matches accounts by
+display name. Conflicting saved entries are reported for review with their data
+retained. An expired connection offers recovery controls while cached collections
+remain available.
 
 Your integration proxy must support client-held connection keys and have
 GitHub OAuth configured. The

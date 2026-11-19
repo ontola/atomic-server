@@ -387,9 +387,16 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
     ),
     proxy: {
       request,
-      connections: vi.fn(async () => [
-        { connectionId: 'slot', platform: 'example-service' },
-      ]),
+      connections: vi.fn(
+        async (): Promise<
+          Array<{
+            connectionId: string;
+            platform: string;
+            label?: string;
+            canReconnect?: boolean;
+          }>
+        > => [{ connectionId: 'slot', platform: 'example-service' }],
+      ),
       connect: vi.fn(),
     },
     ui: { openResource: vi.fn() },
@@ -460,6 +467,177 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       'v2/session',
     ]);
   });
+
+  it('shows a genuine empty state only when no slots or saved accounts exist', async () => {
+    const set = setup('platform');
+    set.store.proxy.connections.mockResolvedValue([]);
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('No accounts connected yet.');
+    expect(element.querySelector('[role="alert"]')).toBeNull();
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it('shows an expired orphan slot without hiding a saved authenticated account', async () => {
+    const set = setup('platform');
+    const saved = await set.app.openPrincipal('slot');
+    const oldLocalId = set.data.get(saved.subject)![P + 'localId'];
+    set.store.proxy.connections.mockResolvedValue([
+      { connectionId: 'slot', platform: 'example-service' },
+      { connectionId: 'orphan', platform: 'example-service' },
+    ]);
+    set.request.mockClear();
+    set.request.mockResolvedValue({
+      status: 401,
+      headers: {},
+      body: { error: 'credential_refresh_failed' },
+    });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('Ada');
+    expect(element.textContent).toContain('This connection has expired.');
+    expect(element.textContent).not.toContain('No accounts connected');
+    expect(element.textContent).not.toContain(
+      'Authenticated principal returned HTTP',
+    );
+    expect(
+      set.request.mock.calls.map(([request]) => request.connectionId),
+    ).toEqual(['orphan']);
+    expect(set.data.get(saved.subject)![P + 'localId']).toBe(oldLocalId);
+  });
+
+  it('offers authorization recovery for unknown 401 slots without claiming no account is connected', async () => {
+    const set = setup('platform');
+    set.request.mockResolvedValue({ status: 401, headers: {}, body: {} });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain(
+      'This connection could not authorize its account.',
+    );
+    expect(element.textContent).toContain('Connect account again');
+    expect(element.textContent).not.toContain('No accounts connected');
+    expect(
+      nodes(set.data, 'principal').filter(
+        ([, row]) =>
+          (config(row).principal as { kind: string }).kind === 'authenticated',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it.each([true, false])(
+    'uses native reconnect eligibility (%s) instead of inferring connection ownership',
+    async canReconnect => {
+      const set = setup('platform');
+      set.store.proxy.connections.mockResolvedValue([
+        {
+          connectionId: 'expired-slot',
+          platform: 'example-service',
+          label: 'Saved connection',
+          canReconnect,
+        },
+      ]);
+      set.request.mockResolvedValue({
+        status: 401,
+        headers: {},
+        body: { error: 'credential_refresh_failed' },
+      });
+      const element = document.createElement('div');
+      await view({ root: element, store: set.store });
+      expect(element.textContent).toContain('Saved connection');
+      const recovery = [...element.querySelectorAll('button')].find(
+        button =>
+          button.textContent ===
+          (canReconnect ? 'Reconnect connection' : 'Connect account again'),
+      )!;
+      recovery.click();
+      await vi.waitFor(() =>
+        expect(set.store.proxy.connect).toHaveBeenCalledWith({
+          platform: 'example-service',
+          ...(canReconnect ? { connectionId: 'expired-slot' } : {}),
+        }),
+      );
+      expect(
+        set.store.newResource.mock.calls.every(
+          ([args]) =>
+            (
+              args.propVals[prop('source-config')] as {
+                principal?: { kind: string };
+              }
+            )?.principal?.kind !== 'authenticated',
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('retains a historical saved account when its connection expires and no modern principal exists', async () => {
+    const subject = 'atomic:historical-account';
+    const set = setup('platform', {
+      legacySources: [{ subject, kind: 'principal', connectionId: 'slot' }],
+    });
+    set.data.set(subject, {
+      [P + 'parent']: root,
+      [P + 'name']: 'Saved legacy account',
+      [P + 'localId']: 'old-local-id',
+    });
+    set.request.mockResolvedValue({
+      status: 401,
+      headers: {},
+      body: { error: 'credential_refresh_failed' },
+    });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('Saved legacy account');
+    expect(element.textContent).not.toContain('No accounts connected');
+    const account = [...element.querySelectorAll('button')].find(
+      button => button.textContent === 'Saved legacy account',
+    )!;
+    account.click();
+    await vi.waitFor(() =>
+      expect(set.store.ui.openResource).toHaveBeenCalledWith(subject),
+    );
+    expect(set.data.get(subject)![P + 'localId']).toBe('old-local-id');
+  });
+
+  it.each([403, 503])(
+    'keeps HTTP %s visible alongside recoverable authorization failures',
+    async status => {
+      const set = setup('platform');
+      set.store.proxy.connections.mockResolvedValue([
+        { connectionId: 'expired', platform: 'example-service' },
+        { connectionId: 'failed', platform: 'example-service' },
+      ]);
+      set.request.mockImplementation(async request => ({
+        status: request.connectionId === 'expired' ? 401 : status,
+        headers: {},
+        body: {},
+      }));
+      const element = document.createElement('div');
+      await view({ root: element, store: set.store });
+      expect(element.textContent).toContain(
+        'This connection could not authorize its account.',
+      );
+      expect(element.textContent).toContain(String(status));
+      expect(element.querySelectorAll('[role="alert"]')).toHaveLength(2);
+      expect(element.textContent).not.toContain('No accounts connected');
+    },
+  );
+
+  it.each(['network', 'schema'])(
+    'does not misclassify %s failures as expired authorization',
+    async failure => {
+      const set = setup('platform');
+      if (failure === 'network')
+        set.request.mockRejectedValue(new Error('Network unavailable'));
+      else
+        set.request.mockResolvedValue({ status: 200, headers: {}, body: {} });
+      const element = document.createElement('div');
+      await view({ root: element, store: set.store });
+      expect(element.querySelector('[role="alert"]')).not.toBeNull();
+      expect(element.textContent).not.toContain('This connection has expired.');
+      expect(element.textContent).not.toContain('Connect account again');
+      expect(element.textContent).not.toContain('No accounts connected');
+    },
+  );
 
   it('resolves a real principal and provisions only catalog root collections without eager reads', async () => {
     const set = setup('platform');
@@ -752,48 +930,161 @@ describe('catalog-driven Sync through the shared app bridge', () => {
     expect(row[prop('source-key')]).toBe(current);
   });
 
-  it('migrates a host-validated principal alias after resolving its real connection identity', async () => {
+  it.each([false, true])(
+    'migrates a host-validated principal alias with cross-slot identity proof (%s)',
+    async crossSlot => {
+      const set = setup('platform');
+      const subject = 'atomic:legacy-account';
+      set.data.set(subject, {
+        [P + 'parent']: root,
+        [P + 'isA']: ['atomic:old-account'],
+        [P + 'localId']: 'old-account-local-id',
+        [P + 'name']: 'Custom account title',
+        [prop('source-key')]: 'old-source-key',
+        [prop('node-kind')]: 'account',
+      });
+      const app = createSyncApp(set.store, {
+        ...set.context,
+        legacySources: [
+          {
+            subject,
+            sourceKey: 'old-source-key',
+            localId: 'old-account-local-id',
+            kind: 'principal',
+            connectionId: crossSlot ? 'historical-slot' : 'slot',
+            ...(crossSlot ? { principal } : {}),
+          },
+        ],
+      });
+      expect((await app.openPrincipal('slot')).subject).toBe(subject);
+      const saved = set.data.get(subject)!;
+      expect(saved[P + 'localId']).toBe('old-account-local-id');
+      expect(saved[P + 'name']).toBe('Custom account title');
+      expect(saved[P + 'isA']).toEqual(
+        expect.arrayContaining([
+          tableClass,
+          classes['syncable-principal'],
+          'atomic:old-account',
+        ]),
+      );
+      expect(JSON.parse(saved[prop('source-key')] as string)).toMatchObject({
+        version: 2,
+        kind: 'principal',
+        principal: { subject: 7 },
+      });
+      expect(config(saved).principal).toEqual(principal);
+      expect(nodes(set.data, 'principal')).toHaveLength(1);
+    },
+  );
+
+  it('does not allocate a duplicate principal when a different historical slot lacks identity proof', async () => {
     const set = setup('platform');
-    const subject = 'atomic:legacy-account';
-    set.data.set(subject, {
+    const subject = 'atomic:historical-account';
+    const old = {
       [P + 'parent']: root,
-      [P + 'isA']: ['atomic:old-account'],
-      [P + 'localId']: 'old-account-local-id',
-      [P + 'name']: 'Custom account title',
-      [prop('source-key')]: 'old-source-key',
-      [prop('node-kind')]: 'account',
-    });
+      [P + 'name']: 'Saved account',
+      [P + 'localId']: 'historical-account',
+      [prop('source-key')]: 'historical-source',
+    };
+    set.data.set(subject, old);
     const app = createSyncApp(set.store, {
       ...set.context,
       legacySources: [
         {
           subject,
-          sourceKey: 'old-source-key',
-          localId: 'old-account-local-id',
+          sourceKey: 'historical-source',
+          localId: 'historical-account',
           kind: 'principal',
-          connectionId: 'slot',
+          connectionId: 'older-slot',
         },
       ],
     });
-    expect((await app.openPrincipal('slot')).subject).toBe(subject);
-    const saved = set.data.get(subject)!;
-    expect(saved[P + 'localId']).toBe('old-account-local-id');
-    expect(saved[P + 'name']).toBe('Custom account title');
-    expect(saved[P + 'isA']).toEqual(
-      expect.arrayContaining([
-        tableClass,
-        classes['syncable-principal'],
-        'atomic:old-account',
-      ]),
-    );
-    expect(JSON.parse(saved[prop('source-key')] as string)).toMatchObject({
-      version: 2,
-      kind: 'principal',
-      principal: { subject: 7 },
-    });
-    expect(config(saved).principal).toEqual(principal);
-    expect(nodes(set.data, 'principal')).toHaveLength(1);
+    await expect(app.openPrincipal('slot')).rejects.toThrow('saved account');
+    expect(set.store.newResource).not.toHaveBeenCalled();
+    expect(set.data.get(subject)).toEqual(old);
   });
+
+  it('refuses competing canonical and legacy resources for the same proven typed principal', async () => {
+    const set = setup('platform');
+    const canonical = await set.app.openPrincipal('slot');
+    const subject = 'atomic:historical-account';
+    set.data.set(subject, {
+      [P + 'parent']: root,
+      [P + 'name']: 'Saved account',
+      [P + 'localId']: 'historical-account',
+      [prop('source-key')]: 'historical-source',
+    });
+    const before = structuredClone([...set.data]);
+    set.store.newResource.mockClear();
+    const app = createSyncApp(set.store, {
+      ...set.context,
+      legacySources: [
+        {
+          subject,
+          sourceKey: 'historical-source',
+          localId: 'historical-account',
+          kind: 'principal',
+          connectionId: 'older-slot',
+          principal,
+        },
+      ],
+    });
+    await expect(app.openPrincipal('slot')).rejects.toThrow(
+      'conflicting saved sources',
+    );
+    expect(set.store.newResource).not.toHaveBeenCalled();
+    expect([...set.data]).toEqual(before);
+    expect(set.data.has(canonical.subject)).toBe(true);
+  });
+
+  it('reports canonical and proven historical principal conflicts even when the canonical slot is already known', async () => {
+    const set = setup('platform');
+    const canonical = await set.app.openPrincipal('slot');
+    const subject = 'atomic:historical-account';
+    set.data.set(subject, {
+      [P + 'parent']: root,
+      [P + 'name']: 'Historical saved name',
+    });
+    Object.assign(set.context, {
+      legacySources: [
+        { subject, kind: 'principal', connectionId: 'old-slot', principal },
+      ],
+    });
+    set.request.mockClear();
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('conflicting saved sources');
+    expect(element.textContent).toContain('Historical saved name');
+    expect(element.textContent).toContain('Ada');
+    expect(set.data.has(canonical.subject)).toBe(true);
+    expect(set.request).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'allows a distinct proven principal or an already adopted historical alias (%s)',
+    async adopted => {
+      const set = setup('platform');
+      const first = await set.app.openPrincipal('old-slot');
+      const alias = {
+        subject: first.subject,
+        kind: 'principal',
+        connectionId: 'old-slot',
+        ...(adopted ? {} : { principal }),
+      };
+      const app = createSyncApp(set.store, {
+        ...set.context,
+        legacySources: [alias],
+      });
+      set.request.mockResolvedValue({
+        status: 200,
+        headers: {},
+        body: { id: 8, label: 'Another account' },
+      });
+      await app.openPrincipal('another-slot');
+      expect(nodes(set.data, 'principal')).toHaveLength(2);
+      expect(set.data.get(first.subject)![P + 'name']).toBe('Ada');
+    },
+  );
 
   it('reuses host-described flat legacy rows without interpreting provider IDs or fields', async () => {
     const set = setup();

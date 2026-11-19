@@ -13930,3 +13930,7 @@ msgstr "Buka aplikasi integrasi"
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan layanan untuk menjelajahi koleksi katalognya dan menyinkronkan data ke drive Anda."
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Collection"
+msgstr "Koleksi"

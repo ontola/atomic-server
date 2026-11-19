@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { core, collections as collectionTerms, type Store } from '@tomic/lib';
-import type { CollectionDescription } from 'syncables/browser';
+import type {
+  AuthenticatedPrincipalDescription,
+  CollectionDescription,
+} from 'syncables/browser';
 import { collectSyncableLegacySources } from './syncableLegacy';
 import { sourceKey, sourceConfigFingerprint } from './builtinSyncIdentity.js';
 
@@ -236,6 +239,17 @@ function fixture() {
     ).legacySources,
   };
 }
+
+const declaredPrincipal: AuthenticatedPrincipalDescription = {
+  namespace: 'https://github.com',
+  operationId: 'currentPrincipal',
+  path: '/user',
+  method: 'GET',
+  kind: 'user',
+  subject: '$response.body#/id',
+  identifier: { scope: 'provider', stable: true, reassigned: false },
+  claims: {},
+};
 
 describe('historical source collection', () => {
   it('does not scan modern installation data without legacy provenance', async () => {
@@ -774,6 +788,125 @@ describe('historical source collection', () => {
       ),
     ).toBe(false);
   });
+  it('bridges a historical verified numeric principal across credential slots without using display names', async () => {
+    const f = fixture();
+    f.authenticatedTree();
+    f.rows.get('account')![core.properties.name] = 'old login';
+    const before = JSON.stringify([...f.rows]);
+    const result = await f.collect({
+      principalDescriptions: [declaredPrincipal],
+      principalProvenance: async (id: string) =>
+        id === slot ? { legacyNumericSubject: 408412 } : undefined,
+    });
+    expect(result.sources.find(row => row.subject === 'account')).toMatchObject(
+      {
+        connectionId: slot,
+        principal: {
+          kind: 'authenticated',
+          namespace: 'https://github.com',
+          subject: 408412,
+        },
+      },
+    );
+    expect(result.sources.find(row => row.subject === 'issue')).toMatchObject({
+      connectionId: slot,
+      principal: {
+        kind: 'authenticated',
+        namespace: 'https://github.com',
+        subject: 408412,
+      },
+    });
+    expect(result.warnings).toEqual([]);
+    expect(JSON.stringify([...f.rows])).toBe(before);
+  });
+  it.each([408412, '408412'])(
+    'uses only typed matching principal proof for an already adopted parent on another slot (%j)',
+    async subject => {
+      const f = fixture();
+      f.authenticatedTree();
+      const principal = {
+        kind: 'authenticated' as const,
+        namespace: 'https://github.com',
+        subject: 408412,
+      };
+      const collection = {
+        collection: 'githubOrganizations',
+        resource: 'githubOrganization',
+        pathParams: {},
+        path: '/user/orgs',
+        method: 'GET',
+        query: {},
+        body: {},
+      };
+      f.rows.get('orgs')![prop('source-key')] = sourceKey({
+        proxyOrigin: origin,
+        platform: 'github-issues',
+        kind: 'collection',
+        principal,
+        collection: {
+          name: 'githubOrganizations',
+          resource: 'githubOrganization',
+          context: {},
+        },
+      });
+      f.rows.get('orgs')![prop('source-config')] = {
+        version: 2,
+        proxyOrigin: origin,
+        platform: 'github-issues',
+        principal,
+        connectionId: otherSlot,
+        collection,
+      };
+      f.rows.get('orgs')![prop('node-kind')] = 'collection';
+      const before = JSON.stringify([...f.rows]);
+      const result = await f.collect({
+        principalDescriptions: [declaredPrincipal],
+        principalProvenance: async (id: string) =>
+          id === slot ? { principal: { ...principal, subject } } : undefined,
+      });
+      const owner = result.sources.find(row => row.subject === 'org');
+      if (typeof subject === 'number')
+        expect(owner).toMatchObject({
+          kind: 'record',
+          remoteId: 12,
+          parentSourceSubject: 'orgs',
+        });
+      else expect(owner).toBeUndefined();
+      expect(JSON.stringify([...f.rows])).toBe(before);
+    },
+  );
+  it.each(['ambiguous', 'client-scoped'])(
+    'does not infer a namespace for %s historical numeric provenance',
+    async mode => {
+      const f = fixture();
+      f.authenticatedTree();
+      const principalDescriptions =
+        mode === 'ambiguous'
+          ? [
+              declaredPrincipal,
+              { ...declaredPrincipal, namespace: 'https://other.example' },
+            ]
+          : [
+              {
+                ...declaredPrincipal,
+                identifier: {
+                  ...declaredPrincipal.identifier,
+                  scope: 'client',
+                },
+              },
+            ];
+      const result = await f.collect({
+        principalDescriptions,
+        principalProvenance: async () => ({ legacyNumericSubject: 408412 }),
+      });
+      expect(
+        result.sources.find(row => row.subject === 'account')?.principal,
+      ).toBeUndefined();
+      expect(result.warnings).toContain(
+        'A saved numeric account identity has no unambiguous provider namespace.',
+      );
+    },
+  );
   it('fails closed at the resource bound and rejects cyclic ancestry', async () => {
     const f = fixture();
     f.authenticatedTree();

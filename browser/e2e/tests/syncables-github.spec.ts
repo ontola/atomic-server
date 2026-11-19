@@ -85,6 +85,8 @@ interface MockState {
   documentRequests: string[];
   iconRequests: string[];
   expiredConnection?: string;
+  expiredPrincipalConnection?: string;
+  principalConnections: string[];
   issueGate?: Promise<void>;
 }
 
@@ -178,6 +180,7 @@ async function mockIntegrationProxy(
   );
   const state: MockState = {
     redeemed: [],
+    principalConnections: [],
     issueConnections: [],
     repositoryRequests: 0,
     organizationRequests: 0,
@@ -433,6 +436,21 @@ async function mockIntegrationProxy(
     state.providerRequests.push(providerPath);
 
     if (providerPath === '/user') {
+      state.principalConnections.push(connectionId);
+
+      if (connectionId === state.expiredPrincipalConnection) {
+        await send(
+          {
+            error: 'credential_refresh_failed',
+            message:
+              "the provider refused to refresh this connection's token; connect again",
+          },
+          401,
+        );
+
+        return;
+      }
+
       await send({ id: 321, login: 'michiel', name: 'michiel', type: 'User' });
 
       return;
@@ -630,7 +648,7 @@ async function selectView(page: Page, name: string) {
 }
 
 async function browse(page: Page) {
-  await selectView(page, 'Browse');
+  await selectView(page, 'Collection');
   await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
 
   return page.getByRole('main').getByRole('table');
@@ -762,6 +780,144 @@ async function publicForm(page: Page, collection = 'repositoryIssues') {
 }
 
 test.describe('catalog-driven built-in Syncables', () => {
+  test('retains a saved principal and safely reconnects an expired orphan connection from the App', async ({
+    page,
+    browserDiagnostics,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    const requests = await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page
+      .locator(`[data-proxy-platform="${PLATFORM}"]`)
+      .getByRole('button', { name: 'Add GitHub to drive' })
+      .click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const appUrl = page.url();
+    const appSubject = await getCurrentSubject(page);
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
+    await expect(
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    const principalSubject = await sourceSubject(page, 'principal');
+    const saved = await sourceState(page, principalSubject);
+    const oldSlot = requests.redeemed[0];
+
+    // A newer slot verifies the same typed principal. The older owned slot is
+    // retained by the proxy and can expire independently of the saved account.
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
+    await expect.poll(() => requests.redeemed.length).toBe(2);
+    await expect(
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect
+      .poll(async () => (await sourceState(page, principalSubject)).config)
+      .toMatchObject({ connectionId: requests.redeemed[1] });
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    browserDiagnostics.expect(
+      'error',
+      /Failed to load resource:.*401/,
+      'The deliberately expired orphan slot rejects its principal read.',
+      1,
+      /^https:\/\/syncables-test\.example\/proxy\//,
+      { optional: true },
+    );
+    requests.expiredPrincipalConnection = oldSlot;
+    await page.reload();
+    const notice = iframe
+      .getByRole('alert')
+      .filter({ hasText: 'This connection has expired.' });
+    await expect(notice).toBeVisible({ timeout: 45_000 });
+    await expect(
+      notice.getByRole('button', { name: 'Reconnect connection', exact: true }),
+    ).toBeVisible();
+    await expect(notice).toContainText(
+      'Saved accounts and collections are retained.',
+    );
+    await expect(
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
+    ).toHaveCount(1);
+    await expect(iframe.locator('body')).not.toContainText(
+      'No accounts connected',
+    );
+    await expect(iframe.locator('body')).not.toContainText(
+      'Authenticated principal returned HTTP 401',
+    );
+    expect((await sourceState(page, principalSubject)).key).toBe(saved.key);
+    expect((await sourceState(page, principalSubject)).localId).toBe(
+      saved.localId,
+    );
+    expect(requests.organizationRequests).toBe(0);
+    expect(requests.repositoryRequests).toBe(0);
+    await testInfo.attach('expired-orphan-connection-desktop', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      notice.getByRole('button', { name: 'Reconnect connection', exact: true }),
+    ).toBeVisible();
+    await testInfo.attach('expired-orphan-connection-mobile', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 1200, height: 800 });
+
+    await openConsent(page, iframe, 'Reconnect connection');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
+    await expect(
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(iframe.getByRole('alert')).toHaveCount(0);
+    expect(requests.redeemed).toHaveLength(3);
+    // Recovery replaces the credential behind the original logical slot.
+    const activeId = await page.evaluate(
+      ({ origin, slot }) => {
+        const prefix = 'atomic-proxy-keyed-v1:';
+        const key = Object.keys(localStorage).find(candidate => {
+          if (!candidate.startsWith(prefix)) return false;
+          const parts = JSON.parse(candidate.slice(prefix.length));
+
+          return parts[0] === origin && parts[2] === slot;
+        });
+
+        return key
+          ? JSON.parse(localStorage.getItem(key)!).activeId
+          : undefined;
+      },
+      { origin: PROXY, slot: oldSlot },
+    );
+    expect(activeId).toBe(requests.redeemed[2]);
+    expect(requests.principalConnections).toContain(activeId);
+    expect(await sourceSubject(page, 'principal')).toBe(principalSubject);
+    const restored = await sourceState(page, principalSubject);
+    expect(restored.key).toBe(saved.key);
+    expect(restored.localId).toBe(saved.localId);
+    expect(restored.config).toMatchObject({ connectionId: oldSlot });
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
+    expect(await getCurrentSubject(page)).toBe(principalSubject);
+    const directory = await browse(page);
+    await expect(
+      directory.getByText('Organizations', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      directory.getByText('Repositories', { exact: true }),
+    ).toBeVisible();
+    expect(requests.organizationRequests).toBe(0);
+    expect(requests.repositoryRequests).toBe(0);
+  });
+
   test('connects a principal directly and syncs only selected declared collection instances', async ({
     page,
     browserDiagnostics,

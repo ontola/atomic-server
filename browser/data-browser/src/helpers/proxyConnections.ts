@@ -22,6 +22,7 @@
 
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import type { AuthenticatedPrincipalDescription } from 'syncables/browser';
 import {
   AGENT_VAULT_PROOF_MESSAGE,
   SIGNATURE_VERSION_HEADER,
@@ -79,6 +80,13 @@ export interface ConnectionPrincipal {
   clientContext?: string;
 }
 
+/** Non-secret proof saved after a host-verified identity response. */
+export interface KeyedPrincipalProvenance {
+  principal?: ConnectionPrincipal;
+  /** Historical marker format stored an already-verified numeric subject. */
+  legacyNumericSubject?: number;
+}
+
 interface PrincipalReconnect {
   slotId: string;
   principal: ConnectionPrincipal;
@@ -95,6 +103,35 @@ interface KeyedConnectionMarker {
   legacyPrincipalId?: string;
   activeId?: string;
   replacement?: true;
+}
+
+function legacyPrincipalOperation(
+  marker: KeyedConnectionMarker | undefined,
+  value: ConnectionPrincipal,
+  descriptions: AuthenticatedPrincipalDescription[],
+): string | undefined {
+  const principal = connectionPrincipal(value);
+  if (
+    !marker?.legacyPrincipalId ||
+    marker.principal ||
+    !principal ||
+    principal.clientContext !== undefined ||
+    typeof principal.subject !== 'number' ||
+    !Number.isSafeInteger(principal.subject) ||
+    principal.subject <= 0 ||
+    String(principal.subject) !== marker.legacyPrincipalId
+  )
+    return;
+  const declared = descriptions.filter(
+    description =>
+      description.identifier.scope === 'provider' &&
+      description.identifier.stable === true &&
+      description.identifier.reassigned === false,
+  );
+
+  return declared.length === 1 && declared[0].namespace === principal.namespace
+    ? declared[0].operationId || undefined
+    : undefined;
 }
 
 function validConnectionId(value: unknown): value is string {
@@ -159,6 +196,8 @@ const loadPrincipalCatalog: PrincipalCatalogLoader = async (
 export interface ConnectionReference {
   connectionId: string;
   platform: string;
+  label?: string;
+  canReconnect?: boolean;
 }
 
 /** One row of `GET /connections`, as far as this page reads it. */
@@ -781,11 +820,84 @@ export class ProxyConnections {
     if (marker?.platform === platform && !marker.replacement) return marker;
   }
 
+  /** Native compatibility lookup only; never reads a provider or derives a key. */
+  async keyedPrincipalProvenance(
+    platform: string,
+    slotId: string,
+  ): Promise<KeyedPrincipalProvenance | undefined> {
+    const owner = await this.user().subject;
+    const marker = this.keyedSlot(owner, platform, slotId);
+    if (!marker) return;
+    const raw = marker.legacyPrincipalId;
+    const numeric =
+      typeof raw === 'string' &&
+      /^[1-9][0-9]*$/.test(raw) &&
+      Number.isSafeInteger(Number(raw))
+        ? Number(raw)
+        : undefined;
+    if (
+      marker.principal &&
+      numeric !== undefined &&
+      marker.principal.subject !== numeric
+    )
+      throw new Error('The saved connection identity proofs conflict');
+    if (!marker.principal && numeric === undefined) return;
+
+    return {
+      ...(marker.principal ? { principal: { ...marker.principal } } : {}),
+      ...(numeric === undefined ? {} : { legacyNumericSubject: numeric }),
+    };
+  }
+
   async canReconnectKeyed(platform: string, slotId: string): Promise<boolean> {
     const owner = await this.user().subject;
     const marker = this.keyedSlot(owner, platform, slotId);
 
     return Boolean(marker?.principal && marker.operationId);
+  }
+
+  /** Read-only eligibility: the native host supplies a validated saved alias and trusted catalog. */
+  async canReconnectLegacyKeyed(
+    platform: string,
+    slotId: string,
+    principal: ConnectionPrincipal,
+    descriptions: AuthenticatedPrincipalDescription[],
+  ): Promise<boolean> {
+    const owner = await this.user().subject;
+
+    return !!legacyPrincipalOperation(
+      this.keyedSlot(owner, platform, slotId),
+      principal,
+      descriptions,
+    );
+  }
+
+  /** Explicit Reconnect only. Cached proof prepares the fresh identity check at OAuth return. */
+  async prepareLegacyKeyedReconnect(
+    platform: string,
+    slotId: string,
+    principal: ConnectionPrincipal,
+    descriptions: AuthenticatedPrincipalDescription[],
+    assertCurrent: () => void,
+  ): Promise<void> {
+    const owner = await this.user().subject;
+    assertCurrent();
+    const marker = this.keyedSlot(owner, platform, slotId);
+    const operationId = legacyPrincipalOperation(
+      marker,
+      principal,
+      descriptions,
+    );
+    if (!marker || !operationId)
+      throw new Error(
+        'This legacy connection has no unambiguous saved identity proof.',
+      );
+    this.saveKeyedMarker(owner, slotId, {
+      ...marker,
+      principal: { ...principal },
+      operationId,
+      legacyPrincipalId: undefined,
+    });
   }
 
   /** Host-only: called after a fresh catalog-declared identity read is verified. */
