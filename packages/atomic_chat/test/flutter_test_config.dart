@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:atomic_chat/src/search_screen.dart' show SearchScreen;
 
 import 'package:atomic_chat/atomic_chat.dart' show HomeLayout, HomeSection;
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,8 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
         .first;
     view.physicalSize = const Size(1080, 2340);
     view.devicePixelRatio = 1080 / 393;
+    // The keyboard a search saw does not carry into the next test.
+    SearchScreen.keyboardHeight = 0;
   });
   await testMain();
 }
