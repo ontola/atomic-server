@@ -56,6 +56,10 @@ import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
 import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
 import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
+// Not lazy: it renders on every page, and a lazy component suspends the first
+// render even when its chunk is cached. React then holds the page behind a
+// loader for at least 300 ms, which is the first thing a reload shows.
+import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -77,12 +81,6 @@ const WebsitePage = lazy(() =>
 const AtomicPluginPage = lazy(() =>
   import('@chunks/PluginRuns/PluginPage').then(m => ({
     default: m.PluginPage,
-  })),
-);
-
-const ImportResolutionNotice = lazy(() =>
-  import('@chunks/PluginRuns/ImportResolutionNotice').then(m => ({
-    default: m.ImportResolutionNotice,
   })),
 );
 
