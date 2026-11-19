@@ -171,20 +171,8 @@ impl NativeReceiptLedger {
         {
             let old = connection.receipts.remove(index).unwrap();
             if let (Some(mut vv), Some(previous)) = (
-                protocol::StorageReceiptRequest {
-                    nonce: evidence.receipt.nonce.clone(),
-                    drive: evidence.receipt.drive.clone(),
-                    subject: evidence.receipt.subject.clone(),
-                    version: evidence.receipt.version.clone(),
-                }
-                .frontier(),
-                protocol::StorageReceiptRequest {
-                    nonce: old.receipt.nonce,
-                    drive: old.receipt.drive,
-                    subject: old.receipt.subject,
-                    version: old.receipt.version,
-                }
-                .frontier(),
+                evidence.receipt.request().frontier(),
+                old.receipt.request().frontier(),
             ) {
                 vv.merge(&previous);
                 let merged = URL_SAFE_NO_PAD.encode(vv.encode());
@@ -217,24 +205,15 @@ struct ResourcePeerConnection {
     drive: String,
     peer_agent: String,
     receipts: Vec<ResourcePeerReceipt>,
-    attachment_receipts: Vec<ResourcePeerAttachmentReceipt>,
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ResourcePeerReceipt {
     subject: String,
     version: String,
-    confirmed_at: u64,
-    source: StorageReceiptReplica,
-    replica: StorageReceiptReplica,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ResourcePeerAttachmentReceipt {
-    subject: String,
-    version: String,
-    manifest: super::attachment_manifest::AttachmentManifest,
+    /// Present on a file-contents receipt, absent on a resource one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manifest: Option<super::attachment_manifest::AttachmentManifest>,
     confirmed_at: u64,
     source: StorageReceiptReplica,
     replica: StorageReceiptReplica,
@@ -297,7 +276,6 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
             continue;
         }
         let mut receipts = Vec::new();
-        let mut attachment_receipts = Vec::new();
         let mut relevant = false;
         for requested in subjects.iter().take(128) {
             let subject = db.normalize_subject(&requested.as_str().into());
@@ -319,6 +297,20 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
             }
             relevant = true;
             let public = wire_subject(db, &subject.pure_id());
+            if let Some(receipt) = session
+                .receipts
+                .iter()
+                .find(|r| r.receipt.subject == public)
+            {
+                receipts.push(ResourcePeerReceipt {
+                    subject: requested.clone(),
+                    version: receipt.receipt.version.clone(),
+                    manifest: None,
+                    confirmed_at: receipt.observed_at,
+                    source: receipt.source.clone(),
+                    replica: receipt.receipt.replica.clone(),
+                });
+            }
             if let Some((receipt, at)) = session.attachment_receipts.iter().find(|(receipt, at)| {
                 receipt.subject == public
                     && crate::utils::now() >= *at as i64
@@ -330,29 +322,16 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
                         .await,
                 ) {
                     if local == receipt.manifest && remote == local {
-                        attachment_receipts.push(ResourcePeerAttachmentReceipt {
+                        receipts.push(ResourcePeerReceipt {
                             subject: requested.clone(),
                             version: receipt.version.clone(),
-                            manifest: local,
+                            manifest: Some(local),
                             confirmed_at: *at,
                             source: session.source.clone(),
                             replica: receipt.replica.clone(),
                         });
                     }
                 }
-            }
-            if let Some(receipt) = session
-                .receipts
-                .iter()
-                .find(|r| r.receipt.subject == public)
-            {
-                receipts.push(ResourcePeerReceipt {
-                    subject: requested.clone(),
-                    version: receipt.receipt.version.clone(),
-                    confirmed_at: receipt.observed_at,
-                    source: receipt.source.clone(),
-                    replica: receipt.receipt.replica.clone(),
-                });
             }
         }
         if relevant && ledger_connection_current(db, &session) {
@@ -363,7 +342,6 @@ pub async fn resource_peer_evidence(db: &Db, subjects: &[String]) -> ResourcePee
                 drive: session.drive.clone(),
                 peer_agent: session.peer_agent.to_string(),
                 receipts,
-                attachment_receipts,
             });
         }
     }
@@ -392,70 +370,128 @@ const RETRY_AFTER: Duration = Duration::from_secs(2);
 const MAX_ATTEMPTS: u8 = 4;
 const RETRY_COOLDOWN: Duration = Duration::from_secs(30);
 
-#[derive(Clone, PartialEq, Eq)]
-struct Target {
-    subject: String,
-    version: String,
+/// A receipt request a session keeps in a bounded [`Requests`] queue.
+trait Request: Clone + PartialEq {
+    /// Retry an unanswered request under a fresh nonce, then cool down. The
+    /// alternative drops it, to be asked again once something observes it.
+    const RETRIES: bool;
+    /// How long a request is outstanding before it is retried or dropped.
+    const WAIT: Duration;
+    /// How long a completed ask is remembered; forever (bounded) when unset.
+    const KEEP_COMPLETED: Option<Duration>;
+    fn nonce_mut(&mut self) -> &mut String;
+    /// Whether both ask for the same proof, whatever their nonces.
+    fn same_ask(&self, other: &Self) -> bool;
 }
-struct Pending {
-    request: StorageReceiptRequest,
+
+impl Request for StorageReceiptRequest {
+    const RETRIES: bool = true;
+    const WAIT: Duration = RETRY_AFTER;
+    const KEEP_COMPLETED: Option<Duration> = None;
+    fn nonce_mut(&mut self) -> &mut String {
+        &mut self.nonce
+    }
+    fn same_ask(&self, other: &Self) -> bool {
+        self.subject == other.subject && self.version == other.version
+    }
+}
+
+impl Request for protocol::AttachmentReceiptRequest {
+    const RETRIES: bool = false;
+    const WAIT: Duration = Duration::from_secs(30);
+    // Contents proof is re-verified every so often, not just once per version.
+    const KEEP_COMPLETED: Option<Duration> = Some(Duration::from_secs(10));
+    fn nonce_mut(&mut self) -> &mut String {
+        &mut self.nonce
+    }
+    fn same_ask(&self, other: &Self) -> bool {
+        self.subject == other.subject && self.manifest == other.manifest
+    }
+}
+
+struct Pending<R> {
+    request: R,
     sent: Instant,
     attempts: u8,
 }
-#[derive(Default)]
-struct Requests {
+struct Requests<R> {
     closed: bool,
     removal_generation: u64,
-    queued: VecDeque<Target>,
-    pending: VecDeque<Pending>,
-    completed: VecDeque<Target>,
-    cooling: VecDeque<(Target, Instant)>,
+    queued: VecDeque<R>,
+    pending: VecDeque<Pending<R>>,
+    completed: VecDeque<(R, Instant)>,
+    cooling: VecDeque<(R, Instant)>,
 }
 
-impl Requests {
+impl<R> Default for Requests<R> {
+    fn default() -> Self {
+        Self {
+            closed: false,
+            removal_generation: 0,
+            queued: VecDeque::new(),
+            pending: VecDeque::new(),
+            completed: VecDeque::new(),
+            cooling: VecDeque::new(),
+        }
+    }
+}
+
+impl<R: Request> Requests<R> {
     fn sync_removals(&mut self, generation: u64) {
         if self.removal_generation < generation {
             self.removal_generation = generation;
-            self.queued.clear();
-            self.pending.clear();
+            self.clear();
             self.completed.clear();
             self.cooling.clear();
         }
     }
 
-    fn enqueue(&mut self, target: Target) {
+    fn clear(&mut self) {
+        self.queued.clear();
+        self.pending.clear();
+    }
+
+    fn expire(&mut self) {
         self.cooling.retain(|(_, at)| at.elapsed() < RETRY_COOLDOWN);
+        if let Some(keep) = R::KEEP_COMPLETED {
+            self.completed.retain(|(_, at)| at.elapsed() < keep);
+        }
+        if !R::RETRIES {
+            self.pending.retain(|p| p.sent.elapsed() < R::WAIT);
+        }
+    }
+
+    fn enqueue(&mut self, request: R) {
+        self.expire();
         if self.closed
-            || self.queued.contains(&target)
-            || self.completed.contains(&target)
-            || self.cooling.iter().any(|(t, _)| t == &target)
-            || self
-                .pending
-                .iter()
-                .any(|p| p.request.subject == target.subject && p.request.version == target.version)
+            || self.queued.iter().any(|r| r.same_ask(&request))
+            || self.pending.iter().any(|p| p.request.same_ask(&request))
+            || self.completed.iter().any(|(r, _)| r.same_ask(&request))
+            || self.cooling.iter().any(|(r, _)| r.same_ask(&request))
         {
             return;
         }
         if self.queued.len() == MAX_TARGETS {
             self.queued.pop_front();
         }
-        self.queued.push_back(target);
+        self.queued.push_back(request);
     }
 
-    fn next(&mut self, drive: &str, now: Instant) -> Option<StorageReceiptRequest> {
+    fn next(&mut self, now: Instant) -> Option<R> {
         if self.closed {
             return None;
         }
+        self.expire();
         if let Some(index) = self
             .pending
             .iter()
-            .position(|p| now.duration_since(p.sent) >= RETRY_AFTER)
+            .position(|p| now.duration_since(p.sent) >= R::WAIT)
         {
             let mut old = self.pending.remove(index)?;
             if old.attempts < MAX_ATTEMPTS {
                 // Every retry has a fresh nonce. A delayed older reply cannot
                 // consume the new outstanding request.
-                old.request.nonce = protocol::new_challenge_nonce();
+                *old.request.nonce_mut() = protocol::new_challenge_nonce();
                 old.sent = now;
                 old.attempts += 1;
                 let request = old.request.clone();
@@ -465,24 +501,12 @@ impl Requests {
             if self.cooling.len() == MAX_TARGETS {
                 self.cooling.pop_front();
             }
-            self.cooling.push_back((
-                Target {
-                    subject: old.request.subject,
-                    version: old.request.version,
-                },
-                now,
-            ));
+            self.cooling.push_back((old.request, now));
         }
         if self.pending.len() >= MAX_PENDING {
             return None;
         }
-        let target = self.queued.pop_front()?;
-        let request = StorageReceiptRequest {
-            nonce: protocol::new_challenge_nonce(),
-            drive: drive.into(),
-            subject: target.subject,
-            version: target.version,
-        };
+        let request = self.queued.pop_front()?;
         self.pending.push_back(Pending {
             request: request.clone(),
             sent: now,
@@ -491,108 +515,25 @@ impl Requests {
         Some(request)
     }
 
-    fn matching(&self, receipt: &StorageReceipt) -> Option<usize> {
-        if self.closed || !receipt.validate() {
+    /// The exact outstanding request a reply answers: same nonce and ask.
+    fn matching(&self, answered: &R) -> Option<usize> {
+        if self.closed {
             return None;
         }
-        self.pending.iter().position(|p| {
-            p.sent.elapsed() < RETRY_AFTER
-                && p.request.nonce == receipt.nonce
-                && p.request.drive == receipt.drive
-                && p.request.subject == receipt.subject
-                && p.request.version == receipt.version
-        })
+        self.pending
+            .iter()
+            .position(|p| p.sent.elapsed() < R::WAIT && p.request == *answered)
     }
 
-    fn accept(&mut self, receipt: &StorageReceipt) -> bool {
-        let Some(index) = self.matching(receipt) else {
+    fn accept(&mut self, answered: &R) -> bool {
+        let Some(index) = self.matching(answered) else {
             return false;
         };
         self.pending.remove(index);
         if self.completed.len() == MAX_TARGETS {
             self.completed.pop_front();
         }
-        self.completed.push_back(Target {
-            subject: receipt.subject.clone(),
-            version: receipt.version.clone(),
-        });
-        true
-    }
-}
-
-#[derive(Default)]
-struct AttachmentRequests {
-    removal_generation: u64,
-    pending: VecDeque<(protocol::AttachmentReceiptRequest, Instant)>,
-    completed: VecDeque<(
-        String,
-        super::attachment_manifest::AttachmentManifest,
-        Instant,
-    )>,
-    queued: VecDeque<protocol::AttachmentReceiptRequest>,
-}
-impl AttachmentRequests {
-    fn sync_removals(&mut self, generation: u64) {
-        if self.removal_generation < generation {
-            *self = Self {
-                removal_generation: generation,
-                ..Self::default()
-            };
-        }
-    }
-    fn enqueue(&mut self, request: protocol::AttachmentReceiptRequest) {
-        self.pending
-            .retain(|(_, time)| time.elapsed() < Duration::from_secs(30));
-        self.completed
-            .retain(|(_, _, time)| time.elapsed() < Duration::from_secs(10));
-        if self
-            .pending
-            .iter()
-            .any(|(r, _)| r.subject == request.subject && r.manifest == request.manifest)
-            || self
-                .queued
-                .iter()
-                .any(|r| r.subject == request.subject && r.manifest == request.manifest)
-            || self.completed.iter().any(|(subject, manifest, _)| {
-                subject == &request.subject && manifest == &request.manifest
-            })
-        {
-            return;
-        }
-        if self.queued.len() >= MAX_TARGETS {
-            self.queued.pop_front();
-        }
-        self.queued.push_back(request);
-    }
-    fn next(&mut self) -> Option<protocol::AttachmentReceiptRequest> {
-        self.pending
-            .retain(|(_, time)| time.elapsed() < Duration::from_secs(30));
-        if self.pending.len() >= MAX_PENDING {
-            return None;
-        }
-        let request = self.queued.pop_front()?;
-        self.pending.push_back((request.clone(), Instant::now()));
-        Some(request)
-    }
-    fn matching(&self, receipt: &protocol::AttachmentReceipt) -> bool {
-        self.pending.iter().any(|(request, time)| {
-            time.elapsed() < Duration::from_secs(30) && request == &receipt.request()
-        })
-    }
-    fn accept(&mut self, receipt: &protocol::AttachmentReceipt) -> bool {
-        if !self.matching(receipt) {
-            return false;
-        }
-        self.pending
-            .retain(|(request, _)| request.nonce != receipt.nonce);
-        if self.completed.len() >= MAX_TARGETS {
-            self.completed.pop_front();
-        }
-        self.completed.push_back((
-            receipt.subject.clone(),
-            receipt.manifest.clone(),
-            Instant::now(),
-        ));
+        self.completed.push_back((answered.clone(), Instant::now()));
         true
     }
 }
@@ -606,8 +547,8 @@ pub(crate) struct ReceiptSession {
     local_agent: String,
     local_generation: u64,
     source: StorageReceiptReplica,
-    requests: Mutex<Requests>,
-    attachment_requests: Mutex<AttachmentRequests>,
+    requests: Mutex<Requests<StorageReceiptRequest>>,
+    attachment_requests: Mutex<Requests<protocol::AttachmentReceiptRequest>>,
     pub(crate) attachments_enabled: bool,
     pub(crate) attachment_responders: Arc<tokio::sync::Semaphore>,
     ledger: Arc<Mutex<NativeReceiptLedger>>,
@@ -696,7 +637,7 @@ impl ReceiptSession {
                 generation: source.generation,
             },
             requests: Mutex::new(Requests::default()),
-            attachment_requests: Mutex::new(AttachmentRequests::default()),
+            attachment_requests: Mutex::new(Requests::default()),
             attachments_enabled: caps
                 .iter()
                 .any(|cap| cap == protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1),
@@ -715,9 +656,10 @@ impl ReceiptSession {
         self.transport.retire();
         let mut requests = self.requests.lock().unwrap();
         requests.closed = true;
-        requests.queued.clear();
-        requests.pending.clear();
-        *self.attachment_requests.lock().unwrap() = AttachmentRequests::default();
+        requests.clear();
+        let mut attachments = self.attachment_requests.lock().unwrap();
+        attachments.closed = true;
+        attachments.clear();
         self.ledger
             .lock()
             .unwrap()
@@ -793,17 +735,13 @@ impl ReceiptSession {
         if vv.is_empty() || !self.current(db) {
             return;
         }
-        let target = Target {
+        let target = StorageReceiptRequest {
+            nonce: protocol::new_challenge_nonce(),
+            drive: self.drive.clone(),
             subject: wire_subject(db, subject),
             version: URL_SAFE_NO_PAD.encode(vv.encode()),
         };
-        let checked = StorageReceiptRequest {
-            nonce: "0".repeat(64),
-            drive: self.drive.clone(),
-            subject: target.subject.clone(),
-            version: target.version.clone(),
-        };
-        if checked.validate() {
+        if target.validate() {
             self.requests.lock().unwrap().enqueue(target.clone());
             if self.attachments_enabled {
                 let removal = db.native_removal_generation();
@@ -841,7 +779,12 @@ impl ReceiptSession {
         // unsolicited reply must not get to resolve its attacker-chosen URL.
         // Release the lock before the asynchronous ACL check; accept() repeats
         // correlation and expiry afterward, when a retry may have superseded it.
-        let correlated = self.requests.lock().unwrap().matching(&receipt).is_some();
+        let correlated = self
+            .requests
+            .lock()
+            .unwrap()
+            .matching(&receipt.request())
+            .is_some();
         if !correlated {
             return;
         }
@@ -851,7 +794,7 @@ impl ReceiptSession {
         let accepted_generation = {
             let mut requests = self.requests.lock().unwrap();
             requests
-                .accept(&receipt)
+                .accept(&receipt.request())
                 .then_some(requests.removal_generation)
         };
         if let Some(removal_generation) = accepted_generation {
@@ -884,7 +827,14 @@ impl ReceiptSession {
         let Some(receipt) = protocol::AttachmentReceipt::decode(payload) else {
             return;
         };
-        if !self.attachment_requests.lock().unwrap().matching(&receipt) {
+        let answered = receipt.request();
+        if self
+            .attachment_requests
+            .lock()
+            .unwrap()
+            .matching(&answered)
+            .is_none()
+        {
             return;
         }
         let removal = db.native_removal_generation();
@@ -905,7 +855,7 @@ impl ReceiptSession {
         {
             return;
         }
-        if !self.attachment_requests.lock().unwrap().accept(&receipt) {
+        if !self.attachment_requests.lock().unwrap().accept(&answered) {
             return;
         }
         let mut ledger = self.ledger.lock().unwrap();
@@ -989,7 +939,11 @@ impl ReceiptSession {
                     last_scan = Instant::now();
                 }
                 for _ in 0..MAX_PENDING {
-                    let request = session.attachment_requests.lock().unwrap().next();
+                    let request = session
+                        .attachment_requests
+                        .lock()
+                        .unwrap()
+                        .next(Instant::now());
                     let Some(request) = request else {
                         break;
                     };
@@ -1004,11 +958,7 @@ impl ReceiptSession {
                     }
                 }
                 for _ in 0..MAX_PENDING {
-                    let request = session
-                        .requests
-                        .lock()
-                        .unwrap()
-                        .next(&session.drive, Instant::now());
+                    let request = session.requests.lock().unwrap().next(Instant::now());
                     let Some(request) = request else {
                         break;
                     };
@@ -1034,12 +984,19 @@ impl ReceiptSession {
 mod tests {
     use super::*;
 
-    fn target(counter: i32) -> Target {
+    fn target(counter: i32) -> StorageReceiptRequest {
         let vv: loro::VersionVector = [(7, counter)].into_iter().collect();
-        Target {
+        StorageReceiptRequest {
+            nonce: protocol::new_challenge_nonce(),
+            drive: "atomic:drive".into(),
             subject: "atomic:receipt-resource".into(),
             version: URL_SAFE_NO_PAD.encode(vv.encode()),
         }
+    }
+
+    /// What `receive` does with a decoded reply: validate, then correlate.
+    fn accept(queue: &mut Requests<StorageReceiptRequest>, receipt: &StorageReceipt) -> bool {
+        receipt.validate() && queue.accept(&receipt.request())
     }
 
     fn reply(request: &StorageReceiptRequest) -> StorageReceipt {
@@ -1076,7 +1033,7 @@ mod tests {
 
     #[test]
     fn attachment_requests_refresh_and_removal_fence() {
-        let mut requests = AttachmentRequests::default();
+        let mut requests = Requests::<protocol::AttachmentReceiptRequest>::default();
         let request = protocol::AttachmentReceiptRequest {
             nonce: "a".repeat(64),
             drive: "atomic:drive".into(),
@@ -1085,7 +1042,7 @@ mod tests {
             manifest: Default::default(),
         };
         requests.enqueue(request.clone());
-        requests.next().unwrap();
+        requests.next(Instant::now()).unwrap();
         let receipt = protocol::AttachmentReceipt {
             nonce: request.nonce.clone(),
             drive: request.drive.clone(),
@@ -1098,18 +1055,18 @@ mod tests {
             },
             barrier: protocol::ATTACHMENT_RECEIPT_BARRIER.into(),
         };
-        assert!(requests.accept(&receipt));
+        assert!(requests.accept(&receipt.request()));
         requests.enqueue(request.clone());
-        assert!(requests.next().is_none());
-        requests.completed[0].2 = Instant::now() - Duration::from_secs(11);
+        assert!(requests.next(Instant::now()).is_none());
+        requests.completed[0].1 = Instant::now() - Duration::from_secs(11);
         let fresh = protocol::AttachmentReceiptRequest {
             nonce: "d".repeat(64),
             ..request
         };
         requests.enqueue(fresh);
-        assert!(requests.next().is_some());
+        assert!(requests.next(Instant::now()).is_some());
         assert!(
-            !requests.matching(&receipt),
+            requests.matching(&receipt.request()).is_none(),
             "old nonce cannot refresh byte proof"
         );
         requests.sync_removals(1);
@@ -1137,18 +1094,21 @@ mod tests {
                 crate::utils::now() as u64,
             ));
         }
+        let contents = |evidence: &ResourcePeerEvidence| {
+            evidence.connections[0]
+                .receipts
+                .iter()
+                .filter(|receipt| receipt.manifest.is_some())
+                .count()
+        };
         assert_eq!(
-            resource_peer_evidence(&db, std::slice::from_ref(&drive))
-                .await
-                .connections[0]
-                .attachment_receipts
-                .len(),
+            contents(&resource_peer_evidence(&db, std::slice::from_ref(&drive)).await),
             1
         );
         db.native_receipt_ledger.lock().unwrap().connections[0].attachment_receipts[0].1 =
             (crate::utils::now() - 30_001) as u64;
         let expired = resource_peer_evidence(&db, &[drive]).await;
-        assert!(expired.connections[0].attachment_receipts.is_empty());
+        assert_eq!(contents(&expired), 0);
         assert_eq!(
             expired.connections[0].receipts.len(),
             1,
@@ -1163,7 +1123,7 @@ mod tests {
             .requests
             .lock()
             .unwrap()
-            .next(&session.drive, Instant::now())
+            .next(Instant::now())
             .unwrap();
         session
             .receive(db, &serde_json::to_vec(&reply(&request)).unwrap())
@@ -1330,7 +1290,7 @@ mod tests {
             .requests
             .lock()
             .unwrap()
-            .next(&session.drive, Instant::now())
+            .next(Instant::now())
             .unwrap();
         db.remove_resource(&key.as_str().into()).await.unwrap();
         restore_identical(&db, &resource, &snapshot, &vv).await;
@@ -1500,7 +1460,7 @@ mod tests {
             .requests
             .lock()
             .unwrap()
-            .next(&drive, Instant::now())
+            .next(Instant::now())
             .unwrap();
         let receipt = serde_json::to_vec(&reply(&request)).unwrap();
         let owner = db.get_default_agent().unwrap();
@@ -1522,12 +1482,7 @@ mod tests {
         )
         .unwrap();
         fresh.observe(&db, &drive).await;
-        let request = fresh
-            .requests
-            .lock()
-            .unwrap()
-            .next(&drive, Instant::now())
-            .unwrap();
+        let request = fresh.requests.lock().unwrap().next(Instant::now()).unwrap();
         super::super::peer::receipt_peer_for_test(&session.remote, 2, agent);
         fresh
             .receive(&db, &serde_json::to_vec(&reply(&request)).unwrap())
@@ -1550,7 +1505,7 @@ mod tests {
             .requests
             .lock()
             .unwrap()
-            .next(&drive, Instant::now())
+            .next(Instant::now())
             .unwrap();
         let mut events = db.subscribe_replica_receipts();
         session.invalidate();
@@ -1649,26 +1604,26 @@ mod tests {
 
     #[test]
     fn delayed_c1_receipt_does_not_acknowledge_queued_c2() {
-        let mut queue = Requests::default();
+        let mut queue = Requests::<StorageReceiptRequest>::default();
         queue.enqueue(target(1));
-        let c1 = queue.next("atomic:drive", Instant::now()).unwrap();
+        let c1 = queue.next(Instant::now()).unwrap();
         queue.enqueue(target(2));
-        let c2 = queue.next("atomic:drive", Instant::now()).unwrap();
-        assert!(queue.accept(&reply(&c1)));
+        let c2 = queue.next(Instant::now()).unwrap();
+        assert!(accept(&mut queue, &reply(&c1)));
         assert_eq!(queue.pending.len(), 1);
         assert_eq!(queue.pending.front().unwrap().request.version, c2.version);
         assert!(
-            !queue.accept(&reply(&c1)),
+            !accept(&mut queue, &reply(&c1)),
             "duplicate receipt must not emit twice"
         );
-        assert!(queue.accept(&reply(&c2)));
+        assert!(accept(&mut queue, &reply(&c2)));
     }
 
     #[test]
     fn every_echo_field_and_the_barrier_are_correlated() {
-        let mut queue = Requests::default();
+        let mut queue = Requests::<StorageReceiptRequest>::default();
         queue.enqueue(target(1));
-        let request = queue.next("atomic:drive", Instant::now()).unwrap();
+        let request = queue.next(Instant::now()).unwrap();
         for field in [
             "nonce",
             "drive",
@@ -1686,35 +1641,35 @@ mod tests {
                 "barrier" => receipt.barrier = "pretend-persisted".into(),
                 _ => receipt.replica.storage_id = "not-an-identity".into(),
             }
-            assert!(!queue.accept(&receipt), "must refuse changed {field}");
+            assert!(!accept(&mut queue, &receipt), "must refuse changed {field}");
         }
-        assert!(queue.accept(&reply(&request)));
+        assert!(accept(&mut queue, &reply(&request)));
     }
 
     #[test]
     fn expired_nonce_is_rejected_before_scheduler_retry() {
-        let mut queue = Requests::default();
+        let mut queue = Requests::<StorageReceiptRequest>::default();
         queue.enqueue(target(1));
-        let old = queue.next("atomic:drive", Instant::now()).unwrap();
+        let old = queue.next(Instant::now()).unwrap();
         queue.pending.front_mut().unwrap().sent = Instant::now() - RETRY_AFTER;
-        assert!(!queue.accept(&reply(&old)));
-        let retried = queue.next("atomic:drive", Instant::now()).unwrap();
+        assert!(!accept(&mut queue, &reply(&old)));
+        let retried = queue.next(Instant::now()).unwrap();
         assert_ne!(old.nonce, retried.nonce);
-        assert!(!queue.accept(&reply(&old)));
-        assert!(queue.accept(&reply(&retried)));
+        assert!(!accept(&mut queue, &reply(&old)));
+        assert!(accept(&mut queue, &reply(&retried)));
     }
 
     #[test]
     fn retry_exhaustion_cools_down_and_all_queues_stay_bounded() {
-        let mut queue = Requests::default();
+        let mut queue = Requests::<StorageReceiptRequest>::default();
         queue.enqueue(target(1));
-        queue.next("atomic:drive", Instant::now()).unwrap();
+        queue.next(Instant::now()).unwrap();
         for _ in 1..MAX_ATTEMPTS {
             queue.pending.front_mut().unwrap().sent = Instant::now() - RETRY_AFTER;
-            assert!(queue.next("atomic:drive", Instant::now()).is_some());
+            assert!(queue.next(Instant::now()).is_some());
         }
         queue.pending.front_mut().unwrap().sent = Instant::now() - RETRY_AFTER;
-        assert!(queue.next("atomic:drive", Instant::now()).is_none());
+        assert!(queue.next(Instant::now()).is_none());
         queue.enqueue(target(1));
         assert!(
             queue.queued.is_empty(),
@@ -1725,13 +1680,13 @@ mod tests {
         }
         assert_eq!(queue.queued.len(), MAX_TARGETS);
         for _ in 0..MAX_PENDING {
-            assert!(queue.next("atomic:drive", Instant::now()).is_some());
+            assert!(queue.next(Instant::now()).is_some());
         }
-        assert!(queue.next("atomic:drive", Instant::now()).is_none());
+        assert!(queue.next(Instant::now()).is_none());
         assert_eq!(queue.pending.len(), MAX_PENDING);
         queue.closed = true;
         let receipt = reply(&queue.pending.front().unwrap().request);
-        assert!(!queue.accept(&receipt));
-        assert!(queue.next("atomic:drive", Instant::now()).is_none());
+        assert!(!accept(&mut queue, &receipt));
+        assert!(queue.next(Instant::now()).is_none());
     }
 }

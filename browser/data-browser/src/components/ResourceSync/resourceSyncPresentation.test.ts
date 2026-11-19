@@ -1,12 +1,31 @@
 // @wc-ignore-file
 import { localCopyLabel, serverCopyLabel } from './resourceCopyLabels';
-import type { ResourceSaveState, ResourceSyncStatus } from '@tomic/react';
+import type { ResourceSaveState } from '@tomic/react';
 import { describe, expect, it } from 'vitest';
+import { copiesOf, type CopiesParts, type Part } from './copiesFixture';
 import {
   resourceSyncPresentation,
   completePeerCopyCount,
-  type ResourceAttachmentPresentationStatus,
 } from './resourceSyncPresentation';
+
+type Status = Required<Pick<CopiesParts, 'local' | 'server'>>;
+type Contents = Required<NonNullable<CopiesParts['contents']>>;
+
+const present = (
+  status: Status,
+  save: ResourceSaveState,
+  vault?: Part,
+  peers?: CopiesParts['peers'],
+  contents?: CopiesParts['contents'],
+) =>
+  resourceSyncPresentation(
+    copiesOf({ ...status, vault, peers, contents }),
+    save,
+  );
+const completeCount = (
+  peers: NonNullable<CopiesParts['peers']>,
+  contents: CopiesParts['contents'],
+) => completePeerCopyCount(copiesOf({ peers, contents }));
 
 const idle: ResourceSaveState = {
   kind: 'idle',
@@ -14,7 +33,7 @@ const idle: ResourceSaveState = {
   error: undefined,
   reason: undefined,
 };
-const confirmed: ResourceSyncStatus = {
+const confirmed: Status = {
   local: { state: 'confirmed', confirmedAt: 100 },
   server: {
     state: 'confirmed',
@@ -25,11 +44,11 @@ const confirmed: ResourceSyncStatus = {
 
 describe('resource sync presentation', () => {
   it('does not turn an idle save queue into a confirmed remote copy', () => {
-    const status: ResourceSyncStatus = {
+    const status: Status = {
       local: { state: 'confirmed' },
       server: { state: 'unknown', url: 'https://studio.example' },
     };
-    expect(resourceSyncPresentation(status, idle)).toMatchObject({
+    expect(present(status, idle)).toMatchObject({
       label: 'Server copy not confirmed',
       tone: 'neutral',
     });
@@ -45,21 +64,19 @@ describe('resource sync presentation', () => {
     ['error', 'Changes could not be saved'],
   ] as const)('does not let a receipt mask a newer %s save', (kind, label) => {
     const save: ResourceSaveState = { ...idle, kind };
-    expect(resourceSyncPresentation(confirmed, save).label).toBe(label);
-    expect(resourceSyncPresentation(confirmed, save).tone).not.toBe(
-      'confirmed',
-    );
+    expect(present(confirmed, save).label).toBe(label);
+    expect(present(confirmed, save).tone).not.toBe('confirmed');
     expect(serverCopyLabel(confirmed.server, save)).not.toBe(
       'Latest changes saved',
     );
   });
 
   it('keeps local persistence failure visible even if the server has the resource', () => {
-    const status: ResourceSyncStatus = {
+    const status: Status = {
       ...confirmed,
       local: { state: 'error', error: 'Storage is full' },
     };
-    expect(resourceSyncPresentation(status, idle)).toMatchObject({
+    expect(present(status, idle)).toMatchObject({
       label: 'Could not save on this device',
       tone: 'attention',
     });
@@ -67,21 +84,21 @@ describe('resource sync presentation', () => {
   });
 
   it('does not call a pending local write saved while the remote copy is current', () => {
-    const status: ResourceSyncStatus = {
+    const status: Status = {
       ...confirmed,
       local: { state: 'pending' },
     };
-    expect(resourceSyncPresentation(status, idle).tone).toBe('pending');
+    expect(present(status, idle).tone).toBe('pending');
     expect(localCopyLabel(status.local)).toBe('Saving on this device…');
     expect(serverCopyLabel(status.server, idle)).toBe('Latest changes saved');
   });
 
   it('distinguishes intentional local-only storage from an unconfirmed server', () => {
-    const status: ResourceSyncStatus = {
+    const status: Status = {
       local: { state: 'confirmed' },
       server: { state: 'not-configured' },
     };
-    expect(resourceSyncPresentation(status, idle)).toEqual({
+    expect(present(status, idle)).toEqual({
       label: 'Saved on this device',
       tone: 'neutral',
       symbol: 'device',
@@ -100,7 +117,7 @@ describe('resource sync presentation', () => {
 });
 
 describe('attachment confirmation presentation', () => {
-  const contents: ResourceAttachmentPresentationStatus = {
+  const contents: Contents = {
     required: true,
     local: { state: 'confirmed' },
     server: { state: 'unknown' },
@@ -124,13 +141,13 @@ describe('attachment confirmation presentation', () => {
 
   it('does not turn metadata-only confirmation into a complete file copy', () => {
     expect(
-      resourceSyncPresentation(confirmed, idle, undefined, undefined, contents),
+      present(confirmed, idle, undefined, undefined, contents),
     ).toMatchObject({
       label: 'Server file contents not confirmed',
       tone: 'neutral',
     });
     expect(
-      resourceSyncPresentation(confirmed, idle, undefined, undefined, {
+      present(confirmed, idle, undefined, undefined, {
         ...contents,
         server: { state: 'confirmed' },
       }),
@@ -142,16 +159,10 @@ describe('attachment confirmation presentation', () => {
 
   it('selects a complete Vault copy when only metadata is confirmed on the server', () => {
     expect(
-      resourceSyncPresentation(
-        confirmed,
-        idle,
-        { state: 'confirmed' },
-        undefined,
-        {
-          ...contents,
-          vault: { state: 'confirmed' },
-        },
-      ),
+      present(confirmed, idle, { state: 'confirmed' }, undefined, {
+        ...contents,
+        vault: { state: 'confirmed' },
+      }),
     ).toMatchObject({ symbol: 'vault', tone: 'confirmed' });
   });
 
@@ -163,16 +174,14 @@ describe('attachment confirmation presentation', () => {
       { connectionId: 'a' },
     ]) {
       expect(
-        completePeerCopyCount(peer, {
+        completeCount(peer, {
           ...contents,
           peers: [{ ...other, state: 'confirmed' }],
         }),
       ).toBe(0);
     }
 
-    expect(
-      completePeerCopyCount(peer, { ...contents, peers: peer.peers }),
-    ).toBe(1);
+    expect(completeCount(peer, { ...contents, peers: peer.peers })).toBe(1);
   });
 
   it('counts shared storage once and requires current metadata as well as bytes', () => {
@@ -181,11 +190,9 @@ describe('attachment confirmation presentation', () => {
       confirmedCount: 1,
       peers: [peer.peers[0], { ...peer.peers[0], connectionId: 'b' }],
     };
+    expect(completeCount(shared, { ...contents, peers: shared.peers })).toBe(1);
     expect(
-      completePeerCopyCount(shared, { ...contents, peers: shared.peers }),
-    ).toBe(1);
-    expect(
-      completePeerCopyCount(
+      completeCount(
         {
           ...shared,
           peers: shared.peers.map(copy => ({ ...copy, state: 'pending' })),
@@ -200,22 +207,16 @@ describe('attachment confirmation presentation', () => {
 
   it('keeps unsaved metadata visible even while contents are confirmed', () => {
     expect(
-      resourceSyncPresentation(
-        confirmed,
-        { ...idle, kind: 'dirty' },
-        undefined,
-        undefined,
-        {
-          ...contents,
-          server: { state: 'confirmed' },
-        },
-      ),
+      present(confirmed, { ...idle, kind: 'dirty' }, undefined, undefined, {
+        ...contents,
+        server: { state: 'confirmed' },
+      }),
     ).toMatchObject({ label: 'Changes waiting to save', tone: 'pending' });
   });
 
   it('keeps a local contents failure visible even with a complete server copy', () => {
     expect(
-      resourceSyncPresentation(confirmed, idle, undefined, undefined, {
+      present(confirmed, idle, undefined, undefined, {
         ...contents,
         local: { state: 'error' },
         server: { state: 'confirmed' },
@@ -231,7 +232,7 @@ describe('resource vault sync presentation', () => {
   it('shows proven vault backup when no current server copy is confirmed', () => {
     for (const state of ['unknown', 'not-configured'] as const) {
       expect(
-        resourceSyncPresentation({ ...confirmed, server: { state } }, idle, {
+        present({ ...confirmed, server: { state } }, idle, {
           state: 'confirmed',
         }),
       ).toEqual({
@@ -243,9 +244,7 @@ describe('resource vault sync presentation', () => {
   });
 
   it('retains the server indicator when both destinations have the current version', () => {
-    expect(
-      resourceSyncPresentation(confirmed, idle, { state: 'confirmed' }),
-    ).toMatchObject({
+    expect(present(confirmed, idle, { state: 'confirmed' })).toMatchObject({
       label: 'Latest changes saved to server',
       symbol: 'server',
       tone: 'confirmed',
@@ -254,11 +253,9 @@ describe('resource vault sync presentation', () => {
 
   it('does not let backup proof hide pending server changes or unsaved edits', () => {
     expect(
-      resourceSyncPresentation(
-        { ...confirmed, server: { state: 'pending' } },
-        idle,
-        { state: 'confirmed' },
-      ),
+      present({ ...confirmed, server: { state: 'pending' } }, idle, {
+        state: 'confirmed',
+      }),
     ).toMatchObject({ label: 'Changes waiting to sync', tone: 'pending' });
 
     for (const kind of [
@@ -269,18 +266,14 @@ describe('resource vault sync presentation', () => {
       'error',
     ] as const) {
       expect(
-        resourceSyncPresentation(
-          confirmed,
-          { ...idle, kind },
-          { state: 'confirmed' },
-        ),
-      ).toEqual(resourceSyncPresentation(confirmed, { ...idle, kind }));
+        present(confirmed, { ...idle, kind }, { state: 'confirmed' }),
+      ).toEqual(present(confirmed, { ...idle, kind }));
     }
   });
 
   it('keeps a local write failure visible even when the vault has the resource', () => {
     expect(
-      resourceSyncPresentation(
+      present(
         { ...confirmed, local: { state: 'error', error: 'Disk full' } },
         idle,
         { state: 'confirmed' },
@@ -293,15 +286,11 @@ describe('resource vault sync presentation', () => {
 
   it('uses pending vault proof as a fallback without hiding a confirmed server', () => {
     expect(
-      resourceSyncPresentation(
-        { ...confirmed, server: { state: 'unknown' } },
-        idle,
-        { state: 'pending' },
-      ),
+      present({ ...confirmed, server: { state: 'unknown' } }, idle, {
+        state: 'pending',
+      }),
     ).toMatchObject({ label: 'Changes waiting for backup', tone: 'pending' });
-    expect(
-      resourceSyncPresentation(confirmed, idle, { state: 'pending' }),
-    ).toMatchObject({
+    expect(present(confirmed, idle, { state: 'pending' })).toMatchObject({
       label: 'Latest changes saved to server',
       symbol: 'server',
     });
@@ -309,7 +298,7 @@ describe('resource vault sync presentation', () => {
 });
 
 describe('resource peer sync presentation', () => {
-  const localOnly: ResourceSyncStatus = {
+  const localOnly: Status = {
     local: { state: 'confirmed' },
     server: { state: 'not-configured' },
   };
@@ -324,7 +313,7 @@ describe('resource peer sync presentation', () => {
   it('gives exact browser proof its own colour and icon for otherwise unconfirmed remote copies', () => {
     for (const serverState of ['not-configured', 'unknown'] as const) {
       expect(
-        resourceSyncPresentation(
+        present(
           { ...localOnly, server: { state: serverState } },
           idle,
           vault,
@@ -340,15 +329,15 @@ describe('resource peer sync presentation', () => {
 
   it('does not equate connected browsers with confirmed resource copies', () => {
     expect(
-      resourceSyncPresentation(localOnly, idle, vault, {
+      present(localOnly, idle, vault, {
         ...peer,
         state: 'unknown',
         connectedCount: 2,
         confirmedCount: 0,
       }),
-    ).toEqual(resourceSyncPresentation(localOnly, idle));
+    ).toEqual(present(localOnly, idle));
     expect(
-      resourceSyncPresentation(localOnly, idle, vault, {
+      present(localOnly, idle, vault, {
         ...peer,
         state: 'pending',
         confirmedCount: 0,
@@ -357,13 +346,11 @@ describe('resource peer sync presentation', () => {
   });
 
   it('preserves server and vault confirmation ahead of temporary browser copies', () => {
-    expect(resourceSyncPresentation(confirmed, idle, vault, peer)).toEqual(
-      resourceSyncPresentation(confirmed, idle, vault),
+    expect(present(confirmed, idle, vault, peer)).toEqual(
+      present(confirmed, idle, vault),
     );
-    expect(
-      resourceSyncPresentation(localOnly, idle, { state: 'confirmed' }, peer),
-    ).toEqual(
-      resourceSyncPresentation(localOnly, idle, { state: 'confirmed' }),
+    expect(present(localOnly, idle, { state: 'confirmed' }, peer)).toEqual(
+      present(localOnly, idle, { state: 'confirmed' }),
     );
   });
 
@@ -375,30 +362,31 @@ describe('resource peer sync presentation', () => {
       'queued',
       'error',
     ] as const) {
-      expect(
-        resourceSyncPresentation(localOnly, { ...idle, kind }, vault, peer),
-      ).toEqual(resourceSyncPresentation(localOnly, { ...idle, kind }, vault));
+      expect(present(localOnly, { ...idle, kind }, vault, peer)).toEqual(
+        present(localOnly, { ...idle, kind }, vault),
+      );
     }
 
     for (const local of [
       { state: 'pending' as const },
       { state: 'error' as const, error: 'Disk full' },
     ]) {
-      expect(
-        resourceSyncPresentation({ ...localOnly, local }, idle, vault, peer),
-      ).toEqual(resourceSyncPresentation({ ...localOnly, local }, idle, vault));
+      expect(present({ ...localOnly, local }, idle, vault, peer)).toEqual(
+        present({ ...localOnly, local }, idle, vault),
+      );
     }
 
     expect(
-      resourceSyncPresentation(
+      present(
         { ...localOnly, server: { state: 'pending' } },
         idle,
         vault,
         peer,
       ),
     ).toMatchObject({ label: 'Changes waiting to sync', tone: 'pending' });
-    expect(
-      resourceSyncPresentation(localOnly, idle, { state: 'pending' }, peer),
-    ).toMatchObject({ label: 'Changes waiting for backup', tone: 'pending' });
+    expect(present(localOnly, idle, { state: 'pending' }, peer)).toMatchObject({
+      label: 'Changes waiting for backup',
+      tone: 'pending',
+    });
   });
 });

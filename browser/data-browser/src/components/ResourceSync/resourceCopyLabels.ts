@@ -1,13 +1,6 @@
-import type {
-  ResourcePeerSyncStatus,
-  ResourceSaveState,
-  ResourceSyncStatus,
-} from '@tomic/react';
-import type { ResourceVaultPresentationStatus } from './resourceSyncPresentation';
+import type { Copy, ResourceSaveState } from '@tomic/react';
 
-export function peerCopyLabel(
-  status: Pick<ResourcePeerSyncStatus, 'state'>,
-): string {
+export function peerCopyLabel(status: Pick<Copy, 'state'>): string {
   switch (status.state) {
     case 'confirmed':
       return 'Latest changes received';
@@ -18,9 +11,7 @@ export function peerCopyLabel(
   }
 }
 
-export function vaultCopyLabel(
-  status: ResourceVaultPresentationStatus,
-): string {
+export function vaultCopyLabel(status: Pick<Copy, 'state'>): string {
   switch (status.state) {
     case 'confirmed':
       return 'Latest changes backed up';
@@ -31,7 +22,7 @@ export function vaultCopyLabel(
   }
 }
 
-export function localCopyLabel(status: ResourceSyncStatus['local']): string {
+export function localCopyLabel(status: Pick<Copy, 'state'>): string {
   switch (status.state) {
     case 'confirmed':
       return 'Saved on this device';
@@ -47,7 +38,7 @@ export function localCopyLabel(status: ResourceSyncStatus['local']): string {
 }
 
 export function serverCopyLabel(
-  status: ResourceSyncStatus['server'],
+  status: Pick<Copy, 'state'>,
   save: ResourceSaveState,
 ): string {
   if (status.state === 'not-configured') return 'No server configured';

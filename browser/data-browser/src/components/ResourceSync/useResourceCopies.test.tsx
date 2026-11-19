@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import { act, cleanup, renderHook } from '@testing-library/react';
-import type { Resource, ResourceSyncStatus } from '@tomic/react';
+import type { Resource } from '@tomic/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useResourceSyncStatus } from './useResourceSyncStatus';
+import { copiesOf } from './copiesFixture';
+import { useResourceCopies } from './useResourceCopies';
 
-const snapshots = new Map<Resource, ResourceSyncStatus>();
+const snapshots = new Map<Resource, ReturnType<typeof copiesOf>>();
 const listeners = new Map<Resource, Set<() => void>>();
 const store = {
-  getResourceSyncStatus: (resource: Resource) => snapshots.get(resource)!,
-  subscribeResourceSyncStatus: (resource: Resource, callback: () => void) => {
+  getResourceCopies: (resource: Resource) => snapshots.get(resource)!,
+  subscribeResourceCopies: (resource: Resource, callback: () => void) => {
     const subscriptions = listeners.get(resource) ?? new Set();
     subscriptions.add(callback);
     listeners.set(resource, subscriptions);
@@ -18,6 +19,13 @@ const store = {
   },
 };
 vi.mock('@tomic/react', () => ({ useStore: () => store }));
+vi.mock('../../helpers/managed/vaultResourceSync', () => ({
+  subscribeResourceCopiesWithVault: (
+    target: typeof store,
+    resource: Resource,
+    callback: () => void,
+  ) => target.subscribeResourceCopies(resource, callback),
+}));
 
 function createResource(subject: string): Resource {
   const value = { subject } as Resource;
@@ -26,14 +34,13 @@ function createResource(subject: string): Resource {
   return value;
 }
 
-const unknown: ResourceSyncStatus = {
-  local: { state: 'unknown' },
+const unknown = copiesOf({
   server: { state: 'unknown', url: 'https://studio.example' },
-};
-const saved: ResourceSyncStatus = {
+});
+const saved = copiesOf({
   local: { state: 'confirmed' },
   server: { state: 'confirmed', url: 'https://studio.example' },
-};
+});
 
 beforeEach(() => {
   snapshots.clear();
@@ -46,8 +53,8 @@ it('updates on receipt events without changing unrelated resource status', () =>
   const second = createResource('atomic:second');
   snapshots.set(first, unknown);
   snapshots.set(second, unknown);
-  const one = renderHook(() => useResourceSyncStatus(first));
-  const two = renderHook(() => useResourceSyncStatus(second));
+  const one = renderHook(() => useResourceCopies(first));
+  const two = renderHook(() => useResourceCopies(second));
 
   act(() => {
     snapshots.set(first, saved);
@@ -62,7 +69,7 @@ it('switches subscriptions and snapshots when a row is reused for another resour
   const second = createResource('atomic:second');
   snapshots.set(first, saved);
   snapshots.set(second, unknown);
-  const hook = renderHook(({ target }) => useResourceSyncStatus(target), {
+  const hook = renderHook(({ target }) => useResourceCopies(target), {
     initialProps: { target: first },
   });
   expect(hook.result.current).toBe(saved);

@@ -1,29 +1,23 @@
-import {
-  ResourceAttachmentSync,
-  type AttachmentPeerReceipt,
-} from './resource-attachment-sync.js';
-import type { ResourceAttachmentSyncStatus } from './resource-attachment-evidence.js';
+import { ResourceAttachmentSync } from './resource-attachment-sync.js';
+import { resourceAttachmentDescriptor } from './attachment-manifest.js';
 import {
   parseResourcePeerEvidence,
+  type Receipt,
   type ResourcePeerEvidenceProvider,
-} from './resource-peer-evidence.js';
+} from './resource-receipts.js';
 import {
-  ResourcePeerSyncStatusTracker,
-  type ResourcePeerSyncStatus,
-} from './resource-peer-sync-status.js';
-import type { BrowserReplicaReceipt } from './peer-receipts.js';
+  ResourceCopiesTracker,
+  carriedVersion,
+  type ResourceCopies,
+} from './resource-copies.js';
 import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import {
-  ResourceSyncStatusTracker,
-  type ResourceSyncStatus,
-} from './resource-sync-status.js';
-import {
   normalizeResourceSyncScope,
   type ResourceSyncScope,
-  type SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+  type SerializedReceipt,
+} from './resource-receipts.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -414,6 +408,8 @@ export interface CommitLogEntry {
 }
 
 /** These Events trigger certain Handlers */
+const NATIVE_EVIDENCE_TIMEOUT = Symbol('native evidence timed out');
+
 export enum StoreEvents {
   /**
    * Whenever `Resource.save()` is called, so only when the user of this library
@@ -1209,7 +1205,7 @@ export class Store {
       this.resetPeerSyncEvidence();
       this.resetResourceSyncEvidence();
     } else {
-      for (const resource of this.resourceSyncWatchers.keys()) {
+      for (const resource of this.resourceCopyWatchers.keys()) {
         this.resourceSyncReads.delete(this.normalizeSubject(resource.subject));
         this.ensureResourceSyncEvidence(resource.subject);
       }
@@ -6044,8 +6040,10 @@ export class Store {
     }
   }
 
-  private resourceAttachmentSync = new ResourceAttachmentSync(
+  private copies = new ResourceCopiesTracker();
+  private attachmentSync = new ResourceAttachmentSync(
     this,
+    this.copies,
     async (subjects, signal) => {
       const agent = this.getAgent();
       if (!agent || this.noServer || this.commitTransport || !this.serverUrl)
@@ -6070,34 +6068,11 @@ export class Store {
     },
   );
 
-  public getResourceAttachmentSyncStatus(
-    resource: Resource,
-  ): ResourceAttachmentSyncStatus {
-    return this.resourceAttachmentSync.get(resource);
-  }
-
-  public subscribeResourceAttachmentSyncStatus(
-    resource: Resource,
-    callback: () => void,
-  ): () => void {
-    return this.resourceAttachmentSync.subscribe(resource, callback);
-  }
-
-  /** @internal Exact authenticated content receipt, independent of metadata coverage. */
-  public acknowledgeResourceAttachmentReceipt(
-    receipt: AttachmentPeerReceipt,
-  ): void {
-    this.resourceAttachmentSync.acknowledge(receipt);
-  }
-
-  private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
   private peerSyncGeneration = 0;
-  private resourcePeerWatchers = new Map<Resource, number>();
+  private resourceCopyWatchers = new Map<Resource, number>();
   private nativePeerReadTokens = new Map<string, object>();
   private nativePeerPoll?: object;
   private nativePeerTimer?: ReturnType<typeof setTimeout>;
-  private nativePeerDeadline?: ReturnType<typeof setTimeout>;
-  private nativePeerAbort?: () => void;
   private nativePeerHostGeneration?: string;
   private nativePeerUnsupportedDb?: ClientDbWorker;
 
@@ -6106,7 +6081,7 @@ export class Store {
       | (ClientDbWorker & Partial<ResourcePeerEvidenceProvider>)
       | undefined;
     if (
-      !this.resourcePeerWatchers.size ||
+      !this.resourceCopyWatchers.size ||
       !db?.getResourcePeerEvidence ||
       db === this.nativePeerUnsupportedDb ||
       this.nativePeerPoll ||
@@ -6114,7 +6089,7 @@ export class Store {
     )
       return;
     // A single microtask collects rows mounted in the same render. Rendering
-    // getResourcePeerSyncStatus itself never performs I/O or starts a timer.
+    // getResourceCopies itself never performs I/O or starts a timer.
     const token = {};
     this.nativePeerPoll = token;
     queueMicrotask(() => void this.readNativePeerEvidence(db, token));
@@ -6122,15 +6097,11 @@ export class Store {
 
   private stopNativePeerEvidence(clear = true): void {
     clearTimeout(this.nativePeerTimer);
-    clearTimeout(this.nativePeerDeadline);
     this.nativePeerTimer = undefined;
-    this.nativePeerDeadline = undefined;
     this.nativePeerPoll = undefined;
-    this.nativePeerAbort?.();
-    this.nativePeerAbort = undefined;
     this.nativePeerReadTokens.clear();
     this.nativePeerHostGeneration = undefined;
-    if (clear) this.resourcePeerSyncStatus.clearNative();
+    if (clear) this.copies.reset('native');
   }
 
   private async readNativePeerEvidence(
@@ -6144,19 +6115,19 @@ export class Store {
       this.clientDb === db &&
       this.peerSyncGeneration === generation &&
       this.agent?.subject === agent &&
-      this.resourcePeerWatchers.size > 0;
+      this.resourceCopyWatchers.size > 0;
     if (!current() || !db.getResourcePeerEvidence) return;
 
     if (!agent) {
       this.nativePeerPoll = undefined;
-      this.resourcePeerSyncStatus.clearNative();
+      this.copies.reset('native');
 
       return;
     }
 
     const subjects = [
       ...new Set(
-        [...this.resourcePeerWatchers.keys()].map(resource =>
+        [...this.resourceCopyWatchers.keys()].map(resource =>
           this.normalizeSubject(resource.subject),
         ),
       ),
@@ -6164,7 +6135,7 @@ export class Store {
       subject => !this.isDestroyed(subject) && !this.hasPendingDestroy(subject),
     );
     const watched = (subject: string) =>
-      [...this.resourcePeerWatchers.keys()].some(
+      [...this.resourceCopyWatchers.keys()].some(
         resource => this.normalizeSubject(resource.subject) === subject,
       );
 
@@ -6181,53 +6152,38 @@ export class Store {
             return [subject, readToken] as const;
           }),
         );
-        let deadline: ReturnType<typeof setTimeout> | undefined;
-        let abort: (() => void) | undefined;
-        let evidence;
+        const reply = await withDeadline<unknown>(
+          db.getResourcePeerEvidence(requested),
+          5000,
+          NATIVE_EVIDENCE_TIMEOUT,
+        );
+        if (!current()) return;
 
-        try {
-          const reply = await Promise.race([
-            db.getResourcePeerEvidence(requested),
-            new Promise<never>((_, reject) => {
-              abort = () => reject(new Error('Native peer evidence cancelled'));
-              this.nativePeerAbort = abort;
-              deadline = setTimeout(
-                () => reject(new Error('Native peer evidence timed out')),
-                5000,
-              );
-              this.nativePeerDeadline = deadline;
-            }),
-          ]);
-          if (!current()) return;
+        if (reply === undefined || reply === null) {
+          this.nativePeerUnsupportedDb = db;
+          this.copies.reset('native');
 
-          if (reply === undefined || reply === null) {
-            this.nativePeerUnsupportedDb = db;
-            this.resourcePeerSyncStatus.clearNative();
-
-            return;
-          }
-
-          evidence = parseResourcePeerEvidence(reply);
-          if (!evidence) throw new Error('Invalid native peer evidence reply');
-        } finally {
-          clearTimeout(deadline);
-          if (this.nativePeerAbort === abort) this.nativePeerAbort = undefined;
-          if (this.nativePeerDeadline === deadline)
-            this.nativePeerDeadline = undefined;
+          return;
         }
+
+        const evidence =
+          reply === NATIVE_EVIDENCE_TIMEOUT
+            ? undefined
+            : parseResourcePeerEvidence(reply);
+        if (!evidence) throw new Error('Invalid native peer evidence reply');
 
         if (
           this.normalizeSubject(evidence.agent || '_local:signed-out') !==
           this.normalizeSubject(agent)
         ) {
-          this.resourcePeerSyncStatus.clearNative();
+          this.copies.reset('native');
 
           return;
         }
 
         if (this.nativePeerHostGeneration !== evidence.agentGeneration) {
           this.nativePeerHostGeneration = evidence.agentGeneration;
-          this.resourcePeerSyncStatus.clearNative();
+          this.copies.reset('native');
         }
 
         if (!current()) return;
@@ -6238,48 +6194,26 @@ export class Store {
           !this.isDestroyed(subject) &&
           !this.hasPendingDestroy(subject);
         const accepted = requested.filter(valid);
-        const acceptedSet = new Set(accepted);
-
-        for (const subject of accepted) {
-          if (!valid(subject)) continue;
-          this.resourceAttachmentSync.replaceNative(
-            subject,
-            evidence.connections.flatMap(connection =>
-              (connection.attachmentReceipts ?? [])
-                .filter(
-                  receipt => this.normalizeSubject(receipt.subject) === subject,
-                )
-                .map(receipt => ({
-                  ...receipt,
-                  subject,
-                  connectionId: connection.connectionId,
-                })),
-            ),
-          );
-        }
-
-        this.resourcePeerSyncStatus.replaceNative(
+        const live = evidence.connections.map(connection => ({
+          destination: `native:${connection.connectionId}`,
+          drive: this.normalizeSubject(connection.drive),
+          peerAgent: connection.peerAgent,
+        }));
+        this.copies.setSessions('native', live);
+        this.copies.replace(
+          'native',
           accepted,
-          {
-            ...evidence,
-            connections: evidence.connections.map(connection => ({
-              ...connection,
-              drive: this.normalizeSubject(connection.drive),
-              receipts: connection.receipts
-                .map(receipt => ({
-                  ...receipt,
-                  subject: this.normalizeSubject(receipt.subject),
-                }))
-                .filter(receipt => acceptedSet.has(receipt.subject)),
-            })),
-          },
-          valid,
+          evidence.connections.flatMap(connection =>
+            connection.receipts
+              .map(receipt => this.normalizedReceipt(receipt))
+              .filter(receipt => accepted.includes(receipt.subject)),
+          ),
         );
       }
     } catch {
       // Availability diagnostics must not affect accepted native saves. A
       // failed bridge call cannot continue presenting its old live proof.
-      if (current()) this.resourcePeerSyncStatus.clearNative();
+      if (current()) this.copies.reset('native');
     } finally {
       if (current()) {
         this.nativePeerPoll = undefined;
@@ -6303,7 +6237,7 @@ export class Store {
     this.peerSyncGeneration++;
     this.stopNativePeerEvidence(false);
     this.nativePeerUnsupportedDb = undefined;
-    this.resourcePeerSyncStatus.reset();
+    this.copies.reset('peer', 'native');
     this.scheduleNativePeerEvidence();
   }
 
@@ -6313,36 +6247,52 @@ export class Store {
     drive: string,
     peerAgent: string,
   ): () => void {
-    const close = this.resourcePeerSyncStatus.open(
-      connectionId,
+    return this.copies.open(
+      `peer:${connectionId}`,
       this.normalizeSubject(drive),
       peerAgent,
     );
-
-    return () => {
-      close();
-      this.resourceAttachmentSync.closePeer(connectionId);
-    };
   }
 
   /** @internal The connection observed replacement of its backing storage. */
   public invalidateResourcePeerSession(connectionId: string): void {
-    this.resourcePeerSyncStatus.invalidate(connectionId);
-    this.resourceAttachmentSync.closePeer(connectionId);
+    this.copies.invalidate(`peer:${connectionId}`);
   }
 
-  /** @internal Only the negotiated authenticated receipt consumer may call this. */
-  public acknowledgeResourcePeerReceipt(receipt: BrowserReplicaReceipt): void {
+  private normalizedReceipt(receipt: Receipt): Receipt {
+    return {
+      ...receipt,
+      subject: this.normalizeSubject(receipt.subject),
+      session: receipt.session && {
+        ...receipt.session,
+        drive: this.normalizeSubject(receipt.session.drive),
+      },
+    };
+  }
+
+  /** @internal Every transport reports through this: the negotiated peer
+   * receipt consumer, the server and Vault. What a receipt proves is decided
+   * by the tracker, never by the transport.
+   */
+  public acknowledgeReceipt(receipt: Receipt): void {
     if (
       this.isDestroyed(receipt.subject) ||
       this.hasPendingDestroy(receipt.subject)
     )
       return;
-    this.resourcePeerSyncStatus.acknowledge({
-      ...receipt,
-      subject: this.normalizeSubject(receipt.subject),
-      drive: this.normalizeSubject(receipt.drive),
-    });
+    this.copies.acknowledge(this.normalizedReceipt(receipt));
+  }
+
+  /** @internal Forget what destinations proved (by prefix, e.g. `vault`) and
+   * fence off acknowledgements still in flight for them.
+   */
+  public resetReceipts(...prefixes: string[]): void {
+    this.copies.reset(...prefixes);
+  }
+
+  /** @internal Capture before gathering proof; see `ResourceCopiesTracker.fence`. */
+  public receiptFence(destination: string, subject: string): string {
+    return this.copies.fence(destination, this.normalizeSubject(subject));
   }
 
   private resourcePeerDrive(resource: Resource): string | undefined {
@@ -6363,62 +6313,7 @@ export class Store {
     return undefined;
   }
 
-  public getResourcePeerSyncStatus(resource: Resource): ResourcePeerSyncStatus {
-    const target = resource.__internalObject;
-
-    return this.resourcePeerSyncStatus.get(
-      this.normalizeSubject(target.subject),
-      this.isDestroyed(target.subject) || this.hasPendingDestroy(target.subject)
-        ? undefined
-        : this.resourcePeerDrive(target),
-      target,
-    );
-  }
-
-  public subscribeResourcePeerSyncStatus(
-    resource: Resource,
-    callback: () => void,
-  ): () => void {
-    const target = resource.__internalObject;
-    this.resourcePeerWatchers.set(
-      target,
-      (this.resourcePeerWatchers.get(target) ?? 0) + 1,
-    );
-    const unsubscribers = [
-      this.resourcePeerSyncStatus.subscribe(
-        () => this.normalizeSubject(target.subject),
-        () => this.resourcePeerDrive(target),
-        callback,
-      ),
-      this.subscribeSaveState(target, callback),
-      this.subscribe(target.subject, callback),
-    ];
-
-    this.scheduleNativePeerEvidence();
-
-    return () => {
-      unsubscribers.forEach(unsubscribe => unsubscribe());
-      const remaining = (this.resourcePeerWatchers.get(target) ?? 1) - 1;
-      if (remaining) this.resourcePeerWatchers.set(target, remaining);
-      else this.resourcePeerWatchers.delete(target);
-      const subject = this.normalizeSubject(target.subject);
-
-      if (
-        ![...this.resourcePeerWatchers.keys()].some(
-          watched => this.normalizeSubject(watched.subject) === subject,
-        )
-      ) {
-        this.nativePeerReadTokens.delete(subject);
-        this.resourcePeerSyncStatus.clearNative(subject);
-      }
-
-      if (!this.resourcePeerWatchers.size) this.stopNativePeerEvidence();
-    };
-  }
-
-  private resourceSyncStatus = new ResourceSyncStatusTracker();
   private resourceSyncEpoch = 0;
-  private resourceSyncWatchers = new Map<Resource, number>();
   private resourceSyncReads = new Map<string, object>();
   private resourceSyncReadBatch:
     | {
@@ -6429,7 +6324,7 @@ export class Store {
           string,
           {
             token: object;
-            restore: ReturnType<ResourceSyncStatusTracker['restore']>;
+            restore: ReturnType<ResourceCopiesTracker['restore']>;
           }
         >;
       }
@@ -6439,7 +6334,7 @@ export class Store {
         epoch: number;
         db: ClientDbWorker;
         scope: ResourceSyncScope;
-        receipts: Map<string, SerializedServerReceipt>;
+        receipts: Map<string, SerializedReceipt>;
       }
     | undefined;
 
@@ -6455,11 +6350,11 @@ export class Store {
     this.resourceSyncReads.clear();
     this.resourceSyncReadBatch = undefined;
     this.resourceSyncWriteBatch = undefined;
-    this.resourceSyncStatus.reset();
+    this.copies.reset('local', 'server');
     // Configuration is assigned before reset notifies subscribers. Schedule
-    // recovery outside getResourceSyncStatus, which React calls during render.
+    // recovery outside getResourceCopies, which React calls during render.
     queueMicrotask(() => {
-      for (const resource of this.resourceSyncWatchers.keys()) {
+      for (const resource of this.resourceCopyWatchers.keys()) {
         this.ensureResourceSyncEvidence(resource.subject);
       }
     });
@@ -6473,7 +6368,7 @@ export class Store {
     const subject = this.normalizeSubject(subjectRaw);
     if (
       !db ||
-      typeof db.getResourceSyncEvidence !== 'function' ||
+      typeof db.getResourceReceipts !== 'function' ||
       this.resourceSyncReads.has(subject) ||
       this.isDestroyed(subject) ||
       this.hasPendingDestroy(subject)
@@ -6499,7 +6394,7 @@ export class Store {
 
     batch.entries.set(subject, {
       token,
-      restore: this.resourceSyncStatus.restore(subject),
+      restore: this.copies.restore(subject),
     });
   }
 
@@ -6520,9 +6415,9 @@ export class Store {
       )
         return;
       if (!current()) return;
-      const rows = await batch.db.getResourceSyncEvidence(
+      const rows = await batch.db.getResourceReceipts(
         subjects,
-        batch.scope,
+        batch.scope && { server: batch.scope },
       );
       if (!current() || !rows) return;
       const bySubject = new Map(
@@ -6541,15 +6436,13 @@ export class Store {
         entry.restore({
           ...row,
           subject,
-          serverReceipt:
-            batch.scope &&
-            !this.isLocalOnlySubject(subject) &&
-            row.serverReceipt
-              ? {
-                  ...row.serverReceipt,
-                  subject: this.normalizeSubject(row.serverReceipt.subject),
-                }
-              : undefined,
+          receipts:
+            batch.scope && !this.isLocalOnlySubject(subject)
+              ? row.receipts.map(receipt => ({
+                  ...receipt,
+                  subject: this.normalizeSubject(receipt.subject),
+                }))
+              : [],
         });
       }
     } catch (error) {
@@ -6568,12 +6461,16 @@ export class Store {
   private queueResourceSyncReceipt(subject: string): void {
     const db = this.clientDb;
     const scope = this.resourceSyncScope();
-    const receipt = this.resourceSyncStatus.serverReceipt(subject);
+    const proof = this.copies.receipt('server', subject);
+    const receipt: SerializedReceipt | undefined =
+      proof?.confirmedAt === undefined
+        ? undefined
+        : { subject, version: proof.version, confirmedAt: proof.confirmedAt };
     if (
       !db ||
       !scope ||
       !receipt ||
-      typeof db.putResourceSyncReceipts !== 'function' ||
+      typeof db.putResourceReceipts !== 'function' ||
       this.isLocalOnlySubject(subject) ||
       this.isDestroyed(subject) ||
       this.hasPendingDestroy(subject)
@@ -6609,7 +6506,7 @@ export class Store {
           !this.hasPendingDestroy(receipt.subject),
       );
       if (receipts.length)
-        await batch.db.putResourceSyncReceipts(batch.scope, receipts);
+        await batch.db.putResourceReceipts({ server: batch.scope }, receipts);
     } catch {
       // The remote acknowledgement remains valid in this session. A failed
       // diagnostic write only means recovery must stay unknown after reload.
@@ -6624,46 +6521,63 @@ export class Store {
   ): () => void {
     const subject = this.normalizeSubject(subjectRaw);
     const epoch = this.resourceSyncEpoch;
-    const acknowledge = this.resourceSyncStatus.serverWrite(subject, bytes);
+    const fence = this.copies.fence('server', subject);
+    const version = carriedVersion(bytes);
 
     return () => {
-      const receipt = acknowledge();
-      if (receipt && epoch === this.resourceSyncEpoch)
+      if (
+        version &&
+        epoch === this.resourceSyncEpoch &&
+        this.copies.acknowledge(
+          { destination: 'server', subject, version, confirmedAt: Date.now() },
+          fence,
+        )
+      )
         this.queueResourceSyncReceipt(subject);
     };
   }
 
-  /** Version-scoped evidence for the resource itself; excludes attachment bytes.
-   * Unknown is intentional: idle save state or a finished drive sync is not proof.
+  /** What each destination has proven about this resource's current state and
+   * its attachment contents. Unknown is intentional: idle save state or a
+   * finished drive sync is not proof. Pure: no I/O, no timers.
    */
-  public getResourceSyncStatus(resource: Resource): ResourceSyncStatus {
+  public getResourceCopies(resource: Resource): ResourceCopies {
     const target = resource.__internalObject;
+    const subject = this.normalizeSubject(target.subject);
     const db = this.clientDb;
+    const descriptor = resourceAttachmentDescriptor(this, target);
 
-    return this.resourceSyncStatus.get(
-      this.normalizeSubject(target.subject),
-      target,
-      {
-        localAvailable: !!db && !db.unsupportedEnvironment,
-        localError: db?.initError?.message,
-        serverUrl:
-          this.noServer ||
-          this.commitTransport ||
-          this.isLocalOnlySubject(target.subject)
-            ? undefined
-            : this.serverUrl,
-      },
-    );
+    return this.copies.get(target, {
+      subject,
+      drive:
+        this.isDestroyed(subject) || this.hasPendingDestroy(subject)
+          ? undefined
+          : this.resourcePeerDrive(target),
+      serverUrl:
+        this.noServer ||
+        this.commitTransport ||
+        this.isLocalOnlySubject(subject)
+          ? undefined
+          : this.serverUrl,
+      localAvailable: !!db && !db.unsupportedEnvironment,
+      hasDb: !!db,
+      localError: db?.initError?.message,
+      manifest: descriptor.manifest,
+      required: descriptor.required,
+    });
   }
 
-  public subscribeResourceSyncStatus(
+  /** Starts the transports that gather proof for mounted rows (durable local
+   * recovery, native peers, file contents); rendering alone never does.
+   */
+  public subscribeResourceCopies(
     resource: Resource,
     callback: () => void,
   ): () => void {
     const target = resource.__internalObject;
-    this.resourceSyncWatchers.set(
+    this.resourceCopyWatchers.set(
       target,
-      (this.resourceSyncWatchers.get(target) ?? 0) + 1,
+      (this.resourceCopyWatchers.get(target) ?? 0) + 1,
     );
     this.ensureResourceSyncEvidence(target.subject);
 
@@ -6673,7 +6587,7 @@ export class Store {
     };
 
     const unsubscribers = [
-      this.resourceSyncStatus.subscribe(
+      this.copies.subscribe(
         () => this.normalizeSubject(target.subject),
         callback,
       ),
@@ -6682,13 +6596,28 @@ export class Store {
       this.on(StoreEvents.SyncStatusChanged, refresh),
       this.on(StoreEvents.AgentChanged, refresh),
       this.on(StoreEvents.ServerURLChanged, refresh),
+      this.attachmentSync.watch(target),
     ];
+
+    this.scheduleNativePeerEvidence();
 
     return () => {
       unsubscribers.forEach(unsubscribe => unsubscribe());
-      const remaining = (this.resourceSyncWatchers.get(target) ?? 1) - 1;
-      if (remaining) this.resourceSyncWatchers.set(target, remaining);
-      else this.resourceSyncWatchers.delete(target);
+      const remaining = (this.resourceCopyWatchers.get(target) ?? 1) - 1;
+      if (remaining) this.resourceCopyWatchers.set(target, remaining);
+      else this.resourceCopyWatchers.delete(target);
+      const subject = this.normalizeSubject(target.subject);
+
+      if (
+        ![...this.resourceCopyWatchers.keys()].some(
+          watched => this.normalizeSubject(watched.subject) === subject,
+        )
+      ) {
+        this.nativePeerReadTokens.delete(subject);
+        this.copies.drop('native', subject);
+      }
+
+      if (!this.resourceCopyWatchers.size) this.stopNativePeerEvidence();
     };
   }
 
@@ -7150,9 +7079,8 @@ export class Store {
     const resolved = this.resolveSubject(subjectRaw);
     // A subsequently loaded resource must not inherit the old cache stamp.
     this.lastPersisted.delete(resolved);
-    this.resourceSyncStatus.remove(this.normalizeSubject(resolved));
-    this.resourcePeerSyncStatus.remove(this.normalizeSubject(resolved));
-    this.resourceAttachmentSync.remove(this.normalizeSubject(resolved));
+    this.copies.remove(this.normalizeSubject(resolved));
+    this.attachmentSync.remove(this.normalizeSubject(resolved));
     this.nativePeerReadTokens.delete(this.normalizeSubject(resolved));
     void this.eventManager.emit(
       StoreEvents.ResourcePeerEvidenceRemoved,
@@ -9083,10 +9011,7 @@ export class Store {
     const receiptEpoch = this.resourceSyncEpoch;
     const settle =
       db === this.clientDb
-        ? this.resourceSyncStatus.localWrite(
-            this.normalizeSubject(subject),
-            snapshot,
-          )
+        ? this.copies.localWrite(this.normalizeSubject(subject), snapshot)
         : undefined;
     entry.done = db
       .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)

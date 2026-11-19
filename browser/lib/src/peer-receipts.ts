@@ -2,7 +2,7 @@ import {
   attachmentManifestKey,
   parseAttachmentManifest,
   type AttachmentManifest,
-} from './resource-attachment-evidence.js';
+} from './attachment-manifest.js';
 import { commits } from './ontologies/commits.js';
 import { canonicalizeScheme } from './subject.js';
 import { decodeB64, encodeB64 } from './base64.js';

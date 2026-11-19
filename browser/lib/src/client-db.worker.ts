@@ -1,8 +1,5 @@
-import type {
-  AttachmentManifest,
-  ResourceAttachmentEvidence,
-  SerializedVaultAttachmentReceipt,
-} from './resource-attachment-evidence.js';
+import type { AttachmentManifest } from './attachment-manifest.js';
+import type { ResourceAttachmentEvidence } from './resource-receipts.js';
 /**
  * Web Worker that hosts the WASM ClientDb.
  * Communicates with the main thread via typed postMessage.
@@ -11,15 +8,11 @@ import type {
  */
 
 import type {
-  ResourceVaultEvidence,
+  ReceiptScope,
+  ResourceReceipts,
+  SerializedReceipt,
   VaultSyncScope,
-  SerializedVaultReceipt,
-} from './resource-vault-evidence.js';
-import type {
-  ResourceSyncEvidence,
-  ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+} from './resource-receipts.js';
 import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
 import { wasmBinaryUrl } from './wasm-url.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
@@ -111,13 +104,13 @@ export interface ClientDbInitRequest {
 export interface ClientDbRpc {
   init: [ClientDbInitRequest, ClientDbInitTimings];
   getResource: [{ subject: string }, string | null];
-  getResourceSyncEvidence: [
-    { subjects: string[]; scope?: ResourceSyncScope },
-    ResourceSyncEvidence[] | undefined,
+  getResourceReceipts: [
+    { subjects: string[]; scope?: ReceiptScope },
+    ResourceReceipts[] | undefined,
   ];
-  putResourceSyncReceipts: [
-    { scope: ResourceSyncScope; receipts: SerializedServerReceipt[] },
-    void,
+  putResourceReceipts: [
+    { scope: ReceiptScope; receipts: SerializedReceipt[]; generation?: number },
+    boolean,
   ];
   vaultAttachmentManifests: [
     { drive: string },
@@ -127,32 +120,8 @@ export interface ClientDbRpc {
     { subjects: string[] },
     ResourceAttachmentEvidence[] | undefined,
   ];
-  getResourceVaultAttachmentReceipts: [
-    { subjects: string[]; scope: VaultSyncScope },
-    SerializedVaultAttachmentReceipt[] | undefined,
-  ];
-  putResourceVaultAttachmentReceipts: [
-    {
-      scope: VaultSyncScope;
-      receipts: SerializedVaultAttachmentReceipt[];
-      generation: number;
-    },
-    boolean,
-  ];
-  getResourceVaultEvidence: [
-    { subjects: string[]; scope: VaultSyncScope },
-    ResourceVaultEvidence[] | undefined,
-  ];
   getResourceVaultGeneration: [{ scope: VaultSyncScope }, number | undefined];
   clearResourceVaultReceipts: [{ scope: VaultSyncScope }, void];
-  putResourceVaultReceipts: [
-    {
-      scope: VaultSyncScope;
-      receipts: SerializedVaultReceipt[];
-      generation: number;
-    },
-    boolean,
-  ];
   getResourceWithSnapshot: [{ subject: string }, Rows[number] | null];
   getResourcesWithSnapshots: [{ subjects: string[] }, Rows | null];
   putResource: [{ jsonAd: string }, void];
@@ -340,26 +309,30 @@ const handlers: Handlers = {
   handlePeerFrame: m => db!.handlePeerFrame(m.session, m.frame),
   closePeerSession: m => db!.closePeerSession(m.session),
   getResource: m => db!.getResource(m.subject),
-  getResourceSyncEvidence: m => {
-    if (typeof db!.getResourceSyncEvidence !== 'function') return undefined;
+  getResourceReceipts: m => {
+    if (typeof db!.getResourceReceipts !== 'function') return undefined;
     dirty = true;
-    const evidence = db!.getResourceSyncEvidence(
+    const evidence = db!.getResourceReceipts(
       JSON.stringify(m.subjects),
       m.scope ? JSON.stringify(m.scope) : undefined,
-    ) as ResourceSyncEvidence[];
+    ) as ResourceReceipts[];
     // The Rust method also flushes; keep the RPC durability boundary explicit.
     flushNow();
 
     return evidence;
   },
-  putResourceSyncReceipts: m => {
-    if (typeof db!.putResourceSyncReceipts !== 'function') return;
+  putResourceReceipts: m => {
+    if (typeof db!.putResourceReceipts !== 'function') return false;
     dirty = true;
-    db!.putResourceSyncReceipts(
-      JSON.stringify(m.scope),
-      JSON.stringify(m.receipts),
-    );
+    const accepted =
+      db!.putResourceReceipts(
+        JSON.stringify(m.scope),
+        JSON.stringify(m.receipts),
+        m.generation,
+      ) === true;
     flushNow();
+
+    return accepted;
   },
   vaultAttachmentManifests: async m => {
     if (typeof db!.vaultAttachmentManifests !== 'function') return undefined;
@@ -373,41 +346,6 @@ const handlers: Handlers = {
     // Keep this worker self-contained; the main-thread RPC adapter validates
     // the evidence before exposing it to callers.
     return db!.getResourceAttachmentEvidence(JSON.stringify(m.subjects));
-  },
-  getResourceVaultAttachmentReceipts: m => {
-    if (typeof db!.getResourceVaultAttachmentReceipts !== 'function')
-      return undefined;
-
-    return db!.getResourceVaultAttachmentReceipts(
-      JSON.stringify(m.subjects),
-      JSON.stringify(m.scope),
-    );
-  },
-  putResourceVaultAttachmentReceipts: m => {
-    if (typeof db!.putResourceVaultAttachmentReceipts !== 'function')
-      return false;
-    dirty = true;
-    const accepted =
-      db!.putResourceVaultAttachmentReceipts(
-        JSON.stringify(m.scope),
-        JSON.stringify(m.receipts),
-        m.generation,
-      ) === true;
-    flushNow();
-
-    return accepted;
-  },
-  getResourceVaultEvidence: m => {
-    if (typeof db!.getResourceVaultEvidence !== 'function') return undefined;
-    dirty = true;
-    const evidence = db!.getResourceVaultEvidence(
-      JSON.stringify(m.subjects),
-      JSON.stringify(m.scope),
-    ) as ResourceVaultEvidence[];
-    // The Rust method also flushes; keep the RPC durability boundary explicit.
-    flushNow();
-
-    return evidence;
   },
   getResourceVaultGeneration: m => {
     if (typeof db!.getResourceVaultGeneration !== 'function') return undefined;
@@ -424,19 +362,6 @@ const handlers: Handlers = {
     dirty = true;
     db!.clearResourceVaultReceipts(JSON.stringify(m.scope));
     flushNow();
-  },
-  putResourceVaultReceipts: m => {
-    if (typeof db!.putResourceVaultReceipts !== 'function') return false;
-    dirty = true;
-    const accepted =
-      db!.putResourceVaultReceipts(
-        JSON.stringify(m.scope),
-        JSON.stringify(m.receipts),
-        m.generation,
-      ) === true;
-    flushNow();
-
-    return accepted;
   },
   // One round trip for a whole list: opening a chat asks for every message and
   // part at once, and a postMessage per subject queued behind boot-time sync

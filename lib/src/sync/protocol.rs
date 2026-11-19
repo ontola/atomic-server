@@ -98,7 +98,7 @@ pub const CAP_IROH_STORAGE_RECEIPTS_V1: &str = "iroh-storage-receipts-v1";
 pub const STORAGE_RECEIPT_BARRIER: &str = "atomic-redb-flush-v1";
 pub const STORAGE_RECEIPT_MAX_FRAME: usize = 64 * 1024;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageReceiptRequest {
     pub nonce: String,
@@ -197,6 +197,16 @@ pub struct StorageReceipt {
 }
 
 impl StorageReceipt {
+    /// The request this receipt answers, for correlating it with the outstanding one.
+    pub fn request(&self) -> StorageReceiptRequest {
+        StorageReceiptRequest {
+            nonce: self.nonce.clone(),
+            drive: self.drive.clone(),
+            subject: self.subject.clone(),
+            version: self.version.clone(),
+        }
+    }
+
     pub fn validate(&self) -> bool {
         receipt_hex(&self.nonce)
             && receipt_subject(&self.drive)

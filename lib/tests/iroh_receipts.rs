@@ -143,6 +143,7 @@ async fn await_host_receipt(host: &EmbedHost, subject: &str, version: &str) -> s
                         .iter()
                         .any(|receipt| {
                             receipt["subject"] == subject
+                                && receipt.get("manifest").is_none()
                                 && receipt["version"].as_str().is_some_and(|vv| {
                                     decoded_frontier(vv) == decoded_frontier(version)
                                 })
@@ -168,13 +169,11 @@ async fn await_host_attachment(host: &EmbedHost, subject: &str, file: &str, hash
                 .unwrap()
                 .iter()
                 .any(|connection| {
-                    connection["attachmentReceipts"]
-                        .as_array()
-                        .is_some_and(|receipts| {
-                            receipts.iter().any(|receipt| {
-                                receipt["subject"] == subject && receipt["manifest"] == expected
-                            })
+                    connection["receipts"].as_array().is_some_and(|receipts| {
+                        receipts.iter().any(|receipt| {
+                            receipt["subject"] == subject && receipt["manifest"] == expected
                         })
+                    })
                 })
             {
                 break;

@@ -8,6 +8,8 @@ import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { Resource } from './resource.js';
 import { Store } from './store.js';
+import { browserReceipt } from './resource-receipts.js';
+import type { BrowserReplicaReceipt } from './peer-receipts.js';
 import { BLOB, INTERNAL_ID } from './urls.js';
 
 const DRIVE = 'atomic:attachment-drive';
@@ -16,6 +18,19 @@ const AGENT = 'atomic:agent:attachment-owner';
 const HASH = 'a'.repeat(64);
 const OTHER_HASH = 'b'.repeat(64);
 const CHUNKS = 'https://atomicdata.dev/properties/chunks';
+
+const ack = (
+  store: Store,
+  receipt: Omit<BrowserReplicaReceipt, 'drive' | 'peerAgent'> &
+    Partial<BrowserReplicaReceipt>,
+) =>
+  store.acknowledgeReceipt(
+    browserReceipt({
+      drive: DRIVE,
+      peerAgent: 'atomic:agent:peer',
+      ...receipt,
+    })!,
+  );
 const cleanups: Array<() => void> = [];
 type Manifest = {
   files: Array<{ subject: string; hash: string; chunks: string[] }>;
@@ -118,11 +133,25 @@ async function fixture({ serverEnabled = false } = {}) {
   });
   answer = async () => [proof()];
   let stop: (() => void) | undefined;
-  const get = (target = resource) =>
-    store.getResourceAttachmentSyncStatus(target);
+
+  /** The unified copies, seen through their file-contents proof. */
+  const get = (target = resource) => {
+    const copies = store.getResourceCopies(target);
+
+    return {
+      required: copies.required,
+      manifest: copies.manifest,
+      local: copies.local.contents,
+      server: copies.server.contents,
+      peers: copies.peers.peers.map(peer => ({
+        ...peer.contents,
+        connectionId: peer.connectionId,
+      })),
+    };
+  };
 
   const watch = (target = resource) => {
-    stop ??= store.subscribeResourceAttachmentSyncStatus(target, () => {});
+    stop ??= store.subscribeResourceCopies(target, () => {});
   };
 
   const unsubscribe = () => {
@@ -179,7 +208,7 @@ describe('exact resource attachment evidence', () => {
       local: { state: 'confirmed' },
       server: { state: 'not-configured' },
     });
-    expect(h.store.getResourceSyncStatus(h.resource).local.state).not.toBe(
+    expect(h.store.getResourceCopies(h.resource).local.state).not.toBe(
       'confirmed',
     );
   });
@@ -193,9 +222,7 @@ describe('exact resource attachment evidence', () => {
       h.resource.toClientDbJsonAd()!,
       h.resource.getLoroDoc()!.export({ mode: 'snapshot' }),
     );
-    expect(h.store.getResourceSyncStatus(h.resource).local.state).toBe(
-      'confirmed',
-    );
+    expect(h.store.getResourceCopies(h.resource).local.state).toBe('confirmed');
     await h.poll();
     expect(h.get().required).toBe(true);
     expect(h.get().local.state).not.toBe('confirmed');
@@ -434,7 +461,7 @@ describe('exact resource attachment evidence', () => {
       'atomic:agent:peer',
     );
     const proof = h.proof();
-    h.store.acknowledgeResourcePeerReceipt({
+    ack(h.store, {
       subject: SUBJECT,
       drive: DRIVE,
       version: proof.version!,
@@ -453,22 +480,20 @@ describe('exact resource attachment evidence', () => {
       source,
       replica,
     };
-    expect(h.store.getResourcePeerSyncStatus(h.resource).confirmedCount).toBe(
-      1,
-    );
+    expect(h.store.getResourceCopies(h.resource).peers.confirmedCount).toBe(1);
     expect(h.get().peers[0].state).not.toBe('confirmed');
-    h.store.acknowledgeResourceAttachmentReceipt({
+    ack(h.store, {
       ...contentProof,
       replica: { ...replica, generation: '5'.repeat(64) },
     });
     expect(h.get().peers[0].state).not.toBe('confirmed');
-    h.store.acknowledgeResourceAttachmentReceipt({
+    ack(h.store, {
       ...contentProof,
       confirmedAt: Date.now(),
     });
     expect(h.get().peers[0].state).toBe('confirmed');
     close();
-    h.store.acknowledgeResourceAttachmentReceipt({
+    ack(h.store, {
       ...contentProof,
       confirmedAt: Date.now(),
     });
@@ -524,7 +549,7 @@ describe('exact resource attachment evidence', () => {
     );
     cleanups.push(close);
     const proof = h.proof();
-    h.store.acknowledgeResourcePeerReceipt({
+    ack(h.store, {
       subject: SUBJECT,
       drive: DRIVE,
       version: proof.version!,
@@ -543,20 +568,20 @@ describe('exact resource attachment evidence', () => {
       source,
       replica,
     };
-    h.store.acknowledgeResourceAttachmentReceipt(content);
+    ack(h.store, content);
     expect(h.get().peers[0].state).toBe('confirmed');
     // A peer whose bytes disappeared cannot issue a fresh positive response.
     // Keep the authenticated connection open and allow normal refresh timers.
     await vi.advanceTimersByTimeAsync(31_000);
-    expect(h.store.getResourcePeerSyncStatus(h.resource)).toMatchObject({
+    expect(h.store.getResourceCopies(h.resource).peers).toMatchObject({
       state: 'confirmed',
       confirmedCount: 1,
     });
     expect(h.get().peers[0].state).not.toBe('confirmed');
     // A delayed replay carries the original time and cannot renew the proof.
-    h.store.acknowledgeResourceAttachmentReceipt(content);
+    ack(h.store, content);
     expect(h.get().peers[0].state).not.toBe('confirmed');
-    h.store.acknowledgeResourceAttachmentReceipt({
+    ack(h.store, {
       ...content,
       confirmedAt: Date.now(),
     });

@@ -8,20 +8,16 @@ import {
   core,
   type ClientDbWorker,
   type VaultSyncScope,
-  type ResourceVaultEvidence,
-  type SerializedVaultReceipt,
-  type SerializedVaultAttachmentReceipt,
+  type ResourceReceipts,
+  type SerializedReceipt,
 } from '@tomic/lib';
 import {
   bindResourceVaultScope,
   captureResourceVaultBackup,
   captureResourceVaultOperation,
   clearResourceVaultScopes,
-  getResourceVaultSyncStatus,
-  getResourceVaultAttachmentSyncStatus,
-  subscribeResourceVaultAttachmentSyncStatus,
   invalidateResourceVaultProof,
-  subscribeResourceVaultSyncStatus,
+  subscribeResourceCopiesWithVault,
   type VaultReceiptDb,
 } from './vaultResourceSync';
 import { getManagedAccount, noteManagedSessionChanged } from './session';
@@ -101,17 +97,15 @@ async function fixture(existingDb?: ReturnType<typeof database>) {
 
 function database() {
   let generation = 0;
-  const receipts = new Map<string, SerializedVaultReceipt>();
+  const receipts = new Map<string, SerializedReceipt>();
   const db = {
     isReady: true,
     getResourceVaultGeneration: vi.fn(async () => generation),
-    getResourceVaultEvidence: vi.fn(
-      async (): Promise<ResourceVaultEvidence[]> => [],
-    ),
-    putResourceVaultReceipts: vi.fn(
+    getResourceReceipts: vi.fn(async (): Promise<ResourceReceipts[]> => []),
+    putResourceReceipts: vi.fn(
       async (
-        _scope: VaultSyncScope,
-        rows: SerializedVaultReceipt[],
+        _scope: { vault: VaultSyncScope },
+        rows: SerializedReceipt[],
         expected: number,
       ) => {
         if (expected !== generation) return false;
@@ -144,15 +138,17 @@ function proof(resource: Resource) {
   };
 }
 
-function stored(resource: Resource): ResourceVaultEvidence {
+function stored(resource: Resource): ResourceReceipts {
   return {
     subject: resource.subject,
     snapshot: resource.getLoroDoc()!.export({ mode: 'snapshot' }),
-    vaultReceipt: {
-      subject: resource.subject,
-      version: proof(resource).resourceVersions[resource.subject],
-      confirmedAt: 123,
-    },
+    receipts: [
+      {
+        subject: resource.subject,
+        version: proof(resource).resourceVersions[resource.subject],
+        confirmedAt: 123,
+      },
+    ],
   };
 }
 
@@ -167,34 +163,32 @@ function edit(resource: Resource) {
 describe('resource Vault proof', () => {
   it('keeps getters pure and confirms only the exported version after accepted durable proof', async () => {
     const { store, db, resource, scope } = await fixture();
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
-    expect(db.getResourceVaultEvidence).not.toHaveBeenCalled();
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
+    expect(db.getResourceReceipts).not.toHaveBeenCalled();
     const capture = captureResourceVaultBackup(store, db, scope);
     expect(await capture.isCurrent()).toBe(true);
     const exported = proof(resource);
     edit(resource);
     await capture.confirm(exported);
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('pending');
-    expect(getResourceVaultSyncStatus(store, resource).confirmedAt).toBe(123);
+    expect(store.getResourceCopies(resource).vault.state).toBe('pending');
+    expect(store.getResourceCopies(resource).vault.confirmedAt).toBe(123);
     await capture.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).vault.state).toBe('confirmed');
   });
 
   it('hydrates valid persisted proof only after the known scope is bound', async () => {
     const { store, db, resource, scope } = await fixture();
-    db.getResourceVaultEvidence.mockResolvedValue([stored(resource)]);
-    const stop = subscribeResourceVaultSyncStatus(store, resource, vi.fn());
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
-    expect(db.getResourceVaultEvidence).not.toHaveBeenCalled();
+    db.getResourceReceipts.mockResolvedValue([stored(resource)]);
+    const stop = subscribeResourceCopiesWithVault(store, resource, vi.fn());
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
+    expect(db.getResourceReceipts).not.toHaveBeenCalled();
     bindResourceVaultScope(store, db, scope);
     await vi.waitFor(() =>
-      expect(getResourceVaultSyncStatus(store, resource).state).toBe(
-        'confirmed',
-      ),
+      expect(store.getResourceCopies(resource).vault.state).toBe('confirmed'),
     );
-    expect(getResourceVaultSyncStatus(store, resource).confirmedAt).toBe(123);
+    expect(store.getResourceCopies(resource).vault.confirmedAt).toBe(123);
     clearResourceVaultScopes(store);
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     stop();
   });
 
@@ -207,8 +201,8 @@ describe('resource Vault proof', () => {
     const old = captureResourceVaultBackup(store, db, scope);
     expect(await old.isCurrent()).toBe(false);
     await old.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
-    expect(db.putResourceVaultReceipts).not.toHaveBeenCalled();
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
+    expect(db.putResourceReceipts).not.toHaveBeenCalled();
   });
 
   it('fences setup and live callbacks on managed session change even for the same account', async () => {
@@ -220,8 +214,8 @@ describe('resource Vault proof', () => {
     expect(setupCurrent()).toBe(false);
     bindResourceVaultScope(store, db, scope);
     await old.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
-    expect(db.putResourceVaultReceipts).not.toHaveBeenCalled();
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
+    expect(db.putResourceReceipts).not.toHaveBeenCalled();
   });
 
   it('refuses a previous account and preserves unsupported adapters as unknown', async () => {
@@ -230,14 +224,14 @@ describe('resource Vault proof', () => {
     vi.mocked(getManagedAccount).mockResolvedValue({ email: 'acct_b' });
     expect(await old.isCurrent()).toBe(false);
     await old.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     const unsupported = captureResourceVaultBackup(
       store,
       {} as VaultReceiptDb,
       scope,
     );
     await unsupported.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
   });
 
   it('does not infer the resource workspace from the currently open drive', async () => {
@@ -250,52 +244,52 @@ describe('resource Vault proof', () => {
       true,
     );
     unrelated.setStore(store);
-    const stop = subscribeResourceVaultSyncStatus(store, unrelated, vi.fn());
+    const stop = subscribeResourceCopiesWithVault(store, unrelated, vi.fn());
     await Promise.resolve();
-    expect(getResourceVaultSyncStatus(store, unrelated).scope).toBeUndefined();
-    expect(db.getResourceVaultEvidence).not.toHaveBeenCalled();
+    expect(store.getResourceCopies(unrelated).vault.state).toBe('unknown');
+    expect(db.getResourceReceipts).not.toHaveBeenCalled();
     stop();
   });
 
   it('ignores a stale read after eviction and resubscription and rejects corrupted snapshots', async () => {
     const { store, db, resource, scope } = await fixture();
-    const read = deferred<ResourceVaultEvidence[]>();
-    db.getResourceVaultEvidence
+    const read = deferred<ResourceReceipts[]>();
+    // Each watch reads the contents proof first, then the document proof.
+    db.getResourceReceipts
+      .mockResolvedValueOnce([])
       .mockReturnValueOnce(read.promise)
       .mockResolvedValue([]);
     bindResourceVaultScope(store, db, scope);
-    const stop = subscribeResourceVaultSyncStatus(store, resource, vi.fn());
-    await vi.waitFor(() =>
-      expect(db.getResourceVaultEvidence).toHaveBeenCalled(),
-    );
+    const stop = subscribeResourceCopiesWithVault(store, resource, vi.fn());
+    await vi.waitFor(() => expect(db.getResourceReceipts).toHaveBeenCalled());
     store.evictResource(resource.subject);
     stop();
     store.resources.set(resource.subject, resource);
-    const stopAgain = subscribeResourceVaultSyncStatus(
+    const stopAgain = subscribeResourceCopiesWithVault(
       store,
       resource,
       vi.fn(),
     );
     read.resolve([stored(resource)]);
     await vi.waitFor(() =>
-      expect(db.getResourceVaultEvidence).toHaveBeenCalledTimes(2),
+      expect(db.getResourceReceipts).toHaveBeenCalledTimes(4),
     );
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     stopAgain();
     clearResourceVaultScopes(store);
-    db.getResourceVaultEvidence.mockResolvedValue([
+    db.getResourceReceipts.mockResolvedValue([
       { ...stored(resource), snapshot: new Uint8Array([1, 2, 3]) },
     ]);
     bindResourceVaultScope(store, db, scope);
-    const stopCorrupt = subscribeResourceVaultSyncStatus(
+    const stopCorrupt = subscribeResourceCopiesWithVault(
       store,
       resource,
       vi.fn(),
     );
     await vi.waitFor(() =>
-      expect(db.getResourceVaultEvidence).toHaveBeenCalledTimes(3),
+      expect(db.getResourceReceipts).toHaveBeenCalledTimes(6),
     );
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     stopCorrupt();
   });
 
@@ -304,24 +298,22 @@ describe('resource Vault proof', () => {
     const old = captureResourceVaultBackup(store, db, scope);
     expect(await old.isCurrent()).toBe(true);
     const write = deferred<void>();
-    const actualWrite = db.putResourceVaultReceipts.getMockImplementation()!;
-    db.putResourceVaultReceipts.mockImplementationOnce(async (...args) => {
+    const actualWrite = db.putResourceReceipts.getMockImplementation()!;
+    db.putResourceReceipts.mockImplementationOnce(async (...args) => {
       await write.promise;
 
       return actualWrite(...args);
     });
     const pending = old.confirm(proof(resource));
-    await vi.waitFor(() =>
-      expect(db.putResourceVaultReceipts).toHaveBeenCalled(),
-    );
+    await vi.waitFor(() => expect(db.putResourceReceipts).toHaveBeenCalled());
     await db.clearResourceVaultReceipts(scope);
     write.resolve();
     await pending;
     expect(db.receipts.size).toBe(0);
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     const fresh = captureResourceVaultBackup(store, db, scope);
     await fresh.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('confirmed');
+    expect(store.getResourceCopies(resource).vault.state).toBe('confirmed');
   });
 
   it('withholds proof on diagnostic generation/storage failure without rejecting the backup callback', async () => {
@@ -333,20 +325,18 @@ describe('resource Vault proof', () => {
     );
     expect(await capture.isCurrent()).toBe(true);
     await expect(capture.confirm(proof(resource))).resolves.toBeUndefined();
-    expect(db.putResourceVaultReceipts).not.toHaveBeenCalled();
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(db.putResourceReceipts).not.toHaveBeenCalled();
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
     const next = captureResourceVaultBackup(store, db, scope);
-    db.putResourceVaultReceipts.mockRejectedValueOnce(
-      new Error('Flush failed'),
-    );
+    db.putResourceReceipts.mockRejectedValueOnce(new Error('Flush failed'));
     await expect(next.confirm(proof(resource))).resolves.toBeUndefined();
     expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
   });
 
   it('clears durable proof before a bound context exists and prevents old callbacks reviving it', async () => {
     const { store, db, resource, scope } = await fixture();
-    db.receipts.set(resource.subject, stored(resource).vaultReceipt!);
+    db.receipts.set(resource.subject, stored(resource).receipts[0]);
     await invalidateResourceVaultProof(store, scope.drivePseudonym, {
       scope,
       db,
@@ -361,7 +351,7 @@ describe('resource Vault proof', () => {
     });
     bindResourceVaultScope(store, db, scope);
     await old.confirm(proof(resource));
-    expect(getResourceVaultSyncStatus(store, resource).state).toBe('unknown');
+    expect(store.getResourceCopies(resource).vault.state).toBe('unknown');
   });
 });
 
@@ -388,18 +378,8 @@ describe('Vault file content confirmations', () => {
     const manifest = {
       files: [{ subject: f.resource.subject, hash, chunks: [] }],
     };
-    const db = Object.assign(f.db, {
-      getResourceVaultAttachmentReceipts: vi.fn(async () => []),
-      putResourceVaultAttachmentReceipts: vi.fn(
-        async (
-          _scope: VaultSyncScope,
-          _receipts: SerializedVaultAttachmentReceipt[],
-          _generation: number,
-        ) => true,
-      ),
-    });
 
-    return { ...f, db, manifest };
+    return { ...f, manifest };
   }
 
   it('binds hash proof before upload, permits rename, and withholds coverage after replacement', async () => {
@@ -407,13 +387,13 @@ describe('Vault file content confirmations', () => {
     const capture = captureResourceVaultBackup(f.store, f.db, f.scope);
     expect(await capture.isCurrent()).toBe(true);
     await capture.confirmAttachments([hash]);
-    expect(
-      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
-    ).toBe('confirmed');
+    expect(f.store.getResourceCopies(f.resource).vault.contents.state).toBe(
+      'confirmed',
+    );
     await f.resource.set(core.properties.name, 'Renamed', false);
-    expect(
-      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
-    ).toBe('confirmed');
+    expect(f.store.getResourceCopies(f.resource).vault.contents.state).toBe(
+      'confirmed',
+    );
     await f.resource.set(
       'https://atomicdata.dev/properties/blob',
       `atomic:blob:${'b'.repeat(64)}`,
@@ -424,41 +404,52 @@ describe('Vault file content confirmations', () => {
       'b'.repeat(64),
       false,
     );
-    expect(
-      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
-    ).toBe('pending');
-    expect(
-      f.db.putResourceVaultAttachmentReceipts.mock.calls[0]![1][0].manifest,
-    ).toEqual(f.manifest);
+    expect(f.store.getResourceCopies(f.resource).vault.contents.state).toBe(
+      'pending',
+    );
+    expect(f.db.putResourceReceipts.mock.calls[0]![1][0].manifest).toEqual(
+      f.manifest,
+    );
   });
   it('does not mint live proof after rejected durable generation or account change', async () => {
     const f = await attachmentFixture();
     const capture = captureResourceVaultBackup(f.store, f.db, f.scope);
-    f.db.putResourceVaultAttachmentReceipts.mockResolvedValue(false);
+    f.db.putResourceReceipts.mockResolvedValue(false);
     await capture.confirmAttachments([hash]);
-    expect(
-      getResourceVaultAttachmentSyncStatus(f.store, f.resource).state,
-    ).toBe('unknown');
+    expect(f.store.getResourceCopies(f.resource).vault.contents.state).toBe(
+      'unknown',
+    );
     const next = captureResourceVaultBackup(f.store, f.db, f.scope);
     noteManagedSessionChanged();
-    f.db.putResourceVaultAttachmentReceipts.mockClear();
+    f.db.putResourceReceipts.mockClear();
     await next.confirmAttachments([hash]);
-    expect(f.db.putResourceVaultAttachmentReceipts).not.toHaveBeenCalled();
+    expect(f.db.putResourceReceipts).not.toHaveBeenCalled();
   });
   it('hydrates accepted manifests under the established account scope with original time', async () => {
     const f = await attachmentFixture();
-    f.db.getResourceVaultAttachmentReceipts.mockResolvedValue([
-      { subject: f.resource.subject, manifest: f.manifest, confirmedAt: 123 },
-    ] as never);
+    f.db.getResourceReceipts.mockResolvedValue([
+      {
+        subject: f.resource.subject,
+        snapshot: null,
+        receipts: [
+          {
+            subject: f.resource.subject,
+            version: {},
+            manifest: f.manifest,
+            confirmedAt: 123,
+          },
+        ],
+      },
+    ]);
     bindResourceVaultScope(f.store, f.db, f.scope);
-    const stop = subscribeResourceVaultAttachmentSyncStatus(
+    const stop = subscribeResourceCopiesWithVault(
       f.store,
       f.resource,
       () => {},
     );
     await vi.waitFor(() =>
       expect(
-        getResourceVaultAttachmentSyncStatus(f.store, f.resource),
+        f.store.getResourceCopies(f.resource).vault.contents,
       ).toMatchObject({ state: 'confirmed', confirmedAt: 123 }),
     );
     stop();
@@ -478,8 +469,8 @@ describe('Vault file content confirmations', () => {
     const capture = captureResourceVaultBackup(f.store, db, f.scope);
     expect(await capture.isCurrent()).toBe(true);
     await capture.confirmAttachments([hash]);
-    expect(db.putResourceVaultAttachmentReceipts).toHaveBeenCalledWith(
-      f.scope,
+    expect(db.putResourceReceipts).toHaveBeenCalledWith(
+      { vault: f.scope },
       [expect.objectContaining({ subject: 'atomic:unloaded' })],
       0,
     );

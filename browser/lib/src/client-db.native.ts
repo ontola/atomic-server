@@ -1,11 +1,7 @@
 import {
   parseResourceAttachmentEvidence,
   type ResourceAttachmentEvidence,
-} from './resource-attachment-evidence.js';
-import {
-  parseResourcePeerEvidence,
-  type ResourcePeerEvidence,
-} from './resource-peer-evidence.js';
+} from './resource-receipts.js';
 /**
  * Native-side ClientDb: the `ClientDbWorker` surface, answered by the host app
  * instead of by a WASM database in this page.
@@ -159,9 +155,7 @@ export class NativeClientDb {
     }
   }
 
-  async getResourcePeerEvidence(
-    subjects: string[],
-  ): Promise<ResourcePeerEvidence | undefined> {
+  async getResourcePeerEvidence(subjects: string[]): Promise<unknown> {
     if (this.destroyed || this.peerEvidenceUnsupported) return undefined;
     if (this.peerEvidenceInFlight)
       throw new Error('Native peer evidence query is still running');
@@ -174,10 +168,9 @@ export class NativeClientDb {
       if (epoch !== this.peerEvidenceEpoch)
         throw new Error('Native peer evidence query cancelled');
       if (reply === undefined || reply === null) return undefined;
-      const evidence = parseResourcePeerEvidence(reply);
-      if (!evidence) throw new Error('Invalid native peer evidence reply');
 
-      return evidence;
+      // The Store validates the reply as a whole before using any of it.
+      return reply;
     } catch (error) {
       if (
         /getResourcePeerEvidence: not available in the embedded renderer yet|mock host: no getResourcePeerEvidence/.test(

@@ -1,7 +1,8 @@
 import type {
-  ResourcePeerSyncStatus,
+  Copy,
+  PeerCopy,
+  ResourceCopies,
   ResourceSaveState,
-  ResourceSyncStatus,
 } from '@tomic/react';
 
 export type SyncTone =
@@ -19,70 +20,35 @@ export type SyncSymbol =
   | 'saving'
   | 'error';
 
-export type ResourceVaultPresentationStatus = {
-  state: 'unknown' | 'pending' | 'confirmed';
-  confirmedAt?: number;
-};
-
-export type AttachmentCopyPresentationStatus = {
-  state:
-    | 'confirmed'
-    | 'pending'
-    | 'unknown'
-    | 'unavailable'
-    | 'not-configured'
-    | 'error';
-  confirmedAt?: number;
-};
-
-export type ResourceAttachmentPresentationStatus = {
-  required: boolean;
-  local: AttachmentCopyPresentationStatus;
-  server: AttachmentCopyPresentationStatus;
-  vault: AttachmentCopyPresentationStatus;
-  peers: readonly (AttachmentCopyPresentationStatus & {
-    connectionId: string;
-    storageId?: string;
-    generation?: string;
-  })[];
-};
-
 /** A metadata receipt from one peer cannot combine with bytes on another. */
 export function peerHasConfirmedContents(
-  peer: ResourcePeerSyncStatus['peers'][number],
-  contents?: ResourceAttachmentPresentationStatus,
+  peer: PeerCopy,
+  required: boolean,
 ): boolean {
-  if (!contents?.required) return true;
-
-  return contents.peers.some(
-    copy =>
-      copy.connectionId === peer.connectionId &&
-      copy.state === 'confirmed' &&
-      !!copy.storageId &&
-      copy.storageId === peer.storageId &&
-      !!copy.generation &&
-      copy.generation === peer.generation,
+  return (
+    !required ||
+    (peer.contents.state === 'confirmed' &&
+      !!peer.storageId &&
+      !!peer.generation)
   );
 }
 
-export function completePeerCopyCount(
-  peers: ResourcePeerSyncStatus,
-  contents?: ResourceAttachmentPresentationStatus,
-): number {
-  if (!contents?.required) return peers.confirmedCount;
+export function completePeerCopyCount({
+  peers,
+  required,
+}: ResourceCopies): number {
+  if (!required) return peers.confirmedCount;
   const copies = new Set<string>();
 
   for (const peer of peers.peers) {
-    if (peer.state === 'confirmed' && peerHasConfirmedContents(peer, contents))
+    if (peer.state === 'confirmed' && peerHasConfirmedContents(peer, required))
       copies.add(JSON.stringify([peer.storageId, peer.generation]));
   }
 
   return copies.size;
 }
 
-export function attachmentCopyLabel(
-  status: AttachmentCopyPresentationStatus,
-): string {
+export function attachmentCopyLabel(status: Copy): string {
   switch (status.state) {
     case 'confirmed':
       return 'File contents confirmed';
@@ -99,13 +65,12 @@ export function attachmentCopyLabel(
 
 /** Copy is deliberately based on receipts, never an idle queue or presence. */
 export function resourceSyncPresentation(
-  status: ResourceSyncStatus,
+  copies: ResourceCopies,
   save: ResourceSaveState,
-  vault: ResourceVaultPresentationStatus = { state: 'unknown' },
-  peers?: ResourcePeerSyncStatus,
-  contents?: ResourceAttachmentPresentationStatus,
 ): { label: string; tone: SyncTone; symbol: SyncSymbol } {
-  if (status.local.state === 'error') {
+  const { local, server, vault, peers, required } = copies;
+
+  if (local.state === 'error') {
     return {
       label: 'Could not save on this device',
       tone: 'attention',
@@ -113,7 +78,7 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (contents?.required && contents.local.state === 'error') {
+  if (required && local.contents.state === 'error') {
     return {
       label: 'Could not confirm file contents on this device',
       tone: 'attention',
@@ -145,7 +110,7 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (save.kind === 'saving' || status.local.state === 'pending') {
+  if (save.kind === 'saving' || local.state === 'pending') {
     return {
       label: 'Saving changes…',
       tone: 'pending',
@@ -154,11 +119,11 @@ export function resourceSyncPresentation(
   }
 
   if (
-    status.server.state === 'confirmed' &&
-    (!contents?.required || contents.server.state === 'confirmed')
+    server.state === 'confirmed' &&
+    (!required || server.contents.state === 'confirmed')
   ) {
     return {
-      label: contents?.required
+      label: required
         ? 'Resource and file contents saved to server'
         : 'Latest changes saved to server',
       tone: 'confirmed',
@@ -166,7 +131,7 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (status.server.state === 'pending') {
+  if (server.state === 'pending') {
     return {
       label: 'Changes waiting to sync',
       tone: 'pending',
@@ -176,10 +141,10 @@ export function resourceSyncPresentation(
 
   if (
     vault.state === 'confirmed' &&
-    (!contents?.required || contents.vault.state === 'confirmed')
+    (!required || vault.contents.state === 'confirmed')
   ) {
     return {
-      label: contents?.required
+      label: required
         ? 'Resource and file contents backed up to Cloud Vault'
         : 'Latest changes backed up to Cloud Vault',
       tone: 'confirmed',
@@ -195,12 +160,9 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (
-    peers?.state === 'confirmed' &&
-    completePeerCopyCount(peers, contents) > 0
-  ) {
+  if (peers.state === 'confirmed' && completePeerCopyCount(copies) > 0) {
     return {
-      label: contents?.required
+      label: required
         ? 'Resource and file contents received by peers'
         : 'Latest changes received by peers',
       tone: 'peer',
@@ -208,7 +170,7 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (peers?.state === 'pending') {
+  if (peers.state === 'pending') {
     return {
       label: 'Changes waiting for peers',
       tone: 'pending',
@@ -216,11 +178,11 @@ export function resourceSyncPresentation(
     };
   }
 
-  if (contents?.required) {
-    if (status.server.state === 'confirmed') {
+  if (required) {
+    if (server.state === 'confirmed') {
       return {
         label: 'Server file contents not confirmed',
-        tone: contents.server.state === 'pending' ? 'pending' : 'neutral',
+        tone: server.contents.state === 'pending' ? 'pending' : 'neutral',
         symbol: 'server',
       };
     }
@@ -228,12 +190,12 @@ export function resourceSyncPresentation(
     if (vault.state === 'confirmed') {
       return {
         label: 'Cloud Vault file contents not confirmed',
-        tone: contents.vault.state === 'pending' ? 'pending' : 'neutral',
+        tone: vault.contents.state === 'pending' ? 'pending' : 'neutral',
         symbol: 'vault',
       };
     }
 
-    if (peers?.state === 'confirmed') {
+    if (peers.state === 'confirmed') {
       return {
         label: 'Peer file copies not confirmed',
         tone: 'neutral',
@@ -241,20 +203,19 @@ export function resourceSyncPresentation(
       };
     }
 
-    if (status.server.state === 'not-configured') {
+    if (server.state === 'not-configured') {
       return {
         label:
-          status.local.state === 'confirmed' &&
-          contents.local.state === 'confirmed'
+          local.state === 'confirmed' && local.contents.state === 'confirmed'
             ? 'Resource and file contents saved on this device'
-            : attachmentCopyLabel(contents.local),
-        tone: contents.local.state === 'error' ? 'attention' : 'neutral',
+            : attachmentCopyLabel(local.contents),
+        tone: local.contents.state === 'error' ? 'attention' : 'neutral',
         symbol: 'device',
       };
     }
   }
 
-  if (status.server.state === 'unknown') {
+  if (server.state === 'unknown') {
     return {
       label: 'Server copy not confirmed',
       tone: 'neutral',
@@ -264,9 +225,9 @@ export function resourceSyncPresentation(
 
   return {
     label:
-      status.local.state === 'confirmed'
+      local.state === 'confirmed'
         ? 'Saved on this device'
-        : status.local.state === 'unavailable'
+        : local.state === 'unavailable'
           ? 'Local storage unavailable'
           : 'Local copy not confirmed',
     tone: 'neutral',

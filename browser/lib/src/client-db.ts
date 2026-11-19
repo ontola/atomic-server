@@ -1,9 +1,8 @@
+import type { AttachmentManifest } from './attachment-manifest.js';
 import {
   parseResourceAttachmentEvidence,
-  type AttachmentManifest,
   type ResourceAttachmentEvidence,
-  type SerializedVaultAttachmentReceipt,
-} from './resource-attachment-evidence.js';
+} from './resource-receipts.js';
 /**
  * ClientDbWorker: typed async wrapper around the WASM ClientDb.
  *
@@ -32,15 +31,11 @@ import {
  */
 
 import type {
-  ResourceVaultEvidence,
+  ReceiptScope,
+  ResourceReceipts,
+  SerializedReceipt,
   VaultSyncScope,
-  SerializedVaultReceipt,
-} from './resource-vault-evidence.js';
-import type {
-  ResourceSyncEvidence,
-  ResourceSyncScope,
-  SerializedServerReceipt,
-} from './resource-sync-evidence.js';
+} from './resource-receipts.js';
 import { randomUUID } from './uuid.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
 import {
@@ -258,8 +253,6 @@ const REPEATABLE_RPC_TYPES = new Set([
   'blake3Hash',
   'vaultAttachmentManifests',
   'getResourceAttachmentEvidence',
-  'getResourceVaultAttachmentReceipts',
-  'putResourceVaultAttachmentReceipts',
   'getBlob',
   'putBlob', // Content-addressed write of the same bytes.
   'getResource',
@@ -269,11 +262,9 @@ const REPEATABLE_RPC_TYPES = new Set([
   'search',
   'allSubjects',
   // Stored proof reads and monotonic receipt merges are safe after handoff.
-  'getResourceSyncEvidence',
-  'putResourceSyncReceipts',
-  'getResourceVaultEvidence',
+  'getResourceReceipts',
+  'putResourceReceipts',
   'getResourceVaultGeneration',
-  'putResourceVaultReceipts',
   'clearResourceVaultReceipts',
   'flush',
   'exportAllResources',
@@ -1096,25 +1087,19 @@ export class ClientDbWorker {
     return this.call('applyCommit', { commitJsonAd });
   }
 
-  async getResourceSyncEvidence(
+  async getResourceReceipts(
     subjects: string[],
-    scope?: ResourceSyncScope,
-  ): Promise<ResourceSyncEvidence[] | undefined> {
-    return this.call('getResourceSyncEvidence', { subjects, scope });
+    scope?: ReceiptScope,
+  ): Promise<ResourceReceipts[] | undefined> {
+    return this.call('getResourceReceipts', { subjects, scope });
   }
 
-  async putResourceSyncReceipts(
-    scope: ResourceSyncScope,
-    receipts: SerializedServerReceipt[],
-  ): Promise<void> {
-    return this.call('putResourceSyncReceipts', { scope, receipts });
-  }
-
-  async getResourceVaultEvidence(
-    subjects: string[],
-    scope: VaultSyncScope,
-  ): Promise<ResourceVaultEvidence[] | undefined> {
-    return this.call('getResourceVaultEvidence', { subjects, scope });
+  async putResourceReceipts(
+    scope: ReceiptScope,
+    receipts: SerializedReceipt[],
+    generation?: number,
+  ): Promise<boolean> {
+    return this.call('putResourceReceipts', { scope, receipts, generation });
   }
 
   async getResourceVaultGeneration(
@@ -1125,18 +1110,6 @@ export class ClientDbWorker {
 
   async clearResourceVaultReceipts(scope: VaultSyncScope): Promise<void> {
     return this.call('clearResourceVaultReceipts', { scope });
-  }
-
-  async putResourceVaultReceipts(
-    scope: VaultSyncScope,
-    receipts: SerializedVaultReceipt[],
-    generation: number,
-  ): Promise<boolean> {
-    return this.call('putResourceVaultReceipts', {
-      scope,
-      receipts,
-      generation,
-    });
   }
 
   removeResource(subject: string): Promise<void> {
@@ -1244,25 +1217,6 @@ export class ClientDbWorker {
     return parseResourceAttachmentEvidence(
       await this.call('getResourceAttachmentEvidence', { subjects }),
     );
-  }
-
-  getResourceVaultAttachmentReceipts(
-    subjects: string[],
-    scope: VaultSyncScope,
-  ): Promise<SerializedVaultAttachmentReceipt[] | undefined> {
-    return this.call('getResourceVaultAttachmentReceipts', { subjects, scope });
-  }
-
-  putResourceVaultAttachmentReceipts(
-    scope: VaultSyncScope,
-    receipts: SerializedVaultAttachmentReceipt[],
-    generation: number,
-  ): Promise<boolean> {
-    return this.call('putResourceVaultAttachmentReceipts', {
-      scope,
-      receipts,
-      generation,
-    });
   }
 
   putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {

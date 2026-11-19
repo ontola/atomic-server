@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { PeerReceiptRequests } from './peer-receipts.js';
 import { LoroLoader } from './loro-loader.js';
 import { encodeB64 } from './base64.js';
-import type { AttachmentManifest } from './resource-attachment-evidence.js';
+import type { AttachmentManifest } from './attachment-manifest.js';
 
 afterEach(() => vi.useRealTimers());
 

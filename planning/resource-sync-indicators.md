@@ -49,8 +49,9 @@ A fresh fully offline reload cannot establish that account and stays unknown.
 An already verified session retains proof while offline; explicit account,
 provider, database and lifecycle changes invalidate its context.
 
-`getResourceVaultGeneration`, `getResourceVaultEvidence`,
-`putResourceVaultReceipts` and `clearResourceVaultReceipts` use the existing
+`getResourceReceipts` and `putResourceReceipts` (one pair for the server and
+Vault destinations, addressed by a `{server}` or `{vault}` scope) plus
+`getResourceVaultGeneration` and `clearResourceVaultReceipts` use the existing
 private encrypted receipt tree. Resource removal clears its receipts. Explicit
 Vault disable rotates a durable scope generation; every export captures it
 before encryption and every write must match it. This rejects delayed writes

@@ -78,13 +78,24 @@ async function storeBytes(page: Page, content = CONTENT) {
 }
 
 async function contents(page: Page, subject: string) {
-  return page.evaluate(
-    target =>
-      window.store.getResourceAttachmentSyncStatus(
-        window.store.getResourceLoading(target),
-      ),
-    subject,
-  );
+  return page.evaluate(target => {
+    const copies = window.store.getResourceCopies(
+      window.store.getResourceLoading(target),
+    );
+
+    return {
+      required: copies.required,
+      manifest: copies.manifest,
+      local: copies.local.contents,
+      server: copies.server.contents,
+      peers: copies.peers.peers.map(peer => ({
+        ...peer.contents,
+        connectionId: peer.connectionId,
+        storageId: peer.storageId,
+        generation: peer.generation,
+      })),
+    };
+  }, subject);
 }
 
 test.beforeEach(before);
@@ -130,7 +141,7 @@ test('resource details can sync before exact attachment bytes, and replacement i
     .poll(() =>
       page.evaluate(
         subject =>
-          window.store.getResourceSyncStatus(
+          window.store.getResourceCopies(
             window.store.getResourceLoading(subject),
           ).server.state,
         target.subject,
@@ -163,7 +174,7 @@ test('resource details can sync before exact attachment bytes, and replacement i
       const blob = await db.getBlob(hash);
 
       return {
-        status: store.getResourceAttachmentSyncStatus(resource),
+        status: store.getResourceCopies(resource),
         evidence: await db.getResourceAttachmentEvidence?.([
           fixtureTarget.subject,
           fixtureTarget.file,
@@ -377,9 +388,9 @@ test('real WebRTC peer confirmation includes received attachment bytes rather th
         () =>
           page.evaluate(
             subject =>
-              window.store.getResourcePeerSyncStatus(
+              window.store.getResourceCopies(
                 window.store.getResourceLoading(subject),
-              ).confirmedCount,
+              ).peers.confirmedCount,
             target.subject,
           ),
         { timeout: 30_000 },
@@ -457,8 +468,13 @@ test('real WebRTC peer confirmation includes received attachment bytes rather th
             const resource = store.getResourceLoading(subject);
 
             return {
-              metadata: store.getResourcePeerSyncStatus(resource),
-              contents: store.getResourceAttachmentSyncStatus(resource).peers,
+              metadata: store.getResourceCopies(resource).peers,
+              contents: store
+                .getResourceCopies(resource)
+                .peers.peers.map(peer => ({
+                  ...peer.contents,
+                  connectionId: peer.connectionId,
+                })),
             };
           }, target.subject),
         { timeout: 20_000 },
