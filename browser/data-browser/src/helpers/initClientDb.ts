@@ -10,6 +10,7 @@ import {
   hasWrappedDbKey,
   waitForSessionDbKey,
 } from './localDbKey';
+import { storageErrorsOwned } from './onboardingStorage';
 import { compiledAtomicWasm, wasmJsUrl } from './wasmUrls';
 
 // Track the current worker so we can terminate it on HMR reload and on
@@ -530,7 +531,11 @@ async function startForIdentity(
       // ghost-leader lock it couldn't reclaim). Surface that to the user —
       // otherwise the app silently renders empty, unpersisted resources with
       // no explanation of why local caching/offline isn't working.
-      if (clientDb.initError && !clientDb.unsupportedEnvironment) {
+      if (
+        clientDb.initError &&
+        !clientDb.unsupportedEnvironment &&
+        !storageErrorsOwned()
+      ) {
         store.notifyError(clientDb.initError);
       }
     })
@@ -545,6 +550,6 @@ async function startForIdentity(
       // Re-emit so the Sync page can show the error (clientDbError).
       // clientDb.initError was populated in the send() catch inside doInit.
       store.setClientDb(clientDb);
-      store.notifyError(clientDb.initError ?? err);
+      if (!storageErrorsOwned()) store.notifyError(clientDb.initError ?? err);
     });
 }
