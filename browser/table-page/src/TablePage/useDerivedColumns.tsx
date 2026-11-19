@@ -159,14 +159,17 @@ function DerivedCell({
 }): JSX.Element {
   const values = useRowValues(subject, specProperties(spec));
   // The evaluator loads lazily: until it has, a cell is empty rather than wrong.
-  useFormulaReady();
+  // Readiness must participate in the computation: the React Compiler can
+  // otherwise keep the empty result cached when only the engine changes.
+  const formulaReady = useFormulaReady();
 
   // A running duration ticks; a finished one reads the same at any instant.
   const live =
+    formulaReady &&
     isLive(spec) &&
     computeDerived(spec, values, 0) !== computeDerived(spec, values, 1);
   const now = useNow(live);
-  const value = computeDerived(spec, values, now);
+  const value = formulaReady ? computeDerived(spec, values, now) : undefined;
 
   return (
     <Value $live={live} data-testid={`derived-${spec.id}`}>
