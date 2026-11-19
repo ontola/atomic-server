@@ -3994,14 +3994,21 @@ schema policy. The unused old MinMaxInput implementation has no callers and is
 removed, avoiding a second range-input implementation.
 
 
-## Local date-formula test limitation
+## Derived-column readiness and civil-date fixtures
 
-`derivedColumns.test.ts` includes a July local-midnight fixture, while
-`formulaEngine.ts` obtains the UTC offset from the current date. In a
-Europe/Amsterdam November run, the summer/winter offset mismatch fails
-“counts a date stamped today as today, in any time zone”. It passes with
-`TZ=UTC`, matching CI. This existing case does not establish correctness
-across seasonal UTC-offset changes.
+`browser/data-browser/src/table-page-derived-compiler.test.tsx` compiles the
+relocated TablePage hook with the app's production Oxc React 19 compiler, then
+mounts a derived cell before its formula engine is ready. It verifies that the
+cell displays its value when only engine readiness changes, with the row and
+column specification held stable. This catches stale compiler memoization that
+an uncompiled Vitest render misses; the evaluator is controlled in this test,
+while the formula tests exercise the real WASM evaluator.
+
+`browser/table-page/src/TablePage/derivedColumns.test.ts` freezes the clock to
+its July local-midnight fixture while checking a date stamped today. The
+evaluator's current-date UTC offset and the supplied timestamp therefore refer
+to the same season. This removes the fixture's summer/winter mismatch without
+changing production date semantics or claiming coverage across a DST transition.
 Range-field content split: `browser/table/src/schema/PropertyRangeField.test.tsx`
 characterizes baseline floor conversion with an uncontrolled visible draft,
 empty-bound/blur callbacks and original max-only/equal-limit validation quirks.
