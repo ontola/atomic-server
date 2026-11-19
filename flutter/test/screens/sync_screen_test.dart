@@ -4,7 +4,10 @@ import 'dart:convert';
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_flutter/atomic_flutter.dart' show SyncCard;
 import 'package:atomic_chat/atomic_chat.dart'
-    show BackgroundActivity, BackgroundState, ProfileAvatar, ResourceWebView;
+    show
+        AppSidebarIcons,
+        AppThemeMode,
+        BackgroundActivity, BackgroundState, ProfileAvatar, ResourceWebView;
 import 'package:atomic_app/atomic/account_store.dart';
 import 'package:atomic_app/screens/sync_screen.dart';
 import 'package:atomic_app/theme.dart';
@@ -156,6 +159,7 @@ Widget _app(Widget home) => MaterialApp(
     );
 
 void main() {
+  _appearanceTests();
   // The account section reads the AI settings from the preferences.
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -1040,5 +1044,47 @@ void main() {
       expect(card.left, 16);
       expect(card.right, 393 - 16);
     });
+  });
+}
+
+void _appearanceTests() {
+  testWidgets('the Appearance section sets the theme and the sidebar icons',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(() {
+      AppThemeMode.mode.value = ThemeMode.system;
+      AppSidebarIcons.show.value = true;
+    });
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_app(SyncScreen(
+      backend: _Backend(),
+      loadAccount: (_) async => null,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Auto'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('appearance-theme')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark').last);
+    await tester.pumpAndSettle();
+    expect(AppThemeMode.mode.value, ThemeMode.dark);
+    expect(find.text('Dark'), findsOneWidget);
+
+    final icons = find.descendant(
+        of: find.byKey(const ValueKey('appearance-sidebar-icons')),
+        matching: find.byType(Switch));
+    expect(tester.widget<Switch>(icons).value, isTrue);
+    await tester.tap(icons);
+    await tester.pumpAndSettle();
+    expect(AppSidebarIcons.show.value, isFalse);
+
+    // A change that arrives from elsewhere (the web app) shows too.
+    AppSidebarIcons.show.value = true;
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(icons).value, isTrue);
   });
 }

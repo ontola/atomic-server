@@ -1,39 +1,40 @@
 import 'package:flutter/widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'preference.dart';
 
 /// "Show icons in the sidebar" (Appearance): the icons, pictures, emoji and
 /// avatars in front of the Home list's rows. On by default.
 ///
-/// One setting for the app and the web app inside it. The web app keeps it in
-/// its own storage as `showSidebarIcons` (same default, same label); inside
-/// the app the value lives here, per device, and goes both ways: the settings
-/// page (embedded web) reports a change with the `sidebarIcons` call, and the
-/// app passes the value to every page (`?sidebarIcons=` at load,
+/// One setting for the app and the web app inside it: a [Preference] on the
+/// person's private drive, which the page reads through the same store. The
+/// settings page (embedded web) still reports a change with the `sidebarIcons`
+/// call, and the app passes the value to every page (`?sidebarIcons=` at load,
 /// `atomicEmbed.setSidebarIcons` when it changes).
 class AppSidebarIcons {
   AppSidebarIcons._();
 
-  static final ValueNotifier<bool> show = ValueNotifier(true);
+  /// The `show-sidebar-icons` preference on the private drive, so the web app
+  /// (same default, same label) and every device share one choice.
+  static final Preference<bool> show = Preference<bool>(
+    property: PreferenceProperty.showSidebarIcons,
+    defaultValue: true,
+    legacyKey: key,
+    encode: (v) => '$v',
+    decode: (t) => switch (t) {
+      'true' => true,
+      'false' => false,
+      _ => null,
+    },
+  );
 
-  /// SharedPreferences key.
+  /// SharedPreferences key (the local cache of the preference).
   static const key = 'show_sidebar_icons';
 
   /// The saved choice, into [show].
-  static Future<void> load() async {
-    try {
-      final p = await SharedPreferences.getInstance();
-      show.value = p.getBool(key) ?? true;
-    } catch (_) {}
-  }
+  static Future<void> load() => show.load();
 
-  /// A choice (from the page): shown at once, saved for the next start.
-  static Future<void> choose(bool value) async {
-    show.value = value;
-    try {
-      final p = await SharedPreferences.getInstance();
-      await p.setBool(key, value);
-    } catch (_) {}
-  }
+  /// A choice (settings, or the embedded page): shown at once, saved for the
+  /// next start and written to the private drive.
+  static Future<void> choose(bool value) => show.set(value);
 
   /// The page's argument of the call: `[true]` or `[false]`.
   static bool? parse(Object? args) =>

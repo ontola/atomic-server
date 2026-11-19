@@ -463,6 +463,10 @@ impl EmbedHost {
                 Ok(agent) => json!(agent.subject.to_string()),
                 Err(_) => Json::Null,
             },
+            // The subject of this agent's private (Personal) drive, derived
+            // from its key: where the person's preferences live. The native
+            // app's settings read and write them there.
+            "privateDrive" => json!(store.private_drive_subject().map_err(err)?),
             "getResource" => {
                 let raw = vec![str_arg(&args, 0)?.to_string()];
                 read_many(store, &self.profiles, &raw).await[0]["jsonAd"].clone()
@@ -637,6 +641,14 @@ mod tests {
 
     async fn ask(host: &EmbedHost, method: &str, args: Json) -> Json {
         serde_json::from_str(&host.call(method, &args.to_string()).await.unwrap()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_private_drive_is_the_one_derived_from_the_agent() {
+        let d = Device::new().await;
+        let home = d.store.ensure_private_drive().await.unwrap();
+
+        assert_eq!(ask(&host(&d), "privateDrive", json!([])).await, json!(home));
     }
 
     #[tokio::test]

@@ -17,7 +17,14 @@ pub async fn set_property(subject: String, property: String, value: String) -> R
         .get_resource(&subject.as_str().into())
         .await
         .map_err(err)?;
-    resource.set_unsafe(property, atomic_lib::Value::String(value));
+    // Typed by the property's datatype, so a boolean preference is written as
+    // a boolean (the web app reads it as one); unknown properties stay text.
+    let typed = match store.get_property(&property).await {
+        Ok(prop) => atomic_lib::Value::new(&value, &prop.data_type)
+            .unwrap_or_else(|_| atomic_lib::Value::String(value.clone())),
+        Err(_) => atomic_lib::Value::String(value),
+    };
+    resource.set_unsafe(property, typed);
     save_and_push(&mut resource, store.as_ref()).await
 }
 

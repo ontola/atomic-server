@@ -33,6 +33,7 @@ export 'src/profile_avatar.dart';
 export 'src/app_top_bar.dart';
 export 'src/app_theme.dart';
 export 'src/app_sidebar_icons.dart';
+export 'src/preference.dart';
 export 'src/slide_back_route.dart';
 export 'src/covered_insets_freeze.dart';
 export 'src/toast.dart';

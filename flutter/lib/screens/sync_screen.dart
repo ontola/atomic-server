@@ -19,11 +19,14 @@ import 'package:atomic_chat/atomic_chat.dart'
         BackgroundState,
         showFeedbackDialog,
         timeAgo,
-        ToastScope;
+        ToastScope,
+        AppSidebarIcons,
+        AppThemeMode;
 
 import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
+import '../atomic/widgets/preference_row.dart';
 import 'ai_settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -267,16 +270,22 @@ class _SyncScreenState extends State<SyncScreen> {
             signInAsOther: _signInAsOther,
             onSignedOut: () => Navigator.of(context).pop(true),
             onCopied: _copied,
-            accountBuilder: (context, info) => _AccountSection(
-              backend: _backend,
-              info: info,
-              loadAccount: widget.loadAccount,
-              linkAccount: widget.linkAccount,
-              loadCredits: widget.loadCredits,
-              loadUsage: widget.loadUsage,
-              loadModels: widget.loadModels,
-              portalCookie: widget.portalCookie,
-              portalPage: widget.portalPage,
+            accountBuilder: (context, info) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AppearanceSection(),
+                _AccountSection(
+                  backend: _backend,
+                  info: info,
+                  loadAccount: widget.loadAccount,
+                  linkAccount: widget.linkAccount,
+                  loadCredits: widget.loadCredits,
+                  loadUsage: widget.loadUsage,
+                  loadModels: widget.loadModels,
+                  portalCookie: widget.portalCookie,
+                  portalPage: widget.portalPage,
+                ),
+              ],
             ),
             thisDeviceBuilder: (context, info) => shared.ThisDeviceCard(
               backend: _backend,
@@ -313,6 +322,33 @@ class _SyncScreenState extends State<SyncScreen> {
       ..clearCooldown('copied')
       ..show('copied', message, icon: Icons.check);
   }
+}
+
+/// The settings that follow the person to every device: preferences on the
+/// private drive, which the web app's settings page shows too. The rest of the
+/// web app's options stay behind the Settings button.
+class _AppearanceSection extends StatelessWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context) =>
+      shared.SyncSection(title: 'Appearance', children: [
+        PreferenceRow<ThemeMode>(
+          key: const ValueKey('appearance-theme'),
+          title: 'Theme',
+          preference: AppThemeMode.mode,
+          choices: const [
+            PreferenceChoice(ThemeMode.system, 'Auto'),
+            PreferenceChoice(ThemeMode.dark, 'Dark'),
+            PreferenceChoice(ThemeMode.light, 'Light'),
+          ],
+        ),
+        PreferenceRow<bool>(
+          key: const ValueKey('appearance-sidebar-icons'),
+          title: 'Show icons in the sidebar',
+          preference: AppSidebarIcons.show,
+        ),
+      ]);
 }
 
 /// The account that hosts your data (only when one is linked, or can be): its

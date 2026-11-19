@@ -173,6 +173,23 @@ make sense on a phone (allow-list: `src/embed/settings.ts`, used by
 | AI (providers, keys, Ollama, MCP, voice, models) | Not relevant/broken: the AI chat is native with its own settings and voice; Ollama/MCP/local discovery are desktop concepts | Hidden |
 | Integration (proxy, plugin catalog) | Not relevant: desktop/server plugin catalog | Hidden |
 
+**Now synced preferences.** Theme, main color, language, hide templates and
+sidebar icons are properties of `https://atomicdata.dev/preferences/v1/` on the
+person's private (Personal) drive, read and written by the web app
+(`usePreference`) and by the app (`Preference<T>` in `packages/atomic_chat`,
+`AppThemeMode.mode`, `AppSidebarIcons.show`). The drive's value wins, then the
+device's old SharedPreferences key, then the default; a choice is applied at
+once, cached locally and written to the drive in the background (errors only
+logged). The app finds the drive with the embed call `privateDrive` (the DID
+derived from the agent's key, as `Agent.privateDriveSubject` on the web) and
+reads/writes through `AtomicClient.getProperty/setProperty`, which types the
+text by the property's datatype (`true` becomes a boolean). Native
+Appearance section: `_AppearanceSection` in `sync_screen.dart`. The values are
+reloaded after sign-in, on resume and after a sync. The `theme` and
+`sidebarIcons` host calls and `?sidebarIcons=` / `setSidebarIcons` /
+`setColorScheme` below predate this and may be redundant now that the page
+reads the same drive; they are kept until that is verified on a device.
+
 The page's Theme choice is the app's too: the page reports its saved and every
 new choice (`reportTheme` in `src/embed/hostActions.ts`, a `theme` call with
 `auto`/`dark`/`light`), and the app saves it and switches its own screens
