@@ -9,6 +9,10 @@ import {
   useStore,
 } from '@tomic/react';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
+import {
+  OtherAgentSecretError,
+  agentFromOwnSecret,
+} from '../helpers/verifyAgentSecret';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useSettings } from '../helpers/AppSettings';
@@ -444,7 +448,12 @@ export function NewIdentitySection({
     setError(undefined);
 
     try {
-      const agent = await Agent.fromSecret(trimmedInput);
+      // Only the key made in this signup proves it was saved; a valid key of
+      // another agent would silently sign in as that agent instead.
+      const agent = await agentFromOwnSecret(
+        trimmedInput,
+        identity.agentSubject,
+      );
       await saveAgentToIDB(trimmedInput);
       setAgent(agent);
 
@@ -457,8 +466,12 @@ export function NewIdentitySection({
 
       onDone();
     } catch (e) {
-      console.error('Failed to verify secret:', e);
-      setError('The secret is invalid. Make sure you copied it correctly.');
+      if (e instanceof OtherAgentSecretError) {
+        setError(e.message);
+      } else {
+        console.error('Failed to verify secret:', e);
+        setError('The secret is invalid. Make sure you copied it correctly.');
+      }
     } finally {
       setLoading(false);
     }

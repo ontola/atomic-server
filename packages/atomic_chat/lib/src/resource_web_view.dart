@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText;
+import 'package:atomic_flutter/atomic_flutter.dart' show ErrorText, AtomicSpinner;
 import 'package:atomic_flutter/atomic_flutter.dart' show AppColorsExt;
 import 'package:flutter/material.dart';
 import 'app_top_bar.dart';
@@ -122,7 +122,7 @@ class _ResourceWebViewState extends State<ResourceWebView> {
               child: ErrorText('$_error', color: c.alert),
             )
           : _controller == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: AtomicSpinner())
               : (widget.viewBuilder ??
                   (c) => WebViewWidget(controller: c))(_controller!),
     );
