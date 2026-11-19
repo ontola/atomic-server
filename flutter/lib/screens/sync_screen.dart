@@ -254,38 +254,40 @@ class _SyncScreenState extends State<SyncScreen> {
             signInAsOther: _signInAsOther,
             onSignedOut: () => Navigator.of(context).pop(true),
             onCopied: _copied,
-            accountBuilder: (context, info) => Column(
+            accountBuilder: (context, info) => _AccountSection(
+              backend: _backend,
+              info: info,
+              loadAccount: widget.loadAccount,
+              linkAccount: widget.linkAccount,
+              loadCredits: widget.loadCredits,
+              loadUsage: widget.loadUsage,
+              loadModels: widget.loadModels,
+              portalCookie: widget.portalCookie,
+              portalPage: widget.portalPage,
+            ),
+            // Appearance below you and this device, above the servers.
+            thisDeviceBuilder: (context, info) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _AppearanceSection(),
-                _AccountSection(
+                shared.ThisDeviceCard(
                   backend: _backend,
-                  info: info,
-                  loadAccount: widget.loadAccount,
-                  linkAccount: widget.linkAccount,
-                  loadCredits: widget.loadCredits,
-                  loadUsage: widget.loadUsage,
-                  loadModels: widget.loadModels,
-                  portalCookie: widget.portalCookie,
-                  portalPage: widget.portalPage,
+                  deviceName: info.deviceName,
+                  peerId: info.peerId,
+                  identity: info.agent?.subject,
+                  driveNames: info.driveNames,
+                  onRename: info.rename,
+                  onOpenStorage: _openStorage,
+                  extraRows: const [_BackgroundActivityRow()],
+                  loadExpanded: () async =>
+                      (await SharedPreferences.getInstance())
+                          .getBool(_storageExpandedKey) ??
+                      false,
+                  saveExpanded: (v) async =>
+                      (await SharedPreferences.getInstance())
+                          .setBool(_storageExpandedKey, v),
                 ),
+                const _AppearanceSection(),
               ],
-            ),
-            thisDeviceBuilder: (context, info) => shared.ThisDeviceCard(
-              backend: _backend,
-              deviceName: info.deviceName,
-              peerId: info.peerId,
-              identity: info.agent?.subject,
-              driveNames: info.driveNames,
-              onRename: info.rename,
-              onOpenStorage: _openStorage,
-              extraRows: const [_BackgroundActivityRow()],
-              loadExpanded: () async =>
-                  (await SharedPreferences.getInstance())
-                      .getBool(_storageExpandedKey) ??
-                  false,
-              saveExpanded: (v) async => (await SharedPreferences.getInstance())
-                  .setBool(_storageExpandedKey, v),
             ),
           ),
         ),
