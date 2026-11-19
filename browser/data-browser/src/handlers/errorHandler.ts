@@ -1,4 +1,6 @@
 import { asError } from '@tomic/react';
+import { STORAGE_BLOCKED_ERROR_NAME } from '@tomic/lib';
+import { storageErrorsOwned } from '../helpers/onboardingStorage';
 import {
   handleErrorBugsnag,
   reportStoreError,
@@ -21,6 +23,10 @@ export const errorHandler = (thrown: unknown) => {
   console.error(e);
   handleErrorBugsnag(e);
   reportStoreError(e);
+
+  // The onboarding card already explains a blocked-storage failure; it is
+  // still logged and reported above, only the duplicate toast is skipped.
+  if (e.name === STORAGE_BLOCKED_ERROR_NAME && storageErrorsOwned()) return;
 
   toastReportableError(e);
 };
