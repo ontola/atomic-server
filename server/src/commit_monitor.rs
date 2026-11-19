@@ -247,39 +247,25 @@ impl Handler<Subscribe> for CommitMonitor {
                     tracing::warn!("can't subscribe to external resource: {subject}");
                     return None;
                 }
-                let resource = match store.get_resource(&subject).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!("Subscribe: {subject} not found: {e}");
-                        // Same frame as a rights failure: whether the subject
-                        // is unreadable or absent is not something an agent
-                        // without read rights gets to learn here, any more
-                        // than a GET would tell it.
-                        crate::actor_messages::refuse_subscription(
-                            &msg.addr,
-                            "SUB",
-                            &subject.to_string(),
-                            "not readable",
-                        );
-                        return None;
-                    }
-                };
-                if let Err(e) = atomic_lib::hierarchy::check_read(
+                let resource = match atomic_lib::sync::engine::readable_subject(
                     &store,
-                    &resource,
+                    &msg.subject,
                     &ForAgent::from(msg.agent.clone()),
                 )
                 .await
                 {
-                    tracing::debug!("Subscribe: {} cannot read {subject}: {e}", msg.agent);
-                    crate::actor_messages::refuse_subscription(
-                        &msg.addr,
-                        "SUB",
-                        &subject.to_string(),
-                        &e.to_string(),
-                    );
-                    return None;
-                }
+                    Ok(r) => r,
+                    Err(reason) => {
+                        tracing::debug!("Subscribe: {} cannot read {subject}: {reason}", msg.agent);
+                        crate::actor_messages::refuse_subscription(
+                            &msg.addr,
+                            "SUB",
+                            &subject.to_string(),
+                            &reason,
+                        );
+                        return None;
+                    }
+                };
                 let is_drive = resource
                     .get(atomic_lib::urls::IS_A)
                     .ok()

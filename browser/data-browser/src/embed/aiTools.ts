@@ -24,6 +24,7 @@
  */
 import { asSchema } from 'ai';
 import type { AiReview } from './aiReview';
+import { withDeadline } from '@tomic/react';
 
 /** What the page needs of an AI SDK tool. */
 export interface EmbedAiTool {
@@ -291,27 +292,48 @@ export interface PromptValues {
 }
 
 /**
+ * How long the prompt waits for the drive's tree or classes. In the app's
+ * page a store read could stay unanswered, and the prompt then never came:
+ * the app waited 30 s and answered without the web tools and search.
+ */
+export const PROMPT_PART_TIMEOUT_MS = 4_000;
+
+/**
  * The web chat's system prompt from its template: the same placeholders
  * replaced the same way (`prepareSystemPrompt` in `ClientOnlyTransport`).
+ * A part that cannot be read in time is left out with a note.
  */
 export async function fillAgentPrompt(
   template: string,
   values: PromptValues,
+  partTimeoutMs = PROMPT_PART_TIMEOUT_MS,
 ): Promise<string> {
   let prompt = template.replaceAll('{{drive}}', values.drive);
+  const wantsTree = prompt.includes('{{drive-structure}}');
+  const wantsClasses = prompt.includes('{{custom-classes}}');
+  const [tree, classes] = await Promise.all([
+    wantsTree ? withDeadline(values.driveTree(), partTimeoutMs, null) : null,
+    wantsClasses
+      ? withDeadline(values.customClasses(), partTimeoutMs, null)
+      : null,
+  ]);
 
-  if (prompt.includes('{{drive-structure}}')) {
-    prompt = prompt.replaceAll('{{drive-structure}}', await values.driveTree());
+  if (wantsTree) {
+    prompt = prompt.replaceAll(
+      '{{drive-structure}}',
+      tree ??
+        'The drive structure could not be read; use the tools to look around.',
+    );
   }
 
-  if (prompt.includes('{{custom-classes}}')) {
-    const classes = await values.customClasses();
-
+  if (wantsClasses) {
     prompt = prompt.replaceAll(
       '{{custom-classes}}',
-      classes.length === 0
-        ? 'No custom classes found on the current drive.'
-        : classes.join('\n'),
+      classes === null
+        ? 'The custom classes could not be read; use the tools to look them up.'
+        : classes.length === 0
+          ? 'No custom classes found on the current drive.'
+          : classes.join('\n'),
     );
   }
 

@@ -220,18 +220,15 @@ class _ResourceMenuScopeState extends State<ResourceMenuScope> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// The "more" button next to the list pane (the split layout), where the
-/// bottom bar has none: opens the menu of the page on top, if it has one.
-/// Draws nothing otherwise.
+/// The "more" button in a page's header, next to its breadcrumbs: opens the
+/// menu of the page on top, if it has one. Draws nothing otherwise.
 class ResourceMoreButton extends StatelessWidget {
   const ResourceMoreButton({super.key});
 
   @override
   Widget build(BuildContext context) {
     final shell = ShellScope.maybeOf(context);
-    if (shell == null || ShellScope.layoutOf(context) != ShellLayout.split) {
-      return const SizedBox.shrink();
-    }
+    if (shell == null) return const SizedBox.shrink();
     final route = ModalRoute.of(context);
     return ListenableBuilder(
       listenable: shell,

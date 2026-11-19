@@ -1,16 +1,44 @@
 // @wc-ignore-file
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@tomic/react', () => ({ core: {}, urls: { instances: {} } }));
-vi.mock('@components/AI/AISettingsContext', () => ({}));
-vi.mock('@components/SideBar/AIPanel', () => ({}));
-vi.mock('./usePrivateDrive', () => ({}));
-vi.mock('./useSavedDrives', () => ({}));
-vi.mock('@helpers/managed/binding', () => ({}));
-vi.mock('@helpers/managed/deviceLink', () => ({}));
+const mocks = vi.hoisted(() => ({
+  binding: vi.fn(),
+  deviceLinked: vi.fn(),
+  hasAccount: vi.fn(),
+}));
+
+vi.mock('@tomic/react', () => ({
+  core: { properties: { read: 'read', write: 'write' } },
+  urls: { instances: {} },
+  useCurrentAgent: () => [{ subject: 'did:ad:agent:me' }],
+  useResources: () => new Map(),
+}));
+vi.mock('@components/AI/AISettingsContext', () => ({
+  useAISettings: () => ({ enableAI: false, availableProviders: [] }),
+}));
+vi.mock('@components/SideBar/AIPanel', () => ({ useDriveChats: () => [] }));
+vi.mock('./usePrivateDrive', () => ({
+  usePrivateDrive: () => ({ privateDrive: 'atomic:home' }),
+}));
+vi.mock('./useSavedDrives', () => ({ useSavedDrives: () => [[]] }));
+vi.mock('./useLocalStorage', () => ({
+  useLocalStorage: (_key: string, initial: unknown) => [initial, () => {}],
+}));
+vi.mock('./useHasManagedAccount', () => ({
+  useHasManagedAccount: mocks.hasAccount,
+}));
+vi.mock('@helpers/managed/binding', () => ({
+  readManagedAccountBinding: mocks.binding,
+}));
+vi.mock('@helpers/managed/deviceLink', () => ({
+  isDeviceLinked: mocks.deviceLinked,
+}));
 
 const { deriveOnboardingSteps, isDefaultDriveName, projectDrives } =
   await import('./useOnboardingProgress');
+const { useOnboardingProgress } = await import('./useOnboardingProgress');
 
 const base = {
   driveName: 'Welcome to Atomic',
@@ -88,5 +116,40 @@ describe('deriveOnboardingSteps', () => {
 
   it('is done for Save once an account is linked', () => {
     expect(done({ ...base, accountLinked: true }).save).toBe(true);
+  });
+});
+
+describe('useOnboardingProgress Save step', () => {
+  const save = () =>
+    renderHook(() => useOnboardingProgress()).result.current.steps.find(
+      s => s.id === 'save',
+    );
+
+  beforeEach(() => {
+    mocks.binding.mockReturnValue(null);
+    mocks.deviceLinked.mockReturnValue(false);
+    mocks.hasAccount.mockReturnValue(undefined);
+  });
+
+  it('is not done with no binding, no device token and no account', () => {
+    expect(save()?.done).toBe(false);
+    mocks.hasAccount.mockReturnValue(false);
+    expect(save()?.done).toBe(false);
+  });
+
+  it('is done for a signed-in account without a binding or device token', () => {
+    mocks.hasAccount.mockReturnValue(true);
+    expect(save()?.done).toBe(true);
+  });
+
+  it('is still done by a binding or a linked device alone', () => {
+    mocks.binding.mockReturnValue({
+      owner_email: 'a',
+      expected_agent_subject: 'b',
+    });
+    expect(save()?.done).toBe(true);
+    mocks.binding.mockReturnValue(null);
+    mocks.deviceLinked.mockReturnValue(true);
+    expect(save()?.done).toBe(true);
   });
 });

@@ -142,6 +142,9 @@ export const ErrorCode = {
    *  a client that predates `canonical-scheme`: the connection keeps working
    *  but will stop being supported. Log it; never fail a request over it. */
   DEPRECATED_CLIENT: 14,
+  /** A `GET_MANY` entry left unfetched because the batch's byte budget was
+   *  spent. Nothing is wrong with the subject: fetch it again on its own. */
+  RESULT_TOO_LARGE: 15,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error
