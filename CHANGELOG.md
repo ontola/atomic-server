@@ -5,6 +5,10 @@ By far most changes relate to `atomic-server`, so if not specified, assume the c
 **Changes to JS assets (including the front-end and JS libraries) are not shown here**, but in [`/browser/CHANGELOG`](/browser/CHANGELOG.md).
 See [STATUS.md](server/STATUS.md) to learn more about which features will remain stable.
 
+## UNRELEASED
+
+- `atomic-cli schema diff <file> [--against <old file>]` lists how a schema differs from the ontology on the server (or an older file) as compatible, tightening or breaking changes, and fails on breaking ones. `schema push` refuses breaking changes unless you pass `--allow-breaking`. The schema lockfile gets an optional `fingerprint` (`atomic_lib::schema::compat`) that `schema check` compares; older lockfiles keep working.
+
 ## [v0.41.0-beta.9] - 2026-11-18
 
 - WebSocket protocol cleanup (wire: additive). The server no longer advertises eight capabilities no client reads (`auth-max-age`, `pull-from`, `signed-destroy`, `unsub`, `auth-nonce`, `client-hello`, `rebind-on-auth`, `ephemeral`; the behaviour is unchanged and the names stay reserved), tag `0x36` is only a reserved note in `docs/src/websockets.md` (the unused `QUERY_UPDATE_RESERVED` constant is gone), and stale text-verb comments are fixed. New `ERROR` code `DEPRECATED_CLIENT (14)`: a client whose `HELLO` lacks `canonical-scheme` (everything before v0.41.0-beta.8) gets one notice with `request_id` 0 and the server logs a warning; the connection keeps working. A client that authenticates without any `HELLO` (before beta.5) is only logged. Old clients see an unknown error code with request id 0. `WsClient` logs the notice instead of failing a pending request.
