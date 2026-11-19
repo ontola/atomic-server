@@ -1,4 +1,5 @@
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { usePreference } from '@hooks/usePreference';
+import { preferenceProperties } from '@helpers/preferences';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { loadLocale } from 'wuchale/load-utils';
 import { getBrowserLocale } from '@helpers/preloadLocale';
@@ -29,8 +30,8 @@ const LocaleContext = createContext<LocaleContextType>({
  * then remounts once, so strings outside React state pick up the change.
  */
 export const LocaleProvider = ({ children }: React.PropsWithChildren) => {
-  const [locale, setLocale] = useLocalStorage(
-    'atomic.locale',
+  const [locale, setLocale] = usePreference(
+    preferenceProperties.interfaceLanguage,
     getBrowserLocale(),
   );
   const [loadedLocale, setLoadedLocale] = useState<string | undefined>();

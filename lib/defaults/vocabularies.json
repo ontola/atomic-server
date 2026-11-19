@@ -239,6 +239,76 @@
     ]
   },
   {
+    "@id": "https://atomicdata.dev/preferences/v1/theme",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Theme",
+    "https://atomicdata.dev/properties/shortname": "theme",
+    "https://atomicdata.dev/properties/description": "Colour theme of the app: auto (follow the system), dark or light. Defaults to auto.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/preferences/v1/main-color",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Main color",
+    "https://atomicdata.dev/properties/shortname": "main-color",
+    "https://atomicdata.dev/properties/description": "Accent colour of the app as a hex code, for example #1b50d8.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/preferences/v1/interface-language",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Interface language",
+    "https://atomicdata.dev/properties/shortname": "interface-language",
+    "https://atomicdata.dev/properties/description": "Locale code of the language the app interface is shown in, for example en or nl. Defaults to the browser language.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/preferences/v1/hide-templates",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Hide templates",
+    "https://atomicdata.dev/properties/shortname": "hide-templates",
+    "https://atomicdata.dev/properties/description": "Hide templates on the new resource page. Defaults to false.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/preferences/v1/show-sidebar-icons",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Show sidebar icons",
+    "https://atomicdata.dev/properties/shortname": "show-sidebar-icons",
+    "https://atomicdata.dev/properties/description": "Show icons, images, emoji and avatars in front of the sidebar items. Defaults to true.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
     "@id": "https://atomicdata.dev/preferences/v1",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/class/ontology"
@@ -248,7 +318,12 @@
     "https://atomicdata.dev/properties/description": "Experimental shared properties for a person's own preferences, stored on their private drive.",
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/preferences/v1/show-api-plugins",
-      "https://atomicdata.dev/preferences/v1/show-experimental-plugins"
+      "https://atomicdata.dev/preferences/v1/show-experimental-plugins",
+      "https://atomicdata.dev/preferences/v1/theme",
+      "https://atomicdata.dev/preferences/v1/main-color",
+      "https://atomicdata.dev/preferences/v1/interface-language",
+      "https://atomicdata.dev/preferences/v1/hide-templates",
+      "https://atomicdata.dev/preferences/v1/show-sidebar-icons"
     ],
     "https://atomicdata.dev/properties/read": [
       "https://atomicdata.dev/agents/publicAgent"

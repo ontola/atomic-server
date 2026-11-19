@@ -1,21 +1,59 @@
 import type { ComponentProps, JSX, PropsWithChildren } from 'react';
 import { styled } from 'styled-components';
 import { Checkbox, CheckboxLabel } from '../forms/Checkbox';
+import { usePreference } from '@hooks/usePreference';
 import { Column } from '../Row';
 import { extractTextFromChildren, useSettingVisible } from './SettingsSection';
 
-type SettingCheckboxProps = ComponentProps<typeof Checkbox> & {
+type SettingCheckboxProps = Omit<
+  ComponentProps<typeof Checkbox>,
+  'checked' | 'onChange'
+> & {
   /** Short explanation shown under the label. */
   hint?: string;
-};
+} & (
+    | {
+        /** A boolean property of the preferences vocabulary, synced through
+         *  the private drive (see `usePreference`). */
+        preference: string;
+        checked?: never;
+        onChange?: never;
+      }
+    | {
+        preference?: undefined;
+        checked: boolean;
+        onChange: (value: boolean) => void;
+      }
+  );
 
 /** A labelled checkbox row for settings; the label is the children. Hides
  *  itself when a settings search doesn't match it. */
 export function SettingCheckbox({
-  children,
-  hint,
+  preference,
   ...props
 }: SettingCheckboxProps): JSX.Element | null {
+  return preference ? (
+    <PreferenceRow preference={preference} {...props} />
+  ) : (
+    <Row {...(props as RowProps)} />
+  );
+}
+
+type RowProps = Omit<ComponentProps<typeof Checkbox>, 'checked'> & {
+  hint?: string;
+  checked: boolean;
+};
+
+function PreferenceRow({
+  preference,
+  ...props
+}: { preference: string } & Omit<RowProps, 'checked' | 'onChange'>) {
+  const [checked, setChecked] = usePreference(preference, false);
+
+  return <Row {...props} checked={checked} onChange={setChecked} />;
+}
+
+function Row({ children, hint, ...props }: RowProps): JSX.Element | null {
   const visible = useSettingVisible(
     `${extractTextFromChildren(children)} ${hint ?? ''}`,
   );

@@ -7910,6 +7910,7 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Show experimental plugins"
 
@@ -11190,10 +11191,6 @@ msgstr "Usage"
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr "Loading integrations…"
-
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Show experimental plugins"
 
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."

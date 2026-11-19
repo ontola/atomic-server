@@ -53,6 +53,14 @@ export const preferencesSchema = {
   properties: {
     showApiPlugins: `${preferences}show-api-plugins`,
     showExperimentalPlugins: `${preferences}show-experimental-plugins`,
+    /** `auto`, `dark` or `light`. */
+    theme: `${preferences}theme`,
+    /** Hex colour. */
+    mainColor: `${preferences}main-color`,
+    /** Locale code. */
+    interfaceLanguage: `${preferences}interface-language`,
+    hideTemplates: `${preferences}hide-templates`,
+    showSidebarIcons: `${preferences}show-sidebar-icons`,
   },
 } as const;
 

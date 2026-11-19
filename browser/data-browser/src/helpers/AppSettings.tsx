@@ -5,6 +5,7 @@ import {
   useContext,
   useMemo,
   useEffect,
+  useRef,
   type JSX,
 } from 'react';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
@@ -25,10 +26,9 @@ import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
 import { isTouchPrimary } from './pointer';
-import {
-  reportSidebarIcons,
-  SHOW_SIDEBAR_ICONS_KEY,
-} from '../embed/hostActions';
+import { reportSidebarIcons } from '../embed/hostActions';
+import { usePreference } from '../hooks/usePreference';
+import { preferenceProperties } from './preferences';
 
 interface ProviderProps {
   children: ReactNode;
@@ -45,29 +45,32 @@ export const AppSettingsContextProvider = (
 
   // == APPEARANCE ==
   const [darkMode, setDarkMode, darkModeSetting] = useDarkMode();
-  const [mainColor, setMainColor] = useLocalStorage('mainColor', '#1b50d8');
+  const [mainColor, setMainColor] = usePreference(
+    preferenceProperties.mainColor,
+    '#1b50d8',
+  );
   const [colorfulMode, setColorfulMode] = useLocalStorage(
     'colorfulMode',
     false,
   );
-  const [hideTemplates, setHideTemplates] = useLocalStorage(
-    'hideTemplates',
+  const [hideTemplates, setHideTemplates] = usePreference(
+    preferenceProperties.hideTemplates,
     false,
   );
   // One setting, same key, label and default as the Flutter app's (see
   // `reportSidebarIcons`): off hides the icons, images, emoji and avatars in
   // front of the sidebar's rows. In the app the host owns the value.
-  const [showSidebarIcons, setShowSidebarIconsLocal] = useLocalStorage(
-    SHOW_SIDEBAR_ICONS_KEY,
+  const [showSidebarIcons, setShowSidebarIcons] = usePreference(
+    preferenceProperties.showSidebarIcons,
     true,
   );
-  const setShowSidebarIcons = useCallback(
-    (show: boolean) => {
-      setShowSidebarIconsLocal(show);
-      reportSidebarIcons(show);
-    },
-    [setShowSidebarIconsLocal],
-  );
+  const reportedIcons = useRef(showSidebarIcons);
+
+  useEffect(() => {
+    if (reportedIcons.current === showSidebarIcons) return;
+    reportedIcons.current = showSidebarIcons;
+    reportSidebarIcons(showSidebarIcons);
+  }, [showSidebarIcons]);
   const [sideBarLocked, setSideBarLocked] = useLocalStorage(
     'sideBarOpen',
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,

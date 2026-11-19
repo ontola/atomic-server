@@ -16,6 +16,7 @@ import AISettings from '@components/AI/AISettings';
 import { VirtualDriveSettings } from '@components/Settings/VirtualDriveSettings';
 import { NotificationSettings } from '@components/Settings/NotificationSettings';
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
+import { preferenceProperties } from '@helpers/preferences';
 import { useLocale } from '@components/LocaleContext';
 import { SUPPORTED_LOCALES } from '@helpers/preloadLocale';
 import { BasicSelect } from '@components/forms/BasicSelect';
@@ -94,10 +95,6 @@ const AppSettings: React.FunctionComponent = () => {
     setViewTransitionsEnabled,
     sidebarKeyboardDndEnabled,
     setSidebarKeyboardDndEnabled,
-    hideTemplates,
-    setHideTemplates,
-    showSidebarIcons,
-    setShowSidebarIcons,
     navbarTop,
     setNavbarTop,
   } = useSettings();
@@ -249,8 +246,7 @@ const AppSettings: React.FunctionComponent = () => {
                   )}
                   {show('sidebarIcons') && (
                     <SettingCheckbox
-                      checked={showSidebarIcons}
-                      onChange={setShowSidebarIcons}
+                      preference={preferenceProperties.showSidebarIcons}
                       hint='Show icons and pictures next to items in the sidebar'
                     >
                       Show icons in the sidebar
@@ -311,8 +307,7 @@ const AppSettings: React.FunctionComponent = () => {
                       )}
                       {show('hideTemplates') && (
                         <SettingCheckbox
-                          checked={hideTemplates}
-                          onChange={setHideTemplates}
+                          preference={preferenceProperties.hideTemplates}
                         >
                           Hide templates on new resource page
                         </SettingCheckbox>

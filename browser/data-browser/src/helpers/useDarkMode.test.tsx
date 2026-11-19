@@ -5,6 +5,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DarkModeOption, useDarkMode } from './useDarkMode';
 import * as embedMode from './embedMode';
 import { setActionsHost } from '../embed/hostActions';
+import { Store, StoreContext } from '@tomic/react';
+
+const store = new Store({ serverUrl: 'http://localhost:9883' });
+const wrapper = ({ children }: React.PropsWithChildren) => (
+  <StoreContext.Provider value={store}>{children}</StoreContext.Provider>
+);
 
 let systemDark = false;
 const listeners = new Set<() => void>();
@@ -37,21 +43,21 @@ const flipSystem = (dark: boolean) => {
 };
 
 it('persists the choice under the web app key and restores it', () => {
-  const first = renderHook(() => useDarkMode());
+  const first = renderHook(() => useDarkMode(), { wrapper });
 
   act(() => first.result.current[1](true));
   expect(first.result.current[0]).toBe(true);
   expect(localStorage.getItem('darkMode')).toBe('"always"');
   first.unmount();
 
-  const second = renderHook(() => useDarkMode());
+  const second = renderHook(() => useDarkMode(), { wrapper });
 
   expect(second.result.current[0]).toBe(true);
   expect(second.result.current[2]).toBe(DarkModeOption.always);
 });
 
 it('auto follows the system, an explicit choice ignores it', () => {
-  const { result } = renderHook(() => useDarkMode());
+  const { result } = renderHook(() => useDarkMode(), { wrapper });
 
   flipSystem(true);
   expect(result.current[0]).toBe(true);
@@ -70,7 +76,7 @@ it('auto follows the system, an explicit choice ignores it', () => {
 
 it('in the embed, auto follows the host app scheme and sets color-scheme', () => {
   vi.spyOn(embedMode, 'isEmbedded').mockReturnValue(true);
-  const { result } = renderHook(() => useDarkMode());
+  const { result } = renderHook(() => useDarkMode(), { wrapper });
 
   expect(document.documentElement.style.colorScheme).toBe('light');
 
@@ -87,7 +93,7 @@ it('tells the app the saved choice and every new one', () => {
   localStorage.setItem('darkMode', '"never"');
   const call = vi.fn().mockResolvedValue(true);
   setActionsHost({ call });
-  const hook = renderHook(() => useDarkMode());
+  const hook = renderHook(() => useDarkMode(), { wrapper });
 
   expect(call).toHaveBeenLastCalledWith('theme', ['light']);
   act(() => hook.result.current[1](true));

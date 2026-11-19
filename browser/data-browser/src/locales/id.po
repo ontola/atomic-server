@@ -3658,8 +3658,7 @@ msgid ""
 msgstr ""
 "Dibuat melalui `/app/dev-drive` untuk pengembangan lokal dan E2E. Anda dapat menghapusnya dengan Bersihkan data pengujian di `/app/prunetests`. \n"
 "\n"
-"{0}"
-"Dibuat melalui `/app/dev-drive` untuk pengembangan lokal dan E2E. Anda dapat menghapusnya dengan Bersihkan data pengujian di `/app/prunetests`. \n"
+"{0}Dibuat melalui `/app/dev-drive` untuk pengembangan lokal dan E2E. Anda dapat menghapusnya dengan Bersihkan data pengujian di `/app/prunetests`. \n"
 "\n"
 "{0}"
 
@@ -3715,8 +3714,7 @@ msgid ""
 msgstr ""
 "Konteks tambahan. Rujuk ini dalam konten utama Anda untuk\n"
 "            instruksi/proses tambahan yang tidak selalu diperlukan saat\n"
-"            menggunakan keterampilan ini."
-"Konteks tambahan. Rujuk ini dalam konten utama Anda untuk\n"
+"            menggunakan keterampilan ini.Konteks tambahan. Rujuk ini dalam konten utama Anda untuk\n"
 "            instruksi/proses tambahan yang tidak selalu diperlukan saat\n"
 "            menggunakan keterampilan ini."
 
@@ -7914,6 +7912,7 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Aktifkan animasi transisi halaman (eksperimental, diketahui bermasalah di luar Chromium pada desktop)"
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Tampilkan plugin eksperimental"
 
@@ -8785,7 +8784,6 @@ msgstr ""
 "Obrolan AI: {0}\n"
 "Pesan: {1}\n"
 "\n"
-""
 "Obrolan AI: {0}\n"
 "Pesan: {1}\n"
 "\n"
@@ -8800,7 +8798,6 @@ msgid ""
 msgstr ""
 "{0} pesan sebelumnya dihilangkan agar laporan muat.\n"
 "\n"
-""
 "{0} pesan sebelumnya dihilangkan agar laporan muat.\n"
 "\n"
 ""
@@ -11200,10 +11197,6 @@ msgstr "Penggunaan"
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr "Memuat integrasi…"
-
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Tampilkan plugin eksperimental"
 
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."

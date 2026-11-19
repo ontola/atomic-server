@@ -24,19 +24,14 @@ import {
   useExtraMarketplaces,
   usePluginCatalogUrl,
 } from '@helpers/pluginCatalogUrl';
+import { preferenceProperties } from '@helpers/preferences';
 import { settingsKeywords } from './settingsKeywords';
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
   const catalogUrl = usePluginCatalogUrl();
-  const {
-    showExperimentalPlugins,
-    experimentalToggleVisible,
-    ready,
-    pending,
-    error,
-    setVisibility,
-  } = useIntegrationVisibility();
+  const { experimentalToggleVisible, ready, pending, error } =
+    useIntegrationVisibility();
 
   return (
     <SettingsSection
@@ -53,10 +48,7 @@ export function IntegrationSettings() {
         {experimentalToggleVisible && (
           <>
             <SettingCheckbox
-              checked={showExperimentalPlugins}
-              onChange={value =>
-                setVisibility('show-experimental-plugins', value)
-              }
+              preference={preferenceProperties.showExperimentalPlugins}
             >
               Show experimental plugins
             </SettingCheckbox>

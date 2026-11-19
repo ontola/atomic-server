@@ -3660,8 +3660,7 @@ msgid ""
 msgstr ""
 "Gemaakt via `/app/dev-drive` voor lokale ontwikkeling en E2E. Je kunt deze verwijderen met Testgegevens opschonen op `/app/prunetests`. \n"
 "\n"
-"{0}"
-"Gemaakt via `/app/dev-drive` voor lokale ontwikkeling en E2E. Je kunt deze verwijderen met Testgegevens opschonen op `/app/prunetests`. \n"
+"{0}Gemaakt via `/app/dev-drive` voor lokale ontwikkeling en E2E. Je kunt deze verwijderen met Testgegevens opschonen op `/app/prunetests`. \n"
 "\n"
 "{0}"
 
@@ -3717,8 +3716,7 @@ msgid ""
 msgstr ""
 "Aanvullende context. Verwijs hiernaar in je hoofdinhoud voor\n"
 "            extra instructies/processen die niet altijd nodig zijn bij\n"
-"            het gebruik van deze skill."
-"Aanvullende context. Verwijs hiernaar in je hoofdinhoud voor\n"
+"            het gebruik van deze skill.Aanvullende context. Verwijs hiernaar in je hoofdinhoud voor\n"
 "            extra instructies/processen die niet altijd nodig zijn bij\n"
 "            het gebruik van deze skill."
 
@@ -7916,6 +7914,7 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Paginaovergangsanimaties inschakelen (experimenteel, bekende problemen buiten Chromium op desktop)"
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Experimentele plugins tonen"
 
@@ -8787,7 +8786,6 @@ msgstr ""
 "AI-chat: {0}\n"
 "Berichten: {1}\n"
 "\n"
-""
 "AI-chat: {0}\n"
 "Berichten: {1}\n"
 "\n"
@@ -8802,7 +8800,6 @@ msgid ""
 msgstr ""
 "{0} eerdere berichten weggelaten om in de melding te passen.\n"
 "\n"
-""
 "{0} eerdere berichten weggelaten om in de melding te passen.\n"
 "\n"
 ""
@@ -11203,10 +11200,6 @@ msgstr "Gebruik"
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr "Integraties laden…"
-
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Experimentele plugins tonen"
 
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
