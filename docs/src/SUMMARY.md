@@ -51,6 +51,7 @@
     - [Creating a JSON-AD file](create-json-ad.md)
 
 - [Build Atomic Apps](atomic-sync/building-on-the-sync-engine.md)
+  - [Atomic vs Supabase and Firebase](atomic-sync/vs-supabase-firebase.md)
   - [Build a local-first app with @tomic/lib](local-first-guide/1-index.md)
     - [Step 1: an identity that is a key](local-first-guide/2-identity.md)
     - [Step 2: a Store and a Drive, no server](local-first-guide/3-store-and-drive.md)
