@@ -13709,8 +13709,8 @@ msgstr "Alle Schreibzugriffe dieser App erlauben"
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "That is not an Atomic secret. Copy the whole secret and try again."
-msgstr ""
+msgstr "Das ist kein Atomic-Secret. Kopiere das ganze Secret und versuche es erneut."
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
-msgstr ""
+msgstr "Dieses Secret ist mit keinem atomic.place-Konto verknüpft oder konnte nicht geprüft werden. Versuche eine andere Anmeldemethode."

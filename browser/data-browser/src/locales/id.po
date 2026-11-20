@@ -13701,8 +13701,8 @@ msgstr "Izinkan semua penulisan oleh aplikasi ini"
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "That is not an Atomic secret. Copy the whole secret and try again."
-msgstr ""
+msgstr "Itu bukan secret Atomic. Salin seluruh secret dan coba lagi."
 
 #: src/views/getting-started/AccountSignInPanel.tsx
 msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
-msgstr ""
+msgstr "Secret ini tidak terhubung ke akun atomic.place, atau tidak dapat diperiksa. Coba cara lain untuk masuk."
