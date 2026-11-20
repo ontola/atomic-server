@@ -1,11 +1,12 @@
 import { Dispatch, useEffect, useRef, useState } from 'react';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { usePreference } from '../hooks/usePreference';
+import { preferenceProperties } from './preferences';
 import {
   getHostColorScheme,
   HOST_COLOR_SCHEME_EVENT,
   isEmbedded,
 } from './embedMode';
-import { reportTheme } from '../embed/hostActions';
+import { reportTheme, type HostThemeChoice } from '../embed/hostActions';
 
 export enum DarkModeOption {
   /** Always use dark mode */
@@ -15,6 +16,18 @@ export enum DarkModeOption {
   /** Use OS / Browser setting */
   auto = 'auto',
 }
+
+/** The synced preference names the choice `auto`, `dark` or `light`. */
+const themeToOption: Record<string, DarkModeOption> = {
+  auto: DarkModeOption.auto,
+  dark: DarkModeOption.always,
+  light: DarkModeOption.never,
+};
+const optionToTheme: Record<DarkModeOption, HostThemeChoice> = {
+  [DarkModeOption.auto]: 'auto',
+  [DarkModeOption.always]: 'dark',
+  [DarkModeOption.never]: 'light',
+};
 
 /**
  * A hook for using dark mode. Sets using local storage. The second argument can
@@ -26,10 +39,10 @@ export const useDarkMode = (): [
   DarkModeOption,
 ] => {
   const [dark, setDark] = useState<boolean>(() => checkPrefersDark());
-  const [darkLocal, setDarkLocal] = useLocalStorage<DarkModeOption>(
-    'darkMode',
-    DarkModeOption.auto,
-  );
+  const [theme, setTheme] = usePreference(preferenceProperties.theme, 'auto');
+  const darkLocal = themeToOption[theme] ?? DarkModeOption.auto;
+  const setDarkLocal = (option: DarkModeOption) =>
+    setTheme(optionToTheme[option]);
 
   /** True, false or auto (if undefined) */
   function setDarkBoth(a?: boolean) {
@@ -82,13 +95,7 @@ export const useDarkMode = (): [
   // In the app, its own screens follow the choice, also the one saved before
   // (nothing happens outside the app).
   useEffect(() => {
-    reportTheme(
-      darkLocal === DarkModeOption.always
-        ? 'dark'
-        : darkLocal === DarkModeOption.never
-          ? 'light'
-          : 'auto',
-    );
+    reportTheme(optionToTheme[darkLocal]);
   }, [darkLocal]);
 
   useEffect(() => {

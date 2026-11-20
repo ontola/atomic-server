@@ -34,6 +34,7 @@ import 'theme.dart';
 import 'atomic/atomic_client.dart';
 import 'atomic/get_started.dart';
 import 'atomic/peer_sync_host.dart';
+import 'atomic/preference_drive.dart';
 import 'atomic/session.dart';
 import 'atomic/store_location.dart';
 import 'atomic/sync_notice_policy.dart';
@@ -43,7 +44,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Perf.watchFrames();
   Perf.watchTaps();
-  // Independent of the database, so read while it opens.
+  // The device's saved choices, read while the database opens. The private
+  // drive is read once it is open and signed in (`reloadPreferences`).
   final theme = Future.wait([AppThemeMode.load(), AppSidebarIcons.load()]);
   await bootstrap(
     initRust: () => RustLib.init(externalLibrary: nativeLibrary()),
@@ -56,6 +58,7 @@ void main() async {
     openDb: _openDb,
     startApp: () {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      usePrivateDrivePreferences();
       defaultAttachmentPicker = const FileSelectorAttachmentPicker();
       PeerSyncHost.instance.backend = const BridgePeerLinkBackend();
       _runAtomicApp();
@@ -217,6 +220,7 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
     }
     if (state == AppLifecycleState.resumed && _loggedIn) {
       _resumeFromSession();
+      unawaited(reloadPreferences());
       _startBackgroundSync();
       unawaited(PeerSyncHost.instance.start());
     }
@@ -295,6 +299,7 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
   void _onLoggedIn() {
     Perf.once('session restored');
     setState(() => _loggedIn = true);
+    unawaited(reloadPreferences());
     unawaited(perfSeedIfAsked());
     _startEventListener();
     _startBackgroundSync();
@@ -373,6 +378,7 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
         // What it imported (and what the open sync session brought meanwhile)
         // is in the store: lists and open conversations read it again.
         AtomicClient.notifyStoreChanged();
+        unawaited(reloadPreferences());
         if (!mounted) return;
 
         // Only a failure is worth a notice; being connected is the normal case.

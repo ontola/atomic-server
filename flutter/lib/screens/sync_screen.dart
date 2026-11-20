@@ -19,11 +19,15 @@ import 'package:atomic_chat/atomic_chat.dart'
         BackgroundState,
         showFeedbackDialog,
         timeAgo,
-        ToastScope;
+        ToastScope,
+        AppSidebarIcons,
+        AppThemeMode,
+        WebPreferences;
 
 import '../assistant/atomic_assistant_api.dart';
 import '../atomic/account_store.dart';
 import '../atomic/settings_backend.dart';
+import '../atomic/widgets/preference_row.dart';
 import 'ai_settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -83,9 +87,10 @@ Widget agentAvatar(shared.AtomicIdentity? agent, {double radius = 16}) =>
 /// Hides the portal's own top bar: the app already has its own.
 const portalChromeCss = 'nav.topbar{display:none!important}';
 
-/// The app's User page: the shared [shared.AtomicUserPanel] with what only the
-/// app has: the account that hosts your data (and linking it), AI credits, the
-/// web app's profile, storage and settings pages, and the full device card.
+/// The app's Settings screen: the shared [shared.AtomicUserPanel] with what
+/// only the app has: the synced preferences, the account that hosts your data
+/// (and linking it), AI credits, the web app's profile and storage pages, and
+/// the full device card.
 ///
 /// Pops with true when the person signed out.
 class SyncScreen extends StatefulWidget {
@@ -177,18 +182,6 @@ class _SyncScreenState extends State<SyncScreen> {
     }
   }
 
-  /// The web app's settings page, like the storage page: in the detail pane
-  /// next to the list, else pushed.
-  void _openSettings() {
-    final drive = _backend.getActiveDrive() ?? '';
-    Widget build(BuildContext _) => ResourceView(
-        api: const AtomicAssistantApi(),
-        drive: drive,
-        title: 'Settings',
-        path: '/app/settings');
-    openFromList<void>(context, build, subject: '$drive#settings');
-  }
-
   /// The web app's storage page for [drive], in the shell's detail pane next
   /// to the list, else pushed with the native app bar.
   void _openStorage(String drive, String name) {
@@ -234,10 +227,10 @@ class _SyncScreenState extends State<SyncScreen> {
     final c = shared.syncColors(context);
     return Scaffold(
       backgroundColor: c.bgBody,
-      // The user panel: the page is about you and your devices; the web
-      // app's settings are one tap away (and nowhere else in the app).
+      // The app's one Settings screen: you, your devices, the account and the
+      // synced preferences. The web settings page is not opened from the app.
       appBar: AppTopBar(
-        title: 'User',
+        title: 'Settings',
         actions: [
           IconButton(
             key: const ValueKey('sync-feedback'),
@@ -245,12 +238,6 @@ class _SyncScreenState extends State<SyncScreen> {
             onPressed: () => showFeedbackDialog(context,
                 api: const AtomicAssistantApi(), source: 'user-page'),
             icon: const Icon(Icons.feedback_outlined),
-          ),
-          TextButton.icon(
-            key: const ValueKey('sync-open-settings'),
-            onPressed: _openSettings,
-            icon: const Icon(Icons.settings_outlined, size: 20),
-            label: const Text('Settings'),
           ),
           const SizedBox(width: 8),
         ],
@@ -278,21 +265,29 @@ class _SyncScreenState extends State<SyncScreen> {
               portalCookie: widget.portalCookie,
               portalPage: widget.portalPage,
             ),
-            thisDeviceBuilder: (context, info) => shared.ThisDeviceCard(
-              backend: _backend,
-              deviceName: info.deviceName,
-              peerId: info.peerId,
-              identity: info.agent?.subject,
-              driveNames: info.driveNames,
-              onRename: info.rename,
-              onOpenStorage: _openStorage,
-              extraRows: const [_BackgroundActivityRow()],
-              loadExpanded: () async =>
-                  (await SharedPreferences.getInstance())
-                      .getBool(_storageExpandedKey) ??
-                  false,
-              saveExpanded: (v) async => (await SharedPreferences.getInstance())
-                  .setBool(_storageExpandedKey, v),
+            // Appearance below you and this device, above the servers.
+            thisDeviceBuilder: (context, info) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                shared.ThisDeviceCard(
+                  backend: _backend,
+                  deviceName: info.deviceName,
+                  peerId: info.peerId,
+                  identity: info.agent?.subject,
+                  driveNames: info.driveNames,
+                  onRename: info.rename,
+                  onOpenStorage: _openStorage,
+                  extraRows: const [_BackgroundActivityRow()],
+                  loadExpanded: () async =>
+                      (await SharedPreferences.getInstance())
+                          .getBool(_storageExpandedKey) ??
+                      false,
+                  saveExpanded: (v) async =>
+                      (await SharedPreferences.getInstance())
+                          .setBool(_storageExpandedKey, v),
+                ),
+                const _AppearanceSection(),
+              ],
             ),
           ),
         ),
@@ -313,6 +308,66 @@ class _SyncScreenState extends State<SyncScreen> {
       ..clearCooldown('copied')
       ..show('copied', message, icon: Icons.check);
   }
+}
+
+/// The settings that follow the person to every device: preferences on the
+/// private drive, which the web app's settings page shows too.
+class _AppearanceSection extends StatelessWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context) =>
+      shared.SyncSection(title: 'Appearance', children: [
+        PreferenceRow<ThemeMode>(
+          key: const ValueKey('appearance-theme'),
+          title: 'Theme',
+          preference: AppThemeMode.mode,
+          choices: const [
+            PreferenceChoice(ThemeMode.system, 'Auto'),
+            PreferenceChoice(ThemeMode.dark, 'Dark'),
+            PreferenceChoice(ThemeMode.light, 'Light'),
+          ],
+        ),
+        PreferenceRow<String>(
+          key: const ValueKey('appearance-main-color'),
+          title: 'Main color',
+          preference: WebPreferences.mainColor,
+          choices: const [
+            PreferenceChoice('#1b50d8', 'Blue'),
+            PreferenceChoice('#4C6FA5', 'Dusty blue'),
+            PreferenceChoice('#6E9B7B', 'Sage green'),
+            PreferenceChoice('#CC7B54', 'Terracotta'),
+            PreferenceChoice('#B5657A', 'Dusty rose'),
+            PreferenceChoice('#CC9A44', 'Mustard'),
+            PreferenceChoice('#7C7BB8', 'Periwinkle'),
+            PreferenceChoice('#4E9B96', 'Muted teal'),
+            PreferenceChoice('#A9825E', 'Warm taupe'),
+          ],
+        ),
+        PreferenceRow<String>(
+          key: const ValueKey('appearance-language'),
+          title: 'Language',
+          preference: WebPreferences.interfaceLanguage,
+          choices: const [
+            PreferenceChoice('en', 'English'),
+            PreferenceChoice('es', 'Español'),
+            PreferenceChoice('fr', 'Français'),
+            PreferenceChoice('de', 'Deutsch'),
+            PreferenceChoice('nl', 'Nederlands'),
+            PreferenceChoice('id', 'Bahasa Indonesia'),
+          ],
+        ),
+        PreferenceRow<bool>(
+          key: const ValueKey('appearance-sidebar-icons'),
+          title: 'Show icons in the sidebar',
+          preference: AppSidebarIcons.show,
+        ),
+        PreferenceRow<bool>(
+          key: const ValueKey('appearance-hide-templates'),
+          title: 'Hide templates on new resource page',
+          preference: WebPreferences.hideTemplates,
+        ),
+      ]);
 }
 
 /// The account that hosts your data (only when one is linked, or can be): its

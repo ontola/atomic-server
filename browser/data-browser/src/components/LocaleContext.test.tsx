@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { act } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
+import { Store, StoreContext } from '@tomic/react';
 
 const loads: Array<{ locale: string; resolve: () => void }> = [];
 
@@ -15,6 +16,7 @@ vi.mock('wuchale/load-utils', () => ({
 }));
 
 const { LocaleProvider, useLocale } = await import('./LocaleContext');
+const store = new Store({ serverUrl: 'http://localhost:9883' });
 
 beforeEach(() => {
   loads.length = 0;
@@ -54,9 +56,11 @@ it('mounts the app once, after the catalog has loaded', async () => {
   };
 
   const { queryByText } = render(
-    <LocaleProvider>
-      <Child />
-    </LocaleProvider>,
+    <StoreContext.Provider value={store}>
+      <LocaleProvider>
+        <Child />
+      </LocaleProvider>
+    </StoreContext.Provider>,
   );
 
   expect(loads).toHaveLength(1);
@@ -90,9 +94,11 @@ it('keeps the app up while switching locale, then remounts once', async () => {
   };
 
   const { queryByText } = render(
-    <LocaleProvider>
-      <Child />
-    </LocaleProvider>,
+    <StoreContext.Provider value={store}>
+      <LocaleProvider>
+        <Child />
+      </LocaleProvider>
+    </StoreContext.Provider>,
   );
 
   await act(async () => loads[0].resolve());
@@ -118,10 +124,16 @@ it('still renders the app when the catalog fails to load', async () => {
   vi.resetModules();
   const { LocaleProvider: Provider } = await import('./LocaleContext');
 
+  const fresh = await import('@tomic/react');
+
   const { findByText } = render(
-    <Provider>
-      <p>app</p>
-    </Provider>,
+    <fresh.StoreContext.Provider
+      value={new fresh.Store({ serverUrl: 'http://localhost:9883' })}
+    >
+      <Provider>
+        <p>app</p>
+      </Provider>
+    </fresh.StoreContext.Provider>,
   );
 
   expect(await findByText('app')).not.toBeNull();

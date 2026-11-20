@@ -1,6 +1,5 @@
-import { useStore } from '@tomic/react';
+import { useCurrentAgent, useStore } from '@tomic/react';
 import { useEffect, useState } from 'react';
-import { useSettings } from '../helpers/AppSettings';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 
 /**
@@ -12,7 +11,7 @@ export function usePrivateDrive(): {
   loading: boolean;
 } {
   const store = useStore();
-  const { agent } = useSettings();
+  const [agent] = useCurrentAgent();
   const [privateDrive, setPrivateDrive] = useState<string | undefined>(
     () => agent?.initialDrive,
   );

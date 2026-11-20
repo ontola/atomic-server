@@ -4,7 +4,14 @@ import 'dart:convert';
 import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_flutter/atomic_flutter.dart' show SyncCard;
 import 'package:atomic_chat/atomic_chat.dart'
-    show BackgroundActivity, BackgroundState, ProfileAvatar, ResourceWebView;
+    show
+        AppSidebarIcons,
+        AppThemeMode,
+        BackgroundActivity,
+        BackgroundState,
+        ProfileAvatar,
+        ResourceWebView,
+        WebPreferences;
 import 'package:atomic_app/atomic/account_store.dart';
 import 'package:atomic_app/screens/sync_screen.dart';
 import 'package:atomic_app/theme.dart';
@@ -156,6 +163,7 @@ Widget _app(Widget home) => MaterialApp(
     );
 
 void main() {
+  _appearanceTests();
   // The account section reads the AI settings from the preferences.
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -219,12 +227,12 @@ void main() {
     expect(find.text('Team'), findsNothing);
     expect(find.text('Account'), findsNothing);
     expect(find.text('Link your account'), findsNothing);
-    // The page is titled "User"; the Settings button sits next to it.
+    // The page is the app's Settings screen; no button opens the web page.
     expect(find.text('Sync'), findsNothing);
     expect(
-        find.descendant(of: find.byType(AppBar), matching: find.text('User')),
+        find.descendant(of: find.byType(AppBar), matching: find.text('Settings')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('sync-open-settings')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-open-settings')), findsNothing);
   });
 
   testWidgets('the ID under the name copies it, and says so', (tester) async {
@@ -547,6 +555,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
           find.byKey(const Key('ai-settings-row')), 300);
+      // Scrolled into view may be only its top edge; the tap needs its centre.
+      await tester.ensureVisible(find.byKey(const Key('ai-settings-row')));
+      await tester.pumpAndSettle();
       expect(find.text('AI credits'), findsNothing);
       expect(find.byKey(const Key('ai-model-row')), findsNothing);
       await tester.tap(find.byKey(const Key('ai-settings-row')));
@@ -1040,5 +1051,62 @@ void main() {
       expect(card.left, 16);
       expect(card.right, 393 - 16);
     });
+  });
+}
+
+void _appearanceTests() {
+  testWidgets('the Appearance section sets the theme and the sidebar icons',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(() {
+      AppThemeMode.mode.value = ThemeMode.system;
+      AppSidebarIcons.show.value = true;
+      WebPreferences.mainColor.value = '#1b50d8';
+      WebPreferences.interfaceLanguage.value = 'en';
+      WebPreferences.hideTemplates.value = false;
+    });
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_app(SyncScreen(
+      backend: _Backend(),
+      loadAccount: (_) async => null,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Auto'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('appearance-theme')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark').last);
+    await tester.pumpAndSettle();
+    expect(AppThemeMode.mode.value, ThemeMode.dark);
+    expect(find.text('Dark'), findsOneWidget);
+
+    final icons = find.descendant(
+        of: find.byKey(const ValueKey('appearance-sidebar-icons')),
+        matching: find.byType(Switch));
+    expect(tester.widget<Switch>(icons).value, isTrue);
+    await tester.tap(icons);
+    await tester.pumpAndSettle();
+    expect(AppSidebarIcons.show.value, isFalse);
+
+    // A change that arrives from elsewhere (the web app) shows too.
+    AppSidebarIcons.show.value = true;
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(icons).value, isTrue);
+
+    // The web-only preferences have their rows.
+    expect(find.byKey(const ValueKey('appearance-main-color')), findsOneWidget);
+    expect(find.text('Blue'), findsOneWidget);
+    expect(find.byKey(const ValueKey('appearance-hide-templates')),
+        findsOneWidget);
+    expect(find.text('Hide templates on new resource page'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('appearance-language')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nederlands').last);
+    await tester.pumpAndSettle();
+    expect(WebPreferences.interfaceLanguage.value, 'nl');
   });
 }

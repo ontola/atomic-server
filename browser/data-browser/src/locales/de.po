@@ -3632,6 +3632,8 @@ msgid ""
 msgstr ""
 "Erstellt über `/app/dev-drive` für lokale Entwicklung und E2E-Tests. Du kannst diese Daten über „Testdaten bereinigen“ auf `/app/prunetests` entfernen.\n"
 "\n"
+"{0}Erstellt über `/app/dev-drive` für lokale Entwicklung und E2E-Tests. Du kannst diese Daten über „Testdaten bereinigen“ auf `/app/prunetests` entfernen.\n"
+"\n"
 "{0}"
 
 #: src/routes/AboutRoute.tsx
@@ -7879,6 +7881,7 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Seitenübergangsanimationen aktivieren (experimentell, bekannte Probleme außerhalb von Chromium auf dem Desktop)"
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Experimentelle Plugins anzeigen"
 
@@ -8750,6 +8753,9 @@ msgstr ""
 "KI-Chat: {0}\n"
 "Nachrichten: {1}\n"
 "\n"
+"KI-Chat: {0}\n"
+"Nachrichten: {1}\n"
+"\n"
 ""
 
 #. 0: omittedMessages
@@ -8759,6 +8765,8 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"{0} frühere Nachrichten ausgelassen, damit der Bericht passt.\n"
+"\n"
 "{0} frühere Nachrichten ausgelassen, damit der Bericht passt.\n"
 "\n"
 ""
@@ -11159,10 +11167,6 @@ msgstr "Nutzung"
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr "Integrationen werden geladen …"
-
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Experimentelle Plugins anzeigen"
 
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."

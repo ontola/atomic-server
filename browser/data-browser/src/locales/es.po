@@ -7876,6 +7876,7 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Activar animaciones de transición entre páginas (experimental; se conocen fallos fuera de Chromium en escritorio)"
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Mostrar complementos experimentales"
 
@@ -8747,6 +8748,9 @@ msgstr ""
 "Chat de IA: {0}\n"
 "Mensajes: {1}\n"
 "\n"
+"Chat de IA: {0}\n"
+"Mensajes: {1}\n"
+"\n"
 ""
 
 #. 0: omittedMessages
@@ -8756,6 +8760,8 @@ msgid ""
 "\n"
 ""
 msgstr ""
+"Se han omitido {0} mensajes anteriores para ajustarse al tamaño del informe.\n"
+"\n"
 "Se han omitido {0} mensajes anteriores para ajustarse al tamaño del informe.\n"
 "\n"
 ""
@@ -11156,10 +11162,6 @@ msgstr "Uso"
 #: src/routes/IntegrationStore.tsx
 msgid "Loading integrations…"
 msgstr "Cargando integraciones…"
-
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Mostrar complementos experimentales"
 
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."

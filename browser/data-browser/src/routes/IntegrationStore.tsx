@@ -49,7 +49,8 @@ import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { Input } from '@components/forms/InputStyles';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { SettingCheckbox } from '@components/Settings/SettingCheckbox';
+import { preferenceProperties } from '@helpers/preferences';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
@@ -95,14 +96,10 @@ function IntegrationStore(): React.JSX.Element {
   const { workspace, preview, app, marketplace } =
     IntegrationStoreRoute.useSearch();
   const marketplaceUrls = useMarketplaceUrls();
-  const {
-    showExperimentalPlugins,
-    showApiPlugins,
-    experimentalToggleVisible,
-    setVisibility,
-  } = useIntegrationVisibility({
-    unlockToggle: preview === PLUGIN_PREVIEW_PARAM,
-  });
+  const { showExperimentalPlugins, showApiPlugins, experimentalToggleVisible } =
+    useIntegrationVisibility({
+      unlockToggle: preview === PLUGIN_PREVIEW_PARAM,
+    });
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -405,15 +402,11 @@ function IntegrationStore(): React.JSX.Element {
             <p>Loading integrations…</p>
           )}
           {hasExperimentalPlugins && experimentalToggleVisible && (
-            <CheckboxLabel>
-              <Checkbox
-                checked={showExperimentalPlugins}
-                onChange={value =>
-                  setVisibility('show-experimental-plugins', value)
-                }
-              />
+            <SettingCheckbox
+              preference={preferenceProperties.showExperimentalPlugins}
+            >
               Show experimental plugins
-            </CheckboxLabel>
+            </SettingCheckbox>
           )}
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           {drive && (

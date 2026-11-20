@@ -16,6 +16,9 @@ class HoldFanItem<T> {
   final String label;
   final String? emoji;
   final IconData? icon;
+
+  /// Drawn in place of [icon] and [emoji] (a drive's picture).
+  final Widget? leading;
   final T value;
 
   /// Drawn quieter (the choice is there but has nothing behind it, or is
@@ -26,7 +29,7 @@ class HoldFanItem<T> {
   final String? hint;
 
   const HoldFanItem(this.label, this.value,
-      {this.emoji, this.icon, this.muted = false, this.hint});
+      {this.emoji, this.icon, this.leading, this.muted = false, this.hint});
 
   String get text => emoji == null ? label : '$emoji $label';
 
@@ -578,7 +581,8 @@ class _HoldFanState<T> extends State<HoldFan<T>>
             ),
             for (final item in items)
               ListTile(
-                leading: item.emoji == null ? null : Text(item.emoji!),
+                leading: item.leading ??
+                    (item.emoji == null ? null : Text(item.emoji!)),
                 title: Text(item.label),
                 onTap: () => Navigator.of(context).pop(item),
               ),
@@ -927,7 +931,9 @@ class _MenuRow extends StatelessWidget {
             child: Row(children: [
               SizedBox(
                 width: _rowIcon,
-                child: item.icon != null
+                child: item.leading != null
+                    ? Center(child: item.leading)
+                    : item.icon != null
                     ? Icon(item.icon, size: 22, color: color)
                     : item.emoji != null
                         ? Text(item.emoji!,
