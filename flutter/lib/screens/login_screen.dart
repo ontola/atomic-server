@@ -235,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       }
-      if (mounted) setState(() => _status = 'Looking for your devices…');
+      if (mounted) setState(() => _status = 'Asking your other devices…');
       final report = await AtomicClient.syncConnectivityNow();
 
       final drive = AtomicClient.getActiveDrive();
