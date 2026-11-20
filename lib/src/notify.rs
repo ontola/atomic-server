@@ -533,7 +533,7 @@ impl Notifier {
                 }
                 Some(kind)
             };
-            let Some(kind) = rows.iter().find_map(|f| matches(f)) else {
+            let Some(kind) = rows.iter().find_map(matches) else {
                 continue;
             };
             let Some(owner) = owners.get(agent) else {
