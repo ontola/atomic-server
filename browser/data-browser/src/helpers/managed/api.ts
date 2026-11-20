@@ -220,10 +220,9 @@ export function getRememberedManagedPortalUrl(): string | null {
 let engagedService: string | null = null;
 
 /**
- * Start talking to the account service at `url` for this page only. The
- * default service is only an offer: nothing contacts it until someone opens a
- * flow that needs it (sign-in, hosting). Not persisted, so a reload does not
- * contact it again; a sign-in that succeeds records its own portal.
+ * Start talking to the account service for this page only. The default is an
+ * offer: nothing contacts it until a flow needs it. Not persisted; a sign-in
+ * that succeeds records its own portal.
  */
 export function engageAccountService(url: string | null | undefined): void {
   engagedService = safePortalUrl(url) ?? engagedService;

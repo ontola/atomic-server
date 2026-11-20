@@ -114,11 +114,9 @@ const OPT_OUT_KEY = 'atomic.vault.optOut';
  * which is the scope the choice was made in. Without this, every sign-in would
  * switch back on the thing the user just switched off.
  */
-const OPT_IN_KEY = 'atomic.vault.optIn';
-
-function readDrives(key: string): Set<string> {
+function readOptOuts(): Set<string> {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(OPT_OUT_KEY);
 
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
@@ -126,43 +124,38 @@ function readDrives(key: string): Set<string> {
   }
 }
 
-function writeDrives(key: string, drives: Set<string>): void {
+/**
+ * Also records the other half: an `in:<drive>` entry is a click on "turn on
+ * backup", which off the service's own site is what switches backup on.
+ */
+export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
+  const drives = readOptOuts();
+
+  drives[optedOut ? 'add' : 'delete'](driveSubject);
+  drives[optedOut ? 'delete' : 'add'](`in:${driveSubject}`);
+
   try {
-    localStorage.setItem(key, JSON.stringify([...drives]));
+    localStorage.setItem(OPT_OUT_KEY, JSON.stringify([...drives]));
   } catch {
     // Storage disabled: the choice lasts the session, which is all we can do.
-  }
-}
-
-/** Turning backup on by hand lifts an opt-out and, off the service's site, is the opt-in. */
-export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
-  for (const [key, member] of [
-    [OPT_OUT_KEY, optedOut],
-    [OPT_IN_KEY, !optedOut],
-  ] as const) {
-    const drives = readDrives(key);
-
-    if (member) drives.add(driveSubject);
-    else drives.delete(driveSubject);
-
-    writeDrives(key, drives);
   }
 }
 
 /**
  * Whether automatic backup stays away from `driveSubject`: switched off on
  * purpose, or not yet switched on by hand. Only the service's own site (the
- * cookie origin) and the hosted app turn it on by themselves after sign-in; a
- * self-hosted node sends a person's data to the service only after a click on
- * the Vault's "turn on backup".
+ * cookie origin) and the hosted app start it after sign-in; a self-hosted
+ * node sends data to the service only after that click.
  */
 export function isVaultOptedOut(driveSubject: string): boolean {
-  if (readDrives(OPT_OUT_KEY).has(driveSubject)) return true;
-
+  const drives = readOptOuts();
   const automatic =
     canHoldProviderCookie(getManagedApiBase()) || isHostedDistribution();
 
-  return !automatic && !readDrives(OPT_IN_KEY).has(driveSubject);
+  return (
+    drives.has(driveSubject) ||
+    (!automatic && !drives.has(`in:${driveSubject}`))
+  );
 }
 
 const defaultDeps: VaultAutoBackupDeps = {

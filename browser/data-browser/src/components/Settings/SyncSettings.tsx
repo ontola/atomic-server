@@ -1277,8 +1277,7 @@ export function SyncSettings({
   });
 
   const accountPortalUrl = getAccountServiceUrl(managedInfo);
-  // A hosted build (a portal is configured), as opposed to one that only knows
-  // the default service.
+  // A portal is configured, rather than only the default service known.
   const hostedBuild = getManagedPortalUrl(managedInfo) !== null;
 
   // The source server copies remote drives in full; enrollment alone is not sync.

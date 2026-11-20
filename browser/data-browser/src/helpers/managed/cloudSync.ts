@@ -31,10 +31,9 @@ import { isRunningInTauri } from '../tauri';
 import { signRequest, type Store } from '@tomic/react';
 
 /**
- * The portal this build or the connected node names: a runtime or build-time
- * setting, else the node's `/node-info` (`portalUrl`). Never the default. It
- * answers "is this a hosted build": where drives live, not whether to offer
- * an account. For an offer use {@link getAccountServiceUrl}.
+ * The portal this build or the connected node names, never the default: "is
+ * this a hosted build", not "is there an account to offer" (that is
+ * {@link getAccountServiceUrl}).
  */
 export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   const runtime = getRuntimeManagedPortalUrl();
@@ -51,20 +50,15 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   return null;
 }
 
-/** The account service every build offers unless told otherwise. */
-export const DEFAULT_ACCOUNT_SERVICE = 'https://atomic.place';
-
 /**
- * The account service (sign-up, backup, hosting) this install offers, safe to
- * open, or null when there is none. Every build has one: the configured portal
- * ({@link getManagedPortalUrl}), else the one remembered from an earlier
- * sign-in, else `VITE_DEFAULT_ACCOUNT_PORTAL`, else atomic.place. Setting that
- * variable to `none` turns the service off (an empty value counts as unset).
+ * The account service (sign-up, backup, hosting) this install offers, or null
+ * when there is none: the configured or remembered portal, else
+ * `VITE_DEFAULT_ACCOUNT_PORTAL`, else atomic.place. The value `none` turns it
+ * off (an empty value counts as unset).
  *
- * Knowing the URL is an offer, not a connection: nothing may contact it until
- * the user opens a flow that needs it (see `engageAccountService`). Whether a
- * session exists is a different question (`useHasManagedAccount`); offers show
- * with a service, features that need an account show with a session.
+ * An offer, not a connection: nothing contacts it until a flow engages it
+ * (`engageAccountService`). Offers show with a service, features that need an
+ * account show with a session (`useHasManagedAccount`).
  */
 export function getAccountServiceUrl(info?: ManagedInfo | null): string | null {
   const configured = safePortalUrl(
@@ -79,7 +73,7 @@ export function getAccountServiceUrl(info?: ManagedInfo | null): string | null {
 
   if (fromEnv === 'none') return null;
 
-  return safePortalUrl(fromEnv || DEFAULT_ACCOUNT_SERVICE) ?? null;
+  return safePortalUrl(fromEnv || 'https://atomic.place') ?? null;
 }
 
 /**
@@ -160,7 +154,6 @@ function delay(ms: number): Promise<void> {
 export async function ensureManagedSession(
   portalUrl: string,
 ): Promise<boolean> {
-  // The user asked to sign in, so this page may now talk to the service.
   engageAccountService(portalUrl);
 
   if (await getManagedAccount({ fresh: true }).catch(() => null)) return true;

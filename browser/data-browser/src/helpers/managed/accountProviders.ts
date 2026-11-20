@@ -89,31 +89,26 @@ export async function sendAccountEmailLink(
 
 const prices = new Map<string, Promise<string | undefined>>();
 
-/**
- * What the service says Cloud Server costs ("€30/month"), if it says. Read
- * from the service's public `/auth/providers` answer, once per page, without
- * credentials. The app never knows a price of its own.
- */
-export function getCloudServerPrice(
-  serviceUrl: string,
-): Promise<string | undefined> {
-  let price = prices.get(serviceUrl);
+/** What the service says Cloud Server costs ("€30/month"), if it says. Never a price of our own. */
+export function getCloudServerPrice(service: string) {
+  const known = prices.get(service);
 
-  if (!price) {
-    price = fetch(new URL('/api/auth/providers', serviceUrl), {
-      credentials: 'omit',
+  if (known) return known;
+
+  const price = fetch(new URL('/api/auth/providers', service), {
+    credentials: 'omit',
+  })
+    .then(res => res.json())
+    .then(body => {
+      const value = body?.cloud_server_price_from;
+
+      return typeof value === 'string' && value.length <= 40
+        ? value
+        : undefined;
     })
-      .then(res => (res.ok ? res.json() : undefined))
-      .then(body => {
-        const value = body?.cloud_server_price_from;
+    .catch(() => undefined);
 
-        return typeof value === 'string' && value.length <= 40
-          ? value
-          : undefined;
-      })
-      .catch(() => undefined);
-    prices.set(serviceUrl, price);
-  }
+  prices.set(service, price);
 
   return price;
 }

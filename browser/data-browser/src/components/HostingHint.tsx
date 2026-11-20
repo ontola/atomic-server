@@ -17,9 +17,8 @@ export type HostingHintReason =
 
 /**
  * The one place the app mentions hosting by the account service: a muted line
- * and a plain link, where a real gap shows. Renders nothing when there is no
- * service or the drive already has a Cloud Server. A price is appended only
- * when the service names one, and is only asked for once the hint is on screen.
+ * and a plain link. Nothing without a service or for a hosted drive. The price
+ * is the service's, and only asked for once the hint is on screen.
  */
 export function HostingHint({
   reason,

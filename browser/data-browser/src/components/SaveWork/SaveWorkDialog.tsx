@@ -18,18 +18,11 @@ import { readManagedAccountBinding } from '../../helpers/managed/binding';
 import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import { noteManagedSessionChanged } from '../../helpers/managed/session';
 import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
-import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
+import { getAccountServiceUrl } from '../../helpers/managed/cloudSync';
 import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
 import { ConnectDevice } from '../ConnectDevice';
 import { subscribeSaveWorkDialog } from './saveWorkDialogState';
 
-/**
- * What the dialog offers, the same in every build: the shared sign-in options
- * when an account service exists (signing up and signing in are the same
- * buttons; the identity gate then adopts this device's key as the account's,
- * or hands over when the account has one), and below them, always, the route
- * that needs no account: another device.
- */
 /** How long to wait for the account to adopt this identity after sign-in. */
 export const SAVE_ADOPT_TIMEOUT_MS = 20_000;
 
@@ -120,22 +113,18 @@ export function SaveWorkContent({
           <p role='status' data-testid='save-work-linking'>
             Saving your work to your account…
           </p>
+        ) : canHoldProviderCookie(portalUrl) ? (
+          <AccountSignInPanel
+            portalUrl={portalUrl}
+            onSignedIn={() => setSignedIn(true)}
+          />
         ) : (
           <>
-            {canHoldProviderCookie(portalUrl) ? (
-              <AccountSignInPanel
-                portalUrl={portalUrl}
-                onSignedIn={() => setSignedIn(true)}
-              />
-            ) : (
-              <>
-                <AccountSignInViaBrowser
-                  portalUrl={portalUrl}
-                  onSignedIn={() => setSignedIn(true)}
-                />
-                <Disclosure portalUrl={portalUrl} />
-              </>
-            )}
+            <AccountSignInViaBrowser
+              portalUrl={portalUrl}
+              onSignedIn={() => setSignedIn(true)}
+            />
+            <Disclosure portalUrl={portalUrl} />
           </>
         ))}
       {!signedIn && <ConnectDevice {...connectDeviceProps} compact />}
@@ -145,7 +134,7 @@ export function SaveWorkContent({
 
 /** Shows the Save dialog when something calls `openSaveWorkDialog()`. */
 export function SaveWorkDialogHost(): JSX.Element {
-  const portalUrl = useKnownPortalUrl();
+  const portalUrl = getAccountServiceUrl();
   const { pathname } = useLocation();
   const [dialogProps, show, close, visible] = useDialog();
   const [openedOn, setOpenedOn] = useState<string>();
