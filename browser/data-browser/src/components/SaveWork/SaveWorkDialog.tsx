@@ -234,12 +234,16 @@ export function SaveWorkDialogHost(): JSX.Element {
         <h1>{portalUrl ? 'Register with email' : 'Connect a device'}</h1>
       </DialogTitle>
       <DialogContent>
-        <SaveWorkContent
-          portalUrl={portalUrl}
-          onDone={() => close(true)}
-          onChoosePortal={choosePortal}
-          onBack={chosenPortal && !knownPortal ? back : undefined}
-        />
+        {/* Only while open: the closed dialog stays in the DOM, and a hidden
+            second Connect a device form would share the Sync page's ids. */}
+        {visible && (
+          <SaveWorkContent
+            portalUrl={portalUrl}
+            onDone={() => close(true)}
+            onChoosePortal={choosePortal}
+            onBack={chosenPortal && !knownPortal ? back : undefined}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button subtle onClick={() => close()}>
