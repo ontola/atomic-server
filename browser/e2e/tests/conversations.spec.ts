@@ -66,6 +66,11 @@ test.describe('conversations', () => {
     // Alice has no conversations yet, so the Messages panel is hidden. She
     // starts one from Bob's agent page.
     await openSubject(page, bobSubject);
+    await expect(
+      page.getByRole('button', { name: 'Send message' }),
+    ).toBeVisible({
+      timeout: 30_000,
+    });
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByText('End-to-end encrypted')).toBeVisible({
       timeout: 30_000,
