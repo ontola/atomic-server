@@ -492,6 +492,11 @@ where
     crate::blob_storage::spawn_gc(appstate.clone())?;
 
     // Tells people about what they follow (`atomic_lib::notify`).
+    if let Some(path) = &appstate.config.opts.push_fcm_credentials {
+        if let Err(e) = crate::push_gateway::init(path) {
+            tracing::error!("push gateway: {e}");
+        }
+    }
     crate::notifier::spawn(appstate.clone());
 
     // Runs plugins nobody is watching. Sleeps on a server with no schedules.

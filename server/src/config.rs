@@ -202,6 +202,13 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_NOTIFY_LINK")]
     pub notify_link: Option<String>,
 
+    /// A Firebase service account JSON file. Turns on `POST /push/fcm/{token}`,
+    /// which forwards push messages to Firebase Cloud Messaging, so apps that
+    /// get pushes through FCM can register a plain URL as their push endpoint.
+    /// Only the server of the app's publisher needs this.
+    #[clap(long, env = "ATOMIC_PUSH_FCM_CREDENTIALS")]
+    pub push_fcm_credentials: Option<std::path::PathBuf>,
+
     /// Custom JS script to include in the body of the HTML template
     #[clap(long, default_value = "", env = "ATOMIC_SCRIPT")]
     pub script: String,

@@ -26,6 +26,7 @@ mod metrics;
 pub mod node_key;
 pub mod notifier;
 pub mod plugins;
+pub mod push_gateway;
 pub mod rate_limit;
 pub mod routes;
 pub mod serve;
