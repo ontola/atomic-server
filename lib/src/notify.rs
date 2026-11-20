@@ -467,15 +467,19 @@ impl Notifier {
         let chain: Vec<&String> = std::iter::once(&subject).chain(ancestors.iter()).collect();
         let created = event.props.contains(urls::IS_A) || event.props.contains(urls::PARENT);
 
-        // Per agent, the nearest follow.
-        let mut nearest: HashMap<&str, (usize, &FollowRow)> = HashMap::new();
+        // Per agent, the nearest follows: several at the same level can each
+        // say what they are about ("meetings", "documents").
+        let mut nearest: HashMap<&str, (usize, Vec<&FollowRow>)> = HashMap::new();
         for f in follows {
             if let Some(depth) = chain.iter().position(|c| **c == f.about) {
-                match nearest.get(f.agent.as_str()) {
-                    Some((d, _)) if *d <= depth => {}
-                    _ => {
-                        nearest.insert(f.agent.as_str(), (depth, f));
-                    }
+                let entry = nearest
+                    .entry(f.agent.as_str())
+                    .or_insert((depth, Vec::new()));
+                if depth < entry.0 {
+                    *entry = (depth, Vec::new());
+                }
+                if depth == entry.0 {
+                    entry.1.push(f);
                 }
             }
         }
@@ -496,29 +500,39 @@ impl Notifier {
             .ok()
             .map(|a| a.subject.to_string());
 
-        for (agent, (depth, f)) in nearest {
-            let kind = match (f.level, created) {
-                (Level::Muted, _) => continue,
-                (_, true) => "created",
-                (Level::NewItems, false) => continue,
-                (Level::Everything, false) => "changed",
-            };
-            // A follow on the thing itself is not about "new items" in it.
-            if kind == "created" && depth == 0 {
-                continue;
-            }
+        for (agent, (depth, rows)) in nearest {
             if actor.as_deref() == Some(agent) || (actor.is_some() && actor == server_agent) {
                 continue;
             }
-            if !f.classes.is_empty() && !event.classes.iter().any(|c| f.classes.contains(c)) {
+            // Muted here silences the rest at this level and everything above.
+            if rows.iter().any(|f| f.level == Level::Muted) {
                 continue;
             }
-            if kind == "changed"
-                && !f.properties.is_empty()
-                && !event.props.iter().any(|p| f.properties.contains(p))
-            {
+            let matches = |f: &&FollowRow| -> Option<&'static str> {
+                let kind = match (f.level, created) {
+                    (Level::Muted, _) => return None,
+                    (_, true) => "created",
+                    (Level::NewItems, false) => return None,
+                    (Level::Everything, false) => "changed",
+                };
+                // A follow on the thing itself is not about "new items" in it.
+                if kind == "created" && depth == 0 {
+                    return None;
+                }
+                if !f.classes.is_empty() && !event.classes.iter().any(|c| f.classes.contains(c)) {
+                    return None;
+                }
+                if kind == "changed"
+                    && !f.properties.is_empty()
+                    && !event.props.iter().any(|p| f.properties.contains(p))
+                {
+                    return None;
+                }
+                Some(kind)
+            };
+            let Some(kind) = rows.iter().find_map(|f| matches(f)) else {
                 continue;
-            }
+            };
             let Some(owner) = owners.get(agent) else {
                 continue;
             };

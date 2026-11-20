@@ -208,25 +208,28 @@ class Inbox {
   Future<List<Follow>> follows() async =>
       [for (final r in await _children(NotifyNs.follow)) Follow(r)];
 
-  /// The follow on [about] itself, if any (not one above it).
-  Future<Follow?> followOf(String about) async {
+  /// The follow on [about] itself named [key], if any (not one above it).
+  /// Several follows of one resource can each narrow to their own thing
+  /// ("meetings", "documents"); [key] tells them apart.
+  Future<Follow?> followOf(String about, {String key = 'Follow'}) async {
     for (final f in await follows()) {
-      if (f.about == about) return f;
+      if (f.about == about && (f.resource.name ?? 'Follow') == key) return f;
     }
     return null;
   }
 
-  /// Follow [about] at [level], replacing an earlier follow of it.
-  /// [classes] and [properties] narrow it (empty: anything).
+  /// Follow [about] at [level], replacing an earlier follow of it with the
+  /// same [key]. [classes] and [properties] narrow it (empty: anything).
   Future<Follow> follow(String about, FollowLevel level,
-      {List<String> classes = const [],
+      {String key = 'Follow',
+      List<String> classes = const [],
       List<String> properties = const []}) async {
-    final existing = await followOf(about);
+    final existing = await followOf(about, key: key);
     final r = existing?.resource ??
         store.newResource(
             parent: subject,
             isA: [NotifyNs.follow],
-            props: {Props.name: 'Follow', NotifyNs.about: LinkValue(about)});
+            props: {Props.name: key, NotifyNs.about: LinkValue(about)});
     r.set(NotifyNs.followLevel, StringValue(level.value));
     if (classes.isEmpty) {
       if (!r.isNew) r.remove(NotifyNs.followClasses);
@@ -244,9 +247,9 @@ class Inbox {
     return Follow(r);
   }
 
-  /// Stop following [about] (follows above it still count).
-  Future<void> unfollow(String about) async {
-    await (await followOf(about))?.resource.destroy();
+  /// Stop following [about] under [key] (follows above it still count).
+  Future<void> unfollow(String about, {String key = 'Follow'}) async {
+    await (await followOf(about, key: key))?.resource.destroy();
   }
 
   // Push.

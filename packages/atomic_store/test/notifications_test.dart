@@ -40,8 +40,10 @@ void main() {
     expect(f.level, FollowLevel.everything);
     expect(f.classes, isEmpty);
 
+    await inbox.follow(council, FollowLevel.everything, key: 'stukken');
+    expect(await inbox.follows(), hasLength(2));
     await inbox.unfollow(council);
-    expect(await inbox.follows(), isEmpty);
+    expect((await inbox.follows()).single.resource.name, 'stukken');
   });
 
   test('settings and push registrations live on the Inbox', () async {

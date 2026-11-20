@@ -453,3 +453,50 @@ async fn push_registrations_are_listed_on_the_owner() {
         vec!["https://push.example.test/up/abc".to_string()]
     );
 }
+
+#[tokio::test]
+async fn two_follows_on_one_drive_each_narrow_their_own_kind() {
+    let w = World::new().await;
+    const DOC: &str = "https://example.test/classes/Doc";
+    w.follow(
+        &w.council,
+        "everything",
+        vec![
+            (FOLLOW_CLASSES, Value::ResourceArray(vec![MEETING.into()])),
+            (FOLLOW_PROPERTIES, Value::ResourceArray(vec![START.into()])),
+        ],
+    )
+    .await;
+    w.follow(
+        &w.council,
+        "everything",
+        vec![(FOLLOW_CLASSES, Value::ResourceArray(vec![DOC.into()]))],
+    )
+    .await;
+    let n = w.notifier();
+    n.tick(crate::utils::now()).await.unwrap();
+    let meeting = create_as(&w.store, &w.bert, MEETING, Some(&w.council), "Raad", vec![]).await;
+    let doc = create_as(
+        &w.store,
+        &w.bert,
+        DOC,
+        Some(&w.council),
+        "Begroting",
+        vec![],
+    )
+    .await;
+    assert_eq!(n.tick(later()).await.unwrap().len(), 2, "both are new");
+
+    edit_as(
+        &w.store,
+        &w.bert,
+        &meeting,
+        ROOM,
+        Value::String("Zaal".into()),
+    )
+    .await;
+    edit_as(&w.store, &w.bert, &doc, ROOM, Value::String("v2".into())).await;
+    let changed = n.tick(later() + 60_000).await.unwrap();
+    assert_eq!(changed.len(), 1, "{changed:?}");
+    assert_eq!(pure(&changed[0].about), pure(&doc));
+}
