@@ -56,12 +56,6 @@ function vault(): UseVaultBackup {
     error: null,
     restore: vi.fn(async () => ({})),
     restoreProgress: null,
-    canRecoverFiles: false,
-    recoverMissingFiles: vi.fn(async () => null),
-    cancelFileRecovery: vi.fn(),
-    fileRecoveryProgress: null,
-    fileRecoveryResult: null,
-    fileRecoveryError: null,
     refresh: vi.fn(),
   } as unknown as UseVaultBackup;
 }

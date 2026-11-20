@@ -423,61 +423,6 @@ pub fn live_peer_ids() -> Vec<String> {
     live_peers().keys().cloned().collect()
 }
 
-/// Request missing files from live peers allowed to read them. Every hash
-/// must still be referenced by the selected drive.
-pub async fn request_drive_blobs(
-    store: &Db,
-    drive: &str,
-    hashes: &[String],
-) -> crate::errors::AtomicResult<()> {
-    use std::collections::HashSet;
-    let base_domain = store.get_base_domain();
-    let drive = crate::Subject::from_raw(drive, base_domain.as_deref());
-    let drive_key = drive.pure_id();
-    if !store.sync_policy().admit_drive_write(&drive_key) {
-        return Err("This drive is not admitted for file sync.".into());
-    }
-    let requested: HashSet<_> = hashes
-        .iter()
-        .map(|hash| hash.to_ascii_lowercase())
-        .collect();
-    if requested.is_empty() {
-        return Ok(());
-    }
-    for subject in super::engine::collect_drive_subjects(store, &drive).await {
-        let resource = store
-            .get_resource(&crate::Subject::from_raw(&subject, base_domain.as_deref()))
-            .await?;
-        let Some(hash) = resource.blob_hash() else {
-            continue;
-        };
-        if !requested.contains(&hex::encode(hash)) || store.has_blob(&hash).await? {
-            continue;
-        }
-        let readable = readable_live_peers(store, &subject).await;
-        let senders: Vec<_> = {
-            let peers = live_peers();
-            readable
-                .iter()
-                .filter_map(|(peer, generation)| {
-                    peers
-                        .get(peer)
-                        .filter(|entry| entry.generation == *generation)
-                })
-                .map(|entry| entry.tx.clone())
-                .collect()
-        };
-        if !senders.is_empty() {
-            store.note_pending_blob_request(hash, drive_key.clone());
-            let frame = frame_with_len(&super::protocol::encode_blob_request(&hash));
-            for sender in senders {
-                let _ = sender.try_send(frame.clone());
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Live peers that are not in the known (paired) list, with the name each gave
 /// over HELLO: devices that dialed us, e.g. by scanning our QR. For display
 /// only. Nothing is saved, so the connection is the whole relationship.
@@ -4452,57 +4397,6 @@ mod live_push_read_filter_tests {
 
     fn allowed(set: &std::collections::HashSet<(String, u64)>, key: &str, g: u64) -> bool {
         set.contains(&(normalize_node_id(key), g))
-    }
-
-    #[tokio::test]
-    async fn missing_file_requests_only_reach_readable_live_peers() {
-        let db = Db::init_temp("request_live_drive_files").await.unwrap();
-        let (alice, drive) = db.setup("Alice").await.unwrap();
-        let hash = *blake3::hash(b"missing private file").as_bytes();
-        db.create_resource(
-            crate::urls::FILE,
-            &drive,
-            "Private file",
-            Some(vec![(
-                crate::urls::BLOB,
-                crate::Value::AtomicUrl(
-                    crate::identifiers::blob_subject(&hex::encode(hash)).into(),
-                ),
-            )]),
-        )
-        .await
-        .unwrap();
-        let reader = "2222aaaa00000000000000000000000000000000000000000000000000000001";
-        let incoming = "2222aaaa00000000000000000000000000000000000000000000000000000002";
-        let denied = "2222aaaa00000000000000000000000000000000000000000000000000000003";
-        let (g_reader, mut rx_reader) =
-            register_as(reader, ForAgent::AgentSubject(alice.subject.clone()));
-        let (g_incoming, mut rx_incoming) =
-            register_as(incoming, ForAgent::AgentSubject(alice.subject.clone()));
-        let (g_denied, mut rx_denied) = register_as(denied, ForAgent::Public);
-        add_known_peer_for_drive(&db, reader, "Reader", &drive);
-        add_known_peer_for_drive(&db, denied, "Denied", &drive);
-        assert!(!is_paired_peer(&db, incoming));
-
-        request_drive_blobs(&db, &drive, &[hex::encode(hash), "00".repeat(32)])
-            .await
-            .unwrap();
-        assert_eq!(
-            rx_reader.try_recv().unwrap(),
-            frame_with_len(&super::super::protocol::encode_blob_request(&hash))
-        );
-        assert!(rx_reader.try_recv().is_err());
-        assert_eq!(
-            rx_incoming.try_recv().unwrap(),
-            frame_with_len(&super::super::protocol::encode_blob_request(&hash))
-        );
-        assert!(rx_incoming.try_recv().is_err());
-        assert!(rx_denied.try_recv().is_err());
-        assert!(db.take_pending_blob_request(&[0; 32]).is_none());
-        assert_eq!(db.take_pending_blob_request(&hash), Some(drive));
-        remove_live_peer(reader, g_reader);
-        remove_live_peer(incoming, g_incoming);
-        remove_live_peer(denied, g_denied);
     }
 
     /// A live peer without read rights gets nothing for a private subject,

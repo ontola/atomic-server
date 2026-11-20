@@ -1173,7 +1173,7 @@ pub enum BlobGroupOutcome {
 
 /// Open one stored file and, if a wanted File resource references it, put it
 /// in the blob store. `wanted` holds plain BLAKE3 hashes (lower-case hex), the
-/// current blob references: the match is made by computing the hash of the
+/// `File.internalId` values: the match is made by computing the hash of the
 /// decrypted bytes, since the vault id says nothing about it.
 pub async fn restore_blob_group(
     store: &Db,
@@ -1182,46 +1182,19 @@ pub async fn restore_blob_group(
     sealed_chunks: &[&[u8]],
     wanted: &HashSet<String>,
 ) -> AtomicResult<BlobGroupOutcome> {
-    restore_blob_group_inner(store, key, id_hex, sealed_chunks, wanted, None).await
-}
-
-/// Restore missing bytes only while the live drive still references them.
-pub async fn restore_blob_group_for_drive(
-    store: &Db,
-    key: &DriveVaultKey,
-    id_hex: &str,
-    sealed_chunks: &[&[u8]],
-    wanted: &HashSet<String>,
-    drive: &Subject,
-) -> AtomicResult<BlobGroupOutcome> {
-    restore_blob_group_inner(store, key, id_hex, sealed_chunks, wanted, Some(drive)).await
-}
-
-async fn restore_blob_group_inner(
-    store: &Db,
-    key: &DriveVaultKey,
-    id_hex: &str,
-    sealed_chunks: &[&[u8]],
-    wanted: &HashSet<String>,
-    drive: Option<&Subject>,
-) -> AtomicResult<BlobGroupOutcome> {
     let Ok((bytes, plain)) = open_blob(key, id_hex, sealed_chunks) else {
         return Ok(BlobGroupOutcome::Unreadable);
     };
     if !wanted.contains(&plain) {
         return Ok(BlobGroupOutcome::Unreferenced);
     }
-    if let Some(drive) = drive {
-        if !drive_file_hashes(store, drive).await.contains(&plain) {
-            return Ok(BlobGroupOutcome::Unreferenced);
-        }
-    }
     let hash = blake3::Hash::from_hex(&plain).map_err(|e| e.to_string())?;
     store.put_blob(hash.as_bytes(), &bytes).await?;
     Ok(BlobGroupOutcome::Restored(plain))
 }
 
-/// Distinct BLAKE3 hashes referenced by the drive's blob-backed resources.
+/// Distinct `File.internalId` hashes (lower-case hex BLAKE3) referenced by
+/// File resources under `drive`.
 pub async fn drive_file_hashes(store: &Db, drive: &Subject) -> Vec<String> {
     let mut hashes = std::collections::BTreeSet::new();
     for subject_str in crate::sync::engine::collect_drive_subjects(store, drive).await {
@@ -1229,8 +1202,14 @@ pub async fn drive_file_hashes(store: &Db, drive: &Subject) -> Vec<String> {
         let Ok(resource) = store.get_resource(&subject).await else {
             continue;
         };
-        if let Some(hash) = resource.blob_hash() {
-            hashes.insert(blake3::Hash::from_bytes(hash).to_hex().to_string());
+        if resource.get(crate::urls::BLOB).is_err() {
+            continue;
+        }
+        if let Ok(id) = resource.get(crate::urls::INTERNAL_ID) {
+            let id = id.to_string().to_ascii_lowercase();
+            if blake3::Hash::from_hex(&id).is_ok() {
+                hashes.insert(id);
+            }
         }
     }
     hashes.into_iter().collect()
@@ -3100,77 +3079,6 @@ mod tests {
         import_vault_blobs(store, drive, key, PSEUDONYM, vault)
             .await
             .unwrap()
-    }
-
-    #[tokio::test]
-    async fn drive_file_hashes_use_blob_references_without_internal_ids() {
-        use crate::{urls, Value};
-        let source = Db::init_temp("vault_blob_reference_hashes").await.unwrap();
-        let (_, drive) = source.setup("alice").await.unwrap();
-        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
-        let hash = blake3::hash(b"modern file contents").to_hex().to_string();
-        let other = blake3::hash(b"old internal id").to_hex().to_string();
-        for name in ["blob-only.txt", "stale-internal-id.txt"] {
-            let mut properties = vec![(
-                urls::BLOB,
-                Value::AtomicUrl(crate::identifiers::blob_subject(&hash).as_str().into()),
-            )];
-            if name == "stale-internal-id.txt" {
-                properties.push((urls::INTERNAL_ID, Value::String(other.clone())));
-            }
-            source
-                .create_resource(urls::FILE, &drive, name, Some(properties))
-                .await
-                .unwrap();
-        }
-        assert_eq!(drive_file_hashes(&source, &drive_subject).await, vec![hash]);
-    }
-
-    #[tokio::test]
-    async fn a_late_blob_download_does_not_restore_a_deleted_file() {
-        use crate::{urls, Value};
-        let target = Db::init_temp("vault_deleted_file_download").await.unwrap();
-        let (_, drive) = target.setup("alice").await.unwrap();
-        let drive_subject = Subject::from_raw(&drive, target.get_base_domain().as_deref());
-        let bytes = b"file deleted while its download was in flight";
-        let plain = blake3::hash(bytes).to_hex().to_string();
-        let file = target
-            .create_resource(
-                urls::FILE,
-                &drive,
-                "Deleted file",
-                Some(vec![(
-                    urls::BLOB,
-                    Value::AtomicUrl(crate::identifiers::blob_subject(&plain).into()),
-                )]),
-            )
-            .await
-            .unwrap();
-        let wanted = drive_file_hashes(&target, &drive_subject)
-            .await
-            .into_iter()
-            .collect();
-        target
-            .remove_resource(&Subject::from_raw(&file, None))
-            .await
-            .unwrap();
-        let key = key();
-        let sealed = seal_blob_chunk(&key, bytes).unwrap();
-        let result = restore_blob_group_for_drive(
-            &target,
-            &key,
-            &blob_id_hex(&key, bytes),
-            &[&sealed],
-            &wanted,
-            &drive_subject,
-        )
-        .await
-        .unwrap();
-        assert_eq!(result, BlobGroupOutcome::Unreferenced);
-        assert!(!target
-            .has_blob(blake3::hash(bytes).as_bytes())
-            .await
-            .unwrap());
     }
 
     #[test]

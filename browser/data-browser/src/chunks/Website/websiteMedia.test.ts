@@ -59,33 +59,6 @@ function fixture() {
 }
 
 describe('website media snapshots', () => {
-  it('recovers a selected image before packaging missing local bytes', async () => {
-    const { store, resources } = fixture();
-    const recovered = new Uint8Array([1, 2, 3]);
-    const getBlob = vi.fn().mockResolvedValue(null);
-    store.getClientDb = () =>
-      ({ getBlob }) as unknown as ReturnType<Store['getClientDb']>;
-    store.hasFileContentRecovery = () => true;
-    store.recoverMissingFileContents = vi.fn(async () => {
-      getBlob.mockResolvedValue(recovered);
-
-      return true;
-    });
-    const originalGet = resources.photo.get!;
-    resources.photo.get = property =>
-      property === 'https://atomicdata.dev/properties/drive'
-        ? 'atomic:drive'
-        : originalGet(property);
-
-    const result = await snapshotWebsiteImage(store, 'photo');
-    expect(new Uint8Array(await result.arrayBuffer())).toEqual(recovered);
-    expect(store.recoverMissingFileContents).toHaveBeenCalledWith(
-      'a'.repeat(64),
-      'atomic:drive',
-    );
-    expect(getBlob).toHaveBeenCalledTimes(2);
-  });
-
   it('packages selected gallery and File cells without exporting other relationships', async () => {
     const { store, getResource } = fixture();
     const config = starterWebsite();

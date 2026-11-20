@@ -15,8 +15,6 @@ pub mod keys;
 // `chacha20poly1305`, and every host that can run a vault client already
 // enables it (see the host table in CLOUD_VAULT_ARCHITECTURE.md).
 #[cfg(feature = "db")]
-pub mod blob_export;
-#[cfg(feature = "db")]
 pub mod dek;
 #[cfg(feature = "db")]
 pub mod envelope;

@@ -305,7 +305,6 @@ export function VaultPanel({
             {notice && (
               <IncludedNote data-testid='vault-notice'>{notice}</IncludedNote>
             )}
-            <FileRecoveryStatus vault={vault} />
             {snapshots && (
               <VaultRestoreDialog
                 snapshots={snapshots}
@@ -343,28 +342,6 @@ export function VaultPanel({
             >
               <FaRotateLeft /> <span>Restore</span>
             </Button>
-            {vault.canRecoverFiles && (
-              <Button
-                data-testid='vault-recover-files'
-                subtle
-                onClick={() => void vault.recoverMissingFiles()}
-                disabled={busy}
-              >
-                {vault.fileRecoveryError ||
-                (vault.fileRecoveryResult?.missing.length ?? 0) > 0
-                  ? 'Retry file recovery'
-                  : 'Recover missing files'}
-              </Button>
-            )}
-            {vault.fileRecoveryProgress && (
-              <Button
-                data-testid='vault-cancel-file-recovery'
-                subtle
-                onClick={vault.cancelFileRecovery}
-              >
-                Cancel file recovery
-              </Button>
-            )}
             <Button
               data-testid='vault-download'
               subtle
@@ -415,61 +392,6 @@ export function VaultPanel({
           </>
         }
       />
-    </>
-  );
-}
-
-function FileRecoveryStatus({ vault }: { vault: UseVaultBackup }) {
-  const { fileRecoveryProgress: progress, fileRecoveryResult: result } = vault;
-  const stage = progress?.stage;
-
-  if (progress)
-    return (
-      <IncludedNote role='status' data-testid='vault-file-recovery-progress'>
-        {stage === 'scanning'
-          ? 'Scanning for missing files…'
-          : stage === 'peers'
-            ? 'Looking for file contents on connected devices…'
-            : stage === 'vault'
-              ? `Recovering files from Cloud Vault… ${progress.done} of ${progress.total}`
-              : 'Checking recovered files…'}
-      </IncludedNote>
-    );
-
-  return (
-    <>
-      {result && (
-        <IncludedNote
-          role='status'
-          data-testid='vault-file-recovery-result'
-          data-files-missing={result.missing.length}
-          data-files-unreadable={result.unreadable}
-        >
-          {result.total === 0 &&
-          result.missing.length === 0 &&
-          result.unreadable === 0
-            ? 'All referenced file contents are available on this device.'
-            : plural(result.repaired, [
-                '# file recovered.',
-                '# files recovered.',
-              ])}
-          {result.missing.length > 0 &&
-            ` ${plural(result.missing.length, [
-              '# file is still unavailable.',
-              '# files are still unavailable.',
-            ])}`}
-          {result.unreadable > 0 &&
-            ` ${plural(result.unreadable, [
-              '# backup file could not be read.',
-              '# backup files could not be read.',
-            ])}`}
-        </IncludedNote>
-      )}
-      {vault.fileRecoveryError && (
-        <IncludedNote role='alert' data-testid='vault-file-recovery-error'>
-          {vault.fileRecoveryError}
-        </IncludedNote>
-      )}
     </>
   );
 }

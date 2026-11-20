@@ -107,42 +107,6 @@ impl BrowserPeerSession {
                 .is_ok()
     }
 
-    /// Prepare explicit file repair requests on this authenticated connection.
-    pub async fn request_blobs(
-        &mut self,
-        db: &Db,
-        hashes: &[String],
-    ) -> AtomicResult<Vec<Vec<u8>>> {
-        let requested: std::collections::HashSet<_> = hashes
-            .iter()
-            .map(|hash| hash.to_ascii_lowercase())
-            .collect();
-        let mut frames = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        if self.closed || matches!(self.agent, ForAgent::Public) {
-            return Ok(frames);
-        }
-        for subject in super::engine::collect_drive_subjects(db, &self.drive.as_str().into()).await
-        {
-            if !self.can_send(db, &subject).await {
-                continue;
-            }
-            let resource = db.get_resource(&subject.as_str().into()).await?;
-            let Some(hash) = resource.blob_hash() else {
-                continue;
-            };
-            if requested.contains(&hex::encode(hash))
-                && !db.has_blob(&hash).await?
-                && seen.insert(hash)
-            {
-                self.pending_blobs.insert(hash);
-                db.note_pending_blob_request(hash, self.drive.clone());
-                frames.push(protocol::encode_blob_request(&hash));
-            }
-        }
-        Ok(frames)
-    }
-
     pub async fn handle(&mut self, db: &Db, frame: &[u8]) -> AtomicResult<BrowserPeerOutput> {
         if self.closed {
             return Err("Peer session closed".into());
@@ -725,52 +689,6 @@ mod tests {
         let replay = session.handle(&db, &frame).await.unwrap();
         assert!(replay.changed.is_empty());
         assert!(db.get_resource(&subject).await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn explicit_file_repair_registers_its_response_on_the_authenticated_edge() {
-        let (db, agent, drive, mut session) = fixture().await;
-        authenticate(&db, &agent, &mut session).await;
-        let bytes = b"missing bytes with matching file metadata";
-        let hash = blake3::hash(bytes);
-        let file = db
-            .create_resource(
-                crate::urls::FILE,
-                &drive,
-                "missing file",
-                Some(vec![
-                    (
-                        crate::urls::BLOB,
-                        crate::Value::AtomicUrl(
-                            crate::identifiers::blob_subject(&hash.to_hex()).into(),
-                        ),
-                    ),
-                    (
-                        crate::urls::DRIVE_PROP,
-                        crate::Value::AtomicUrl(drive.clone().into()),
-                    ),
-                ]),
-            )
-            .await
-            .unwrap();
-        let before = db.get_loro_snapshot_bytes(&file);
-        let requested = session
-            .request_blobs(&db, &[hash.to_hex().to_string(), "00".repeat(32)])
-            .await
-            .unwrap();
-        assert_eq!(
-            requested,
-            vec![protocol::encode_blob_request(hash.as_bytes())]
-        );
-        session
-            .handle(&db, &protocol::encode_blob_response(hash.as_bytes(), bytes))
-            .await
-            .unwrap();
-        assert_eq!(
-            db.get_blob(hash.as_bytes()).await.unwrap().as_deref(),
-            Some(bytes.as_slice())
-        );
-        assert_eq!(db.get_loro_snapshot_bytes(&file), before);
     }
 
     #[tokio::test]

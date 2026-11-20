@@ -5,7 +5,7 @@ import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { loadVaultKeyOps } from './vaultKeyOps';
 import { vaultLaneId, type VaultKeyOps } from './vault';
 import { getOrCreateDeviceId } from './devices';
-import { nodeVault, requestNodeFileContents } from './nodeVault';
+import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
 import { useVaultBackup, type UseVaultBackup } from './useVaultBackup';
 
@@ -62,21 +62,10 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
         : Promise.resolve({}),
     [store, driveSubject],
   );
-  const tryPeers = useCallback(
-    (hashes: string[], signal?: AbortSignal) => {
-      if (!driveSubject) return Promise.resolve();
-
-      return isRunningInTauri()
-        ? requestNodeFileContents(driveSubject, hashes, signal)
-        : store.requestMissingFileContents(driveSubject, hashes, signal);
-    },
-    [driveSubject, store],
-  );
 
   const vault = useVaultBackup({
     store,
     getDisplayMetadata,
-    tryPeers,
     // Whichever local store this build actually keeps the drive in. A browser
     // has the ClientDb; the desktop and Android apps have the embedded node and
     // deliberately no ClientDb, since a second copy of the same drive is the
