@@ -484,3 +484,51 @@ async fn append_lets_each_agent_write_only_its_own_child() {
         "an agent without append added a ballot"
     );
 }
+
+/// An invite accepted at the server (`accept_invite_at_server`, what a
+/// device connected to a server does) puts the accepting agent on the
+/// target's lists. A one-use invite admits one agent.
+#[tokio::test]
+async fn an_invite_accepted_at_the_server_grants_its_target() {
+    let (port, _store) = start_server_with_store("drive_audiences_invite", &[]);
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let client = Client::new(&server_url).await.unwrap();
+
+    let owner = client.new_agent("Owner").await.unwrap();
+    let guest = client.new_agent("Guest").await.unwrap();
+    let other = client.new_agent("Other").await.unwrap();
+    let (drive, _) = drive_for(&client, &owner, "Leden", &[]).await;
+    let claim = folder_in(&client, &owner, &drive, &[]).await;
+    assert!(!http_get(&client, &guest, &claim).await);
+
+    let expires = atomic_lib::utils::now() + 60_000;
+    let token = atomic_lib::invite_token::InviteToken::new(claim.clone(), true, expires, &owner, Some(1))
+        .unwrap()
+        .encode()
+        .unwrap();
+    atomic_lib::client::helpers::accept_invite_at_server(&server_url, &token, &guest)
+        .await
+        .expect("the server accepts the invite");
+
+    let target = atomic_lib::client::fetch_resource(&claim, client.store(), Some(&owner))
+        .await
+        .unwrap()
+        .to_single();
+    let writers: Vec<String> = target
+        .get(urls::WRITE)
+        .unwrap()
+        .to_subjects(None)
+        .unwrap();
+    assert!(writers.contains(&guest.subject.to_string()), "{writers:?}");
+    assert!(http_get(&client, &guest, &claim).await, "the guest reads the target");
+    // The rest of the drive stays closed to the guest.
+    assert!(!http_get(&client, &guest, &drive).await);
+
+    assert!(
+        atomic_lib::client::helpers::accept_invite_at_server(&server_url, &token, &other)
+            .await
+            .is_err(),
+        "a one-use invite admitted a second agent"
+    );
+}

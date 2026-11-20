@@ -83,6 +83,14 @@ abstract interface class ServerSync {
   /// session nothing is sent.
   Future<bool> pushPending();
 
+  /// Gets [drive] (or any resource) onto this device from the connected
+  /// server when missing, catches up on what changed while away, and
+  /// follows its changes over the open session. For a drive another agent
+  /// shared with this one, which the node does not list itself. Throws a
+  /// `StoreException` without a session, or when the server does not host it
+  /// or refuses this agent.
+  Future<void> follow(String drive);
+
   /// The servers that host [drive] and prove it: the https origins its public
   /// directory record (pkarr) names whose `/genesis` answer verifies against
   /// the drive's DID. Nothing from the record is trusted unverified.
@@ -171,6 +179,15 @@ class BridgeServerSync implements ServerSync {
 
   @override
   Future<bool> pushPending() => _handle.pushPending();
+
+  @override
+  Future<void> follow(String drive) async {
+    try {
+      await _handle.followConversation(subject: drive);
+    } on bridge.AtomicError catch (e) {
+      throw storeExceptionFromBridge(e);
+    }
+  }
 
   @override
   Future<List<String>> verifiedOrigins(String drive) =>

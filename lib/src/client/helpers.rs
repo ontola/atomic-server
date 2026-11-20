@@ -705,6 +705,38 @@ pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> Atom
     post_commit_custom_endpoint(&endpoint, commit, store).await
 }
 
+/// Accepts an invite `token` at the server `origin` as `agent`: an
+/// authenticated `POST {origin}/invites?token=…`. The server checks the
+/// token and adds `agent` to the target's `read` (and `write`) list. This is
+/// the server form of an invite; the serverless one is redeemed at the
+/// inviter's device (`sync::invite`).
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn accept_invite_at_server(origin: &str, token: &str, agent: &Agent) -> AtomicResult<()> {
+    let url = format!(
+        "{}/invites?token={}",
+        origin.trim().trim_end_matches('/'),
+        url::form_urlencoded::byte_serialize(token.trim().as_bytes()).collect::<String>()
+    );
+    let client = http_client_builder()
+        .build()
+        .map_err(|e| format!("Could not build HTTP client: {}", e))?;
+    let mut req = client
+        .post(&url)
+        .header("Accept", crate::parse::JSON_AD_MIME);
+    for (k, v) in get_authentication_headers(&url, agent)? {
+        req = req.header(k, v);
+    }
+    let resp = req.send().await.map_err(|e| {
+        crate::errors::AtomicError::upstream_unreachable(format!("Could not reach {}: {}", origin, e))
+    })?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        return Ok(());
+    }
+    let body = resp.text().await.unwrap_or_default();
+    Err(format!("The server refused the invite (status {}): {}", status, body).into())
+}
+
 /// Posts a Commit to an endpoint
 /// Default commit endpoint is `https://example.com/commit`
 async fn post_commit_custom_endpoint(
