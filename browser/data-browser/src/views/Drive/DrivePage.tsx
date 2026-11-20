@@ -14,10 +14,6 @@ import {
 } from '@components/ResourceDecorations';
 import { Column } from '@components/Row';
 import { IconButton } from '@components/IconButton/IconButton';
-import {
-  DriveSwitcher,
-  DriveSwitcherChevronTrigger,
-} from '@components/SideBar/DriveSwitcher';
 import { styled } from 'styled-components';
 import { useDialog } from '@components/Dialog/useDialog';
 import { FaGear } from 'react-icons/fa6';
@@ -99,7 +95,6 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
                 {vectorIndexing && <VectorIndexingIndicator />}
               </TitleArea>
               <Actions>
-                <DriveSwitcher Trigger={DriveSwitcherChevronTrigger} />
                 <TitleDecorationAffordances
                   resource={resource}
                   onPickIcon={() => setIconPickerOpen(true)}
