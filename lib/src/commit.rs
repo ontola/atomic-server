@@ -1363,6 +1363,9 @@ impl Commit {
         // Check if all required props are there
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
+            // `envelopes` only exists with the `db` feature (clients such as
+            // atomic-cli build without it and never store envelopes).
+            #[cfg(feature = "db")]
             if applied.changed_props.contains(urls::RETENTION) {
                 crate::envelopes::check_retention_value(&applied.resource_new)?;
             }

@@ -46,10 +46,11 @@ export interface WebsiteArtifact {
   [key: string]: unknown;
 }
 
-/** The schema `ensureSchema` registered for websites on a drive. */
-export interface WebsiteSchema {
-  classes?: Record<string, string>;
-  properties?: Record<string, string>;
+/** The class and property subjects one website resource uses (fixed website/v1 or legacy per-drive). */
+export interface WebsiteTerms {
+  source: 'fixed' | 'legacy';
+  class: string;
+  properties: Record<'design' | 'release' | 'artifact', string | undefined>;
 }
 
 /**
@@ -158,7 +159,7 @@ export interface E2EModules {
       resource: Resource,
     ): Promise<{
       config: WebsiteConfig;
-      schema: WebsiteSchema;
+      terms: WebsiteTerms;
       property: string;
     }>;
     starterWebsite(title?: string, document?: string): WebsiteConfig;

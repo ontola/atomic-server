@@ -22,7 +22,6 @@ pub const FOLLOW_EVENT: &str = "https://atomicdata.dev/classes/FollowEvent";
 pub const IMPORTER: &str = "https://atomicdata.dev/classes/Importer";
 pub const LENS: &str = "https://atomicdata.dev/classes/Lens";
 pub const ERROR: &str = "https://atomicdata.dev/classes/Error";
-pub const BOOKMARK: &str = "https://atomicdata.dev/class/Bookmark";
 pub const DOCUMENT_V2: &str = "https://atomicdata.dev/classes/DocumentV2";
 pub const ONTOLOGY: &str = "https://atomicdata.dev/class/ontology";
 pub const ENDPOINT_RESPONSE: &str =
@@ -192,8 +191,6 @@ pub const SEARCH_PROPERTY: &str = "https://atomicdata.dev/properties/search/prop
 pub const SETUP_RESET: &str = "https://atomicdata.dev/properties/setup/reset";
 pub const SEARCH_CHUNKS: &str = "https://atomicdata.dev/properties/search/chunks";
 pub const URL: &str = "https://atomicdata.dev/property/url";
-pub const PREVIEW: &str = "https://atomicdata.dev/property/preview";
-// ... for Bookmarks
 pub const IMAGE_URL: &str = "https://atomicdata.dev/properties/imageUrl";
 // ... for Hierarchy / Drive
 pub const PARENT: &str = "https://atomicdata.dev/properties/parent";
@@ -363,7 +360,6 @@ pub const SUDO_AGENT: &str = "sudo:agent";
 
 // Paths
 pub const PATH_IMPORT: &str = "/import";
-pub const PATH_FETCH_BOOKMARK: &str = "/fetch-bookmark";
 pub const PATH_QUERY: &str = "/query";
 pub const PATH_PRUNE_TESTS: &str = "/prunetests";
 pub const PATH_INVITE: &str = "/invites";

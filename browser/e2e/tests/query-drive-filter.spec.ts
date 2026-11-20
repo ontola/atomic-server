@@ -19,7 +19,7 @@ import {
  * resource (resources are scoped by drive DID), so every default-drive
  * query returned zero rows — wasted work that the user noticed in their
  * console: tons of `/query?drive=http%3A%2F%2Flocalhost%3A9883&...`
- * requests on `/app/sync` after a hard refresh.
+ * requests on `/app/settings?section=sync` after a hard refresh.
  *
  * Note: most `/query` traffic flows over the WebSocket (the store
  * prefers `ws.fetch(subject)` when the socket is open, see

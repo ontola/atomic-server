@@ -1139,7 +1139,7 @@ export async function waitForClassInstanceSearchable(
 }
 
 export async function openAgentPage(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
 }
 
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
@@ -1372,7 +1372,7 @@ export async function newResource(klass: string, page: Page) {
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
-    // dialog opens (bookmark/table), or the in-place NewFormFullPage shows
+    // dialog opens (table), or the in-place NewFormFullPage shows
     // up (custom user classes — `/app/new?classSubject=...` keeps the path
     // but renders the resource form).
     await Promise.any([
@@ -2000,12 +2000,9 @@ export async function openNewSubjectWindow(
 }
 
 export async function openConfigureDrive(page: Page) {
-  // Drive management lives on the User Settings page (/app/server redirects
-  // there too, but go direct).
-  await page.goto(`${FRONTEND_URL}/app/agent`);
-  await expect(
-    page.getByRole('heading', { name: 'User', exact: true }),
-  ).toBeVisible({
+  // Drive management lives in the Drive section of the settings page.
+  await page.goto(`${FRONTEND_URL}/app/settings?section=drive`);
+  await expect(page.getByTestId('my-drives')).toBeVisible({
     timeout: 10000,
   });
 }
@@ -2031,7 +2028,7 @@ export async function changeDrive(
       }
     }
 
-    // The open-by-URL input starts empty on the User Settings page; the Open
+    // The open-by-URL input starts empty in the Drive settings; the Open
     // button is disabled when the target equals the current drive.
     const currentDriveInput = page.getByTestId('drive-url-input');
     await currentDriveInput.fill(subject);

@@ -86,10 +86,8 @@ async function stubIrohSync(page: Page, body: unknown) {
 }
 
 async function gotoSync(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/sync`);
-  await expect(
-    page.getByRole('heading', { name: 'Sync', exact: true }),
-  ).toBeVisible();
+  await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
+  await expect(page.getByText('Sync & devices', { exact: true })).toBeVisible();
 }
 
 // Connect a device takes a pairing code or a server address in one box.

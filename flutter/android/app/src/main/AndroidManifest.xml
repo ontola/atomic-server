@@ -67,6 +67,21 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="atomic"/>
             </intent-filter>
+            <!-- The app reads links itself (MainActivity, main.dart); Flutter
+                 must not also turn them into a route name. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
+            <!-- App Link: the sign-in link atomic.place mails opens here when
+                 the app is installed (verified through
+                 https://atomic.place/.well-known/assetlinks.json, served by
+                 the portal from ANDROID_APP_LINKS), the browser otherwise. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="atomic.place"/>
+                <data android:pathPrefix="/signin"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

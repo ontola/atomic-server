@@ -321,7 +321,7 @@ conformance is claimed.
 - [ ] Existing tables keep drive-local properties; reviewed Lens mappings only.
 - [ ] `timeTrackingSchema()` is removed from `@tomic/lib`. The Clockify app (atomic-plugins) now writes ontology-kit's `time-entry-v1` (`work-*` on the kit's base), not `workSchema`; the two are still different properties.
 - [ ] Same frozen-package caveat as the task pilot.
-- [x] Rule: a term that more than one drive or app must understand lives in a fixed namespace with the same ID everywhere (`lib/defaults`, `shared-vocabularies.ts`), never in `ensureSchema`, which gives every drive its own property ID. The integration visibility flags were the first conversion (`preferences/v1`); `ensure-schema-callers.test.ts` lists the callers that remain, and that list may only shrink.
+- [x] Rule: a term that more than one drive or app must understand lives in a fixed namespace with the same ID everywhere (`lib/defaults`, `shared-vocabularies.ts`), never in `ensureSchema`, which gives every drive its own property ID. The integration visibility flags were the first conversion (`preferences/v1`); `ensure-schema-callers.test.ts` lists the callers that remain, and that list may only shrink. Websites were the second (`website/v1`, `websiteSchema`): new websites use the fixed terms, and an old per-drive website migrates to them on its next write (`websiteModel.ts`, remove the legacy lookup once old websites are migrated).
 
 ## Time Tracker / Clockify pilot (2026-09-07)
 

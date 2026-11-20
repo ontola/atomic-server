@@ -73,7 +73,7 @@ test('remote username change updates existing chat author', async ({
     .getByText('Message from renamed author', { exact: true })
     .locator('xpath=ancestor::*[@about][1]');
   await expect(message).toContainText('Dev User');
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
   await page
     .getByLabel('Your name', { exact: true })
     .fill('Renamed Collaborator');

@@ -2,10 +2,12 @@ import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_store_flutter/atomic_store_flutter.dart'
     show SecureAccountSessionStore;
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:http/http.dart' as http;
 
 import 'atomic_auth.dart';
 import 'atomic_client.dart';
 import 'session.dart' show createSecureStorage;
+import 'sign_in_link.dart';
 
 /// What the person's managed account says about one workspace: the address it
 /// belongs to, and whether Cloud Vault (encrypted backup) and Cloud Server
@@ -71,6 +73,29 @@ class AccountStore {
       _attemptedAt = null;
     } finally {
       client.close();
+    }
+  }
+
+  /// Opens the account with the mailed sign-in [link] and saves the session,
+  /// so whatever waits for the account (the AI sign-up dialog polls) finds it.
+  /// Returns false when [link] is not a sign-in link for [portal] (nothing is
+  /// sent); throws a [StateError] with a sentence fit to show when the portal
+  /// refuses it (expired, already used) or cannot be reached.
+  static Future<bool> redeemSignInLink(String link,
+      {String portal = defaultPortal, http.Client? client}) async {
+    final parsed = SignInLink.parse(link,
+        portal: shared.AtomicAccountClient.providerOrigin(portal));
+    if (parsed == null) return false;
+    final account = shared.AtomicAccountClient(portal, client: client);
+    try {
+      await account.loginWithLinkToken(parsed.token);
+      await save(account.exportSession());
+      // Whoever was refused before the account existed may sign in now.
+      _attemptedAgent = null;
+      _attemptedAt = null;
+      return true;
+    } finally {
+      account.close();
     }
   }
 
