@@ -1,87 +1,60 @@
 # Built-in Syncables: shared CI handoff
 
-## Completed follow-up (2026-11-19)
-
-- Canonical `github` catalog published by atomic-plugins PR #748, merged as
-  `91a2c7418b64092aa90277b17148bb359690d978`. SaaS deployment 44545754328
-  from `18cc23d2c1b151efb8d4d2c5c5a958b7cbeeb99e` passed and serves only the
-  new provider ID. All other 16 profiles and the composed API bytes are unchanged.
-  Michiel explicitly permits reconnecting all old GitHub clients; no route alias
-  or credential/source migration is supplied for the provider rename.
-- Principal HTTP 401s get per-slot recovery; genuinely empty accounts get an empty
-  state. Saved accounts/data and unrelated errors remain visible. Explicit legacy
-  reconnect uses verified cached identity and verifies fresh identity on return.
-- Verified typed identity can reuse a historical account across slots. Existing
-  conflicting entries remain intact for review or the approved reinstall; no
-  resources were merged or deleted automatically.
-- Collection replaces the generated Browse label, with a distinct icon. Historical
-  default labels are presented consistently without rewriting stored/custom names.
-  All six translation catalogs were settled through Vite and reviewed.
-- The [flat collection/filter implementation](flat-syncable-collections.md) now
-  provides canonical entity tables and independent saved rules. Unit/type checks
-  pass; matching browser and localhost acceptance are in progress.
-
-## Remaining work
+Local implementation and acceptance are complete. Remaining gate:
 
 - [ ] Trekmeester runs full shared server CI on the final PR #2522 head, reviews
-  and merges. Workers must not dispatch or rerun shared CI for this refactor.
-  Remove this handoff after acceptance; implementation is locally complete.
+  and merges. Workers must not dispatch or rerun shared CI. Remove this handoff
+  after that acceptance.
 
-## Final source and published dependencies
+## Contract
 
-- Owned server worktree: `builtin-syncables-completion/atomic-server`, branch
-  `codex/builtin-syncables-completion`, published through existing PR #2522 on
-  `feat/builtin-syncables-foundation`. Refactor base: `43eb0306c0555f45db77ee2ed5dd8ddde1d168c6`.
-- atomic-plugins PR #747 passed all required checks and merged as
-  `4f7ceb8100cb461e3e0b3e223bcfaaa4b6883935`. The actual registry package
-  `syncables@0.29.0` is pinned with a frozen lockfile. Archive integrity matches
-  the tested candidate; provenance names the merged source and official publisher.
-- Immutable IAP profile `2026-11-19-collection-navigation.json` is published and
-  deployed on integrations.atomic.place by SaaS run 44520913028. All 17 providers,
-  runtime binary, public connection key, credentials and permissions were retained.
-  Public GitHub document SHA-256:
+`Drive → provider App → authenticated principal / Public → item type`.
+
+The catalog supplies identity, API schemas, relationships and filter bindings.
+One canonical table holds each item type; following a relationship saves a filter
+of that table. Filters have independent sync/pause status and memberships.
+Overlapping reads share typed rows, explicit field evidence and durable run order.
+Complete reads replace only their own membership; incomplete/cancelled reads
+retain accepted data. Canonical identity survives same-drive moves.
+
+Collection and Table are native views of stored data. Open saves a declared scope
+without provider/catalog reads. Sync runs in an opaque iframe through the existing
+bridge; the proxy retains credentials. Request authority comes from the selected
+filter, current catalog and actual response provenance, without Drive-root iframe
+write grants. Reopening Sync revalidates metadata without restarting its worker.
+
+Proven legacy sources preserve subjects, local IDs, user fields and read plans.
+Ambiguous/unprovable sources block competing allocations. Out-of-root moves remain
+protected. Adopted tables are navigation leaves despite retained old local IDs;
+cold rows hydrate before ownership validation. Canonical `github` replaces
+`github-issues`; Michiel approved reinstall/reconnect of all old clients. Old data
+is retained rather than deleted or merged automatically.
+
+## Dependency and local proof
+
+- Tested application source: `bda3250fe99b1efbd90e9c0e735293662d28f0a5` on
+  `codex/builtin-syncables-completion`, published to PR #2522 through
+  `feat/builtin-syncables-foundation`. Subsequent cleanup is documentation only.
+- Actual npm `syncables@0.30.0`, released from atomic-plugins PR #749, merge
+  `e9933e8fbf772c48476e3345d2263494598664ee`. Relevant PR checks and publication
+  run 44556325558 passed; registry bytes/provenance match the tested candidate.
+- 2,938 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
+  pre-commit lint/format, compiler checks and six-language translation audit pass.
+- 1,791 @tomic/lib tests pass, with one existing skip. Query snapshots replace
+  independent server pages while ordinary documents retain CRDT merge behavior.
+- 14/14 optimized native Chromium journeys pass, one worker, zero retries,
+  skips or flakes. Includes overlap, independent pause, background/offline
+  navigation, reconnect, legacy adoption, 21-page Public reads, unrelated provider
+  and existing Apps cases. Desktop/mobile screenshots shared in chat.
+- Native report: `.e2e-runs/2026-11-20T07-00-18.764Z-KHeWii/{report,run}.json`.
+  Executable SHA-256:
+  `11e4e4be313c07a93c3435f00292cfd828934596b28a3f2ebe3902cf3eff8ebf`.
+- Localhost port 52771 runs that private executable against the existing drive.
+  HTTP health and host/Sync asset bytes match the tested distribution. Live
+  catalog SHA-256 remains
   `ac247f6b3cc28c3be5f24e7858c2232bd4a50c0640a0b241823171157d21f621`.
 
-## Local acceptance
-
-- 2,889 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
-  scoped checks and final pre-commit lint/format are required before publishing.
-- Matching optimized native build with the plugin runtime: 14/14 Chromium
-  journeys pass, one worker, zero retries, no skips/flakes. Includes ten existing
-  Apps journeys plus authenticated selected hierarchy/background sync/pause and
-  reconnect, expired orphan-slot recovery, Public migration/21-page pagination,
-  and an unrelated Notebook API.
-- Report: `.e2e-runs/2026-11-19T14-36-30.123Z-lq9pmP/{report,run}.json`.
-  Desktop and mobile screenshots captured and shared in the implementation chat.
-  Records are invented; this is not a fresh live GitHub OAuth acceptance run.
-- The report records pre-commit HEAD `058cc9020`; the tested worktree also included
-  the follow-up recovery, identity-proof and Collection-label fixes. Application source and tests
-  remained frozen after the build/run; only documentation/handoff notes followed.
-- Tested executable SHA-256:
-  `cf0c0a45253e50223e74eac9dd8938bc652cf99bf9551db06a76280f3e501bd8`.
-  Localhost port 52771 uses that private executable with the existing drive.
-  HTTP health and host-app/Sync-app bytes match the tested embedded assets.
-- A pre-existing date-formula test fails in Europe/Amsterdam and passes in UTC;
-  its source is unchanged. The earlier full hosted pass 44341195612 tested
-  `43eb0306c`, not this refactor. New-head full shared CI remains unverified.
-
-## Contract and compatibility limits
-
-Drive → provider App → authenticated principal or Public → catalog collections.
-Authenticated Principal, CRUD references and standard OpenAPI response Links own
-identity and organization/repository/Issues navigation. The new GitHub profile
-omits legacy owner-path mutation annotations; historical published profiles remain
-unchanged. GitHub Issues explicitly includes pull requests.
-
-The actual Syncables library owns API discovery, bound reads, pagination and typed
-projection. Atomic owns storage, UI and permission checks. Refresh executes through
-the existing opaque AppFrame bridge; native views read saved Atomic data only.
-Credentials stay outside the iframe. Selected-root write boundaries are unchanged;
-compact logical-parent hashes preserve identity across moves within bridge limits.
-
-Migration retains subjects, user fields and manual locations, and fails closed on
-incomplete/duplicate query pages or ambiguous aliases. Unresolved old-format sources
-opened directly show a validated integration-App link before frame/schema setup.
-Aliases outside the selected frame root are retained without broader drive grants.
-Paused Sync views retain Resume after reload while provider reads and starts remain
-blocked, including requests awaiting principal verification.
+Browser fixtures use invented records; this is not a new live GitHub OAuth test.
+Full shared server CI has not validated this application head. Earlier full passes
+are not evidence for this refactor. Bidirectional provider writes and unattended
+server-side synchronization remain outside this MVP.
