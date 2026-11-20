@@ -161,6 +161,9 @@ enum RowShape { circle, square }
 /// How far (of 24) the ink of a Material glyph starts inside its box. Most
 /// outlined icons have 2; the tall ones more.
 double glyphInset(IconData icon) {
+  // Font Awesome's glyphs (the class icons, as in the web app) fill their
+  // box from the left edge.
+  if (icon.fontFamily != Icons.add.fontFamily) return 0;
   if (icon == Icons.description_outlined) return 4;
   if (icon == Icons.add) return 5;
   return 2;
@@ -339,10 +342,15 @@ class _RowLeadingState extends State<RowLeading> {
       // A bare glyph that starts at the slot's edge has no circle behind
       // it: centred in one it would start 6 dp right of the pictures.
       if (circle && !widget.alignGlyphStart) background = c.mainSelectedBg;
+      // Grey, as the web app's sidebar draws its icons (`textLight`); blue
+      // only on the circle of a person or chat without a picture.
+      final ink = background == null ? c.textSecondary : c.main;
+      // Never larger than the slot: the glyph is not clipped any more, and a
+      // 20 dp icon stuck out of a 14 dp caption slot into the text next to it.
+      final glyph = widget.iconSize < size ? widget.iconSize : size;
       base = widget.alignGlyphStart
-          ? GlyphStart(
-              icon: widget.fallbackIcon, size: widget.iconSize, color: c.main)
-          : Icon(widget.fallbackIcon, size: widget.iconSize, color: c.main);
+          ? GlyphStart(icon: widget.fallbackIcon, size: glyph, color: ink)
+          : Icon(widget.fallbackIcon, size: glyph, color: ink);
     }
     final radius =
         BorderRadius.circular(circle ? size / 2 : widget.cornerRadius);
@@ -351,19 +359,21 @@ class _RowLeadingState extends State<RowLeading> {
       height: size,
       child: DecoratedBox(
         decoration: BoxDecoration(color: background, borderRadius: radius),
-        child: ClipRRect(
-          borderRadius: radius,
-          child: Stack(
-            fit: StackFit.expand,
-            alignment: Alignment.center,
-            children: [
-              Align(
-                  alignment: widget.alignGlyphStart && background == null
-                      ? Alignment.centerLeft
-                      : Alignment.center,
-                  child: base),
-              if (provider != null)
-                Image(
+        // Only the picture is clipped to the corners: a glyph that starts at
+        // the slot's edge was cut off by them.
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            Align(
+                alignment: widget.alignGlyphStart && background == null
+                    ? Alignment.centerLeft
+                    : Alignment.center,
+                child: base),
+            if (provider != null)
+              ClipRRect(
+                borderRadius: radius,
+                child: Image(
                   key: const Key('row-picture'),
                   image: ResizeImage.resizeIfNeeded(
                       (size * MediaQuery.devicePixelRatioOf(context)).ceil(),
@@ -385,8 +395,8 @@ class _RowLeadingState extends State<RowLeading> {
                     return const SizedBox.shrink();
                   },
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
