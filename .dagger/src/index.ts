@@ -709,18 +709,8 @@ export class AtomicServer {
           '--parallel',
           'typecheck',
         ])
-        // 3. data-browser is the one package that reaches repo-root
-        //    `integrations`, and those files import
-        //    `../../browser/lib/src/index.js`, which here is /browser: the
-        //    symlink `jsSource()` makes so integration tsconfigs can find
-        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
-        //    prefix it is handed, so compiling data-browser as /app while its
-        //    own imports arrive as /browser produces two unrelated
-        //    declarations of every type in `lib`, which is the wall of
-        //    "Store is not assignable to Store" the first attempt hit.
-        //    Naming the project by its /browser path puts both ends on one
-        //    prefix. A workdir cannot do this: the kernel resolves the
-        //    symlink, so `process.cwd()` would be /app again.
+        // 3. Pass the /browser project path explicitly so TypeScript uses
+        //    that prefix. A working directory resolves the symlink to /app.
         .withExec([
           'pnpm',
           '--filter',
@@ -743,15 +733,6 @@ export class AtomicServer {
       depsContainer
         .withWorkdir('/app')
         .withExec(['pnpm', 'run', 'test'])
-        // jsBuild mounts external integration tests at /integrations and
-        // exposes the installed browser workspace at /browser.
-        .withExec([
-          '/app/node_modules/.bin/vitest',
-          'run',
-          '--config',
-          '/integrations/localthought/vitest.config.ts',
-        ])
-        .withWorkdir('/app')
         .withExec([
           'node',
           '--test',
@@ -1394,9 +1375,6 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
-      // Integration sources live at the repository root. The browser mounts at
-      // /app, and its raw imports resolve these paths from /integrations.
-      .withDirectory('/integrations', this.source.directory('integrations'))
       // `@tomic/plugin`'s export-bindings test reads the Rust example's
       // manifest and checked-in bindings from the repository root, which
       // resolves from /app/plugin/src to /plugin-examples.
@@ -1404,9 +1382,7 @@ export class AtomicServer {
         '/plugin-examples/host-abi-statement',
         this.source.directory('plugin-examples/host-abi-statement'),
       )
-      // integrations/localthought/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
-      // so that relative path resolves.
+      // jsTypecheck() addresses the data-browser project through this alias.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1810,7 +1786,6 @@ export class AtomicServer {
           source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withDirectory('/code/server', source.directory('server'))
-        .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory(

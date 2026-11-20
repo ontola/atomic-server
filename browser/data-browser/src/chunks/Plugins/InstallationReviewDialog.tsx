@@ -54,7 +54,7 @@ interface InstallationReviewDialogProps {
 }
 
 const INSTALL_VERB = {
-  title: 'Install plugin',
+  title: 'Install app',
   confirm: 'Install',
   busy: 'Installing…',
 };
@@ -91,7 +91,7 @@ export const InstallationReviewDialog: React.FC<
   const title =
     review.name && review.namespace
       ? `${review.namespace}/${review.name}`
-      : (review.name ?? pending.title ?? 'plugin');
+      : (review.name ?? pending.title ?? 'app');
   const description = review.description ?? pending.description;
   const hasConfig =
     review.configSchema !== undefined ||

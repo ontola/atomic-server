@@ -64,7 +64,7 @@ test('a Listing opens the Installation review before anything is installed', asy
 
   const dialog = page.locator('dialog[open]');
   await expect(
-    dialog.getByRole('heading', { name: 'Install plugin' }),
+    dialog.getByRole('heading', { name: 'Install app' }),
   ).toBeVisible();
   await expect(dialog.getByText('Storage', { exact: true })).toBeVisible();
   await expect(dialog.getByText('Remembers the cursor')).toBeVisible();

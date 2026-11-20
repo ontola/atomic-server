@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from 'vitest';
 import { Agent, Store, core, commits, JSCryptoProvider } from './index.js';
 import { bootstrapCoreVocab } from './test-vocab.js';
+import { mockLocalPersistence } from './test-store.js';
 
 /** Creates a fresh Store with the given agent.
  *
@@ -16,6 +17,7 @@ async function freshStore(agent: Agent): Promise<Store> {
   });
   await bootstrapCoreVocab(store);
   store.setAgent(agent);
+  mockLocalPersistence(store);
 
   return store;
 }

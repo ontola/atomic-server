@@ -153,8 +153,8 @@ export function PluginSecrets({
 
       {nothingToShow && (
         <Muted>
-          This plugin asks for no credentials. To use one, have it declare what
-          it needs —{' '}
+          This app asks for no credentials. To use one, have it declare what it
+          needs —{' '}
           <code>
             export const manifest = {'{'} secrets: [{'{'} name, origin {'}'}]{' '}
             {'}'}
@@ -191,7 +191,7 @@ export function PluginSecrets({
             <Column gap='0.1rem'>
               <strong>{secret.name}</strong>
               <Muted>
-                No longer asked for by this plugin — {describeUse(secret)}
+                No longer asked for by this app — {describeUse(secret)}
               </Muted>
             </Column>
             <Button subtle onClick={() => revoke(secret.name)}>
@@ -235,7 +235,7 @@ function SecretSlot({
           <Column gap='0.1rem'>
             <strong>{secret.description ?? secret.name}</strong>
             <Muted>
-              Sent only to <code>{secret.origin}</code>. The plugin uses it as{' '}
+              Sent only to <code>{secret.origin}</code>. The app uses it as{' '}
               <code>secret:{secret.name}</code> and never sees the value.
             </Muted>
           </Column>
@@ -325,8 +325,8 @@ function UndeclaredSlot({
                 </>
               ) : candidateOrigins.length > 1 ? (
                 <>
-                  Used as <code>secret:{name}</code>. This plugin requests
-                  several origins — pick the one this credential belongs to.
+                  Used as <code>secret:{name}</code>. This app requests several
+                  origins — pick the one this credential belongs to.
                 </>
               ) : (
                 <>

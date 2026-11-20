@@ -1,3 +1,4 @@
+import { rowFromLoroSnapshot } from './test-client-db-row.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from './agent.js';
 import type { ClientDbOutboxWrite, ClientDbWorker } from './client-db.js';
@@ -54,15 +55,18 @@ class FakeClientDb {
 
   async flush() {}
 
-  async putResourceWithSnapshot(
+  async putLoroSnapshot(
     subject: string,
-    jsonAd: string,
-    snapshot?: Uint8Array,
+    snapshot: Uint8Array,
+    lastCommit?: string,
     outbox?: ClientDbOutboxWrite,
   ) {
     if (!this.isOpen) throw new Error('ClientDb unavailable: still opening');
     this.putCalls.push({ subject, outbox });
-    this.rows.set(subject, { jsonAd, snapshot: snapshot ?? null });
+    this.rows.set(subject, {
+      jsonAd: rowFromLoroSnapshot(subject, snapshot, lastCommit),
+      snapshot,
+    });
     if (outbox) this.applyOutbox(outbox, true);
   }
 
@@ -316,6 +320,7 @@ describe('the outbox in the client database', () => {
     store.setClientDb({
       isReady: true,
       putResourceWithSnapshot: async () => undefined,
+      putLoroSnapshot: async () => undefined,
     } as unknown as ClientDbWorker);
     await store.outbox.whenHydrated();
 

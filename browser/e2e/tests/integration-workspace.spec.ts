@@ -109,7 +109,8 @@ test('workspace owns its views and links to separate connection settings', async
     const schema = await ensureSchema(store, drive, pluginSchema());
 
     const save = async (resource: { save(): Promise<string> }) => {
-      if ((await resource.save()) === 'offline')
+      const result = await resource.save();
+      if (result === 'offline' || result === 'queued')
         throw new Error('AtomicServer disconnected while building the fixture');
     };
 

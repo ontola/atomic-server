@@ -280,6 +280,7 @@ export async function run(ctx) {{
             store: db.clone(),
             for_agent: host.for_agent.clone(),
             signing_as: None,
+            refusal_code: Default::default(),
         };
         let running = sync_session::advance(
             db,
@@ -400,6 +401,7 @@ export async function run(ctx) {{
             store: db.clone(),
             for_agent: host.for_agent.clone(),
             signing_as: None,
+            refusal_code: Default::default(),
         };
         let done = sync_session::advance(
             db,

@@ -1,19 +1,44 @@
 // @wc-ignore-file
-import { core, urls, useCurrentAgent, useResources } from '@tomic/react';
+import { useEffect, useSyncExternalStore } from 'react';
+import {
+  contacts,
+  core,
+  StoreEvents,
+  urls,
+  useStore,
+  useCollection,
+  useCollectionPage,
+  useCurrentAgent,
+  useResources,
+} from '@tomic/react';
+import {
+  TEMPLATE_CATALOG,
+  WELCOME_DOC_NAME,
+} from '../chunks/Templates/catalog';
+import {
+  getRecentResources,
+  subscribeRecentResources,
+} from '../helpers/recentResources';
+import { useVisibleDriveChildren } from './useVisibleDriveChildren';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useDriveChats } from '@components/SideBar/AIPanel';
-import { readManagedAccountBinding } from '@helpers/managed/binding';
-import { isDeviceLinked } from '@helpers/managed/deviceLink';
-import { useHasManagedAccount } from './useHasManagedAccount';
-import { useLocalStorage } from './useLocalStorage';
+import { useIsLinkedToAccount } from './useIsLinkedToAccount';
+import { pendingInviteQuery } from '../helpers/pendingInvites';
 import { usePrivateDrive } from './usePrivateDrive';
-import { useSavedDrives } from './useSavedDrives';
+import { usePrivateDriveSync } from './usePrivateDriveSync';
+import { userSettingProps, useUserSetting } from './useUserSetting';
 
-export type OnboardingStepId = 'name' | 'project' | 'ai' | 'invite' | 'save';
+export type OnboardingStepId =
+  | 'start'
+  | 'name'
+  | 'create'
+  | 'ai'
+  | 'invite'
+  | 'save';
 
 /** What a step is waiting for before its button can do anything. */
-export type OnboardingNeed = 'project' | 'ai-source';
+export type OnboardingNeed = 'ai-source';
 
 export interface OnboardingStep {
   id: OnboardingStepId;
@@ -22,16 +47,13 @@ export interface OnboardingStep {
 }
 
 /**
- * The card keeps three local flags per agent. Nothing is written to a drive:
- * what the card shows is derived from what exists, and these only remember a
- * choice or a fact that leaves no trace to derive from.
+ * What the card shows is derived from what exists. The one fact that leaves no
+ * trace to derive from, which drive is the Welcome drive, is a user setting on
+ * the personal drive (`useUserSetting`); these keys are its offline fallback.
  */
 export const onboardingKeys = {
-  hidden: (agent?: string) => `atomic.gettingStarted.hidden:${agent}`,
   /** The drive `startWelcomeDrive` made; it stays the Welcome drive when renamed. */
   welcomeDrive: (agent?: string) => `atomic.gettingStarted.welcome:${agent}`,
-  /** An invite link was made. Joining leaves rights; a link nobody used does not. */
-  invited: (agent?: string) => `atomic.gettingStarted.invited:${agent}`,
 };
 
 const same = (a: string, b?: string) =>
@@ -43,73 +65,75 @@ export function isDefaultDriveName(name: string | undefined): boolean {
 }
 
 export interface OnboardingInput {
+  /** Set on the Welcome drive when it still has its Start here document. */
+  startHere?: { opened: boolean };
   driveName?: string;
-  /** Drives on the private drive's list, in the order they were added. */
-  savedDrives: string[];
-  privateDrive?: string;
-  welcomeDrive?: string;
+  /** Visible children of the drive the panel is for, and how many its template gave. */
+  childCount: number;
+  templateChildCount: number;
   hasAIChat: boolean;
   aiAvailable: boolean;
-  /** Agents with rights on each project drive, other than the signed-in one. */
-  otherAgentsOnProjects: boolean;
-  invited: boolean;
+  /** Agents with rights on the panel's drive, other than the signed-in one. */
+  otherAgentsOnDrives: boolean;
+  /** An invite was sent for that drive (not necessarily accepted yet). */
+  inviteSent?: boolean;
   accountLinked: boolean;
-}
-
-/** The project drive: the most recently added one that is neither home nor Welcome. */
-export function projectDrives(input: OnboardingInput): string[] {
-  return input.savedDrives.filter(
-    d => !same(d, input.privateDrive) && !same(d, input.welcomeDrive),
-  );
 }
 
 /** The steps in order, each with a derived `done` and, if blocked, why. */
 export function deriveOnboardingSteps(
   input: OnboardingInput,
 ): OnboardingStep[] {
-  const hasProject = projectDrives(input).length > 0;
-
   return [
+    ...(input.startHere
+      ? [{ id: 'start' as const, done: input.startHere.opened }]
+      : []),
     { id: 'name', done: !isDefaultDriveName(input.driveName) },
-    { id: 'project', done: hasProject },
+    { id: 'create', done: input.childCount > input.templateChildCount },
     {
       id: 'ai',
       done: input.hasAIChat,
       needs: input.aiAvailable ? undefined : 'ai-source',
     },
-    {
-      id: 'invite',
-      done: input.invited || input.otherAgentsOnProjects,
-      needs: hasProject ? undefined : 'project',
-    },
+    { id: 'invite', done: input.otherAgentsOnDrives || !!input.inviteSent },
     { id: 'save', done: input.accountLinked },
   ];
 }
 
-export function useOnboardingProgress(driveName?: string) {
+/**
+ * Whether any email-invite Contact points at one of `drives`. Such a Contact
+ * lives in the inviter's own private drive (see `pendingInvites.ts`), so it is
+ * by construction one this agent created.
+ */
+export function hasInviteForDrives(
+  invitedTargets: Array<string | undefined>,
+  drives: string[],
+): boolean {
+  return invitedTargets.some(
+    t => typeof t === 'string' && drives.some(d => same(d, t)),
+  );
+}
+
+export function useOnboardingProgress(drive: string, driveName?: string) {
   const [agent] = useCurrentAgent();
   const { privateDrive } = usePrivateDrive();
-  const [savedDrives] = useSavedDrives();
   const { enableAI, availableProviders } = useAISettings();
   const chats = useDriveChats(privateDrive);
-  const [welcomeDrive] = useLocalStorage<string | undefined>(
+  const [welcomeDrive] = useUserSetting<string | undefined>(
+    userSettingProps.welcomeDrive,
     onboardingKeys.welcomeDrive(agent?.subject),
     undefined,
   );
-  const [invited] = useLocalStorage(
-    onboardingKeys.invited(agent?.subject),
-    false,
-  );
-  const [hidden, setHidden] = useLocalStorage(
-    onboardingKeys.hidden(agent?.subject),
-    false,
-  );
-  // Signing in with an email lands a cookie session, which leaves neither a
-  // binding nor a device token; the account itself is the proof.
-  const hasAccount = useHasManagedAccount();
-  const base = { savedDrives, privateDrive, welcomeDrive } as OnboardingInput;
-  const projects = projectDrives(base);
-  const resources = useResources(projects);
+  const accountLinked = useIsLinkedToAccount();
+  const { subjects: children } = useVisibleDriveChildren(drive);
+  // The Welcome template fills its drive; anything past that is the person's.
+  const templateChildCount = same(drive, welcomeDrive)
+    ? TEMPLATE_CATALOG.find(t => t.id === 'welcome')!.parts.length
+    : 0;
+  // Only the panel's own drive: fetching every saved drive to look for other
+  // members hits legacy drives on dead servers on every render.
+  const shared = same(drive, privateDrive) ? [] : [drive];
+  const resources = useResources(shared);
   const others = [...resources.values()].some(r =>
     [r.get(core.properties.read), r.get(core.properties.write)]
       .flat()
@@ -120,24 +144,69 @@ export function useOnboardingProgress(driveName?: string) {
           a !== urls.instances.publicAgent,
       ),
   );
+  // The query the Share dialog's pending list uses. A query on the property
+  // alone (any target) returns nothing in the browser, so this asks for the
+  // panel's own drive, which is the drive the step is about.
+  const { collection, invalidateCollection } = useCollection(
+    pendingInviteQuery(privateDrive, drive),
+    { pageSize: 100 },
+  );
+  usePrivateDriveSync(privateDrive, invalidateCollection);
+  // A filter on the property alone does not recognise a brand-new Contact as a
+  // member, so an invite recorded in this session (the Share dialog) would
+  // only show after a reload. Refresh when one is made.
+  const store = useStore();
+  useEffect(
+    () =>
+      store.on(StoreEvents.ResourceManuallyCreated, r => {
+        const to = r.get(contacts.properties.invitedTo);
+
+        if (typeof to === 'string' && same(to, drive))
+          void invalidateCollection();
+      }),
+    [store, drive, invalidateCollection],
+  );
+  const inviteMembers = useCollectionPage(collection, 0);
+  const inviteContacts = useResources(privateDrive ? inviteMembers : []);
+  const inviteSent = hasInviteForDrives(
+    [...inviteContacts.values()].map(r => {
+      const t = r.get(contacts.properties.invitedTo);
+
+      return typeof t === 'string' ? t : undefined;
+    }),
+    shared,
+  );
+  const childResources = useResources(
+    same(drive, welcomeDrive) ? children : [],
+  );
+  // Found by the name the template wrote, which is never translated; a
+  // renamed or deleted document drops the step.
+  const startHereSubject = [...childResources.values()].find(
+    r => r.get(core.properties.name) === WELCOME_DOC_NAME,
+  )?.subject;
+  const startHereOpened = useSyncExternalStore(
+    subscribeRecentResources,
+    () =>
+      !!startHereSubject &&
+      getRecentResources(agent?.subject, drive).includes(startHereSubject),
+  );
   const input: OnboardingInput = {
-    ...base,
+    startHere: startHereSubject ? { opened: startHereOpened } : undefined,
     driveName,
+    childCount: children.length,
+    templateChildCount,
     hasAIChat: chats.length > 0,
     aiAvailable: enableAI && availableProviders.length > 0,
-    otherAgentsOnProjects: others,
-    invited,
-    accountLinked:
-      !!readManagedAccountBinding() || isDeviceLinked() || hasAccount === true,
+    otherAgentsOnDrives: others,
+    inviteSent,
+    accountLinked,
   };
   const steps = deriveOnboardingSteps(input);
 
   return {
     steps,
-    /** Where Invite points: the project drive made last. */
-    projectDrive: projects.at(-1),
+    /** The Start here document, for the step to point at. */
+    startHere: startHereSubject,
     doneCount: steps.filter(s => s.done).length,
-    hidden,
-    hide: () => setHidden(true),
   };
 }

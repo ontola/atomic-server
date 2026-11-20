@@ -93,7 +93,7 @@ const PluginViewSession: React.FC<PluginViewProps> = ({ plugin }) => {
       });
       if (!response.ok)
         throw new Error(
-          /* @wc-ignore */ `Plugin asset request failed (${response.status})`,
+          /* @wc-ignore */ `App asset request failed (${response.status})`,
         );
 
       return response.text();

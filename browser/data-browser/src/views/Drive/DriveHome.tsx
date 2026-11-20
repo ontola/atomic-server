@@ -43,6 +43,10 @@ import { useRecentComments } from '@hooks/useRecentComments';
 import { lastEditedAt } from './lastEditedAt';
 import { mergeActivity, type ActivityRow } from './commentActivity';
 
+import { SectionTitle } from './SectionTitle';
+
+export { SectionTitle };
+
 export { lastEditedAt };
 
 const MAX_PEOPLE = 6;
@@ -273,7 +277,10 @@ export function ActivityFeed({
   drive: string;
 }): JSX.Element {
   const store = useStore();
-  const recent = useMemo(() => getRecentResources(drive), [drive]);
+  const recent = useMemo(
+    () => getRecentResources(store.getAgent()?.subject, drive),
+    [store, drive],
+  );
   const children = useMemo(() => new Set(subjects), [subjects]);
   const commented = useRecentComments(drive);
   const hidden = useHiddenDriveSubjects(drive);
@@ -352,15 +359,6 @@ export function ActivityFeed({
     </section>
   );
 }
-
-export const SectionTitle = styled.h2`
-  font-size: 0.85rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: ${p => p.theme.colors.textLight};
-  margin: 0 0 0.75rem;
-`;
 
 const Lines = styled.ul`
   list-style: none;

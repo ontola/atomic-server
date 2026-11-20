@@ -212,7 +212,8 @@ pub fn encode_keepalive_wire_msg() -> Vec<u8> {
 /// yet, or a genuinely unclassified error).
 #[allow(dead_code)]
 pub mod error_code {
-    /// No structured classification — client falls back to string matching.
+    /// No structured classification: the refusal has no code of its own. A
+    /// client treats it as a plain, retryable failure.
     pub const UNKNOWN: u16 = 0;
     /// The commit's subject already exists server-side; this exact write can
     /// never succeed by retrying (see `is_genesis: true, but the resource
@@ -297,6 +298,31 @@ pub mod error_code {
     /// already filled the batch's byte budget. Nothing is wrong with the
     /// subject: ask for it again, on its own or in a smaller batch.
     pub const RESULT_TOO_LARGE: u16 = 15;
+    /// A commit's Loro delta starts past ops the node never received (an
+    /// earlier commit was lost), so none of it applied. Retrying the same
+    /// delta can never succeed; the sender must drop its save cursor and send
+    /// a self-contained snapshot, which always merges. Not terminal, not
+    /// parked: retry, but with the whole snapshot.
+    pub const PENDING_DEPS: u16 = 16;
+    /// The node does not hold the resource's parent (a drive switched to a
+    /// node that never received its root). Every retry fails identically:
+    /// park the entry; a finished resync of the drive re-arms it.
+    pub const MISSING_PARENT: u16 = 17;
+    /// A destroy commit with nothing left to do: the resource is already gone
+    /// here, or was re-created after the destroy was signed. The sender's goal
+    /// is met, so treat it as an acknowledgement.
+    pub const DESTROY_SETTLED: u16 = 19;
+}
+
+/// An error that knows which [`error_code`] answers it on the wire.
+pub trait RefusalCode {
+    fn refusal_code(&self) -> u16;
+}
+
+impl RefusalCode for crate::errors::AtomicError {
+    fn refusal_code(&self) -> u16 {
+        self.code
+    }
 }
 
 /// Pull the `retry_after_ms=<n>` hint out of a `BUSY` error message (or an
@@ -334,73 +360,6 @@ pub struct DecodedError {
     pub request_id: u16,
     pub code: u16,
     pub message: String,
-}
-
-/// Classify a commit-application error message into a structured code for
-/// [`error_code`]. Called at the point an `ERROR` frame or `/commit` error
-/// response is built, so both wire paths share one classification. Mirrors
-/// (and is now authoritative over) `local-outbox.ts`'s
-/// `isTerminalCommitErrorMessage` / `isUnrecoverableCommitErrorMessage`
-/// patterns — update both sides together if you add a case.
-pub fn classify_commit_error(message: &str) -> u16 {
-    // Load shedding and the write rate limiter both mean "wait, then resend".
-    if message.starts_with("Server busy; retry_after_ms=")
-        || message.starts_with("Too many writes; retry after ")
-    {
-        return error_code::BUSY;
-    }
-
-    // A stale Loro write cannot win by resending the same update. Preserve it
-    // client-side for review/rebase instead of retrying indefinitely.
-    if message.contains("Commit's Loro update produced no state changes") {
-        return error_code::CAUSALITY_CONFLICT;
-    }
-
-    // Admission refusals are not transport failures. They can recover after
-    // enrollment/quota changes, so keep the write but stop unlimited retries.
-    if message.contains("is not enrolled for sync on this node")
-        || message.contains("has reached its storage quota on this node")
-    {
-        return error_code::SYNC_REJECTED;
-    }
-
-    if message.contains("is_genesis: true, but the resource already exists") {
-        return error_code::GENESIS_COLLISION;
-    }
-
-    // `commit.rs` — the signature does not verify against the signer's key,
-    // or there is none: a tampered or mis-attributed envelope.
-    if message.contains("Incorrect signature for Commit") || message.contains("No signature set") {
-        return error_code::INVALID_SIGNATURE;
-    }
-
-    if message.contains("missing. Is required in class") {
-        return error_code::MISSING_REQUIRED_PROPERTY;
-    }
-
-    // `hierarchy.rs` — the commit's subject is a Commit, which can never be
-    // edited, whoever signs.
-    if message.contains("Commits cannot be edited") {
-        return error_code::IMMUTABLE_COMMIT;
-    }
-
-    // `hierarchy.rs` — no write right on the resource, or (for a create) no
-    // append right on the parent. Both are the client trying to write where
-    // it may not.
-    if message.contains("/properties/write right has been found")
-        || message.contains("/properties/append right has been found")
-    {
-        return error_code::UNAUTHORIZED_WRITE;
-    }
-
-    // `storelike.rs` wraps the lookup failure as
-    // "Failed getting class <subject>. <inner>", so the prefix is the stable
-    // part regardless of why the class could not be read.
-    if message.contains("Failed getting class") {
-        return error_code::MISSING_CLASS;
-    }
-
-    error_code::UNKNOWN
 }
 
 /// HELLO display name cap. Counted in Unicode scalar values, not bytes, so
@@ -2113,67 +2072,6 @@ mod tests {
     }
 
     #[test]
-    fn managed_commit_refusals_are_blocking() {
-        for message in [
-            "Drive did:ad:private is not enrolled for sync on this node.",
-            "Drive did:ad:private has reached its storage quota on this node.",
-        ] {
-            assert_eq!(classify_commit_error(message), error_code::SYNC_REJECTED);
-        }
-    }
-
-    #[test]
-    fn classify_commit_error_matches_known_patterns() {
-        assert_eq!(
-            classify_commit_error("Commit's Loro update produced no state changes — its writes were silently dropped by LWW against stored state."),
-            error_code::CAUSALITY_CONFLICT
-        );
-        assert_eq!(
-            classify_commit_error("is_genesis: true, but the resource already exists"),
-            error_code::GENESIS_COLLISION
-        );
-        assert_eq!(
-            classify_commit_error("Property foo missing. Is required in class Bar"),
-            error_code::MISSING_REQUIRED_PROPERTY
-        );
-        assert_eq!(
-            classify_commit_error(
-                "Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:x"
-            ),
-            error_code::UNAUTHORIZED_WRITE
-        );
-        assert_eq!(
-            classify_commit_error(
-                "Incorrect signature for Commit. This could be due to an error during signing"
-            ),
-            error_code::INVALID_SIGNATURE
-        );
-        assert_eq!(
-            classify_commit_error("Commits cannot be edited."),
-            error_code::IMMUTABLE_COMMIT
-        );
-        assert_eq!(
-            classify_commit_error("some other error"),
-            error_code::UNKNOWN
-        );
-    }
-
-    /// The message a table row gets when its class never reached this server.
-    /// Verbatim from the field, where every row of a shared table was refused
-    /// with it and nothing surfaced that to either person.
-    #[test]
-    fn a_missing_class_is_classified_rather_than_left_unknown() {
-        assert_eq!(
-            classify_commit_error(
-                "Failed getting class did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd. \
-                 Resource not found. DID Resource did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd \
-                 not found locally"
-            ),
-            error_code::MISSING_CLASS
-        );
-    }
-
-    #[test]
     fn encode_sub_frame() {
         let encoded = encode_sub("did:ad:drive:abc");
         assert_eq!(encoded[0], tag::SUB);
@@ -2523,7 +2421,6 @@ mod wire_vectors {
         let busy = decode_error(&hex_of("error_busy")[1..]).unwrap();
         assert_eq!(busy.code, error_code::BUSY);
         assert_eq!(retry_after_ms_from_message(&busy.message), Some(1730));
-        assert_eq!(classify_commit_error(&busy.message), error_code::BUSY);
         assert!(slim.commit_json.is_none());
         assert_eq!(
             decode_challenge(&hex_of("challenge")[1..]),

@@ -14,6 +14,10 @@ describe('isHiddenFromChildLists', () => {
     expect(isHiddenFromChildLists([server.classes.externalApp])).toBe(true);
   });
 
+  it('hides installed apps, which the Apps panel lists', () => {
+    expect(isHiddenFromChildLists([server.classes.installation])).toBe(true);
+  });
+
   it('hides a private note on an agent', () => {
     expect(isHiddenFromChildLists([dataBrowser.classes.plainText], agent)).toBe(
       true,

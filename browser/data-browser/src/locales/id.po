@@ -140,7 +140,6 @@ msgstr "Agen AI"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -552,6 +551,7 @@ msgstr "Memeriksa server…"
 msgid "Not responding"
 msgstr "Tidak merespons"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Baca selengkapnya "
@@ -993,10 +993,6 @@ msgid "Default Ontology"
 msgstr "Ontologi bawaan"
 
 #: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Plugins"
-msgstr "Plugin"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Hapus tag"
 
@@ -1257,10 +1253,6 @@ msgid "Keyboard shortcuts"
 msgstr "Pintasan keyboard"
 
 #: src/views/Installation/InstallationPage.tsx
-msgid "Plugin Description"
-msgstr "Deskripsi plugin"
-
-#: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Uninstall"
 msgstr "Copot pemasangan"
@@ -1347,14 +1339,12 @@ msgstr "Teks alternatif"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1945,10 +1935,6 @@ msgstr "<0/> Kembali"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> sumber daya merujuk ke{0} {1}"
 
-#: src/views/Drive/PluginList.tsx
-msgid "No plugins installed"
-msgstr "Tidak ada plugin yang diinstal"
-
 #: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
@@ -2244,14 +2230,6 @@ msgstr "Permintaan baca"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Write Request"
 msgstr "Permintaan tulis"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all reads done by this plugin"
-msgstr "Izinkan semua pembacaan oleh plugin ini"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all writes done by this plugin"
-msgstr "Izinkan semua penulisan oleh plugin ini"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
@@ -2765,7 +2743,6 @@ msgstr "Kosong"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Sembunyikan"
 
@@ -3462,7 +3439,6 @@ msgid "Click to add a value"
 msgstr "Klik untuk menambahkan nilai"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Ganti nama"
 
@@ -4050,6 +4026,11 @@ msgstr "Memasangkan perangkat"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SyncProblemBanner.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
@@ -4067,6 +4048,8 @@ msgstr "Buka ruang kerja"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -4385,18 +4368,8 @@ msgstr "Properti ini dikelola oleh server dan tidak dapat disunting."
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Membuat…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Buat drive"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Drive baru"
 
@@ -4466,10 +4439,14 @@ msgid "Change icon"
 msgstr "Ganti ikon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Tambahkan ikon"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Tambahkan sampul"
 
@@ -5422,7 +5399,7 @@ msgstr "Tidak terhubung"
 msgid "Switch"
 msgstr "Beralih"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #. 0: accountAddress(phase.account)
 #: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
@@ -5444,12 +5421,12 @@ msgstr "{0} sumber daya"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
 
@@ -5512,7 +5489,7 @@ msgstr "{0} gagal: {1}"
 msgid "Sign in →"
 msgstr "Masuk →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, sehingga email ini memungkinkan Anda masuk kembali di perangkat baru."
@@ -5583,7 +5560,7 @@ msgstr "Menyimpan…"
 msgid "Store it with {0}"
 msgstr "Simpan dengan {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Cadangan Anda tersegel hanya di browser ini, sehingga dapat dibuka di sini tetapi tidak dapat membantu Anda masuk kembali di perangkat baru."
@@ -5640,7 +5617,7 @@ msgstr "Pulihkan dari Cloud Vault"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Hanya kunci sandi Anda yang dapat membuka akun ini. Jika tidak ada di perangkat ini, buka di perangkat tempat Anda menyiapkannya dan tambahkan kode pemulihan di Pengaturan — kode itu memungkinkan Anda masuk di mana saja."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi hanya kunci sandi Anda yang dapat membukanya. Browser yang belum menerima sinkronisasi kunci sandi tidak dapat membantu Anda masuk kembali — kode pemulihan dapat melakukannya."
@@ -6061,10 +6038,6 @@ msgstr "Sembunyikan templat di halaman sumber daya baru"
 #: src/routes/AppSettings.tsx
 msgid "Enable keyboard drag & drop in sidebar"
 msgstr "Aktifkan seret & lepas dengan keyboard di bilah samping"
-
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Upload Plugin"
-msgstr "Unggah plugin"
 
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading"
@@ -6492,13 +6465,9 @@ msgstr "Tanya AI"
 msgid "<0/> Loading"
 msgstr "<0/> Memuat"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Drive saya"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Nama drive"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6508,10 +6477,6 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Memuat obrolan…"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Set up AI"
-msgstr "Siapkan AI"
-
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
 msgstr "Memuat pengaturan AI…"
@@ -6520,15 +6485,6 @@ msgstr "Memuat pengaturan AI…"
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Run"
 msgstr "Jalankan"
-
-#: src/actions/resourceActions.tsx
-msgid "Run this plugin and review what it proposes before anything is written."
-msgstr "Jalankan plugin ini dan tinjau usulannya sebelum apa pun ditulis."
-
-#. 0: e.message
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "Could not run this plugin: {0}"
-msgstr "Tidak dapat menjalankan plugin ini: {0}"
 
 #. 0: result.message
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
@@ -6550,16 +6506,8 @@ msgid "Apply {0} changes"
 msgstr "Terapkan {0} perubahan"
 
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "This plugin ran too long and was stopped. Nothing was planned."
-msgstr "Plugin ini berjalan terlalu lama dan dihentikan. Tidak ada yang direncanakan."
-
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "This run proposes no changes."
 msgstr "Eksekusi ini tidak mengusulkan perubahan."
-
-#: src/chunks/PluginRuns/PluginRunHistory.tsx
-msgid "This plugin has not run yet."
-msgstr "Plugin ini belum dijalankan."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "Runs"
@@ -6601,23 +6549,9 @@ msgstr "Belum masuk"
 msgid "Source"
 msgstr "Sumber"
 
-#: src/chunks/PluginRuns/PluginPage.tsx
-msgid "This plugin has no source yet."
-msgstr "Plugin ini belum memiliki sumber."
-
-#. 0: describeUse(secret)
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "No longer asked for by this plugin — {0}"
-msgstr "Tidak lagi diminta oleh plugin ini — {0}"
-
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Revoke"
 msgstr "<0/> Cabut"
-
-#. 0: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
-msgstr "Hanya dikirim ke <0/>. Plugin menggunakannya sebagai{0} <1/> dan tidak pernah melihat nilainya."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
@@ -6683,10 +6617,6 @@ msgstr "Setiap {0} detik"
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Allowed by {0}. Every write is still checked against what that account may change."
 msgstr "Diizinkan oleh {0}. Setiap penulisan tetap diperiksa berdasarkan hal yang boleh diubah oleh akun tersebut."
-
-#: src/chunks/PluginRuns/PluginSchedule.tsx
-msgid "Available once you have run this plugin and applied its changes at least once."
-msgstr "Tersedia setelah Anda menjalankan plugin ini dan menerapkan perubahannya setidaknya sekali."
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Apply background runs without asking me"
@@ -7197,10 +7127,6 @@ msgstr "Eksekusi otomatisasi yang menggunakan tindakan ini"
 #: src/chunks/PluginRuns/ActionHistoryCleanup.tsx
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Hapus payload tindakan lama sambil mempertahankan ID, hasil, dan bukti pemulihan. Hasil yang selesai harus berusia setidaknya 30 hari. Hasil otomatisasi juga mensyaratkan setiap eksekusi yang menggunakannya telah selesai atau secara eksplisit ditinggalkan setidaknya 30 hari lalu. Eksekusi yang belum selesai, penggunaan yang tidak terlacak, penulisan yang tidak pasti atau gagal, serta bukti dengan tanggal penyelesaian tidak diketahui tetap disimpan."
-
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Plugin komunitas"
 
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
@@ -7879,10 +7805,6 @@ msgstr "Juga berubah pada sumber asli sejak fork ini dibuat:"
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Aktifkan animasi transisi halaman (eksperimental, diketahui bermasalah di luar Chromium pada desktop)"
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Tampilkan plugin eksperimental"
-
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
 msgstr "Rilis yang diterbitkan. Buka salah satunya untuk meninjau kemampuannya sebelum menginstalnya ke drive ini, atau buat draf untuk menyesuaikan kodenya."
@@ -7936,29 +7858,12 @@ msgid "No capabilities were granted."
 msgstr "Tidak ada kapabilitas yang diberikan."
 
 #: src/views/Installation/InstallationPage.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin agent"
-msgstr "Agen plugin"
-
-#: src/views/Installation/InstallationPage.tsx
 msgid "Permissions"
 msgstr "Izin"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke installation"
 msgstr "Cabut instalasi"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Uninstall plugin"
-msgstr "Copot plugin"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Revoking uninstalls the plugin and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
-msgstr "Pencabutan mencopot plugin dan menonaktifkan agennya. Catatan Instalasi tetap ada agar Anda dapat melihat apa yang pernah diinstal; penginstalan ulang memerlukan Instalasi baru."
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Are you sure you want to uninstall this plugin? This removes the Installation record."
-msgstr "Yakin ingin mencopot plugin ini? Ini menghapus catatan Instalasi."
 
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No"
@@ -8279,7 +8184,7 @@ msgstr "<0/> Salin tautan"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Selesai"
 
@@ -8303,10 +8208,6 @@ msgstr "Ruang kerja ini tidak dapat dibaca di perangkat ini. Coba buka lagi."
 #: src/routes/IntegrationStore.tsx
 msgid "No integrations match your search."
 msgstr "Tidak ada integrasi yang cocok dengan pencarian Anda."
-
-#: src/routes/IntegrationStore.tsx
-msgid "No plugins to show here."
-msgstr "Tidak ada plugin untuk ditampilkan di sini."
 
 #. 0: ' '
 #: src/helpers/privateHomeNudge.tsx
@@ -8505,7 +8406,9 @@ msgid "Pinned to <0/>"
 msgstr "Disematkan ke <0/>"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "dari {0}"
 
@@ -8554,11 +8457,11 @@ msgstr "Tambahkan catatan untuk orang yang Anda undang"
 msgid "Sending…"
 msgstr "Mengirim…"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Tautan undangan disalin"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Tidak dapat menyalin tautan. Pilih dan salin secara manual."
 
@@ -8667,11 +8570,6 @@ msgstr "Penyiapan membuat tabel {0} untuk pengimpor ini. Belum ada yang diimpor.
 msgid "File to import"
 msgstr "File untuk diimpor"
 
-#. 0: ' '; 1: formatBytes(maxBytes(accepts))
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
-msgstr "File dibaca oleh plugin ini di AtomicServer Anda, hingga{0} {1}. Tinjau perubahan yang diusulkan sebelum apa pun disimpan."
-
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Open imported data"
 msgstr "Buka data yang diimpor"
@@ -8704,7 +8602,11 @@ msgid "Install {0}"
 msgstr "Instal {0}"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "Buka {0}"
 
@@ -8722,20 +8624,6 @@ msgstr "Aplikasi drive"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Aplikasi yang berjalan dalam bingkainya sendiri pada drive ini dan menyimpan barisnya dalam tabel tersendiri. Masing-masing adalah versi yang diterbitkan; penginstalan memeriksa kodenya terhadap katalog sebelum apa pun disimpan."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "Server integration-proxy yang menjadi perantara panggilan plugin API. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL katalog plugin"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di browser ini."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
@@ -8845,14 +8733,6 @@ msgstr "Tidak ada yang terbuka."
 msgid "Nothing closed."
 msgstr "Tidak ada yang ditutup."
 
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental plugins to try out."
-msgstr "Ini adalah fitur baru. Anda melihat plugin eksperimental untuk dicoba."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Plugins will show up here soon for you to try out."
-msgstr "Ini adalah fitur baru. Plugin akan segera muncul di sini untuk Anda coba."
-
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
 msgstr "Beberapa rapat berulang tidak dapat ditampilkan"
@@ -8918,7 +8798,7 @@ msgstr "Buka drive Anda"
 msgid "Choose a template"
 msgstr "Pilih templat"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Beri nama drive Anda"
 
@@ -10145,6 +10025,7 @@ msgstr "Anda melewatkan {0} pesan saat tidak di sini"
 
 #: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Jangan sekarang"
 
@@ -10798,6 +10679,10 @@ msgstr "Akun dibuat"
 msgid "Welcome"
 msgstr "Selamat datang"
 
+#: src/components/SideBar/accountRowName.ts
+msgid "Account"
+msgstr "Akun"
+
 #: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Pengaturan server"
@@ -10811,6 +10696,7 @@ msgid "Data"
 msgstr "Data"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Mulai"
@@ -11160,10 +11046,6 @@ msgstr "Penggunaan"
 msgid "Loading integrations…"
 msgstr "Memuat integrasi…"
 
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Tampilkan plugin eksperimental"
-
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Belum ada perangkat lain — data Anda aman di perangkat ini."
@@ -11243,19 +11125,10 @@ msgstr "<0/> Jalankan"
 msgid "The last background run failed: {0}"
 msgstr "Eksekusi latar belakang terakhir gagal: {0}"
 
-#. 0: ' '; 1: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "This plugin asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
-msgstr "Plugin ini tidak meminta kredensial. Untuk menggunakannya, minta plugin mendeklarasikan kebutuhannya —{0} <0/>{1} — atau rujuk <1/> dalam header, dan slot akan muncul di sini."
-
 #. 0: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>, sent only to{0} <1/>. Undeclared, so this was read from the URLs it requests."
 msgstr "Digunakan sebagai <0/>, hanya dikirim ke{0} <1/>. Tidak dideklarasikan, jadi ini dibaca dari URL yang dimintanya."
-
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Used as <0/>. This plugin requests several origins — pick the one this credential belongs to."
-msgstr "Digunakan sebagai <0/>. Plugin ini meminta beberapa origin — pilih origin milik kredensial ini."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>. Its URLs are built at run time, so say which origin it may be sent to."
@@ -11445,11 +11318,6 @@ msgstr "Ambil ruang kerja"
 msgid "Search again"
 msgstr "Cari lagi"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Ingin server sendiri?{0} <0>Dapatkan server yang dihosting</0>{1} atau{2} <1>jalankan sendiri</1> ."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11590,7 +11458,7 @@ msgstr "Konfirmasi dengan kunci sandi Anda"
 msgid "Confirm with your code"
 msgstr "Konfirmasi dengan kode Anda"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi masuk belum membukanya. Konfirmasi sekali dengan kunci sandi atau kode pemulihan untuk mengaktifkannya."
@@ -11608,14 +11476,6 @@ msgstr "Masuk ke akun {0} Anda belum membuka identitas ini: cadangan ini dibuat 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Masuk ke akun {0} Anda belum membuka identitas ini: cadangan ini dibuat sebelum hal itu memungkinkan. Konfirmasi sekali dengan kode pemulihan Anda untuk mengaktifkannya."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "Lihat paket Cloud Server"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Sinkronisasi browser telah mencapai batas koneksi peer. Cloud Server di atomic.place menjaga ruang kerja ini tetap sinkron untuk semua orang, tanpa peer."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -11793,15 +11653,6 @@ msgstr "Kode hanya mengarahkan. Kunci Anda tetap menentukan apa yang disinkronka
 #: src/components/ConnectDevice.tsx
 msgid "An always-on device has an address. One you carry has a code."
 msgstr "Perangkat yang selalu aktif memiliki alamat. Perangkat yang Anda bawa memiliki kode."
-
-#: src/components/ConnectDevice.tsx
-msgid "Scan this from your other device, or copy the code."
-msgstr "Pindai ini dari perangkat Anda yang lain, atau salin kodenya."
-
-#. 0: serverName
-#: src/components/ConnectDevice.tsx
-msgid "Scan from your other device to sync with {0}."
-msgstr "Pindai dari perangkat Anda yang lain untuk menyinkronkan dengan {0}."
 
 #: src/components/ConnectDevice.tsx
 msgid "Show this device"
@@ -12073,10 +11924,6 @@ msgstr "orang dapat bergabung"
 msgid "{0} Viewers are free."
 msgstr "{0} Pemirsa gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Sudah masuk"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "Penyimpanan perangkat ini tidak merespons. Tutup jendela atau tab atomic.place lainnya, lalu coba lagi."
@@ -12299,10 +12146,6 @@ msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-va
 msgstr "Ini bukan file cadangan Atomic vault. Pilih file yang berakhiran .atomic-vault."
 
 #: src/helpers/managed/vaultFile.ts
-msgid "Atomic vault backup"
-msgstr "Cadangan Atomic vault"
-
-#: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
 msgstr "File cadangan ini tidak lengkap. Unduh lagi."
 
@@ -12391,10 +12234,6 @@ msgstr "Hapus sumber daya ini secara permanen. Ini tidak dapat diurungkan."
 msgid "Hide formatting toolbar"
 msgstr "Sembunyikan bilah alat pemformatan"
 
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Sinkronisasi browser gratis ditujukan untuk kelompok kecil hingga 4 orang. Untuk lebih banyak orang, gunakan Cloud Server di atomic.place."
-
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
 msgstr "Buka percakapan"
@@ -12420,13 +12259,11 @@ msgid "Show all"
 msgstr "Tampilkan semua"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Pengaturan drive"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Belum ada apa pun di sini."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Pengaturan drive"
@@ -12645,7 +12482,7 @@ msgstr "Paket drive ini mencakup Cloud Server. Persetujuan Anda ditunggu."
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Masuk ke akun {0} Anda untuk memeriksa pemulihan melalui email. Masuk ke drive ini dengan kunci sandi atau kunci rahasia tidak dengan sendirinya menghubungkan akun cloud Anda."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Cadangan pemulihan tidak tersimpan, sehingga kehilangan semua perangkat berarti kehilangan drive ini."
@@ -12695,9 +12532,7 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Cloud Server menjaga drive ini tetap online untuk semua orang, sehingga tidak ada yang harus membiarkan browser tetap terbuka."
 
 #. 0: CLOUD_SERVER_PRICE
-#. 0: CLOUD_SERVER_PRICE
 #: src/components/CloudVaultWatcher.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Tingkatkan ke Cloud Server mulai dari {0}"
 
@@ -12936,47 +12771,27 @@ msgstr "Cloud Server belum aktif untuk drive ini. Server ini hanya menerimanya u
 msgid "Not hosted yet"
 msgstr "Belum dihosting"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Bicara dengan AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Minta AI mencari, menulis, atau mengatur hal-hal dalam drive Anda"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a chat"
-msgstr "Mulai obrolan"
-
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Undang seseorang"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Invite"
-msgstr "Undang"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Save your work"
-msgstr "Simpan pekerjaan Anda"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Daftar dengan email, simpan kunci rahasia, atau hubungkan perangkat"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Memulai"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Memerlukan sumber AI: kunci Anda sendiri atau Ollama"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Not done yet"
-msgstr "Belum selesai"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13020,7 +12835,9 @@ msgstr "Waktu habis saat mengambil {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
 msgstr "Aplikasi"
 
@@ -13040,6 +12857,7 @@ msgstr "Cari aplikasi, integrasi, domain, atau standar"
 msgid "Loading apps…"
 msgstr "Memuat aplikasi…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Temukan aplikasi"
@@ -13074,10 +12892,6 @@ msgstr "<0/> Hapus"
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Marketplaces"
 msgstr "Marketplace"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Aplikasi dari katalog ini ditawarkan bersama katalog di atas. Saat dua katalog memiliki aplikasi dengan nama yang sama, katalog yang terdaftar lebih dahulu diprioritaskan. Pengaturan ini disimpan di browser ini."
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
@@ -13187,7 +13001,6 @@ msgid "Could not send your identity"
 msgstr "Tidak dapat mengirim identitas Anda"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Ganti drive"
@@ -13208,21 +13021,9 @@ msgstr "Tambahkan ke akun saya"
 msgid "Don't add, keep it in this browser only"
 msgstr "Jangan tambahkan, simpan hanya di browser ini"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Beri nama drive Anda: tim, perusahaan, kelas, atau rumah tangga"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive"
-msgstr "Mulai drive"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Bagikan drive dengan rekan tim atau teman"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive first"
-msgstr "Mulai drive terlebih dahulu"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
@@ -13244,10 +13045,6 @@ msgstr "Tambahkan ke drive ini"
 msgid "Or describe what you need"
 msgstr "Atau jelaskan kebutuhan Anda"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Tampilkan Memulai di drive saya"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Mulai dengan"
@@ -13267,10 +13064,6 @@ msgstr "Atau isi drive ini dengan paket awal"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Mulai drive ini"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Beri nama, lalu isi dengan paket awal"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13353,17 +13146,104 @@ msgstr "Sunting kolom"
 msgid "Add view"
 msgstr "Tambahkan tampilan"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Tamu"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> Di Drive saya"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Membuat drive Anda…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Tambahkan ke Drive saya"
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Disimpan sebagai {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Menyimpan pekerjaanmu ke akunmu…"
+
+#: src/hooks/useCreateDrive.ts
+msgid "Switch back to your previous drive here"
+msgstr "Kembali ke drive sebelumnya di sini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr "Klik di sini untuk memberi nama drive Anda"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr "Bicara dengan AI di sini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Buat sesuatu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Tambahkan dokumen atau tabel ke drive ini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Buat dokumen atau tabel di sini"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Bagikan drive ini dengan rekan tim atau teman"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Bagikan drive ini di sini"
+
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+msgid "Your account"
+msgstr "Akun Anda"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Baca Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Tur singkat drive ini, di dokumen pertamanya"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Buka Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Only saved on this device"
+msgstr "Hanya tersimpan di perangkat ini"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr "Anda sudah masuk, tetapi penyimpanan pekerjaan Anda ke akun belum selesai. Periksa koneksi Anda lalu coba lagi."
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Register with email"
+msgstr "Daftar dengan email"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invite link"
+msgstr "Tautan undangan"
+
+#. 0: new Date(invite.sentAt).toLocaleDateString()
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied {0}"
+msgstr "Disalin {0}"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied"
+msgstr "Disalin"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite link"
+msgstr "Hapus tautan undangan"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
@@ -13561,3 +13441,260 @@ msgstr "Kredit terpakai: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Edit profil"
+
+#: src/components/Toaster.tsx
+msgid "<0/> Report"
+msgstr "<0/> Laporkan"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Tidak ada yang menjaga drive ini tetap online saat perangkatmu mati."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Dapatkan server yang selalu aktif"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Sinkronisasi browser telah mencapai batas koneksi peer."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Jaga semua orang tetap sinkron dengan Cloud Server"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Ingin server sendiri?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Minta dihosting"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Sinkronisasi browser gratis ditujukan untuk kelompok kecil hingga 4 orang."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "Untuk lebih banyak orang, gunakan Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Hanya browser ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Simpan pekerjaanmu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Daftarkan emailmu atau hubungkan perangkat untuk membukanya di tempat lain"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Simpan pekerjaanmu di sini"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Emailmu dan cadangan terenkripsi identitasmu dikirim ke {0}."
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan with the app"
+msgstr "Pindai dengan aplikasi"
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Syncs with {0}."
+msgstr "Menyinkronkan dengan {0}."
+
+#: src/actions/resourceActions.tsx
+msgid "Run this app and review what it proposes before anything is written."
+msgstr "Jalankan aplikasi ini dan tinjau apa yang diusulkannya sebelum ada yang ditulis."
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr "Tampilkan panel Aplikasi"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr "Buat aplikasi dengan AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr "Panduan: menerbitkan aplikasi"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr "Aplikasi tidak ada? Buat sendiri dengan AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuat aplikasi di drive Anda. Lalu bagikan ke drive Anda, jalankan marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental apps to try out."
+msgstr "Ini adalah fitur baru. Anda melihat aplikasi eksperimental untuk dicoba."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Apps will show up here soon for you to try out."
+msgstr "Ini adalah fitur baru. Aplikasi akan segera muncul di sini untuk Anda coba."
+
+#: src/routes/IntegrationStore.tsx
+msgid "<0/> Show experimental apps"
+msgstr "<0/> Tampilkan aplikasi eksperimental"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr "Aplikasi komunitas"
+
+#: src/routes/IntegrationStore.tsx
+msgid "No apps to show here."
+msgstr "Tidak ada aplikasi untuk ditampilkan di sini."
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Upload App"
+msgstr "Unggah aplikasi"
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this app on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr "File dibaca oleh aplikasi ini di AtomicServer Anda, hingga{0} {1}. Tinjau perubahan yang diusulkan sebelum ada yang disimpan."
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "This app has no source yet."
+msgstr "Aplikasi ini belum memiliki sumber."
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "This app has not run yet."
+msgstr "Aplikasi ini belum dijalankan."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Available once you have run this app and applied its changes at least once."
+msgstr "Tersedia setelah Anda menjalankan aplikasi ini dan menerapkan perubahannya setidaknya sekali."
+
+#. 0: ' '; 1: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "This app asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
+msgstr "Aplikasi ini tidak meminta kredensial. Untuk memakainya, minta aplikasi menyatakan apa yang dibutuhkan:{0} <0/>{1}, atau rujuk <1/> di sebuah header dan slot akan muncul di sini."
+
+#. 0: describeUse(secret)
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "No longer asked for by this app — {0}"
+msgstr "Tidak lagi diminta oleh aplikasi ini: {0}"
+
+#. 0: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Sent only to <0/>. The app uses it as{0} <1/> and never sees the value."
+msgstr "Hanya dikirim ke <0/>. Aplikasi memakainya sebagai{0} <1/> dan tidak pernah melihat nilainya."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Used as <0/>. This app requests several origins — pick the one this credential belongs to."
+msgstr "Dipakai sebagai <0/>. Aplikasi ini meminta beberapa origin: pilih origin tempat kredensial ini berada."
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this app: {0}"
+msgstr "Tidak dapat menjalankan aplikasi ini: {0}"
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This app ran too long and was stopped. Nothing was planned."
+msgstr "Aplikasi ini berjalan terlalu lama dan dihentikan. Tidak ada yang direncanakan."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr "Tampilkan aplikasi eksperimental"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr "Server proxy integrasi yang dilewati panggilan integrasi. Pengaturan ini disimpan di browser ini."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr "Aplikasi ditawarkan dari katalog-katalog ini, sesuai urutan ini. Jika dua katalog memiliki aplikasi dengan nama yang sama, yang tercantum lebih dulu yang dipakai. Disimpan di browser ini."
+
+#: src/views/Drive/PluginList.tsx
+msgid "No apps installed"
+msgstr "Belum ada aplikasi terpasang"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr "Pasang aplikasi dan tinjau apa yang dapat diaksesnya"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr "Isi pengaturan yang diperlukan"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "App Description"
+msgstr "Deskripsi aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr "Belum dikerjakan"
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr "Mulai, {0} dari {1} langkah selesai"
+
+#: src/views/Installation/InstallationPage.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "App agent"
+msgstr "Agen aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr "Lanjutan: edit sebagai JSON"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Uninstall app"
+msgstr "Copot aplikasi"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Revoking uninstalls the app and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
+msgstr "Pencabutan akan mencopot aplikasi dan menonaktifkan agennya. Catatan Installation tetap ada, sehingga Anda dapat melihat apa yang pernah terpasang; untuk memasang lagi diperlukan Installation baru."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Are you sure you want to uninstall this app? This removes the Installation record."
+msgstr "Yakin ingin mencopot aplikasi ini? Ini akan menghapus catatan Installation."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "This field is required."
+msgstr "Kolom ini wajib diisi."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Pick one of the available options."
+msgstr "Pilih salah satu opsi yang tersedia."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a number."
+msgstr "Masukkan angka."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a whole number."
+msgstr "Masukkan bilangan bulat."
+
+#. 0: def.minimum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0}."
+msgstr "Minimal {0}."
+
+#. 0: def.maximum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at most {0}."
+msgstr "Maksimal {0}."
+
+#. 0: def.minLength
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0} characters."
+msgstr "Minimal {0} karakter."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this app"
+msgstr "Izinkan semua pembacaan oleh aplikasi ini"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this app"
+msgstr "Izinkan semua penulisan oleh aplikasi ini"

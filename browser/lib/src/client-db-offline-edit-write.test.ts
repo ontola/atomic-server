@@ -23,17 +23,17 @@ describe('writing a server copy to the local database', () => {
   };
 
   const attach = async (store: Store) => {
-    const putResourceWithSnapshot = vi.fn(async () => undefined);
+    const putLoroSnapshot = vi.fn(async () => undefined);
     const worker = {
       isReady: true,
       waitForReady: async () => true,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as ClientDbWorker;
 
     store.setClientDb(worker);
     await store.outbox.whenHydrated();
 
-    return putResourceWithSnapshot;
+    return putLoroSnapshot;
   };
 
   it('waits while the outbox holds an entry for the subject', async () => {
@@ -64,7 +64,7 @@ describe('writing a server copy to the local database', () => {
     const worker = {
       isReady: true,
       waitForReady: async () => true,
-      putResourceWithSnapshot: put,
+      putLoroSnapshot: put,
     } as unknown as ClientDbWorker;
     // Attached, but not yet known to hold (or not hold) the queue.
     (store as unknown as { clientDb: ClientDbWorker }).clientDb = worker;

@@ -6569,3 +6569,273 @@ async fn opened_drive_stays_listed_after_another_becomes_active() {
     assert!(subjects.contains(&welcome.to_string()), "{subjects:?}");
     assert!(subjects.contains(&other), "{subjects:?}");
 }
+
+/// Storing a resource from its Loro snapshot alone gives the row, the stored
+/// snapshot and the query results that the JSON-AD + snapshot put gave, for
+/// strings, numbers, a resource array, a nested JSON value and an atomicUrl.
+/// The doc carries the datatype tags (`set_property`), which is all the
+/// materialization needs; only `lastCommit` is passed on the side.
+#[tokio::test]
+#[timeout(120000)]
+async fn loro_only_put_matches_json_ad_plus_snapshot_put() {
+    let subject =
+        "did:ad:loroONLYaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let nested = "https://example.com/properties/nested-json";
+    let last_commit =
+        "did:ad:commit:lastCOMMITaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let parent = "https://localhost/loro-only-parent";
+    let requires = ["https://localhost/req-a", "https://localhost/req-b"];
+
+    let mut authored = crate::Resource::new(subject.into());
+    authored
+        .set_unsafe(urls::NAME.into(), Value::String("loro only".into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::DESCRIPTION.into(), Value::Markdown("# body".into()))
+        .unwrap();
+    authored
+        .set_unsafe(urls::FILESIZE.into(), Value::Integer(42))
+        .unwrap();
+    authored
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))
+        .unwrap();
+    authored
+        .set_unsafe(
+            urls::REQUIRES.into(),
+            Value::ResourceArray(requires.iter().map(|s| (*s).into()).collect()),
+        )
+        .unwrap();
+    authored
+        .set_unsafe(
+            nested.into(),
+            Value::Json(serde_json::json!({"a": {"b": [1, 2, "x"]}, "c": true})),
+        )
+        .unwrap();
+    let snapshot = authored.build_state_doc().unwrap().export_snapshot();
+
+    // The old put: what the tab sent, parsed, then written with the snapshot.
+    let old_store = Db::init_temp("loro_only_put_old").await.unwrap();
+    let json_ad = serde_json::json!({
+        "@id": subject,
+        urls::NAME: "loro only",
+        urls::DESCRIPTION: "# body",
+        urls::FILESIZE: 42,
+        urls::PARENT: parent,
+        urls::REQUIRES: requires,
+        nested: {"a": {"b": [1, 2, "x"]}, "c": true},
+        urls::LAST_COMMIT: last_commit,
+    })
+    .to_string();
+    let mut parsed = crate::parse::parse_json_ad_resource(
+        &json_ad,
+        &old_store,
+        &crate::parse::ParseOpts {
+            skip_unknown_props: true,
+            save: crate::parse::SaveOpts::DontSave,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let keys: Vec<String> = [
+        urls::NAME,
+        urls::DESCRIPTION,
+        urls::FILESIZE,
+        urls::PARENT,
+        urls::REQUIRES,
+        nested,
+        urls::LAST_COMMIT,
+    ]
+    .iter()
+    .map(|k| k.to_string())
+    .collect();
+    parsed.restore_props_from_snapshot(&keys, &snapshot);
+    old_store
+        .persist_replicated_resource_with_snapshot(&parsed, snapshot.clone())
+        .await
+        .unwrap();
+
+    // The new put: the snapshot and `lastCommit`, nothing else.
+    let new_store = Db::init_temp("loro_only_put_new").await.unwrap();
+    new_store
+        .persist_replicated_loro_snapshot(subject, snapshot.clone(), Some(last_commit))
+        .await
+        .unwrap();
+
+    let subj: Subject = subject.into();
+    // `createdAt` is derived from the doc's own first change, as the server
+    // derives it; the JSON-AD above carried none, so it is the one addition.
+    let describe = |store: &Db| {
+        let row = store.get_resource_shallow(&subj).unwrap();
+        let mut props: Vec<(String, String)> = row
+            .get_propvals()
+            .iter()
+            .filter(|(prop, _)| {
+                prop.as_str() != urls::LORO_UPDATE && prop.as_str() != urls::CREATED_AT
+            })
+            .map(|(prop, value)| (prop.clone(), format!("{value:?}")))
+            .collect();
+        props.sort();
+        props
+    };
+    let old_row = describe(&old_store);
+    assert_eq!(old_row, describe(&new_store));
+    assert!(new_store
+        .get_resource_shallow(&subj)
+        .unwrap()
+        .get(urls::CREATED_AT)
+        .is_ok());
+    assert!(
+        old_row.iter().any(|(p, _)| p == nested)
+            && old_row.iter().any(|(p, _)| p == urls::LAST_COMMIT),
+        "the row holds the nested value and lastCommit: {old_row:?}"
+    );
+    assert_eq!(
+        old_store.get_loro_snapshot_bytes(&subj.pure_id()),
+        new_store.get_loro_snapshot_bytes(&subj.pure_id()),
+        "the stored snapshot is the one given"
+    );
+
+    for (prop, value) in [
+        (urls::NAME, "loro only"),
+        (urls::PARENT, parent),
+        (urls::REQUIRES, requires[1]),
+    ] {
+        let hits = |store: &Db| {
+            let q = Query::new_prop_val(prop, value);
+            let store = store.clone();
+            async move { store.query(&q).await.unwrap().subjects }
+        };
+        let old_hits = hits(&old_store).await;
+        assert_eq!(old_hits.len(), 1, "{prop} is indexed");
+        assert_eq!(old_hits, hits(&new_store).await, "{prop} query");
+    }
+    assert_eq!(
+        old_store
+            .search_hits("loro", &Default::default())
+            .unwrap()
+            .len(),
+        new_store
+            .search_hits("loro", &Default::default())
+            .unwrap()
+            .len(),
+    );
+}
+
+/// A snapshot that does not import is an error, not a row built from guesses.
+#[tokio::test]
+#[timeout(120000)]
+async fn loro_only_put_rejects_a_snapshot_that_does_not_import() {
+    let store = Db::init_temp("loro_only_put_bad").await.unwrap();
+    let subject = "https://localhost/loro-only-bad";
+    for bytes in [vec![], vec![1, 2, 3, 4, 5]] {
+        let err = store
+            .persist_replicated_loro_snapshot(subject, bytes, None)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("does not import"), "{err}");
+    }
+    assert!(store.get_resource_shallow(&subject.into()).is_err());
+    let err = store
+        .persist_replicated_loro_snapshots(vec![(subject.into(), vec![9, 9], None)])
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("does not import"), "{err}");
+}
+
+/// A doc the signing tab never tagged (a server doc, or a property the tab had
+/// not loaded) holds a string that merely looks like a URL. The JSON-AD put
+/// typed it from the Property; the Loro-only put must too, in the row and in
+/// the indexes, not by the URL-shape guess (which makes it an atomicUrl).
+#[tokio::test]
+#[timeout(120000)]
+async fn loro_only_put_types_untagged_strings_from_their_property() {
+    let subject =
+        "did:ad:untaggedaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let unknown = "https://example.com/properties/not-in-this-store";
+    let url = "https://example.com/looks-like-a-link";
+
+    let mut authored = crate::Resource::new(subject.into());
+    for prop in [urls::DESCRIPTION, urls::NAME, unknown] {
+        authored
+            .set_unsafe(prop.into(), Value::String(url.into()))
+            .unwrap();
+    }
+    // A writer that did not tag (a tab that had not loaded the Property, a
+    // legacy doc): drop the tags the Rust writer added.
+    let tagged = authored.build_state_doc().unwrap().export_snapshot();
+    let raw = loro::LoroDoc::new();
+    raw.import(&tagged).unwrap();
+    let tags = raw.get_map("datatypes");
+    for key in tags.keys().collect::<Vec<_>>() {
+        tags.delete(&key).unwrap();
+    }
+    raw.commit();
+    let snapshot = raw.export(loro::ExportMode::Snapshot).unwrap();
+    assert!(
+        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .unwrap()
+            .get_all_datatypes()
+            .is_empty(),
+        "the premise: nothing tagged"
+    );
+
+    let old_store = Db::init_temp("loro_untagged_old").await.unwrap();
+    let json_ad = serde_json::json!({
+        "@id": subject, urls::DESCRIPTION: url, urls::NAME: url,
+    })
+    .to_string();
+    let mut parsed = crate::parse::parse_json_ad_resource(
+        &json_ad,
+        &old_store,
+        &crate::parse::ParseOpts {
+            skip_unknown_props: true,
+            save: crate::parse::SaveOpts::DontSave,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    parsed.restore_props_from_snapshot(&[unknown.to_string()], &snapshot);
+    old_store
+        .persist_replicated_resource_with_snapshot(&parsed, snapshot.clone())
+        .await
+        .unwrap();
+
+    let new_store = Db::init_temp("loro_untagged_new").await.unwrap();
+    new_store
+        .persist_replicated_loro_snapshot(subject, snapshot, None)
+        .await
+        .unwrap();
+
+    let subj: Subject = subject.into();
+    let variant = |store: &Db, prop: &str| {
+        let row = store.get_resource_shallow(&subj).unwrap();
+        let v = format!("{:?}", row.get(prop).unwrap());
+        v.split('(').next().unwrap().to_string()
+    };
+    for prop in [urls::DESCRIPTION, urls::NAME] {
+        assert_eq!(
+            variant(&old_store, prop),
+            variant(&new_store, prop),
+            "{prop}"
+        );
+    }
+    assert_eq!(variant(&new_store, urls::DESCRIPTION), "Markdown");
+    assert_eq!(variant(&new_store, urls::NAME), "String");
+    // A property this store does not know keeps the heuristic.
+    assert_eq!(variant(&new_store, unknown), "AtomicUrl");
+
+    for prop in [urls::DESCRIPTION, urls::NAME] {
+        let hits = |store: &Db| {
+            let q = Query::new_prop_val(prop, url);
+            let store = store.clone();
+            async move { store.query(&q).await.unwrap().subjects }
+        };
+        assert_eq!(
+            hits(&old_store).await,
+            hits(&new_store).await,
+            "{prop} query"
+        );
+    }
+}

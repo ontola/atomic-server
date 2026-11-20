@@ -6,6 +6,8 @@ import {
 import { ContainerNarrow } from '@components/Containers';
 import Markdown from '@components/datatypes/Markdown';
 import { JSONEditor } from '@components/JSONEditor';
+import { Card } from '@components/Card';
+import { Details } from '@components/Details';
 import { Column, Row } from '@components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
@@ -35,6 +37,8 @@ import {
   FaBan,
   FaTrash,
   FaArrowUp,
+  FaCheck,
+  FaRegCircle,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
@@ -44,6 +48,14 @@ import {
 } from '@chunks/Plugins/CapabilityList';
 import { ConfigReference } from './ConfigReference';
 import { AssignRights } from './AssignRights';
+import { ConfigForm } from './ConfigForm';
+import {
+  asConfigObject,
+  configFields,
+  fieldError,
+  onboardingSteps,
+  type OnboardingStepId,
+} from './configFormLogic';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
@@ -53,7 +65,7 @@ import {
 } from '@chunks/Plugins/InstallationReviewDialog';
 
 const UPDATE_VERB = {
-  title: 'Update plugin',
+  title: 'Update app',
   confirm: 'Update',
   busy: 'Updating…',
 };
@@ -69,6 +81,8 @@ export const InstallationPage: React.FC<
   ResourcePageProps<Server.Installation>
 > = ({ resource }) => {
   const configLabelId = useId();
+  const grantsId = useId();
+  const configId = useId();
   const store = useStore();
   const canWrite = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
@@ -98,6 +112,7 @@ export const InstallationPage: React.FC<
   const [configValid, setConfigValid] = useState(true);
   const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
   const [configEdited, setConfigEdited] = useState(false);
+  const [formRevision, setFormRevision] = useState(0);
   const saveState = useSaveState(resource);
   const [changing, setChanging] = useState(false);
   const [pending, setPending] = useState<PendingInstallation>();
@@ -123,6 +138,23 @@ export const InstallationPage: React.FC<
     : grants && typeof grants === 'object'
       ? Object.keys(grants)
       : [];
+
+  const fields = configFields(schema as JSONSchema7 | undefined);
+  const formValid =
+    !fields || fields.every(f => !fieldError(f, asConfigObject(config)[f.key]));
+  const steps = onboardingSteps({
+    active: currentStatus === 'active',
+    schema: schema as JSONSchema7 | undefined,
+    config,
+  });
+  const stepsDone = steps.filter(s => s.done).length;
+  const stepTarget: Record<OnboardingStepId, { label: string; id: string }> = {
+    access: {
+      label: 'Install the app and review what it can access',
+      id: grantsId,
+    },
+    config: { label: 'Fill in the required settings', id: configId },
+  };
 
   const changeStatus = async (next: InstallationStatus) => {
     setChanging(true);
@@ -178,7 +210,7 @@ export const InstallationPage: React.FC<
     // plugin is refused there. Saying so here is the clearer error.
     if (p.review.name !== name || p.review.namespace !== namespace) {
       throw new Error(
-        `That package is ${p.review.namespace}/${p.review.name}, not ${title}. A plugin's name and namespace cannot change.`,
+        `That package is ${p.review.namespace}/${p.review.name}, not ${title}. An app's name and namespace cannot change.`,
       );
     }
 
@@ -190,6 +222,26 @@ export const InstallationPage: React.FC<
     });
     await refreshCustomViews();
   };
+
+  const jsonEditor = (
+    <JSONEditor
+      key={formRevision}
+      labelId={configLabelId}
+      initialValue={JSON.stringify(config ?? {}, null, 2)}
+      onChange={v => {
+        try {
+          setConfig(JSON.parse(v));
+          setConfigEdited(true);
+          setConfigSyntaxValid(true);
+        } catch {
+          setConfigSyntaxValid(false);
+        }
+      }}
+      schema={schema as JSONSchema7 | undefined}
+      showErrorStyling={!configValid}
+      onValidationChange={setConfigValid}
+    />
+  );
 
   return (
     <ContainerNarrow>
@@ -270,11 +322,38 @@ export const InstallationPage: React.FC<
             </Row>
           )}
           {description && (
-            <DescriptionWrapper aria-label='Plugin Description'>
+            <DescriptionWrapper aria-label='App Description'>
               <Markdown text={description} />
             </DescriptionWrapper>
           )}
         </Column>
+        {canWrite && stepsDone < steps.length && (
+          <Card as='section' aria-label='Get started'>
+            <Column>
+              <h3>
+                Get started, {stepsDone} of {steps.length} steps done
+              </h3>
+              {steps.map(({ id, done }) => (
+                <StepButton
+                  key={id}
+                  clean
+                  onClick={() =>
+                    document
+                      .getElementById(stepTarget[id].id)
+                      ?.scrollIntoView({ behavior: 'smooth' })
+                  }
+                >
+                  {done ? (
+                    <FaCheck aria-label='Done' />
+                  ) : (
+                    <FaRegCircle aria-label='To do' />
+                  )}
+                  <span>{stepTarget[id].label}</span>
+                </StepButton>
+              ))}
+            </Column>
+          </Card>
+        )}
         <Column as='section' aria-label='Release'>
           <h3>Release</h3>
           {/* Two paragraphs, not a <br /> inside one message: a JSX element
@@ -296,7 +375,7 @@ export const InstallationPage: React.FC<
             </Identity>
           )}
         </Column>
-        <Column as='section' aria-label='Grants'>
+        <Column as='section' aria-label='Grants' id={grantsId}>
           <h3>Grants</h3>
           {grantNames.length === 0 ? (
             <Muted>No capabilities were granted.</Muted>
@@ -309,15 +388,15 @@ export const InstallationPage: React.FC<
           )}
         </Column>
         {pluginAgent && (
-          <Column as='section' aria-label='Plugin agent'>
-            <h3>Plugin agent</h3>
+          <Column as='section' aria-label='App agent'>
+            <h3>App agent</h3>
             <ResourceInline subject={pluginAgent} />
           </Column>
         )}
         {canWrite && pluginAgent && (
           <AssignRights installation={resource} disabled={hasFullDriveAccess} />
         )}
-        <Column>
+        <Column id={configId}>
           <Row center justify='space-between'>
             <h3 id={configLabelId}>
               <Row gap='0.5ch' center>
@@ -329,6 +408,7 @@ export const InstallationPage: React.FC<
               <Button
                 disabled={
                   !configValid ||
+                  !formValid ||
                   !configSyntaxValid ||
                   saveState.kind === 'saving' ||
                   saveState.kind === 'scheduled' ||
@@ -345,24 +425,31 @@ export const InstallationPage: React.FC<
               </Button>
             )}
           </Row>
-          <JSONEditor
-            labelId={configLabelId}
-            initialValue={JSON.stringify(config ?? {}, null, 2)}
-            onChange={v => {
-              try {
-                setConfig(JSON.parse(v));
+          {fields && (
+            <ConfigForm
+              fields={fields}
+              config={config}
+              disabled={!canWrite}
+              onChange={next => {
+                setConfig(next);
                 setConfigEdited(true);
+                setConfigValid(true);
                 setConfigSyntaxValid(true);
-              } catch {
-                setConfigSyntaxValid(false);
-              }
-            }}
-            schema={schema as JSONSchema7 | undefined}
-            showErrorStyling={!configValid}
-            onValidationChange={setConfigValid}
-          />
+                setFormRevision(r => r + 1);
+              }}
+            />
+          )}
+          {fields ? (
+            <Details noIndent title={<strong>Advanced: edit as JSON</strong>}>
+              {jsonEditor}
+            </Details>
+          ) : (
+            jsonEditor
+          )}
         </Column>
-        {schema && <ConfigReference schema={schema as JSONSchema7} />}
+        {schema && !fields && (
+          <ConfigReference schema={schema as JSONSchema7} />
+        )}
         {declared.length > 0 && (
           <CapabilityList capabilities={declared} title='Permissions' />
         )}
@@ -382,12 +469,12 @@ export const InstallationPage: React.FC<
         onConfirm={() => changeStatus('revoked')}
         onCancel={() => setConfirm(undefined)}
       >
-        Revoking uninstalls the plugin and retires its agent. The Installation
+        Revoking uninstalls the app and retires its agent. The Installation
         record stays, so you can see what was installed; installing again needs
         a new Installation.
       </ConfirmationDialog>
       <ConfirmationDialog
-        title='Uninstall plugin'
+        title='Uninstall app'
         show={confirm === 'uninstall'}
         theme={ConfirmationDialogTheme.Alert}
         confirmLabel='Uninstall'
@@ -400,12 +487,26 @@ export const InstallationPage: React.FC<
         }}
         onCancel={() => setConfirm(undefined)}
       >
-        Are you sure you want to uninstall this plugin? This removes the
+        Are you sure you want to uninstall this app? This removes the
         Installation record.
       </ConfirmationDialog>
     </ContainerNarrow>
   );
 };
+
+/** A checklist row: icon and label left-aligned with a gap between them. */
+const StepButton = styled(Button)`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: ${p => p.theme.size(2)};
+  text-align: left;
+  width: 100%;
+
+  svg {
+    flex-shrink: 0;
+  }
+`;
 
 const PluginName = styled.span`
   font-weight: bold;

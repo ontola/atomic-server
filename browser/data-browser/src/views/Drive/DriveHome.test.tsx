@@ -19,6 +19,7 @@ const loaded = new Set([
   'https://atomicdata.dev/properties/name',
 ]);
 const store = {
+  getAgent: () => ({ subject: 'did:ad:agent:me' }),
   driveOfSubject: (s: string) => parents[s] ?? s,
   resources: { has: (s: string) => loaded.has(s) },
 };
@@ -52,7 +53,7 @@ vi.mock('@hooks/useVisibleDriveChildren', () => ({
   useHiddenDriveSubjects: () => new Set(['atomic:hidden-doc']),
 }));
 vi.mock('@helpers/recentResources', () => ({
-  getRecentResources: (d: string) => recents[d] ?? [],
+  getRecentResources: (_a: unknown, d: string) => recents[d] ?? [],
 }));
 vi.mock('@tomic/react', () => ({
   canvas: { classes: {} },

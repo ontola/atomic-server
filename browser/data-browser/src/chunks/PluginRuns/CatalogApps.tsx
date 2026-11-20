@@ -22,7 +22,7 @@ import {
   useDialog,
 } from '@components/Dialog';
 import { FaShareNodes } from 'react-icons/fa6';
-import { getPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
+import { defaultPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 import { paths } from '../../routes/paths';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
@@ -263,7 +263,7 @@ export function CatalogApps({
                   window.location.origin,
                   sharing.app.id,
                   sharing.catalogUrl,
-                  getPluginCatalogUrl(),
+                  defaultPluginCatalogUrl,
                 )}
                 qrAlt={`QR code for the ${sharing.app.name} link`}
               />

@@ -362,7 +362,7 @@ export async function assertPrivateWebsiteParent(
 /** Local/outbox writes are not confirmation that a release is durable. */
 export async function saveWebsiteResource(resource: Resource) {
   const result = await resource.save();
-  if (result === 'offline')
+  if (result === 'offline' || result === 'queued')
     throw new Error(
       `Changes remain pending locally for ${resource.subject}. Reconnect and save this resource before creating another release.`,
     );

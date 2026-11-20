@@ -430,7 +430,9 @@ function SearchOverlay(): JSX.Element {
   const chatMatches = useChatMatches(searchQuery, !scope && filterIsEmpty);
   const chatSubjects = new Set(chatMatches.map(match => match.subject));
   const candidates = showRecent
-    ? getRecentResources(drive).filter(subject => subject !== currentSubject)
+    ? getRecentResources(store.getAgent()?.subject, drive).filter(
+        subject => subject !== currentSubject,
+      )
     : results.filter(subject => !chatSubjects.has(subject));
   // Deleted or trashed resources (possibly from an earlier session or another
   // device) are hidden, and forgotten when they were only a recent.
@@ -449,9 +451,11 @@ function SearchOverlay(): JSX.Element {
     if (goneKey) {
       goneKey
         .split('\n')
-        .forEach(subject => removeRecentResource(drive, subject));
+        .forEach(subject =>
+          removeRecentResource(store.getAgent()?.subject, drive, subject),
+        );
     }
-  }, [drive, goneKey]);
+  }, [store, drive, goneKey]);
 
   const actionHits = currentSubject
     ? matchActionsForPalette(query, resourceActions, actionCtx)

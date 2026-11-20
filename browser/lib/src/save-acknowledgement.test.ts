@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { core } from './ontologies/core.js';
 import { Resource } from './resource.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 import { AtomicError, ErrorType, RequestCancelledError } from './error.js';
 import { BLOCK_AFTER_FAILURES } from './local-outbox.js';
 import { ErrorCode } from './ws-v2.js';
@@ -47,6 +47,7 @@ describe('explicit save acknowledgement', () => {
 
   it('keeps transport failures queued and returns offline', async () => {
     const { store, postCommitSpy } = await testStore();
+    mockLocalPersistence(store);
     const doc = await store.newResource({
       isA: 'https://atomicdata.dev/classes/Drive',
       noParent: true,
@@ -208,6 +209,33 @@ describe('explicit save acknowledgement', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('not allowed to add this here');
     expect(errors[0]).not.toContain('right has been found');
+    store.setServerConnected(false);
+  });
+
+  it('names the item and points to the Sync page when a right is missing', async () => {
+    const { store } = await testStore();
+    const drive = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      noParent: true,
+      propVals: { [core.properties.name]: 'Team notes' },
+    });
+    store.addResource(drive);
+    const refusal =
+      'Unauthorized. No https://atomicdata.dev/properties/write right has been found for atomic:agent:x in this resource or its parents';
+    const errors: string[] = [];
+    store.on(StoreEvents.Error, e => errors.push(e.message));
+
+    (
+      store as unknown as {
+        notifyBlockedSync(subject: string, message: string): void;
+      }
+    ).notifyBlockedSync(drive.subject, refusal);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('"Team notes" was not synced');
+    expect(errors[0]).toContain(
+      'Review it on the Sync page, where you can discard it.',
+    );
     store.setServerConnected(false);
   });
 

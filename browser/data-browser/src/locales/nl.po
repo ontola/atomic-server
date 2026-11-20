@@ -140,7 +140,6 @@ msgstr "AI-agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -552,6 +551,7 @@ msgstr "Server controleren…"
 msgid "Not responding"
 msgstr "Reageert niet"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Meer lezen "
@@ -993,10 +993,6 @@ msgid "Default Ontology"
 msgstr "Standaardontologie"
 
 #: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Plugins"
-msgstr "Plugins"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Remove tag"
 msgstr "Tag verwijderen"
 
@@ -1257,10 +1253,6 @@ msgid "Keyboard shortcuts"
 msgstr "Sneltoetsen"
 
 #: src/views/Installation/InstallationPage.tsx
-msgid "Plugin Description"
-msgstr "Pluginbeschrijving"
-
-#: src/views/Installation/InstallationPage.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Uninstall"
 msgstr "Verwijderen"
@@ -1347,14 +1339,12 @@ msgstr "Alternatieve tekst"
 #: src/components/AvatarCropper.tsx
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/NewFormDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1945,10 +1935,6 @@ msgstr "<0/> Terug"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> resources verwijzen naar{0} {1}"
 
-#: src/views/Drive/PluginList.tsx
-msgid "No plugins installed"
-msgstr "Geen plugins geïnstalleerd"
-
 #: src/components/ResourceUsage/UsageCard.tsx
 #: src/views/Card/CollectionCard.tsx
 msgid "No resources"
@@ -2244,14 +2230,6 @@ msgstr "Leesverzoek"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Write Request"
 msgstr "Schrijfverzoek"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all reads done by this plugin"
-msgstr "Alle leesacties van deze plugin toestaan"
-
-#: src/views/PluginView/useRequestPermissionDialog.tsx
-msgid "Allow all writes done by this plugin"
-msgstr "Alle schrijfacties van deze plugin toestaan"
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
@@ -2766,7 +2744,6 @@ msgstr "Leeg"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Verbergen"
 
@@ -3464,7 +3441,6 @@ msgid "Click to add a value"
 msgstr "Klik om een waarde toe te voegen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Hernoemen"
 
@@ -4052,6 +4028,11 @@ msgstr "Apparaat koppelen"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SyncProblemBanner.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
@@ -4069,6 +4050,8 @@ msgstr "Werkruimte openen"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -4387,18 +4370,8 @@ msgstr "Deze eigenschap wordt door de server beheerd en kan niet worden bewerkt.
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokale opslag is uitgeschakeld, dus deze server is de enige gegevensbron. Schakel hieronder lokale opslag in om zonder verbinding te werken."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Maken…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Schijf maken"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Nieuwe schijf"
 
@@ -4468,10 +4441,14 @@ msgid "Change icon"
 msgstr "Pictogram wijzigen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Pictogram toevoegen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Omslag toevoegen"
 
@@ -5424,7 +5401,7 @@ msgstr "Niet verbonden"
 msgid "Switch"
 msgstr "Wisselen"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #. 0: accountAddress(phase.account)
 #: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
@@ -5446,12 +5423,12 @@ msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} van {1}"
 
@@ -5514,7 +5491,7 @@ msgstr "{0} mislukt: {1}"
 msgid "Sign in →"
 msgstr "Inloggen →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. We bewaren je sleutel versleuteld, zodat je met deze e-mail weer toegang krijgt op een nieuw apparaat."
@@ -5585,7 +5562,7 @@ msgstr "Opslaan…"
 msgid "Store it with {0}"
 msgstr "Opslaan bij {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Je back-up is alleen in deze browser versleuteld opgeslagen. Je kunt deze hier ontgrendelen, maar op een nieuw apparaat zou je geen toegang kunnen herstellen."
@@ -5642,7 +5619,7 @@ msgstr "Herstellen uit Cloud Vault"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Alleen je passkey opent dit account. Als deze niet op dit apparaat staat, ontgrendel je het account op het apparaat waarop je de passkey hebt ingesteld en voeg je via Instellingen een herstelcode toe — daarmee krijg je overal toegang."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar alleen je passkey opent deze. Een browser waarmee je passkey niet is gesynchroniseerd kan je geen toegang geven — een herstelcode wel."
@@ -6063,10 +6040,6 @@ msgstr "Sjablonen verbergen op de pagina voor nieuwe resources"
 #: src/routes/AppSettings.tsx
 msgid "Enable keyboard drag & drop in sidebar"
 msgstr "Slepen met toetsenbord inschakelen in zijbalk"
-
-#: src/chunks/Plugins/NewPluginButton.tsx
-msgid "Upload Plugin"
-msgstr "Plugin uploaden"
 
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Reading"
@@ -6494,13 +6467,9 @@ msgstr "Vraag AI"
 msgid "<0/> Loading"
 msgstr "<0/> Laden"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mijn schijf"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Schijfnaam"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6510,10 +6479,6 @@ msgstr "Atomic"
 msgid "Loading chat…"
 msgstr "Chat laden…"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Set up AI"
-msgstr "AI instellen"
-
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
 msgstr "AI-instellingen laden…"
@@ -6522,15 +6487,6 @@ msgstr "AI-instellingen laden…"
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Run"
 msgstr "Uitvoeren"
-
-#: src/actions/resourceActions.tsx
-msgid "Run this plugin and review what it proposes before anything is written."
-msgstr "Voer deze plugin uit en beoordeel de voorstellen voordat er iets wordt geschreven."
-
-#. 0: e.message
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "Could not run this plugin: {0}"
-msgstr "Kan deze plugin niet uitvoeren: {0}"
 
 #. 0: result.message
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
@@ -6552,16 +6508,8 @@ msgid "Apply {0} changes"
 msgstr "{0} wijzigingen toepassen"
 
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
-msgid "This plugin ran too long and was stopped. Nothing was planned."
-msgstr "Deze plugin was te lang bezig en is gestopt. Er is niets gepland."
-
-#: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "This run proposes no changes."
 msgstr "Deze uitvoering stelt geen wijzigingen voor."
-
-#: src/chunks/PluginRuns/PluginRunHistory.tsx
-msgid "This plugin has not run yet."
-msgstr "Deze plugin is nog niet uitgevoerd."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "Runs"
@@ -6603,23 +6551,9 @@ msgstr "Niet ingelogd"
 msgid "Source"
 msgstr "Bron"
 
-#: src/chunks/PluginRuns/PluginPage.tsx
-msgid "This plugin has no source yet."
-msgstr "Deze plugin heeft nog geen broncode."
-
-#. 0: describeUse(secret)
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "No longer asked for by this plugin — {0}"
-msgstr "Niet meer gevraagd door deze plugin — {0}"
-
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Revoke"
 msgstr "<0/> Intrekken"
-
-#. 0: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
-msgstr "Wordt alleen naar <0/> verzonden. De plugin gebruikt dit als{0} <1/> en ziet de waarde nooit."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
@@ -6685,10 +6619,6 @@ msgstr "Elke {0} seconden"
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Allowed by {0}. Every write is still checked against what that account may change."
 msgstr "Toegestaan door {0}. Elke schrijfactie wordt nog steeds gecontroleerd op wat dat account mag wijzigen."
-
-#: src/chunks/PluginRuns/PluginSchedule.tsx
-msgid "Available once you have run this plugin and applied its changes at least once."
-msgstr "Beschikbaar nadat je deze plugin minstens één keer hebt uitgevoerd en de wijzigingen hebt toegepast."
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Apply background runs without asking me"
@@ -7199,10 +7129,6 @@ msgstr "Automatiseringsuitvoeringen die deze actie gebruiken"
 #: src/chunks/PluginRuns/ActionHistoryCleanup.tsx
 msgid "Remove old action payloads while keeping IDs, outcomes and recovery evidence. Completed results must be at least 30 days old. Automation results also require every consuming run to have finished or been explicitly abandoned at least 30 days ago. Unfinished runs, untracked usage, uncertain or failed writes, and receipts with an unknown completion date are kept."
 msgstr "Verwijder oude actiegegevens en behoud ID's, uitkomsten en herstelbewijzen. Voltooide resultaten moeten minstens 30 dagen oud zijn. Voor automatiseringsresultaten moeten ook alle uitvoeringen die ze gebruiken minstens 30 dagen geleden zijn voltooid of expliciet afgebroken. Onvoltooide uitvoeringen, niet-bijgehouden gebruik, onzekere of mislukte schrijfacties en ontvangstbewijzen met een onbekende voltooiingsdatum blijven behouden."
-
-#: src/routes/IntegrationStore.tsx
-msgid "Community plugins"
-msgstr "Communityplugins"
 
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
@@ -7881,10 +7807,6 @@ msgstr "Ook gewijzigd in het origineel sinds deze fork is gemaakt:"
 msgid "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 msgstr "Paginaovergangsanimaties inschakelen (experimenteel, bekende problemen buiten Chromium op desktop)"
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show experimental plugins"
-msgstr "Experimentele plugins tonen"
-
 #: src/routes/IntegrationStore.tsx
 msgid "Published releases. Open one to review what it can do before installing it into this drive, or create a draft to adapt its code."
 msgstr "Gepubliceerde releases. Open er een om te bekijken wat deze kan doen voordat je deze op deze schijf installeert, of maak een concept om de code aan te passen."
@@ -7938,29 +7860,12 @@ msgid "No capabilities were granted."
 msgstr "Er zijn geen bevoegdheden toegekend."
 
 #: src/views/Installation/InstallationPage.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Plugin agent"
-msgstr "Pluginagent"
-
-#: src/views/Installation/InstallationPage.tsx
 msgid "Permissions"
 msgstr "Rechten"
 
 #: src/views/Installation/InstallationPage.tsx
 msgid "Revoke installation"
 msgstr "Installatie intrekken"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Uninstall plugin"
-msgstr "Plugin verwijderen"
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Revoking uninstalls the plugin and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
-msgstr "Intrekken verwijdert de plugin en stelt de agent buiten gebruik. Het installatierecord blijft bestaan zodat je kunt zien wat er was geïnstalleerd; opnieuw installeren vereist een nieuwe installatie."
-
-#: src/views/Installation/InstallationPage.tsx
-msgid "Are you sure you want to uninstall this plugin? This removes the Installation record."
-msgstr "Weet je zeker dat je deze plugin wilt verwijderen? Hiermee verwijder je het installatierecord."
 
 #: src/chunks/FormBuilder/Summary/SummaryTab.tsx
 msgid "No"
@@ -8281,7 +8186,7 @@ msgstr "<0/> Link kopiëren"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Klaar"
 
@@ -8305,10 +8210,6 @@ msgstr "Deze werkruimte kon niet worden gelezen op dit apparaat. Probeer deze op
 #: src/routes/IntegrationStore.tsx
 msgid "No integrations match your search."
 msgstr "Geen integraties komen overeen met je zoekopdracht."
-
-#: src/routes/IntegrationStore.tsx
-msgid "No plugins to show here."
-msgstr "Geen plugins om hier te tonen."
 
 #. 0: ' '
 #: src/helpers/privateHomeNudge.tsx
@@ -8507,7 +8408,9 @@ msgid "Pinned to <0/>"
 msgstr "Vastgemaakt aan <0/>"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "van {0}"
 
@@ -8556,11 +8459,11 @@ msgstr "Voeg een bericht toe voor de mensen die je uitnodigt"
 msgid "Sending…"
 msgstr "Verzenden…"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Uitnodigingslink gekopieerd"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Kan de link niet kopiëren. Selecteer deze en kopieer handmatig."
 
@@ -8669,11 +8572,6 @@ msgstr "Instellen maakt een {0}-tabel voor deze importeerfunctie. Er wordt nog n
 msgid "File to import"
 msgstr "Te importeren bestand"
 
-#. 0: ' '; 1: formatBytes(maxBytes(accepts))
-#: src/chunks/PluginRuns/FileImport.tsx
-msgid "The file is read by this plugin on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
-msgstr "Deze plugin leest het bestand op je AtomicServer, tot{0} {1}. Beoordeel de voorgestelde wijzigingen voordat er iets wordt opgeslagen."
-
 #: src/chunks/PluginRuns/FileImport.tsx
 msgid "Open imported data"
 msgstr "Geïmporteerde gegevens openen"
@@ -8706,7 +8604,11 @@ msgid "Install {0}"
 msgstr "{0} installeren"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "{0} openen"
 
@@ -8724,20 +8626,6 @@ msgstr "Schijfapps"
 msgid "Apps that run in their own frame on this drive and keep their rows in a table of their own. Each is a published version; installing checks its code against the catalog before anything is saved."
 msgstr "Apps die in hun eigen frame op deze schijf draaien en hun rijen in een eigen tabel bewaren. Elke app is een gepubliceerde versie; bij installatie wordt de code gecontroleerd aan de hand van de catalogus voordat er iets wordt opgeslagen."
 
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
-msgstr "De integratieproxyserver waarlangs API-plugins aanroepen doen. Deze instelling wordt opgeslagen in deze browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Plugin catalog URL"
-msgstr "URL van plugincatalogus"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Discover integrations from this catalog.json. This setting is saved in this browser."
-msgstr "Ontdek integraties uit deze catalog.json. Deze instelling wordt opgeslagen in deze browser."
-
-#: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Voer een HTTPS-URL of een localhost-HTTP-URL in die verwijst naar een catalog.json-bestand."
@@ -8848,14 +8736,6 @@ msgstr "Niets open."
 msgid "Nothing closed."
 msgstr "Niets gesloten."
 
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental plugins to try out."
-msgstr "Dit is een nieuwe functie. Je ziet experimentele plugins om uit te proberen."
-
-#: src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Plugins will show up here soon for you to try out."
-msgstr "Dit is een nieuwe functie. Binnenkort verschijnen hier plugins om uit te proberen."
-
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
 msgid "Some recurring meetings could not be displayed"
 msgstr "Sommige terugkerende vergaderingen konden niet worden getoond"
@@ -8921,7 +8801,7 @@ msgstr "Je schijf openen"
 msgid "Choose a template"
 msgstr "Kies een sjabloon"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Geef je schijf een naam"
 
@@ -10148,6 +10028,7 @@ msgstr "Je hebt {0} berichten gemist terwijl je weg was"
 
 #: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Niet nu"
 
@@ -10801,6 +10682,10 @@ msgstr "Account gemaakt"
 msgid "Welcome"
 msgstr "Welkom"
 
+#: src/components/SideBar/accountRowName.ts
+msgid "Account"
+msgstr "Account"
+
 #: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Serverinstellingen"
@@ -10814,6 +10699,7 @@ msgid "Data"
 msgstr "Gegevens"
 
 #: src/components/MetaSetter.tsx
+#: src/views/Installation/InstallationPage.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Get started"
 msgstr "Aan de slag"
@@ -11163,10 +11049,6 @@ msgstr "Gebruik"
 msgid "Loading integrations…"
 msgstr "Integraties laden…"
 
-#: src/routes/IntegrationStore.tsx
-msgid "<0/> Show experimental plugins"
-msgstr "<0/> Experimentele plugins tonen"
-
 #: src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Nog geen andere apparaten — je gegevens staan veilig op dit apparaat."
@@ -11246,19 +11128,10 @@ msgstr "<0/> Uitvoeren"
 msgid "The last background run failed: {0}"
 msgstr "De laatste achtergronduitvoering is mislukt: {0}"
 
-#. 0: ' '; 1: ' '
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "This plugin asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
-msgstr "Deze plugin vraagt geen inloggegevens. Laat deze aangeven wat nodig is om er een te gebruiken —{0} <0/>{1} — of verwijs naar <1/> in een header; dan verschijnt hier een invoerveld."
-
 #. 0: ' '
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>, sent only to{0} <1/>. Undeclared, so this was read from the URLs it requests."
 msgstr "Gebruikt als <0/>, alleen verzonden naar{0} <1/>. Niet gedeclareerd, dus dit is afgeleid van de opgevraagde URL's."
-
-#: src/chunks/PluginRuns/PluginSecrets.tsx
-msgid "Used as <0/>. This plugin requests several origins — pick the one this credential belongs to."
-msgstr "Gebruikt als <0/>. Deze plugin vraagt meerdere origins op — kies degene waarbij deze inloggegevens horen."
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Used as <0/>. Its URLs are built at run time, so say which origin it may be sent to."
@@ -11448,11 +11321,6 @@ msgstr "Werkruimte ophalen"
 msgid "Search again"
 msgstr "Opnieuw zoeken"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Wil je een eigen server?{0} <0>Laat er een hosten</0>{1} of{2} <1>draai deze zelf</1> ."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11593,7 +11461,7 @@ msgstr "Bevestigen met je passkey"
 msgid "Confirm with your code"
 msgstr "Bevestigen met je code"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar inloggen opent deze nog niet. Bevestig één keer met je passkey of herstelcode om dat in te schakelen."
@@ -11611,14 +11479,6 @@ msgstr "Inloggen op je {0}-account opent deze identiteit nog niet: deze back-up 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Inloggen op je {0}-account opent deze identiteit nog niet: deze back-up is gemaakt voordat dat mogelijk was. Bevestig één keer met je herstelcode om het in te schakelen."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "Cloud Server-abonnementen bekijken"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Browsersynchronisatie heeft de limiet voor peerverbindingen bereikt. Een Cloud Server op atomic.place houdt deze werkruimte voor iedereen gesynchroniseerd, zonder peers."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -11796,15 +11656,6 @@ msgstr "Codes bepalen alleen de route. Je sleutel bepaalt nog steeds wat synchro
 #: src/components/ConnectDevice.tsx
 msgid "An always-on device has an address. One you carry has a code."
 msgstr "Een apparaat dat altijd aanstaat heeft een adres. Een apparaat dat je meeneemt heeft een code."
-
-#: src/components/ConnectDevice.tsx
-msgid "Scan this from your other device, or copy the code."
-msgstr "Scan dit vanaf je andere apparaat of kopieer de code."
-
-#. 0: serverName
-#: src/components/ConnectDevice.tsx
-msgid "Scan from your other device to sync with {0}."
-msgstr "Scan vanaf je andere apparaat om met {0} te synchroniseren."
 
 #: src/components/ConnectDevice.tsx
 msgid "Show this device"
@@ -12076,10 +11927,6 @@ msgstr "personen kunnen deelnemen"
 msgid "{0} Viewers are free."
 msgstr "{0} Kijkers zijn gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Ingelogd"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "De opslag van dit apparaat reageert niet. Sluit andere atomic.place-vensters of -tabbladen en probeer het opnieuw."
@@ -12302,10 +12149,6 @@ msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-va
 msgstr "Dit is geen Atomic-kluisback-upbestand. Kies een bestand dat eindigt op .atomic-vault."
 
 #: src/helpers/managed/vaultFile.ts
-msgid "Atomic vault backup"
-msgstr "Atomic-kluisback-up"
-
-#: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
 msgstr "Dit back-upbestand is onvolledig. Download het opnieuw."
 
@@ -12394,10 +12237,6 @@ msgstr "Verwijder deze resource definitief. Dit kan niet ongedaan worden gemaakt
 msgid "Hide formatting toolbar"
 msgstr "Opmaakwerkbalk verbergen"
 
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Gratis browsersynchronisatie is bedoeld voor kleine groepen van maximaal 4 personen. Gebruik voor meer mensen een Cloud Server op atomic.place."
-
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
 msgstr "Gesprek openen"
@@ -12423,13 +12262,11 @@ msgid "Show all"
 msgstr "Alles tonen"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Schijfinstellingen"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Hier is nog niets."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Schijfinstellingen"
@@ -12648,7 +12485,7 @@ msgstr "Het abonnement van deze schijf bevat Cloud Server. Er wordt op je toeste
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Log in op je {0}-account om herstel via e-mail te controleren. Inloggen op deze schijf met een passkey of geheime sleutel verbindt niet vanzelf je cloudaccount."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Geen herstelback-up opgeslagen, dus als je alle apparaten kwijtraakt, verlies je deze schijf."
@@ -12698,9 +12535,7 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Een Cloud Server houdt deze schijf voor iedereen online, zodat niemand een browser open hoeft te houden."
 
 #. 0: CLOUD_SERVER_PRICE
-#. 0: CLOUD_SERVER_PRICE
 #: src/components/CloudVaultWatcher.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Upgraden naar Cloud Server vanaf {0}"
 
@@ -12939,47 +12774,27 @@ msgstr "Cloud Server staat niet aan voor deze schijf. Deze server accepteert de 
 msgid "Not hosted yet"
 msgstr "Nog niet gehost"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Praat met de AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Vraag om dingen op je schijf te vinden, schrijven of ordenen"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a chat"
-msgstr "Een chat starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Invite"
-msgstr "Uitnodigen"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Save your work"
-msgstr "Sla je werk op"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Meld je aan met je e-mail, bewaar je geheime sleutel of verbind een apparaat"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Aan de slag"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Vereist een AI-bron: je eigen sleutel of Ollama"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Not done yet"
-msgstr "Nog niet klaar"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13023,7 +12838,9 @@ msgstr "Time-out bij ophalen van {0}"
 
 #: src/components/MetaSetter.tsx
 #: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/usePanelList.ts
 #: src/routes/IntegrationStore.tsx
+#: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Apps"
 msgstr "Apps"
 
@@ -13043,6 +12860,7 @@ msgstr "Zoek apps, integraties, domeinen of standaarden"
 msgid "Loading apps…"
 msgstr "Apps laden…"
 
+#: src/components/SideBar/AppsPanel.tsx
 #: src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Apps ontdekken"
@@ -13077,10 +12895,6 @@ msgstr "<0/> Verwijderen"
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Marketplaces"
 msgstr "Marktplaatsen"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Apps from these catalogs are offered next to the one above. When two have an app with the same name, the one listed first wins. This setting is saved in this browser."
-msgstr "Apps uit deze catalogi worden naast de bovenstaande aangeboden. Als twee catalogi een app met dezelfde naam hebben, krijgt de eerst vermelde voorrang. Deze instelling wordt opgeslagen in deze browser."
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Add marketplace URL"
@@ -13190,7 +13004,6 @@ msgid "Could not send your identity"
 msgstr "Kan je identiteit niet verzenden"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Van schijf wisselen"
@@ -13211,21 +13024,9 @@ msgstr "Aan mijn account toevoegen"
 msgid "Don't add, keep it in this browser only"
 msgstr "Niet toevoegen, alleen in deze browser bewaren"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Geef je schijf een naam: een team, bedrijf, klas of huishouden"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive"
-msgstr "Een schijf starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Deel een schijf met een teamgenoot of vriend"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive first"
-msgstr "Start eerst een schijf"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
@@ -13247,10 +13048,6 @@ msgstr "Aan deze schijf toevoegen"
 msgid "Or describe what you need"
 msgstr "Of beschrijf wat je nodig hebt"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Aan de slag tonen op mijn schijven"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Begin met"
@@ -13270,10 +13067,6 @@ msgstr "Of vul deze schijf met een startpakket"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Deze schijf starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Geef deze een naam en vul deze met een startpakket"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13361,17 +13154,104 @@ msgstr "Kolom bewerken"
 msgid "Add view"
 msgstr "Weergave toevoegen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> In Mijn schijven"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Je schijf wordt gemaakt…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Toevoegen aan Mijn schijven"
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Opgeslagen als {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Je werk wordt opgeslagen in je account…"
+
+#: src/hooks/useCreateDrive.ts
+msgid "Switch back to your previous drive here"
+msgstr "Wissel hier terug naar je vorige schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr "Klik hier om je schijf een naam te geven"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr "Praat hier met de AI"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Maak iets"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Voeg een document of tabel toe aan deze schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Maak hier een document of tabel"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Deel deze schijf met een teamgenoot of vriend"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Deel deze schijf hier"
+
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+msgid "Your account"
+msgstr "Je account"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lees Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Een korte rondleiding door deze schijf, in het eerste document"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Open Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Only saved on this device"
+msgstr "Alleen op dit apparaat opgeslagen"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr "Je bent ingelogd, maar het opslaan van je werk in je account is niet gelukt. Controleer je verbinding en probeer het opnieuw."
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Register with email"
+msgstr "Registreren met e-mail"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invite link"
+msgstr "Uitnodigingslink"
+
+#. 0: new Date(invite.sentAt).toLocaleDateString()
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied {0}"
+msgstr "Gekopieerd {0}"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied"
+msgstr "Gekopieerd"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite link"
+msgstr "Uitnodigingslink verwijderen"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
@@ -13572,3 +13452,260 @@ msgstr "Gebruikte credits: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Profiel bewerken"
+
+#: src/components/Toaster.tsx
+msgid "<0/> Report"
+msgstr "<0/> Melden"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Niets houdt deze drive online als je apparaten uit staan."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Neem een server die altijd aan staat"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Browsersynchronisatie heeft de limiet van peerverbindingen bereikt."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Houd iedereen gesynchroniseerd met een Cloud Server"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Wil je een eigen server?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Laat er een hosten"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Gratis browsersynchronisatie is bedoeld voor kleine groepen tot 4 mensen."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "Gebruik voor meer mensen een Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mailadres, of koppel een ander apparaat, zodat je het elders kunt openen en de toegang niet kwijtraakt."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Bewaar je werk"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Registreer je e-mailadres of koppel een apparaat om het elders te openen"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Bewaar je werk hier"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Je e-mailadres en een versleutelde back-up van je identiteit gaan naar {0}."
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan with the app"
+msgstr "Scannen met de app"
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Syncs with {0}."
+msgstr "Synchroniseert met {0}."
+
+#: src/actions/resourceActions.tsx
+msgid "Run this app and review what it proposes before anything is written."
+msgstr "Voer deze app uit en beoordeel de voorstellen voordat er iets wordt geschreven."
+
+#: src/routes/AppSettings.tsx
+msgid "Show Apps panel"
+msgstr "Toon Apps-paneel"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Build an app with AI"
+msgstr "Bouw een app met AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Guide: publishing an app"
+msgstr "Handleiding: een app publiceren"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Missing an app? Build it yourself with AI"
+msgstr "Mis je een app? Bouw hem zelf met AI"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
+msgstr "Beschrijf wat je wilt en de assistent bouwt de app in je drive. Deel hem daarna met je drive, host je eigen marktplaats, of dien hem in bij de community-marktplaats."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. You are seeing experimental apps to try out."
+msgstr "Dit is een nieuwe functie. Je ziet experimentele apps om uit te proberen."
+
+#: src/routes/IntegrationStore.tsx
+msgid "This is a new feature. Apps will show up here soon for you to try out."
+msgstr "Dit is een nieuwe functie. Binnenkort verschijnen hier apps om uit te proberen."
+
+#: src/routes/IntegrationStore.tsx
+msgid "<0/> Show experimental apps"
+msgstr "<0/> Experimentele apps tonen"
+
+#: src/routes/IntegrationStore.tsx
+msgid "Community apps"
+msgstr "Community-apps"
+
+#: src/routes/IntegrationStore.tsx
+msgid "No apps to show here."
+msgstr "Geen apps om hier te tonen."
+
+#: src/chunks/Plugins/NewPluginButton.tsx
+msgid "Upload App"
+msgstr "App uploaden"
+
+#. 0: ' '; 1: formatBytes(maxBytes(accepts))
+#: src/chunks/PluginRuns/FileImport.tsx
+msgid "The file is read by this app on your AtomicServer, up to{0} {1}. Review the proposed changes before anything is saved."
+msgstr "Deze app leest het bestand op je AtomicServer, tot{0} {1}. Beoordeel de voorgestelde wijzigingen voordat er iets wordt opgeslagen."
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "This app has no source yet."
+msgstr "Deze app heeft nog geen broncode."
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "This app has not run yet."
+msgstr "Deze app is nog niet uitgevoerd."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Available once you have run this app and applied its changes at least once."
+msgstr "Beschikbaar nadat je deze app minstens één keer hebt uitgevoerd en de wijzigingen hebt toegepast."
+
+#. 0: ' '; 1: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "This app asks for no credentials. To use one, have it declare what it needs —{0} <0/>{1} — or reference <1/> in a header and a slot will appear here."
+msgstr "Deze app vraagt geen inloggegevens. Laat deze aangeven wat nodig is om er een te gebruiken:{0} <0/>{1}, of verwijs naar <1/> in een header; dan verschijnt hier een invoerveld."
+
+#. 0: describeUse(secret)
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "No longer asked for by this app — {0}"
+msgstr "Niet meer gevraagd door deze app: {0}"
+
+#. 0: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Sent only to <0/>. The app uses it as{0} <1/> and never sees the value."
+msgstr "Wordt alleen naar <0/> verzonden. De app gebruikt dit als{0} <1/> en ziet de waarde nooit."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Used as <0/>. This app requests several origins — pick the one this credential belongs to."
+msgstr "Gebruikt als <0/>. Deze app vraagt meerdere origins op. Kies degene waarbij deze inloggegevens horen."
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this app: {0}"
+msgstr "Kan deze app niet uitvoeren: {0}"
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This app ran too long and was stopped. Nothing was planned."
+msgstr "Deze app was te lang bezig en is gestopt. Er is niets gepland."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Show experimental apps"
+msgstr "Experimentele apps tonen"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that integrations call through. This setting is saved in this browser."
+msgstr "De integratieproxyserver waarlangs integraties aanroepen doen. Deze instelling wordt opgeslagen in deze browser."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "Apps are offered from these catalogs, in this order. When two have an app with the same name, the one listed first wins. Saved in this browser."
+msgstr "Apps worden uit deze catalogi aangeboden, in deze volgorde. Als twee catalogi een app met dezelfde naam hebben, krijgt de eerst vermelde voorrang. Opgeslagen in deze browser."
+
+#: src/views/Drive/PluginList.tsx
+msgid "No apps installed"
+msgstr "Geen apps geïnstalleerd"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Install the app and review what it can access"
+msgstr "Installeer de app en bekijk waar hij bij mag"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Fill in the required settings"
+msgstr "Vul de verplichte instellingen in"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "App Description"
+msgstr "App-beschrijving"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "To do"
+msgstr "Nog te doen"
+
+#. 0: stepsDone; 1: steps.length
+#: src/views/Installation/InstallationPage.tsx
+msgid "Get started, {0} of {1} steps done"
+msgstr "Aan de slag, {0} van {1} stappen gedaan"
+
+#: src/views/Installation/InstallationPage.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "App agent"
+msgstr "App-agent"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Advanced: edit as JSON"
+msgstr "Geavanceerd: bewerk als JSON"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Uninstall app"
+msgstr "App verwijderen"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Revoking uninstalls the app and retires its agent. The Installation record stays, so you can see what was installed; installing again needs a new Installation."
+msgstr "Intrekken verwijdert de app en stelt de agent buiten gebruik. Het installatierecord blijft bestaan zodat je kunt zien wat er was geïnstalleerd; opnieuw installeren vereist een nieuwe installatie."
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "Are you sure you want to uninstall this app? This removes the Installation record."
+msgstr "Weet je zeker dat je deze app wilt verwijderen? Hiermee verwijder je het installatierecord."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "This field is required."
+msgstr "Dit veld is verplicht."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Pick one of the available options."
+msgstr "Kies een van de beschikbare opties."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a number."
+msgstr "Vul een getal in."
+
+#: src/views/Installation/configFormLogic.ts
+msgid "Enter a whole number."
+msgstr "Vul een geheel getal in."
+
+#. 0: def.minimum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0}."
+msgstr "Moet minimaal {0} zijn."
+
+#. 0: def.maximum
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at most {0}."
+msgstr "Mag maximaal {0} zijn."
+
+#. 0: def.minLength
+#: src/views/Installation/configFormLogic.ts
+msgid "Must be at least {0} characters."
+msgstr "Moet minimaal {0} tekens bevatten."
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all reads done by this app"
+msgstr "Alle leesacties van deze app toestaan"
+
+#: src/views/PluginView/useRequestPermissionDialog.tsx
+msgid "Allow all writes done by this app"
+msgstr "Alle schrijfacties van deze app toestaan"
