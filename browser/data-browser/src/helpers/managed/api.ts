@@ -174,6 +174,23 @@ export function rememberManagedPortalUrl(url: string | null | undefined): void {
 }
 
 /**
+ * Undo {@link rememberManagedPortalUrl} for a portal the user tried and walked
+ * away from. A no-op while a device token exists: that portal stays until the
+ * device is unlinked.
+ */
+export function forgetManagedPortalUrl(): void {
+  if (getLinkedPortalOrigin()) return;
+
+  rememberedPortalUrl = null;
+
+  try {
+    localStorage.removeItem(PORTAL_URL_STORAGE_KEY);
+  } catch {
+    // Storage disabled: the in-memory copy is already cleared.
+  }
+}
+
+/**
  * The last control plane a managed node named, or null if none ever has.
  *
  * While a device token exists this is the portal that issued it, whatever any

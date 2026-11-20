@@ -34,16 +34,16 @@ import {
   profileReviewedBefore,
   rememberProfileReviewed,
 } from './profileReviewed';
-import { paths } from '../../routes/paths';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
-import { CLOUD_SERVER_PRICE } from '../../helpers/cloudServerPrice';
+import { openCloudServerSales } from '../../helpers/openCloudServerSales';
 import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
 import {
   accountAddress,
   getManagedAccount,
 } from '../../helpers/managed/session';
+import { useIsLinkedToAccount } from '@hooks/useIsLinkedToAccount';
+import { openSaveWorkDialog } from '../SaveWork/saveWorkDialogState';
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { describeEditorSeats, useEditorSeats } from './useEditorSeats';
@@ -55,6 +55,7 @@ import { useShareRights } from './useShareRights';
 import { usePendingInvites } from './usePendingInvites';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
+import { copyInviteLink, type CreateInviteLink } from './copyInviteLink';
 import {
   UNLIMITED,
   UsageLimitField,
@@ -200,6 +201,7 @@ function ShareOverview({
   onDone: () => void;
 }): JSX.Element {
   const isSaas = !!getManagedPortalUrl();
+  const accountLinked = useIsLinkedToAccount();
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const store = useStore();
   const isUnhostedDrive =
@@ -315,7 +317,10 @@ function ShareOverview({
             <SeatsNote>{describeEditorSeats(editorSeats)}</SeatsNote>
           )}
           {canWrite && !isSaas && (
-            <InviteLinkField createInviteLink={createInviteLink} />
+            <InviteLinkField
+              createInviteLink={createInviteLink}
+              onCopied={pending.recordLink}
+            />
           )}
           {composing ? (
             <MessageField>
@@ -374,6 +379,17 @@ function ShareOverview({
             </>
           )}
           {err && <ErrorLook>{err.message}</ErrorLook>}
+          {err && isSaas && !accountLinked && (
+            <Button
+              subtle
+              onClick={() => {
+                onDone();
+                openSaveWorkDialog();
+              }}
+            >
+              Register with email
+            </Button>
+          )}
         </Stack>
       </Dialog.Content>
       <Actions>
@@ -393,7 +409,10 @@ function ShareOverview({
         ) : (
           <>
             {canWrite && isSaas && (
-              <CopyInviteLinkSplit createInviteLink={createInviteLink} />
+              <CopyInviteLinkSplit
+                createInviteLink={createInviteLink}
+                onCopied={pending.recordLink}
+              />
             )}
             <Spacer />
             <Button onClick={onDone}>Done</Button>
@@ -404,30 +423,13 @@ function ShareOverview({
   );
 }
 
-type CreateInviteLink = ReturnType<typeof useCreateInviteLink>;
-
-async function copyInviteLink(
-  createInviteLink: CreateInviteLink,
-  role: ShareRole,
-  maxUsages?: number,
-): Promise<string> {
-  const link = await createInviteLink({ write: role === 'write', maxUsages });
-
-  try {
-    await navigator.clipboard.writeText(link);
-    toast.success('Invite link copied');
-  } catch {
-    toast.error('Could not copy the link. Select it and copy it by hand.');
-  }
-
-  return link;
-}
-
 /** Hosted: a secondary way to invite, next to email. */
 function CopyInviteLinkSplit({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const [role, setRole] = useState<ShareRole>('read');
   const [busy, setBusy] = useState(false);
@@ -436,7 +438,7 @@ function CopyInviteLinkSplit({
     setBusy(true);
 
     try {
-      await copyInviteLink(createInviteLink, role);
+      await copyInviteLink(createInviteLink, role, undefined, onCopied);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -471,8 +473,10 @@ function CopyInviteLinkSplit({
  */
 function InviteLinkField({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const store = useStore();
   const [role, setRole] = useState<ShareRole>('write');
@@ -487,7 +491,9 @@ function InviteLinkField({
 
     try {
       const maxUsages = parseMaxUsages(limit);
-      setLink(await copyInviteLink(createInviteLink, role, maxUsages));
+      setLink(
+        await copyInviteLink(createInviteLink, role, maxUsages, onCopied),
+      );
     } catch (e) {
       setErr(e as Error);
     }
@@ -612,7 +618,7 @@ function UpgradePitch({
   subject: string;
   onDone: () => void;
 }): JSX.Element {
-  const navigate = useNavigateWithTransition();
+  const [name] = useString(useResource(subject), core.properties.name);
 
   return (
     <>
@@ -625,12 +631,10 @@ function UpgradePitch({
       <UpgradeButton
         onClick={() => {
           onDone();
-          void navigate(
-            `${paths.sync}&${new URLSearchParams({ drive: subject })}`,
-          );
+          void openCloudServerSales(subject, name);
         }}
       >
-        Upgrade to Cloud Server from {CLOUD_SERVER_PRICE}
+        Read more
       </UpgradeButton>
     </>
   );

@@ -140,7 +140,6 @@ msgstr "AI-agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -283,6 +282,7 @@ msgid "Choose a default model"
 msgstr "Kies een standaardmodel"
 
 #: src/chunks/AI/AISetupPanel.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Terug"
 
@@ -552,6 +552,7 @@ msgstr "Server controleren…"
 msgid "Not responding"
 msgstr "Reageert niet"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Meer lezen "
@@ -1354,7 +1355,6 @@ msgstr "Alternatieve tekst"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2766,7 +2766,6 @@ msgstr "Leeg"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Verbergen"
 
@@ -3464,7 +3463,6 @@ msgid "Click to add a value"
 msgstr "Klik om een waarde toe te voegen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Hernoemen"
 
@@ -4052,6 +4050,11 @@ msgstr "Apparaat koppelen"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SyncProblemBanner.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
@@ -4069,6 +4072,8 @@ msgstr "Werkruimte openen"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -4262,6 +4267,8 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 
 #: src/components/ConnectServerDialog.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
@@ -4387,18 +4394,8 @@ msgstr "Deze eigenschap wordt door de server beheerd en kan niet worden bewerkt.
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokale opslag is uitgeschakeld, dus deze server is de enige gegevensbron. Schakel hieronder lokale opslag in om zonder verbinding te werken."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Maken…"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Schijf maken"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Nieuwe schijf"
 
@@ -4468,10 +4465,14 @@ msgid "Change icon"
 msgstr "Pictogram wijzigen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Pictogram toevoegen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Omslag toevoegen"
 
@@ -5424,7 +5425,7 @@ msgstr "Niet verbonden"
 msgid "Switch"
 msgstr "Wisselen"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #. 0: accountAddress(phase.account)
 #: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
@@ -5446,12 +5447,12 @@ msgstr "{0} resources"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} van {1}"
 
@@ -5514,7 +5515,7 @@ msgstr "{0} mislukt: {1}"
 msgid "Sign in →"
 msgstr "Inloggen →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. We bewaren je sleutel versleuteld, zodat je met deze e-mail weer toegang krijgt op een nieuw apparaat."
@@ -5585,7 +5586,7 @@ msgstr "Opslaan…"
 msgid "Store it with {0}"
 msgstr "Opslaan bij {0}"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Je back-up is alleen in deze browser versleuteld opgeslagen. Je kunt deze hier ontgrendelen, maar op een nieuw apparaat zou je geen toegang kunnen herstellen."
@@ -5642,7 +5643,7 @@ msgstr "Herstellen uit Cloud Vault"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Alleen je passkey opent dit account. Als deze niet op dit apparaat staat, ontgrendel je het account op het apparaat waarop je de passkey hebt ingesteld en voeg je via Instellingen een herstelcode toe — daarmee krijg je overal toegang."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar alleen je passkey opent deze. Een browser waarmee je passkey niet is gesynchroniseerd kan je geen toegang geven — een herstelcode wel."
@@ -6494,13 +6495,9 @@ msgstr "Vraag AI"
 msgid "<0/> Loading"
 msgstr "<0/> Laden"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mijn schijf"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Schijfnaam"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6509,10 +6506,6 @@ msgstr "Atomic"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Loading chat…"
 msgstr "Chat laden…"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Set up AI"
-msgstr "AI instellen"
 
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
@@ -8281,7 +8274,6 @@ msgstr "<0/> Link kopiëren"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Klaar"
 
@@ -8556,11 +8548,11 @@ msgstr "Voeg een bericht toe voor de mensen die je uitnodigt"
 msgid "Sending…"
 msgstr "Verzenden…"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Uitnodigingslink gekopieerd"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Kan de link niet kopiëren. Selecteer deze en kopieer handmatig."
 
@@ -8706,7 +8698,11 @@ msgid "Install {0}"
 msgstr "{0} installeren"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "{0} openen"
 
@@ -8921,7 +8917,7 @@ msgstr "Je schijf openen"
 msgid "Choose a template"
 msgstr "Kies een sjabloon"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Geef je schijf een naam"
 
@@ -10148,6 +10144,7 @@ msgstr "Je hebt {0} berichten gemist terwijl je weg was"
 
 #: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Niet nu"
 
@@ -10800,6 +10797,10 @@ msgstr "Account gemaakt"
 #: src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Welkom"
+
+#: src/components/SideBar/accountRowName.ts
+msgid "Account"
+msgstr "Account"
 
 #: src/components/MetaSetter.tsx
 msgid "Server settings"
@@ -11593,7 +11594,7 @@ msgstr "Bevestigen met je passkey"
 msgid "Confirm with your code"
 msgstr "Bevestigen met je code"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar inloggen opent deze nog niet. Bevestig één keer met je passkey of herstelcode om dat in te schakelen."
@@ -12076,10 +12077,6 @@ msgstr "personen kunnen deelnemen"
 msgid "{0} Viewers are free."
 msgstr "{0} Kijkers zijn gratis."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Ingelogd"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "De opslag van dit apparaat reageert niet. Sluit andere atomic.place-vensters of -tabbladen en probeer het opnieuw."
@@ -12423,13 +12420,11 @@ msgid "Show all"
 msgstr "Alles tonen"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Schijfinstellingen"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Hier is nog niets."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Schijfinstellingen"
@@ -12648,7 +12643,7 @@ msgstr "Het abonnement van deze schijf bevat Cloud Server. Er wordt op je toeste
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Log in op je {0}-account om herstel via e-mail te controleren. Inloggen op deze schijf met een passkey of geheime sleutel verbindt niet vanzelf je cloudaccount."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Geen herstelback-up opgeslagen, dus als je alle apparaten kwijtraakt, verlies je deze schijf."
@@ -12698,9 +12693,7 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Een Cloud Server houdt deze schijf voor iedereen online, zodat niemand een browser open hoeft te houden."
 
 #. 0: CLOUD_SERVER_PRICE
-#. 0: CLOUD_SERVER_PRICE
 #: src/components/CloudVaultWatcher.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Upgraden naar Cloud Server vanaf {0}"
 
@@ -12939,47 +12932,27 @@ msgstr "Cloud Server staat niet aan voor deze schijf. Deze server accepteert de 
 msgid "Not hosted yet"
 msgstr "Nog niet gehost"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Praat met de AI"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Vraag om dingen op je schijf te vinden, schrijven of ordenen"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a chat"
-msgstr "Een chat starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Iemand uitnodigen"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Invite"
-msgstr "Uitnodigen"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Save your work"
-msgstr "Sla je werk op"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Meld je aan met je e-mail, bewaar je geheime sleutel of verbind een apparaat"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Aan de slag"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Vereist een AI-bron: je eigen sleutel of Ollama"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Not done yet"
-msgstr "Nog niet klaar"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13211,21 +13184,9 @@ msgstr "Aan mijn account toevoegen"
 msgid "Don't add, keep it in this browser only"
 msgstr "Niet toevoegen, alleen in deze browser bewaren"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Geef je schijf een naam: een team, bedrijf, klas of huishouden"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive"
-msgstr "Een schijf starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Deel een schijf met een teamgenoot of vriend"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive first"
-msgstr "Start eerst een schijf"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
@@ -13247,10 +13208,6 @@ msgstr "Aan deze schijf toevoegen"
 msgid "Or describe what you need"
 msgstr "Of beschrijf wat je nodig hebt"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "Aan de slag tonen op mijn schijven"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Begin met"
@@ -13270,10 +13227,6 @@ msgstr "Of vul deze schijf met een startpakket"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Deze schijf starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Geef deze een naam en vul deze met een startpakket"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13361,17 +13314,122 @@ msgstr "Kolom bewerken"
 msgid "Add view"
 msgstr "Weergave toevoegen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> In Mijn schijven"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Je schijf wordt gemaakt…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Toevoegen aan Mijn schijven"
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Opgeslagen als {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Je werk wordt opgeslagen in je account…"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device to open your work on it"
+msgstr "Verbind een apparaat om je werk daarop te openen"
+
+#: src/hooks/useCreateDrive.ts
+msgid "Switch back to your previous drive here"
+msgstr "Wissel hier terug naar je vorige schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr "Klik hier om je schijf een naam te geven"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr "Praat hier met de AI"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add your email here"
+msgstr "Voeg hier je e-mailadres toe"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Connect a device here"
+msgstr "Verbind hier een apparaat"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Maak iets"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Voeg een document of tabel toe aan deze schijf"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Maak hier een document of tabel"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Deel deze schijf met een teamgenoot of vriend"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Deel deze schijf hier"
+
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+msgid "Your account"
+msgstr "Je account"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lees Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Een korte rondleiding door deze schijf, in het eerste document"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Open Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Only saved on this device"
+msgstr "Alleen op dit apparaat opgeslagen"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr "Je bent ingelogd, maar het opslaan van je werk in je account is niet gelukt. Controleer je verbinding en probeer het opnieuw."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/Share/ShareDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register with email"
+msgstr "Registreren met e-mail"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email to keep it safe on every device"
+msgstr "Registreer je e-mail om het veilig te houden op elk apparaat"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invite link"
+msgstr "Uitnodigingslink"
+
+#. 0: new Date(invite.sentAt).toLocaleDateString()
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied {0}"
+msgstr "Gekopieerd {0}"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied"
+msgstr "Gekopieerd"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite link"
+msgstr "Uitnodigingslink verwijderen"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
@@ -13488,6 +13546,22 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 #: src/helpers/verifyAgentSecret.ts
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "No second device?"
+msgstr "Geen tweede apparaat?"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Sign in with atomic.place"
+msgstr "Inloggen met atomic.place"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
+msgstr "Alleen deze browser kan je werk openen. Koppel een ander apparaat of log in, zodat je het elders kunt openen en geen toegang verliest."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
+msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mail, zodat je het elders kunt openen en geen toegang verliest."
 
 #: src/actions/appActions.ts
 msgid "Profile settings"

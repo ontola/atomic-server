@@ -28,8 +28,6 @@ managedDriveTest(
     );
 
     await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await managedExpect(page.getByLabel('Drive name')).toBeVisible();
-    await page.getByRole('button', { name: 'Create drive' }).click();
     await managedExpect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
     const result = await page.evaluate(async () => {
       const store = window.store;
@@ -71,7 +69,6 @@ managedDriveTest(
     );
 
     await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await page.getByRole('button', { name: 'Create drive' }).click();
     await page.getByRole('button', { name: 'Report this error' }).click();
     const dialog = page.getByRole('dialog');
     await managedExpect(

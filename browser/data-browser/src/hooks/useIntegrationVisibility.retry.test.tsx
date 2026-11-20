@@ -10,6 +10,9 @@ const ACTOR = 'atomic:agent';
 const driveResource = {
   get: () => undefined,
   loading: false,
+  isReady() {
+    return !this.loading && this.error === undefined;
+  },
   error: new Error(
     `Async Request for subject ${DRIVE} timed out after 10000ms`,
   ) as Error | undefined,
@@ -27,7 +30,11 @@ const store = {
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useStore: () => store,
-  useResource: () => ({ ...driveResource }),
+  useResource: () => ({
+    ...driveResource,
+    isReady: () => driveResource.isReady(),
+  }),
+  useCanWrite: () => false,
   useValue: (resource: typeof driveResource) => [resource.get(), vi.fn()],
   useCurrentAgent: () => [{ subject: ACTOR }],
 }));

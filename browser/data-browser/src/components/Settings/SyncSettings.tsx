@@ -93,11 +93,7 @@ import {
   getManagedAccount,
   type ManagedAccount,
 } from '../../helpers/managed/session';
-import {
-  managedFetch,
-  getRememberedManagedPortalUrl,
-  safePortalUrl,
-} from '../../helpers/managed/api';
+import { managedFetch } from '../../helpers/managed/api';
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
@@ -144,10 +140,12 @@ import {
   ensureManagedSession,
   driveHasCloudEnrollment,
   isCloudSyncAvailable,
-  getManagedPortalUrl,
+  resolvePortalUrl,
 } from '../../helpers/managed/cloudSync';
 import { paths } from '../../routes/paths';
 import { useSettings } from '../../helpers/AppSettings';
+import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
+import { useAccountAddress } from '../SideBar/useAccountAddress';
 import { serverURLStorage } from '../../helpers/serverURLStorage';
 
 function nodeDidToRaw(nodeDid: string): string | undefined {
@@ -1243,6 +1241,13 @@ export function SyncSettings({
     store.isLiveSyncedDrive(status.drive) &&
     !embeddedActive &&
     !isOriginWithoutNode(status.serverUrl);
+  const connectDeviceProps = useConnectDeviceProps({
+    serverNodeId,
+    serverUrl: status.serverUrl ?? '',
+    serverPairingAllowed:
+      showServerConn &&
+      (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true),
+  });
   const pairedPeers = isNode ? knownPeers : [];
   // A browser is not a node, so it cannot pair with a device itself. But the
   // server it reads from can — and reports who, over `/server`. So a phone
@@ -1384,10 +1389,9 @@ export function SyncSettings({
    * its own embedded node, say — without inventing a URL for a node that has
    * never heard of a portal.
    */
-  const accountPortalUrl =
-    safePortalUrl(
-      getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl(),
-    ) ?? null;
+  // Never the opaque `acct_` id: the address, else a generic label.
+  const accountAddressLabel = useAccountAddress();
+  const accountPortalUrl = resolvePortalUrl(managedInfo);
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;
@@ -2018,7 +2022,7 @@ export function SyncSettings({
       <SyncProviderAccount
         key={accountPortalUrl}
         portalUrl={accountPortalUrl}
-        email={managedAccount?.email ?? null}
+        email={managedAccount ? (accountAddressLabel ?? 'Your account') : null}
         emailRecoveryOn={recoveryBackup === 'stored'}
         onLinked={() => window.location.reload()}
       />
@@ -2047,16 +2051,16 @@ export function SyncSettings({
               {!managedAccount
                 ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
                 : recoveryBackup === null
-                  ? `Signed in as ${managedAccount.email}.`
+                  ? `Signed in as ${accountAddressLabel ?? 'your account'}.`
                   : recoveryBackup === 'stored'
-                    ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                    ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, so this email gets you back in on a new device.`
                     : recoveryBackup === 'sign-in-not-on'
-                      ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                      ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
                       : recoveryBackup === 'passkey-only'
-                        ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                        ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
                         : recoveryBackup === 'device-only'
-                          ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                          : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
+                          ? `${accountAddressLabel ?? 'Your account'}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                          : `${accountAddressLabel ?? 'Your account'}. No recovery backup stored, so losing every device loses this drive.`}
             </ConnSub>
             {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
@@ -2426,18 +2430,7 @@ export function SyncSettings({
             only, and safe to leave on screen. The section itself always
             renders, in the same place, because adding a device is always
             possible; only the "show this device" half is gated. */}
-      <ConnectDevice
-        pairNodeDid={pairNodeId ? rawToNodeDid(pairNodeId) : null}
-        showPairing={
-          !!pairNodeId &&
-          (isNode ||
-            (showServerConn &&
-              (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true)))
-        }
-        canTakeCode={isNode}
-        serverName={serverLabel(status.serverUrl ?? '')}
-        onAddServer={setServer}
-      />
+      <ConnectDevice {...connectDeviceProps} />
 
       {/* Developer: diagnostics + advanced toggles, tucked away. */}
       <DevDetails>
