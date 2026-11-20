@@ -206,6 +206,52 @@ void main() {
     });
   });
 
+  group('livekit token', () {
+    AtomicAccountClient signedIn(MockClient http) =>
+        AtomicAccountClient('https://provider.example', client: http)
+          ..restoreSession(
+              jsonEncode({'origin': 'https://provider.example', 'token': 't1'}));
+    final room = 'ab' * 32;
+
+    test('posts the room and name with the bearer token', () async {
+      final seen = <http.Request>[];
+      final client = signedIn(MockClient((r) async {
+        seen.add(r);
+        return http.Response(
+            jsonEncode({'url': 'wss://lk', 'token': 'jwt', 'identity': 'u_1'}),
+            200);
+      }));
+      final grant = await client.livekitToken(room, name: 'did:ad:agent:x');
+      expect(grant?.url, 'wss://lk');
+      expect(grant?.token, 'jwt');
+      expect(seen.single.method, 'POST');
+      expect(seen.single.url.path, '/api/meetings/livekit-token');
+      expect(seen.single.headers['Authorization'], 'Bearer t1');
+      expect(jsonDecode(seen.single.body),
+          {'room': room, 'name': 'did:ad:agent:x'});
+    });
+
+    test('no LiveKit on the portal, or no valid session, is null', () async {
+      for (final status in [401, 404, 503]) {
+        final client = signedIn(
+            MockClient((r) async => http.Response('{"error":"x"}', status)));
+        expect(await client.livekitToken(room), isNull, reason: '$status');
+      }
+    });
+
+    test('other errors throw', () async {
+      final client =
+          signedIn(MockClient((r) async => http.Response('{}', 500)));
+      await expectLater(client.livekitToken(room), throwsStateError);
+    });
+
+    test('signed out throws without a request', () async {
+      final client = AtomicAccountClient('https://provider.example',
+          client: MockClient((r) async => fail('no request')));
+      await expectLater(client.livekitToken(room), throwsStateError);
+    });
+  });
+
   group('agent sign-up', () {
     Future<String> fakeSign(String m) async => 'sig:$m';
     MockClient portal(int status, Object body, List<http.Request> seen) =>

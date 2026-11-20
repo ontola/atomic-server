@@ -13554,3 +13554,11 @@ msgstr ""
 #: src/chunks/Conference/ConferenceRoom.tsx
 msgid "Record this call"
 msgstr ""
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Via the LiveKit server"
+msgstr "A través del servidor LiveKit"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Peer-to-peer, without a server"
+msgstr "Peer-to-peer, sin servidor"

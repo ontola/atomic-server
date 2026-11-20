@@ -13560,3 +13560,11 @@ msgstr "Stop recording"
 #: src/chunks/Conference/ConferenceRoom.tsx
 msgid "Record this call"
 msgstr "Record this call"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Via the LiveKit server"
+msgstr "Via the LiveKit server"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Peer-to-peer, without a server"
+msgstr "Peer-to-peer, without a server"

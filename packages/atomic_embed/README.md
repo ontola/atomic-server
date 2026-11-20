@@ -10,6 +10,11 @@ view, with the app's own store as the only database.
 - `EmbedServer` serves the renderer's files on the loopback address. The app
   ships them as assets: build them with `flutter/scripts/build_embed.sh` and
   copy `assets/embed/` into the app (or point `EmbedServer.assetRoot` at them).
+- `MeetingCall(call:, livekitToken:)` runs a meeting's audio/video call in
+  its own page. With `livekitToken` (for example
+  `AtomicAccountClient.livekitToken` of atomic_flutter) the call goes through
+  the account's LiveKit server; without it, or when that gives no grant, it
+  goes peer-to-peer. `transport` says which one carries the running call.
 - `WebViewEmbedPage` is the page and its channel; `atomic_chat`'s
   `ResourceView` and warm pool are built on it.
 

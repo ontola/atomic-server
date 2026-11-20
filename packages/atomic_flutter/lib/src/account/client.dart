@@ -385,6 +385,27 @@ class AtomicAccountClient {
     return _object(response);
   }
 
+  /// A LiveKit access token for a video call in [room] (64 lowercase hex
+  /// characters: the sha256 of the meeting's subject, as the web app derives
+  /// it), with [name] as what the others see. Free for every signed-in
+  /// account. Null when this portal runs no LiveKit (404, 503) or the session
+  /// is not valid (401): the call then goes peer-to-peer. Throws on other
+  /// errors and when the portal cannot be reached.
+  Future<({String url, String token})?> livekitToken(String room,
+      {String name = ''}) async {
+    final response = await _request('POST', 'meetings/livekit-token',
+        body: {'room': room, 'name': name},
+        timeout: const Duration(seconds: 8));
+    if (const {401, 404, 503}.contains(response.statusCode)) return null;
+    final data = _object(response);
+    final url = data['url'];
+    final token = data['token'];
+    if (url is! String || token is! String || url.isEmpty || token.isEmpty) {
+      throw const FormatException('Invalid account response');
+    }
+    return (url: url, token: token);
+  }
+
   /// The account's AI credits, from the same `ai/status` the web Sync page
   /// reads. Null when the portal offers none (404/401) or AI is off for the
   /// account. Throws when the portal cannot be reached.
