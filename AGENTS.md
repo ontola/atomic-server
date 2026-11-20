@@ -85,11 +85,16 @@ Remove planning documents that are completed.
 
 ## Git
 
-Default branch is `develop`. Open PRs against it. Staging deploys from `develop`
-after green CI; production and live docs deploy from a stable `v*` tag. Do not
-introduce a `main` branch, treat `master` as production, or add a job that
-fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
-branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
+Default branch is `develop`. Open PRs against it. A green `develop` goes to
+staging, then (once staging is healthy and the commit is still the tip) to
+production and the live docs, and to TestFlight and Google Play internal
+testing. Store releases (App Store, Play production) stay manual. Release tags
+are plain `vX.Y.Z` (no pre-release suffixes), pushed only by the owner; they
+publish crates.io, npm, Docker, the GitHub release and desktop installers, and
+deploy nothing. Do not introduce a `main` branch, treat `master` as production,
+or add a job that fast-forwards `main` when a tag is pushed. Hotfixes are fixed
+on `develop` and reach production with the next green run; roll back by
+dispatching `deploy_production.yml` with an older sha. See `CONTRIBUTING.md`.
 
 Short-lived agent sessions: read [`AGENT_WORKFLOW.md`](./AGENT_WORKFLOW.md)
 first. It covers dispatching CI on a PR branch, the paired atomic-saas branch,

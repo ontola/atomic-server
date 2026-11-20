@@ -9,11 +9,24 @@ on:
       - 'packages/atomic_store_flutter/cargokit/build_tool/lib/src/android_environment.dart'
       - 'flutter/.gitignore'
       - '**/*.md'
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build (default: the triggering ref)"
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit or branch to build (default: the selected ref)"
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: atomic-flutter-ios-${{ github.ref }}
+  group: atomic-flutter-ios-${{ inputs.ref || github.ref }}
   cancel-in-progress: false
 jobs:
   ios:
@@ -24,6 +37,16 @@ jobs:
       HAS_APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - name: Compute build number
+        id: build
+        # Minutes since the Unix epoch: always increases and beats every earlier
+        # run_number, on both platforms, so stores never see a lower number.
+        run: |
+          n=$(( $(date +%s) / 60 ))
+          echo "build_number=$n" >> "$GITHUB_OUTPUT"
+          echo "Build number $n (minutes since the Unix epoch)." >> "$GITHUB_STEP_SUMMARY"
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.7'
@@ -49,7 +72,7 @@ jobs:
       - name: Build iOS release
         if: env.HAS_APP_STORE_CONNECT_KEY != 'true'
         working-directory: flutter
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+        run: flutter build ios --release --no-codesign --build-number=${{ steps.build.outputs.build_number }}
       - uses: actions/upload-artifact@v4
         if: env.HAS_APP_STORE_CONNECT_KEY != 'true'
         with:
@@ -82,7 +105,7 @@ jobs:
       - name: Build signed IPA
         if: steps.signing.outcome == 'success'
         working-directory: flutter
-        run: flutter build ipa --release --export-options-plist="$RUNNER_TEMP/ios-signing/ExportOptions.plist" --build-number=${{ github.run_number }}
+        run: flutter build ipa --release --export-options-plist="$RUNNER_TEMP/ios-signing/ExportOptions.plist" --build-number=${{ steps.build.outputs.build_number }}
       - uses: actions/upload-artifact@v4
         if: steps.signing.outcome == 'success'
         with:
@@ -100,7 +123,7 @@ jobs:
           mkdir -p ~/.appstoreconnect/private_keys
           printf '%s\n' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
           xcrun altool --upload-app --type ios --file build/ios/ipa/*.ipa --apiKey "$APP_STORE_CONNECT_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
-          echo "atomic.place build ${{ github.run_number }} uploaded to TestFlight; Apple processing is pending." >> "$GITHUB_STEP_SUMMARY"
+          echo "atomic.place build ${{ steps.build.outputs.build_number }} uploaded to TestFlight; Apple processing is pending." >> "$GITHUB_STEP_SUMMARY"
       - name: Clean up this run's Apple signing
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

@@ -568,9 +568,9 @@ export class AtomicServer {
     @argument() netlifyAuthToken: Secret,
     /**
      * Publish docs to the live sites instead of preview URLs. Pass
-     * `--publish-docs` only from a stable `v*` tag (the same ref production
-     * deploys). Left off, every build gets a Netlify preview and the published
-     * docs stay whatever the last stable tag put there.
+     * `--publish-docs` only from `develop` (the branch production follows).
+     * Left off, every build gets a Netlify preview and the published docs stay
+     * whatever the last develop run put there.
      */
     @argument() publishDocs = false,
     /**
