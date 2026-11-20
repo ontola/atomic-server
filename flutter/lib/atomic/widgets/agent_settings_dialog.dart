@@ -48,6 +48,7 @@ class _AgentSettingsDialogState extends State<AgentSettingsDialog> {
     _loadDeviceName();
   }
 
+
   @override
   void dispose() {
     _newDriveController.dispose();
