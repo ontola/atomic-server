@@ -2361,6 +2361,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(trashed).toEqual({ moved: true, inTrash: true });
     await waitForSynced(page);
     await waitForDriveSettled(page);
+    await expect(page.locator('#boot-splash')).toHaveCSS('opacity', '0');
     expect(writes.length).toBeGreaterThan(0);
     const existingWrites = writes.length;
     const providerReads = requests.providerRequests.length;
@@ -2373,10 +2374,12 @@ test.describe('catalog-driven built-in Syncables', () => {
     });
     await page.goto(managerUrl);
     await expect(restoreNotice).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('#boot-splash')).toHaveCSS('opacity', '0');
     await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     await page.goto(syncUrl);
     await expect(page.getByRole('main')).toHaveAttribute('about', tableSubject);
     await expect(restoreNotice).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('#boot-splash')).toHaveCSS('opacity', '0');
     await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     await testInfo.attach('trashed-integration-sync-restoration-guidance', {
       body: await page.screenshot(),
@@ -2389,6 +2392,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       page.getByRole('main').getByText('No stored rows yet.', { exact: true }),
     ).toBeVisible();
+    await expect(page.locator('#boot-splash')).toHaveCSS('opacity', '0');
     await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     expect(await readStoredRows()).toEqual(originalRows);
     const identities = await page.evaluate(

@@ -1288,7 +1288,11 @@ This does not yet prove restoration of the user's private staging workspace.
   background workers, pause/cancellation/reconnect, stable moved identities,
   native views without provider reads, and desktop/mobile layouts. A third
   journey imports an unrelated Notebook provider through the same runtime.
-  This does not exercise live GitHub OAuth or deploy the live proxy.
+  These fixtures do not exercise live GitHub OAuth. Separately, the existing
+  live localhost connection completed a 1,274-repository import on 2026-11-20;
+  signed stored rows and the ordinary Table were verified. The new Trash
+  regression retains the trashed App and blocks duplicate allocation before
+  provider or iframe writes, with explicit restore guidance.
 - `browser/lib/src/collection-snapshot-refresh.test.ts` uses real Store HTTP
   responses and independent Loro documents to verify query pages refresh from
   empty to additions to removals and back to empty. Generated query snapshots

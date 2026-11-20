@@ -1,6 +1,8 @@
 # Built-in Syncables: shared CI handoff
 
-Local implementation and acceptance are complete. Remaining gate:
+The flat collection and Trash follow-ups have passed local acceptance.
+Catalog-declared record links are now in progress; see
+`syncables-reference-links.md`. Remaining integration gate:
 
 - [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
   server CI on the final integration candidate, reviews and merges. Integration
@@ -50,36 +52,41 @@ is retained rather than deleted or merged automatically.
 
 ## Dependency and local proof
 
-- Tested application source: `ecad7d60cbd1e8e5c7d5dc02f97ce5bebbe3ac73` on
+- Tested application source: `239adc79bd77751395372b6587fdaea880907bed` on
   `codex/builtin-syncables-completion`, published to PR #2522 through
   `feat/builtin-syncables-foundation`. Native acceptance uses that same source;
-  subsequent cleanup is documentation only.
+  the reference-link follow-up is not yet accepted.
 - Actual npm `syncables@0.30.0`, released from atomic-plugins PR #749, merge
   `e9933e8fbf772c48476e3345d2263494598664ee`. Relevant PR checks and publication
   run 44556325558 passed; registry bytes/provenance match the tested candidate.
-- 3,032 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
+- 3,042 Data Browser tests and both MCP checks pass in UTC. Full typecheck,
   pre-commit lint/format, compiler checks and six-language translation audit pass.
-- 1,796 @tomic/lib tests pass, with one existing skip. Query snapshots replace
+- 1,797 @tomic/lib tests pass, with one existing skip. Query snapshots replace
   independent server pages while ordinary documents retain CRDT merge behavior.
   Both real-WASM two-Drive regressions pass after rebuilding WASM; native Rust
   query regressions cover counts/paging and explicit Drive selection.
-- 16/16 optimized native Chromium journeys pass, one worker, zero retries,
+- 17/17 optimized native Chromium journeys pass, one worker, zero retries,
   skips or flakes. Includes overlap, independent pause, background/offline
   navigation, principal-App reuse/isolation, Public reinstall, reconnect,
   legacy adoption before saved-filter navigation, 21-page Public reads, unrelated
-  provider, two populated Drives in one OPFS database, and existing Apps cases.
+  provider, two populated Drives in one OPFS database, and existing Apps cases and retained Trash collisions failing before provider/frame writes.
   Desktop/mobile fixture screenshots shared in chat.
-- Native report: `.e2e-runs/2026-11-20T10-24-27.426Z-hTpOsK/{report,run}.json`.
+- Native report: `.e2e-runs/2026-11-20T13-01-09.930Z-ICC2Xo/{report,run}.json`.
   Executable SHA-256:
-  `29abf579034743d71de30b5cb41fab6da36d509527eff674b9a9c96f0910de4b`.
+  `3ba5d3634a8b679990ad6d5efab3ef35c0567afece839b8c064ac1cd6a7371b5`.
 - Localhost port 52771 runs that private executable against the existing drive.
   HTTP health and host/Sync/WASM asset bytes match the tested distribution. Live
   catalog SHA-256 remains
   `ac247f6b3cc28c3be5f24e7858c2232bd4a50c0640a0b241823171157d21f621`.
 
-Browser fixtures use invented records; this is not a new live GitHub OAuth test.
-The user has been asked to reload both existing localhost tabs and verify their
-actual collections; private browser storage was not inspected.
+Browser fixtures use invented records. Separately, the existing real GitHub
+connection on localhost completed the My drive repository filter at
+2026-11-20 13:29:26 UTC: 1,274 added, incomplete=false, error=null. Signed
+Atomic reads and the ordinary native Table confirm 1,274 stored rows; opening
+the Table creates no iframe or provider requests. Dev drive's old App remains
+in Trash as explicitly requested; the restore guidance appears before syncing.
+The 22 historical blocked duplicate drafts are retained. This was a real
+existing-connection import, not a new OAuth authorization test.
 Full shared server CI has not validated this application head. Earlier full passes
 are not evidence for this refactor. Bidirectional provider writes and unattended
 server-side synchronization remain outside this MVP.
