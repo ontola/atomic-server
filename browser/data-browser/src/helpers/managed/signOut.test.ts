@@ -5,6 +5,7 @@ import { getManagedApiBase, hasManagedApi } from './api';
 import { logoutManagedSession } from './session';
 import { forgetCachedRecoverySecret } from './recovery';
 import { saveAgentToIDB } from '../agentStorage';
+import { clearManagedAccountBinding } from './binding';
 
 vi.mock('./api', () => ({
   getManagedApiBase: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock('./api', () => ({
 vi.mock('./session', () => ({ logoutManagedSession: vi.fn() }));
 vi.mock('./recovery', () => ({ forgetCachedRecoverySecret: vi.fn() }));
 vi.mock('../agentStorage', () => ({ saveAgentToIDB: vi.fn() }));
+vi.mock('./binding', () => ({ clearManagedAccountBinding: vi.fn() }));
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -33,6 +35,12 @@ it('ends the account session before the key leaves the device', async () => {
 
   expect(order).toEqual(['account', 'key']);
   expect(forgetCachedRecoverySecret).toHaveBeenCalledWith('did:ad:agent:a');
+});
+
+it('drops the account binding, so the account row no longer shows it', async () => {
+  await signOutEverywhere({ agentSubject: 'did:ad:agent:a' });
+
+  expect(clearManagedAccountBinding).toHaveBeenCalled();
 });
 
 it('keeps the cached backup unless asked to forget it', async () => {

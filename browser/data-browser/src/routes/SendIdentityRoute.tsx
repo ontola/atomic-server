@@ -8,12 +8,8 @@ import {
   getManagedAccount,
   type ManagedAccount,
 } from '../helpers/managed/session';
-import { safePortalUrl } from '../helpers/managed/api';
-import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
-import {
-  canHoldProviderCookie,
-  getRememberedProvider,
-} from '../helpers/managed/deviceLink';
+import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
+import { canHoldProviderCookie } from '../helpers/managed/deviceLink';
 import { getUnlockableRecoverySecret } from '../helpers/managed/recovery';
 import type { RecoverySecret } from '../helpers/managed/recovery';
 import {
@@ -78,9 +74,8 @@ function SendIdentityPage() {
   const { baseURL } = useSettings();
   const [phase, setPhase] = useState<Phase>({ name: 'loading' });
   const [attempt, setAttempt] = useState(0);
-  const [portalUrl, setPortalUrl] = useState<string | null>(
-    () =>
-      safePortalUrl(getManagedPortalUrl() ?? getRememberedProvider()) ?? null,
+  const [portalUrl, setPortalUrl] = useState<string | null>(() =>
+    getAccountServiceUrl(),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -90,10 +85,7 @@ function SendIdentityPage() {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
       if (!cancelled) {
-        setPortalUrl(
-          safePortalUrl(getManagedPortalUrl(info) ?? getRememberedProvider()) ??
-            null,
-        );
+        setPortalUrl(getAccountServiceUrl(info));
       }
     });
 

@@ -140,7 +140,6 @@ msgstr "KI-Agenten"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -552,6 +551,7 @@ msgstr "Server wird geprüft …"
 msgid "Not responding"
 msgstr "Antwortet nicht"
 
+#: src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more "
 msgstr "Mehr erfahren "
@@ -1354,7 +1354,6 @@ msgstr "Alternativtext"
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -2766,7 +2765,6 @@ msgstr "Leer"
 #: src/components/AccountRecoveryCard.tsx
 #: src/components/LoroDocValue.tsx
 #: src/components/Share/PeopleWithAccess.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Hide"
 msgstr "Ausblenden"
 
@@ -3464,7 +3462,6 @@ msgid "Click to add a value"
 msgstr "Klicken, um einen Wert hinzuzufügen"
 
 #: src/chunks/TablePage/TableViewTabs.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Umbenennen"
 
@@ -4049,6 +4046,11 @@ msgstr "Gerät wird gekoppelt"
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SyncProblemBanner.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/NewDriveRoute.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
@@ -4066,6 +4068,8 @@ msgstr "Arbeitsbereich öffnen"
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/components/SideBar/FeedbackButton.tsx
+#: src/components/UiHint.tsx
+#: src/components/UiHint.tsx
 #: src/components/Vault/VaultStorage.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Close"
@@ -4384,18 +4388,8 @@ msgstr "Diese Eigenschaft wird vom Server verwaltet und kann nicht bearbeitet we
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Creating…"
-msgstr "Wird erstellt …"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Create drive"
-msgstr "Laufwerk erstellen"
-
 #: src/components/MetaSetter.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/routes/NewDriveRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "New drive"
 msgstr "Neues Laufwerk"
 
@@ -4465,10 +4459,14 @@ msgid "Change icon"
 msgstr "Symbol ändern"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add icon"
 msgstr "Symbol hinzufügen"
 
 #: src/actions/resourceActions.tsx
+#: src/components/ResourceDecorations.tsx
+#: src/components/ResourceDecorations.tsx
 msgid "Add cover"
 msgstr "Titelbild hinzufügen"
 
@@ -5421,7 +5419,7 @@ msgstr "Nicht verbunden"
 msgid "Switch"
 msgstr "Wechseln"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'your account'
 #. 0: accountAddress(phase.account)
 #: src/components/Settings/SyncSettings.tsx
 #: src/routes/SendIdentityRoute.tsx
@@ -5443,12 +5441,12 @@ msgstr "{0} Ressourcen"
 
 #. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: progress.done; 1: progress.total
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #. 0: doneCount; 1: steps.length
+#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
 #: src/components/Cloud/UsageMeter.tsx
 #: src/components/DatabaseUpgradeNotice.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} von {1}"
 
@@ -5511,7 +5509,7 @@ msgstr "{0} fehlgeschlagen: {1}"
 msgid "Sign in →"
 msgstr "Anmelden →"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf. Mit dieser E-Mail erhältst du auf einem neuen Gerät wieder Zugriff."
@@ -5582,7 +5580,7 @@ msgstr "Wird gespeichert …"
 msgid "Store it with {0}"
 msgstr "Bei {0} speichern"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Deine Sicherung ist nur in diesem Browser verschlüsselt gespeichert. Sie lässt sich hier entsperren, aber ein neues Gerät könnte dir keinen Zugriff verschaffen."
@@ -5639,7 +5637,7 @@ msgstr "Aus Cloud Vault wiederherstellen"
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
 msgstr "Nur dein Passkey öffnet dieses Konto. Ist er nicht auf diesem Gerät, entsperre das Konto auf dem Gerät, auf dem du ihn eingerichtet hast, und füge in den Einstellungen einen Wiederherstellungscode hinzu. Damit erhältst du überall Zugriff."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber nur dein Passkey öffnet ihn. In einem Browser, mit dem dein Passkey nicht synchronisiert wurde, erhältst du keinen Zugriff. Ein Wiederherstellungscode würde das ermöglichen."
@@ -6491,13 +6489,9 @@ msgstr "KI fragen"
 msgid "<0/> Loading"
 msgstr "<0/> Wird geladen"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
+#: src/hooks/useCreateDrive.ts
 msgid "My drive"
 msgstr "Mein Laufwerk"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
-msgid "Drive name"
-msgstr "Laufwerkname"
 
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
@@ -6506,10 +6500,6 @@ msgstr "Atomic"
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Loading chat…"
 msgstr "Chat wird geladen …"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Set up AI"
-msgstr "KI einrichten"
 
 #: src/components/AI/AISettings.tsx
 msgid "Loading AI settings…"
@@ -8278,7 +8268,6 @@ msgstr "<0/> Link kopieren"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
-#: src/views/Drive/GettingStartedCard.tsx
 msgid "Done"
 msgstr "Fertig"
 
@@ -8504,7 +8493,9 @@ msgid "Pinned to <0/>"
 msgstr "An <0/> angeheftet"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "von {0}"
 
@@ -8553,11 +8544,11 @@ msgstr "Füge eine Notiz für die eingeladenen Personen hinzu"
 msgid "Sending…"
 msgstr "Wird gesendet …"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Invite link copied"
 msgstr "Einladungslink kopiert"
 
-#: src/components/Share/ShareDialog.tsx
+#: src/components/Share/copyInviteLink.ts
 msgid "Could not copy the link. Select it and copy it by hand."
 msgstr "Link konnte nicht kopiert werden. Markiere ihn und kopiere ihn manuell."
 
@@ -8703,7 +8694,11 @@ msgid "Install {0}"
 msgstr "{0} installieren"
 
 #. 0: app.name
+#. 0: driveName
+#. 0: driveName
 #: src/chunks/PluginRuns/CatalogApps.tsx
+#: src/components/SideBar/SideBarDrive.tsx
+#: src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
 msgstr "{0} öffnen"
 
@@ -8918,7 +8913,7 @@ msgstr "Dein Laufwerk öffnen"
 msgid "Choose a template"
 msgstr "Vorlage auswählen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Name your drive"
 msgstr "Dein Laufwerk benennen"
 
@@ -10145,6 +10140,7 @@ msgstr "Du hast während deiner Abwesenheit {0} Nachrichten verpasst"
 
 #: src/components/CloudVaultWatcher.tsx
 #: src/components/Notifications/MessageNotifier.tsx
+#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Not now"
 msgstr "Nicht jetzt"
 
@@ -10798,6 +10794,10 @@ msgstr "Konto erstellt"
 msgid "Welcome"
 msgstr "Willkommen"
 
+#: src/components/SideBar/accountRowName.ts
+msgid "Account"
+msgstr "Konto"
+
 #: src/components/MetaSetter.tsx
 msgid "Server settings"
 msgstr "Servereinstellungen"
@@ -11445,11 +11445,6 @@ msgstr "Arbeitsbereich abrufen"
 msgid "Search again"
 msgstr "Erneut suchen"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Möchtest du einen eigenen Server?{0} <0>Lass einen hosten</0>{1} oder{2} <1>betreibe ihn selbst</1>."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11590,7 +11585,7 @@ msgstr "Mit deinem Passkey bestätigen"
 msgid "Confirm with your code"
 msgstr "Mit deinem Code bestätigen"
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber eine Anmeldung öffnet ihn noch nicht. Bestätige einmal mit deinem Passkey oder Wiederherstellungscode, um dies zu aktivieren."
@@ -11608,14 +11603,6 @@ msgstr "Die Anmeldung bei deinem {0}-Konto öffnet diese Identität noch nicht: 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Die Anmeldung bei deinem {0}-Konto öffnet diese Identität noch nicht: Diese Sicherung wurde erstellt, bevor das möglich war. Bestätige einmal mit deinem Wiederherstellungscode, um dies zu aktivieren."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "Cloud-Server-Tarife ansehen"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Die Browser-Synchronisierung hat ihre maximale Anzahl an Peer-Verbindungen erreicht. Ein Cloud Server auf atomic.place hält diesen Arbeitsbereich ohne Peers für alle synchron."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -12073,10 +12060,6 @@ msgstr "Personen können beitreten"
 msgid "{0} Viewers are free."
 msgstr "{0} Betrachter sind kostenlos."
 
-#: src/components/SideBar/AccountMenu.tsx
-msgid "Signed in"
-msgstr "Angemeldet"
-
 #: src/components/Vault/VaultRestoreAction.tsx
 msgid "This device's storage isn't responding. Close other atomic.place windows or tabs, then try again."
 msgstr "Der Speicher dieses Geräts antwortet nicht. Schließe andere atomic.place-Fenster oder -Tabs und versuche es erneut."
@@ -12391,10 +12374,6 @@ msgstr "Diese Ressource dauerhaft löschen. Dies kann nicht rückgängig gemacht
 msgid "Hide formatting toolbar"
 msgstr "Formatierungsleiste ausblenden"
 
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Die kostenlose Browser-Synchronisierung ist für kleine Gruppen mit bis zu 4 Personen gedacht. Verwende für mehr Personen einen Cloud Server auf atomic.place."
-
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
 msgstr "Unterhaltung öffnen"
@@ -12420,13 +12399,11 @@ msgid "Show all"
 msgstr "Alle anzeigen"
 
 #: src/views/Drive/DrivePage.tsx
-msgid "<0/> Drive settings"
-msgstr "<0/> Drive-Einstellungen"
-
-#: src/views/Drive/DrivePage.tsx
 msgid "Nothing here yet."
 msgstr "Noch nichts hier."
 
+#: src/views/Drive/DrivePage.tsx
+#: src/views/Drive/DrivePage.tsx
 #: src/views/Drive/DriveSettingsDialog.tsx
 msgid "Drive settings"
 msgstr "Drive-Einstellungen"
@@ -12645,7 +12622,7 @@ msgstr "Der Tarif dieses Laufwerks enthält Cloud Server. Es wartet auf deine Zu
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Melde dich bei deinem {0}-Konto an, um die E-Mail-Wiederherstellung zu prüfen. Die Anmeldung bei diesem Laufwerk mit Passkey oder Geheimnis verbindet dein Cloud-Konto nicht automatisch."
 
-#. 0: managedAccount.email
+#. 0: accountAddressLabel ?? 'Your account'
 #: src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Keine Wiederherstellungssicherung gespeichert. Wenn du alle Geräte verlierst, verlierst du dieses Laufwerk."
@@ -12695,9 +12672,7 @@ msgid "A Cloud Server keeps this drive online for everyone, so nobody has to kee
 msgstr "Ein Cloud Server hält dieses Laufwerk für alle online, sodass niemand einen Browser geöffnet lassen muss."
 
 #. 0: CLOUD_SERVER_PRICE
-#. 0: CLOUD_SERVER_PRICE
 #: src/components/CloudVaultWatcher.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Upgrade to Cloud Server from {0}"
 msgstr "Ab {0} auf Cloud Server upgraden"
 
@@ -12936,47 +12911,27 @@ msgstr "Cloud Server ist für dieses Laufwerk nicht aktiviert. Dieser Server akz
 msgid "Not hosted yet"
 msgstr "Noch nicht gehostet"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI"
 msgstr "Mit der KI sprechen"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Ask it to find, write or organize things in your drive"
 msgstr "Bitte sie, Dinge in deinem Laufwerk zu finden, zu schreiben oder zu organisieren"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a chat"
-msgstr "Chat starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Invite someone"
 msgstr "Jemanden einladen"
 
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Invite"
-msgstr "Einladen"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Save your work"
-msgstr "Deine Arbeit sichern"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Sign up with your email, save your secret or connect a device"
-msgstr "Mit deiner E-Mail registrieren, dein Geheimnis aufbewahren oder ein Gerät verbinden"
-
-#: src/views/Drive/DriveSettingsDialog.tsx
-#: src/views/Drive/GettingStartedCard.tsx
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Getting started"
 msgstr "Erste Schritte"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Needs an AI source: your own key or Ollama"
 msgstr "Benötigt eine KI-Quelle: deinen eigenen Schlüssel oder Ollama"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Not done yet"
-msgstr "Noch nicht erledigt"
 
 #: src/views/getting-started/WorkspaceLoading.tsx
 msgid "Setting up your workspace on this device…"
@@ -13207,21 +13162,9 @@ msgstr "Zu meinem Konto hinzufügen"
 msgid "Don't add, keep it in this browser only"
 msgstr "Nicht hinzufügen, nur in diesem Browser behalten"
 
-#: src/views/Drive/GettingStartedCard.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Give your drive a name: a team, company, class or household"
 msgstr "Benenne dein Laufwerk: ein Team, Unternehmen, eine Klasse oder einen Haushalt"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive"
-msgstr "Laufwerk starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Share a drive with a teammate or a friend"
-msgstr "Laufwerk mit einem Teammitglied oder Freund teilen"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Start a drive first"
-msgstr "Starte zuerst ein Laufwerk"
 
 #: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Scripts run on a server, and this device has none. Open this drive on a server to run it."
@@ -13243,10 +13186,6 @@ msgstr "Zu diesem Laufwerk hinzufügen"
 msgid "Or describe what you need"
 msgstr "Oder beschreibe, was du brauchst"
 
-#: src/views/Drive/DriveSettingsDialog.tsx
-msgid "Show Getting started on my drives"
-msgstr "„Erste Schritte“ auf meinen Laufwerken anzeigen"
-
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start with"
 msgstr "Beginnen mit"
@@ -13266,10 +13205,6 @@ msgstr "Oder fülle dieses Laufwerk mit einer Startvorlage"
 #: src/views/Drive/EmptyDriveStart.tsx
 msgid "Start this drive"
 msgstr "Dieses Laufwerk starten"
-
-#: src/views/Drive/GettingStartedCard.tsx
-msgid "Give it a name, then fill it with a starter"
-msgstr "Gib ihm einen Namen und fülle es dann mit einer Startvorlage"
 
 #. 0: conflicts.length; 1: propertyNames
 #: src/components/ForkBar.tsx
@@ -13357,17 +13292,104 @@ msgstr "Spalte bearbeiten"
 msgid "Add view"
 msgstr "Ansicht hinzufügen"
 
-#: src/components/SideBar/AccountMenu.tsx
+#: src/components/SideBar/accountRowName.ts
 msgid "Guest"
 msgstr "Gast"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> In My drives"
-msgstr "<0/> In Meine Laufwerke"
+#: src/routes/NewDriveRoute.tsx
+msgid "Creating your drive…"
+msgstr "Dein Laufwerk wird erstellt…"
 
-#: src/views/Drive/DrivePage.tsx
-msgid "<0/> Add to My drives"
-msgstr "<0/> Zu Meine Laufwerke hinzufügen"
+#. 0: email
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saved as {0}"
+msgstr "Gespeichert als {0}"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Saving your work to your account…"
+msgstr "Deine Arbeit wird in deinem Konto gespeichert…"
+
+#: src/hooks/useCreateDrive.ts
+msgid "Switch back to your previous drive here"
+msgstr "Wechsle hier zurück zu deinem vorherigen Drive"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Click to name your drive"
+msgstr "Klicke hier, um deinem Drive einen Namen zu geben"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Talk to the AI here"
+msgstr "Sprich hier mit der KI"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make something"
+msgstr "Etwas erstellen"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Add a document or table to this drive"
+msgstr "Füge diesem Laufwerk ein Dokument oder eine Tabelle hinzu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a document or table here"
+msgstr "Erstelle hier ein Dokument oder eine Tabelle"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive with a teammate or a friend"
+msgstr "Teile dieses Laufwerk mit einem Teammitglied oder Freund"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Share this drive here"
+msgstr "Teile dieses Laufwerk hier"
+
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+#: src/components/Settings/SyncSettings.tsx
+msgid "Your account"
+msgstr "Dein Konto"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Read Start here"
+msgstr "Lies „Start here“"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "A short tour of this drive, in its first document"
+msgstr "Eine kurze Tour durch dieses Laufwerk, im ersten Dokument"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open Start here"
+msgstr "Öffne Start here"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Only saved on this device"
+msgstr "Nur auf diesem Gerät gespeichert"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
+msgstr "Du bist angemeldet, aber das Speichern deiner Arbeit in deinem Konto wurde nicht abgeschlossen. Prüfe deine Verbindung und versuche es erneut."
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Register with email"
+msgstr "Mit E-Mail registrieren"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Invite link"
+msgstr "Einladungslink"
+
+#. 0: new Date(invite.sentAt).toLocaleDateString()
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied {0}"
+msgstr "Kopiert am {0}"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Copied"
+msgstr "Kopiert"
+
+#: src/components/Share/PeopleWithAccess.tsx
+msgid "Remove invite link"
+msgstr "Einladungslink entfernen"
 
 #: src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault is full, so this drive is not being backed up."
@@ -13572,3 +13594,57 @@ msgstr "Profil bearbeiten"
 #: src/components/Toaster.tsx
 msgid "<0/> Report"
 msgstr "<0/> Melden"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Nichts hält dieses Laufwerk online, solange deine Geräte aus sind."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Hol dir einen Server, der immer läuft"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Die Browser-Synchronisierung hat ihr Limit an Peer-Verbindungen erreicht."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Halte alle mit einem Cloud Server synchron"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Du möchtest einen eigenen Server?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Lass einen hosten"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Die kostenlose Browser-Synchronisierung ist für kleine Gruppen mit bis zu 4 Personen gedacht."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "Für mehr Personen nutze einen Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Nur dieser Browser kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Speichere deine Arbeit"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Registriere deine E-Mail oder verbinde ein Gerät, um sie anderswo zu öffnen"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Speichere deine Arbeit hier"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Deine E-Mail und ein verschlüsseltes Backup deiner Identität gehen an {0}."

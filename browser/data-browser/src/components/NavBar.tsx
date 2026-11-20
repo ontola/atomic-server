@@ -55,6 +55,7 @@ import {
   TOUCH_TARGET,
 } from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
+import { UiHint } from './UiHint';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
 import { TagSelectPopover } from './Tag/TagSelectPopover';
@@ -422,26 +423,30 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
             )}
             <CommentsButton subject={contextResource.subject} />
             {enableAI && (
-              <LabelButton
-                $active={aiOpen}
-                onClick={() => setIsOpen(prev => !prev)}
-                data-testid='navbar-ai-button'
-                title='AI'
-              >
-                <AIIcon />
-                <span>AI</span>
-              </LabelButton>
+              <UiHint target='ai-button'>
+                <LabelButton
+                  $active={aiOpen}
+                  onClick={() => setIsOpen(prev => !prev)}
+                  data-testid='navbar-ai-button'
+                  title='AI'
+                >
+                  <AIIcon />
+                  <span>AI</span>
+                </LabelButton>
+              </UiHint>
             )}
             <TagSelectPopoverWrapper resource={contextResource} />
-            <ShareDialog
-              subject={contextResource.subject}
-              trigger={
-                <LabelButton as='button' title='Share'>
-                  <FaShare />
-                  <span>Share</span>
-                </LabelButton>
-              }
-            />
+            <UiHint target='share-button'>
+              <ShareDialog
+                subject={contextResource.subject}
+                trigger={
+                  <LabelButton as='button' title='Share'>
+                    <FaShare />
+                    <span>Share</span>
+                  </LabelButton>
+                }
+              />
+            </UiHint>
           </>
         )}
         {/* Pages that are not a resource (settings, notifications) still get

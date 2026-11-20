@@ -37,6 +37,8 @@ interface ConnectDeviceProps {
   /** The address a browser tab reads from, named when showing its code. */
   serverName: string;
   onAddServer: (url: string) => void;
+  /** Smaller and quieter for a dialog: no explanatory note, a smaller QR. */
+  compact?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export function ConnectDevice({
   canTakeCode,
   serverName,
   onAddServer,
+  compact,
 }: ConnectDeviceProps): JSX.Element {
   const [input, setInput] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -113,12 +116,19 @@ export function ConnectDevice({
   }
 
   return (
-    <Section id={SECTION_ID} tabIndex={-1} data-testid='connect-device'>
-      <Note>
-        {showPairing
-          ? 'Codes only route. Your key still decides what syncs.'
-          : 'An always-on device has an address. One you carry has a code.'}
-      </Note>
+    <Section
+      id={SECTION_ID}
+      tabIndex={-1}
+      data-testid='connect-device'
+      $embedded={compact}
+    >
+      {!compact && (
+        <Note>
+          {showPairing
+            ? 'Codes only route. Your key still decides what syncs.'
+            : 'An always-on device has an address. One you carry has a code.'}
+        </Note>
+      )}
       <Card>
         {showPairing && pairNodeDid && (
           <Side data-testid='connect-device-show'>
@@ -129,7 +139,7 @@ export function ConnectDevice({
                 : `Scan from your other device to sync with ${serverName}.`}
             </Hint>
             <Centered>
-              <PairingCode nodeDid={pairNodeDid} />
+              <PairingCode nodeDid={pairNodeDid} compact={compact} />
             </Centered>
           </Side>
         )}
@@ -182,8 +192,8 @@ export function ConnectDevice({
   );
 }
 
-const Section = styled.section`
-  margin-bottom: 2rem;
+const Section = styled.section<{ $embedded?: boolean }>`
+  margin-bottom: ${p => (p.$embedded ? 0 : '2rem')};
   scroll-margin-top: 1rem;
 
   &:focus {

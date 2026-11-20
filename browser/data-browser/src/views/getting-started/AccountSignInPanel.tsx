@@ -9,6 +9,7 @@ import {
   type AccountProviders,
   type SignInProvider,
 } from '../../helpers/managed/accountProviders';
+import { engageAccountService } from '../../helpers/managed/api';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import {
   getManagedAccount,
@@ -93,12 +94,14 @@ export function AccountSignInPanel({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     return () => {
       live = false;
     };
-  }, []);
+  }, [portalUrl]);
 
   // The email link opens on the portal, in another tab or on the phone that
   // got the mail. The shared cookie is how this page hears about it.
@@ -252,6 +255,8 @@ export function AccountSignInViaBrowser({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     // Signed in in the browser, which sent the handoff back through

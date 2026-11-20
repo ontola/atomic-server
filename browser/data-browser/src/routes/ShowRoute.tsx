@@ -174,8 +174,8 @@ export const ShowComponent: React.FunctionComponent = () => {
     // Wait until the drive switch above has landed.
     if (requestedDrive && requestedDrive !== drive) return;
 
-    addRecentResource(drive, subject);
-  }, [signInFirst, drive, requestedDrive, subject]);
+    addRecentResource(agent?.subject, drive, subject);
+  }, [signInFirst, agent, drive, requestedDrive, subject]);
 
   if (signInFirst) {
     return null;
