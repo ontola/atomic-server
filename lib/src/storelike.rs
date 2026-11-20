@@ -782,8 +782,9 @@ pub struct Query {
     /// A query that lists the children of the Trash folder itself (a `parent`
     /// filter) is the Trash view and is never filtered.
     ///
-    /// Costs one shallow read per member of the returned page; trashed members
-    /// do not count towards `count`, like members the agent cannot read.
+    /// Exact totals check every candidate with shallow reads; nested bodies are
+    /// loaded only for the returned page. Trashed, unreadable and unresolvable
+    /// members consume neither `count` nor the visible offset.
     pub exclude_trashed: bool,
 }
 

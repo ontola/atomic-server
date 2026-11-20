@@ -1345,6 +1345,10 @@ This does not yet prove restoration of the user's private staging workspace.
 - A two-drive browser journey uses the same agent and populated OPFS database,
   installs the same principal in both drives and verifies separate Apps, tables
   and row identities. Syncing either drive preserves the other's accepted rows.
+- Rust paging regressions verify constant visible totals and exact once-only
+  page unions with unreadable, trashed and stale-index hits before, within and
+  after each page. Both basic and indexed queries, nested/subjects-only reads,
+  Public/Sudo callers and early-stop `query_page` retain visible offsets.
 - Populated two-drive Rust, Collection and real-WASM regressions cover repeated
   source/local IDs, explicit-drive queries, counts and pagination. Built-in host
   regressions reject cross-drive direct reads/search, ignore frame-supplied scope,

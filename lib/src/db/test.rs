@@ -3090,6 +3090,199 @@ async fn single_property_queries_are_drive_scoped_before_paging() {
     );
 }
 
+/// Totals and offsets describe the visible set, not the raw index. Hidden
+/// hits before, within and after a page must neither inflate counts nor cause
+/// duplicate/skipped members on the next page (the live Syncables source scan).
+#[tokio::test]
+#[timeout(120000)]
+async fn query_paging_counts_visible_members_before_offsets() {
+    let store = Db::init_temp("query_paging_visible_offsets").await.unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let trash = "atomic:paging-trash";
+    let mut root = store.get_resource(&drive).await.unwrap();
+    root.set_unsafe(urls::TRASH_FOLDER.into(), Value::AtomicUrl(trash.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&root, false, true, true)
+        .await
+        .unwrap();
+    let mut trash_folder = Resource::new(trash.into());
+    trash_folder
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.clone()))
+        .unwrap();
+    trash_folder
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.clone()))
+        .unwrap();
+    store
+        .add_resource_opts(&trash_folder, false, true, true)
+        .await
+        .unwrap();
+    let marker = "query-paging-source-identity";
+    let mut visible = Vec::new();
+    let mut with_trash = Vec::new();
+    for index in 0..10 {
+        let subject = format!("atomic:paging-row-{index:02}");
+        let denied = matches!(index, 0 | 4 | 8);
+        let trashed = matches!(index, 2 | 6);
+        let mut row = Resource::new(subject.clone());
+        row.set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(if trashed { trash.into() } else { drive.clone() }),
+        )
+        .unwrap();
+        row.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.clone()))
+            .unwrap();
+        row.set_unsafe(urls::NAME.into(), Value::String(format!("{index:02}")))
+            .unwrap();
+        row.set_unsafe(urls::DESCRIPTION.into(), Value::String(marker.into()))
+            .unwrap();
+        if !denied {
+            row.set_unsafe(
+                urls::READ.into(),
+                Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+            )
+            .unwrap();
+            with_trash.push(Subject::from(subject.clone()));
+            if !trashed {
+                visible.push(Subject::from(subject));
+            }
+        }
+        store
+            .add_resource_opts(&row, false, true, true)
+            .await
+            .unwrap();
+    }
+    for indexed in [false, true] {
+        for include_nested in [false, true] {
+            for exclude_trashed in [false, true] {
+                let expected = if exclude_trashed {
+                    &visible
+                } else {
+                    &with_trash
+                };
+                let mut query = Query::new_prop_val(urls::DESCRIPTION, marker);
+                query.for_agent = ForAgent::Public;
+                query.include_external = true;
+                query.include_nested = include_nested;
+                query.exclude_trashed = exclude_trashed;
+                query.limit = Some(2);
+                if indexed {
+                    query.drive = Some(drive.clone());
+                    query.sort_by = Some(urls::NAME.into());
+                }
+                let mut union = Vec::new();
+                for offset in (0..expected.len() + 2).step_by(2) {
+                    query.offset = offset;
+                    let page = store.query(&query).await.unwrap();
+                    assert_eq!(page.count, expected.len(), "stable visible total: indexed={indexed}, nested={include_nested}, hide_trash={exclude_trashed}, offset={offset}");
+                    let end = (offset + 2).min(expected.len());
+                    let members = if offset < expected.len() {
+                        &expected[offset..end]
+                    } else {
+                        &[]
+                    };
+                    assert_eq!(
+                        page.subjects, members,
+                        "visible offset: indexed={indexed}, offset={offset}"
+                    );
+                    assert_eq!(
+                        page.resources.len(),
+                        if include_nested { members.len() } else { 0 }
+                    );
+                    if indexed {
+                        assert_eq!(
+                            store.query_page(&query).await.unwrap(),
+                            members,
+                            "early-stop paging uses the same visible offsets"
+                        );
+                    }
+                    union.extend(page.subjects);
+                }
+                assert_eq!(
+                    union, *expected,
+                    "every visible member appears exactly once"
+                );
+            }
+        }
+    }
+}
+
+/// Defensively retained index entries have the same visible-count contract as
+/// denied/trashed rows, including Sudo subjects-only scans.
+#[tokio::test]
+#[timeout(120000)]
+async fn query_paging_ignores_unresolvable_index_hits() {
+    let store = Db::init_temp("query_paging_stale_index").await.unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let marker = "query-paging-stale-identity";
+    let mut subjects = Vec::new();
+    for index in 0..3 {
+        let subject = Subject::from(format!("atomic:paging-stale-{index:02}"));
+        let mut row = Resource::new(subject.to_string());
+        row.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.clone()))
+            .unwrap();
+        row.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.clone()))
+            .unwrap();
+        row.set_unsafe(urls::DESCRIPTION.into(), Value::String(marker.into()))
+            .unwrap();
+        row.set_unsafe(urls::NAME.into(), Value::String(format!("{index:02}")))
+            .unwrap();
+        row.set_unsafe(
+            urls::READ.into(),
+            Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+        )
+        .unwrap();
+        store
+            .add_resource_opts(&row, false, true, true)
+            .await
+            .unwrap();
+        subjects.push(subject);
+    }
+    let mut indexed = Query::new_prop_val(urls::DESCRIPTION, marker);
+    indexed.drive = Some(drive);
+    indexed.sort_by = Some(urls::NAME.into());
+    indexed.include_nested = false;
+    assert_eq!(store.query(&indexed).await.unwrap().count, 3);
+    // Simulate an old peer's stale index without running the normal atomic
+    // destroy/index cleanup. The existing watched query retains its hit.
+    let stale = subjects[1].pure_id();
+    store.kv.remove(Tree::Resources, stale.as_bytes()).unwrap();
+    store
+        .kv
+        .remove(Tree::LoroSnapshots, stale.as_bytes())
+        .unwrap();
+    let expected = [subjects[0].clone(), subjects[2].clone()];
+    for is_indexed in [false, true] {
+        for agent in [ForAgent::Sudo, ForAgent::Public] {
+            let mut query = Query::new_prop_val(urls::DESCRIPTION, marker);
+            if is_indexed {
+                query.drive = indexed.drive.clone();
+                query.sort_by = indexed.sort_by.clone();
+            }
+            query.for_agent = agent;
+            query.include_nested = false;
+            query.limit = Some(1);
+            for offset in 0..3 {
+                query.offset = offset;
+                let page = store.query(&query).await.unwrap();
+                assert_eq!(
+                    page.count, 2,
+                    "unresolvable hits never count: indexed={is_indexed}, offset={offset}"
+                );
+                assert_eq!(
+                    page.subjects,
+                    expected
+                        .get(offset)
+                        .map(|subject| vec![subject.clone()])
+                        .unwrap_or_default()
+                );
+            }
+        }
+    }
+}
+
 /// A watched query's index is built once, when it is both empty and unwatched
 /// (`query_complex`). After that nothing reconciles it against reality — so any
 /// member the incremental path fails to add is missing for good, and the guard
