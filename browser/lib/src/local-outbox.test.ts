@@ -644,6 +644,49 @@ describe('LocalOutbox blocking', () => {
   }
 
   it.each([
+    'Import identity already exists; preview again',
+    'Ambiguous import identity: review all copies again before importing',
+  ])(
+    'preserves identity-conflicting writes without retrying forever: %s',
+    async message => {
+      vi.useFakeTimers();
+
+      try {
+        const outbox = new LocalOutbox();
+        const genesis = fakeCommit(SUBJECT, 'preserve-identity-conflict');
+        outbox.setGenesisCommit(SUBJECT, genesis);
+        const drainSubject = vi.fn(async (subject: string) => {
+          if (subject === SUBJECT) throw new Error(message);
+          outbox.clearDirty(subject);
+        });
+        const ctx = {
+          ...blockingCtx(async () => {}),
+          drainSubject,
+        };
+        await drainUntilBlocked(outbox, ctx);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBe(true);
+        assert(outbox.getEntry(SUBJECT)?.signedGenesis).toEqual(genesis);
+        assert(outbox.size).toBe(1);
+        assert(outbox.nextDueAt()).toBeUndefined();
+        assert(isTerminalCommitError(message)).toBe(false);
+
+        vi.setSystemTime(1_000_000);
+        await outbox.drain(ctx);
+        assert(drainSubject).toHaveBeenCalledTimes(BLOCK_AFTER_FAILURES);
+        outbox.markDirty('atomic:unrelated-write');
+        await outbox.drain(ctx);
+        assert(outbox.getEntry('atomic:unrelated-write')).toBeUndefined();
+        assert(outbox.getEntry(SUBJECT)?.signedGenesis).toEqual(genesis);
+        assert(ctx.onBlocked).toHaveBeenCalledOnce();
+        outbox.markDirty(SUBJECT);
+        assert(outbox.getEntry(SUBJECT)?.blocked).toBeFalsy();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each([
     'Drive did:ad:private is not enrolled for sync on this node.',
     'Drive did:ad:private has reached its storage quota on this node.',
   ])(

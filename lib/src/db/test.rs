@@ -2990,6 +2990,106 @@ async fn find_resource_scoped_to_its_drive() {
     );
 }
 
+/// A simple source/localId query must keep its explicit Drive before counts
+/// and pagination, even though the same logical identity exists in another Drive.
+#[tokio::test]
+#[timeout(120000)]
+async fn single_property_queries_are_drive_scoped_before_paging() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("single_property_drive_scope").await.unwrap();
+    store.populate().await.unwrap();
+    let drives = ["atomic:single-query-drive-a", "atomic:single-query-drive-b"];
+    let identity = "same-provider-principal-entity";
+    let mut expected = Vec::new();
+
+    for (index, drive) in drives.iter().enumerate() {
+        let mut root = Resource::new((*drive).into());
+        root.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                urls::DRIVE.into(),
+            )]),
+        )
+        .unwrap();
+        store
+            .add_resource_opts(&root, false, true, true)
+            .await
+            .unwrap();
+        let mut members = Vec::new();
+        for row in 0..2 {
+            let subject = format!("atomic:single-query-row-{index}-{row}");
+            let mut resource = Resource::new(subject.clone());
+            resource
+                .set_unsafe(urls::PARENT.into(), Value::AtomicUrl((*drive).into()))
+                .unwrap();
+            resource
+                .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl((*drive).into()))
+                .unwrap();
+            resource
+                .set_unsafe(urls::DESCRIPTION.into(), Value::String(identity.into()))
+                .unwrap();
+            resource
+                .set_unsafe(
+                    urls::LOCAL_ID.into(),
+                    Value::String(if row == 0 {
+                        identity.into()
+                    } else {
+                        format!("{identity}-second")
+                    }),
+                )
+                .unwrap();
+            store
+                .add_resource_opts(&resource, false, true, true)
+                .await
+                .unwrap();
+            members.push(Subject::from(subject));
+        }
+        expected.push(members);
+    }
+
+    for (index, drive) in drives.iter().enumerate() {
+        let mut source = Query::new_prop_val(urls::DESCRIPTION, identity);
+        source.for_agent = ForAgent::Sudo;
+        source.drive = Some((*drive).into());
+        source.include_nested = true;
+        let result = store.query(&source).await.unwrap();
+        assert_eq!(result.count, 2, "the count must exclude the other Drive");
+        assert_eq!(
+            result.subjects.iter().collect::<HashSet<_>>(),
+            expected[index].iter().collect::<HashSet<_>>()
+        );
+        assert_eq!(result.resources.len(), 2);
+
+        source.limit = Some(1);
+        let mut pages = HashSet::new();
+        for offset in 0..2 {
+            source.offset = offset;
+            let page = store.query(&source).await.unwrap();
+            assert_eq!(page.count, 2);
+            assert_eq!(page.subjects.len(), 1);
+            assert!(expected[index].contains(&page.subjects[0]));
+            pages.insert(page.subjects[0].clone());
+        }
+        assert_eq!(pages.len(), 2, "pages must cover this Drive exactly once");
+
+        let mut local = Query::new_prop_val(urls::LOCAL_ID, identity);
+        local.for_agent = ForAgent::Sudo;
+        local.drive = Some((*drive).into());
+        let result = store.query(&local).await.unwrap();
+        assert_eq!(result.count, 1);
+        assert_eq!(result.subjects, vec![expected[index][0].clone()]);
+    }
+
+    let mut global = Query::new_prop_val(urls::DESCRIPTION, identity);
+    global.for_agent = ForAgent::Sudo;
+    assert_eq!(
+        store.query(&global).await.unwrap().count,
+        4,
+        "an explicitly unscoped query remains global"
+    );
+}
+
 /// A watched query's index is built once, when it is both empty and unwatched
 /// (`query_complex`). After that nothing reconciles it against reality — so any
 /// member the incremental path fails to add is missing for good, and the guard

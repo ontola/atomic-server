@@ -1291,11 +1291,10 @@ export class Collection {
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
-      // Single property/value queries use the basic path and intentionally
-      // omit `drive` (see the sort note above). We still don't pass
-      // `sort_by`, so the indexed query stays drive-scoped without the
-      // DID-sort issue.
-      drive: hasExtraFilters ? drive : undefined,
+      // Keep the selected Drive for single-property queries too: logical
+      // source/localId values can repeat in another Drive. Sorting remains
+      // client-side to avoid the WASM sorted-query issue described above.
+      drive,
       includeResources: true,
       // Aggregated in WASM over the whole matching set, exactly as the server
       // would — the local DB is not a lesser source here.

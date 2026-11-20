@@ -758,7 +758,10 @@ pub(crate) fn parse_members_key_id_subject(bytes: &[u8]) -> Option<(Vec<u8>, Str
 }
 
 pub fn requires_query_index(query: &Query) -> bool {
-    query.sort_by.is_some()
+    // The basic prop/value index is global. Even an unsorted, single-property
+    // query needs the scoped index when the caller selected a Drive.
+    query.drive.is_some()
+        || query.sort_by.is_some()
         || query.start_val.is_some()
         || query.end_val.is_some()
         // Multi-property (AND) filters can only be answered by the combined

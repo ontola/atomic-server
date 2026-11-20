@@ -237,6 +237,10 @@ export class NodeClientDb {
       opts.offset ?? null,
       opts.includeResources ?? null,
       opts.drive ?? null,
+      opts.filters ?? null,
+      opts.aggregation ?? null,
+      opts.expressionFilters ?? null,
+      opts.includeTrashed ?? null,
     );
 
     return r as ClientDbQueryResult;
