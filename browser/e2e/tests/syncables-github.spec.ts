@@ -503,9 +503,8 @@ async function mockIntegrationProxy(
       );
 
       if (providerPath.startsWith('/orgs/')) {
-        // Related reads bind the collection's fixed query and use provider
-        // paging defaults; the root rule keeps its explicit page-size hint.
-        expect(url.searchParams.get('per_page')).toBeNull();
+        // Related and root reads both retain the current catalog page size.
+        expect(url.searchParams.get('per_page')).toBe('100');
         expect(url.searchParams.get('type')).toBe('all');
         await send(currentRepos.filter(repo => repo.owner.id === 123));
       } else {
@@ -518,7 +517,7 @@ async function mockIntegrationProxy(
 
     if (providerPath === '/repositories/790/issues') {
       expect(url.searchParams.get('state')).toBe('all');
-      expect(url.searchParams.get('per_page')).toBeNull();
+      expect(url.searchParams.get('per_page')).toBe('100');
       await send([]);
 
       return;
@@ -526,7 +525,7 @@ async function mockIntegrationProxy(
 
     if (providerPath === '/repositories/456/issues') {
       expect(url.searchParams.get('state')).toBe('all');
-      expect(url.searchParams.get('per_page')).toBeNull();
+      expect(url.searchParams.get('per_page')).toBe('100');
       state.issueConnections.push(connectionId);
       await state.issueGate;
 
