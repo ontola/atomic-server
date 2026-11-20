@@ -12066,6 +12066,7 @@ msgstr "<0/> meminta untuk menggunakan data Atomic Anda. Aplikasi memiliki kunci
 msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
 msgstr "Aplikasi yang Anda izinkan menggunakan data, seperti asisten AI. Masing-masing memiliki kunci sendiri; cabut aksesnya untuk memutuskan hubungan."
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Connected apps"
 msgstr "Aplikasi terhubung"
@@ -14009,3 +14010,51 @@ msgstr "Filter tersimpan ini tidak tersedia atau bukan lagi bagian dari koleksi 
 #: src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "All cached rows"
 msgstr "Semua baris dalam cache"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration connection manager"
+msgstr "Pengelola koneksi integrasi"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A native provider setup resource accessed from Apps rather than the drive tree."
+msgstr "Sumber daya penyiapan penyedia bawaan yang diakses dari App, bukan dari pohon drive."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App index"
+msgstr "Indeks App identitas"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native lookup hint for validated principal Apps; registrations remain authoritative."
+msgstr "Petunjuk pencarian bawaan untuk App identitas yang telah divalidasi; pendaftaran tetap menjadi acuan utama."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration key"
+msgstr "Kunci pendaftaran App identitas"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only typed principal installation identity; independent of physical location."
+msgstr "Identitas instalasi bertipe yang hanya dikelola sistem bawaan dan tidak bergantung pada lokasi fisik."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration complete"
+msgstr "Pendaftaran App identitas selesai"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native recovery marker written after promotion reaches its drive destination."
+msgstr "Penanda pemulihan bawaan yang ditulis setelah promosi mencapai tujuan di drive."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Registered principal App"
+msgstr "App identitas terdaftar"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only registration target retained across same-drive moves."
+msgstr "Tujuan pendaftaran yang hanya dikelola sistem bawaan dan dipertahankan saat dipindahkan dalam drive yang sama."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration"
+msgstr "Pendaftaran App identitas"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native uniqueness registration outside any integration iframe write root."
+msgstr "Pendaftaran keunikan bawaan di luar semua akar penulisan iframe integrasi."

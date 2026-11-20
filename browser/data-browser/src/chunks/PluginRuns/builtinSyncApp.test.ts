@@ -1720,3 +1720,45 @@ describe('verified principal migration compatibility', () => {
     },
   );
 });
+
+describe('principal Apps outside the setup write root', () => {
+  it.each([false, true])(
+    'reuses a promoted principal App without sibling writes (%s)',
+    async publicSource => {
+      const set = setup('platform');
+      const first = publicSource
+        ? await set.app.openPublic()
+        : await set.app.openPrincipal('slot');
+      const identity = publicSource ? { kind: 'public' } : principal;
+      const props = set.data.get(first.subject)!;
+      props[P + 'parent'] = 'atomic:drive';
+      props[P + 'name'] = 'My named integration';
+      const count = set.data.size;
+      const writes = set.saves.length;
+      const app = createSyncApp(set.store, {
+        ...set.context,
+        principalApps: [
+          {
+            subject: first.subject,
+            principal: identity,
+            name: 'My named integration',
+            ...(publicSource ? {} : { connectionId: 'slot' }),
+          },
+        ],
+      });
+      expect(
+        (await app.storedPrincipals()).map(
+          (row: { subject: string }) => row.subject,
+        ),
+      ).toEqual([first.subject]);
+      const reopened = publicSource
+        ? await app.openPublic()
+        : await app.openPrincipal('replacement-slot');
+      expect(reopened.subject).toBe(first.subject);
+      expect(set.data.size).toBe(count);
+      expect(set.saves).toHaveLength(writes);
+      expect(props[P + 'parent']).toBe('atomic:drive');
+      expect(props[P + 'name']).toBe('My named integration');
+    },
+  );
+});

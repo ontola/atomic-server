@@ -5,6 +5,8 @@ import {
   withoutTableViews,
 } from '@chunks/PluginRuns/syncablesNavigation';
 import { syncableHierarchySchema } from '@chunks/PluginRuns/syncableHierarchy';
+import { readHiddenSyncableSetups } from '@chunks/PluginRuns/syncableSetupVisibility';
+import { canonicalizeScheme } from '@tomic/lib';
 import { shortenSubject } from '@tomic/react';
 import {
   ai,
@@ -82,6 +84,7 @@ export function useGetDriveStructure() {
     subjects: string[],
     visited: Set<string>,
     getSourceKeyProperty: () => Promise<string | undefined>,
+    hidden: ReadonlySet<string>,
   ): Promise<TreeNode> => {
     const node: TreeNode = {};
 
@@ -91,6 +94,8 @@ export function useGetDriveStructure() {
 
     for (const resource of resources) {
       const subject = resource.subject;
+
+      if (hidden.has(canonicalizeScheme(subject))) continue;
 
       if (visited.has(subject)) {
         continue;
@@ -132,6 +137,7 @@ export function useGetDriveStructure() {
             visibleChildren,
             visited,
             getSourceKeyProperty,
+            hidden,
           );
         }
       }
@@ -156,6 +162,15 @@ export function useGetDriveStructure() {
 
     const rootSubjects = await fetchChildren(store, drive);
 
-    return buildTree(rootSubjects, new Set([drive]), getSourceKeyProperty);
+    const hidden = await readHiddenSyncableSetups(store, drive).catch(
+      () => new Set<string>(),
+    );
+
+    return buildTree(
+      rootSubjects,
+      new Set([drive]),
+      getSourceKeyProperty,
+      hidden,
+    );
   };
 }

@@ -12063,6 +12063,7 @@ msgstr "<0/> solicita usar tus datos de Atomic. Tiene su propia clave, por lo qu
 msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
 msgstr "Aplicaciones a las que has permitido usar tus datos, como un asistente de IA. Cada una tiene su propia clave; revoca una para cortarle el acceso."
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Connected apps"
 msgstr "Aplicaciones conectadas"
@@ -14011,3 +14012,51 @@ msgstr "Este filtro guardado no está disponible o ya no pertenece a esta colecc
 #: src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "All cached rows"
 msgstr "Todas las filas en caché"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration connection manager"
+msgstr "Gestor de conexiones de integración"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A native provider setup resource accessed from Apps rather than the drive tree."
+msgstr "Un recurso nativo de configuración del proveedor al que se accede desde Aplicaciones en lugar del árbol de la unidad."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App index"
+msgstr "Índice de aplicaciones por identidad"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native lookup hint for validated principal Apps; registrations remain authoritative."
+msgstr "Referencia de búsqueda nativa para aplicaciones por identidad validadas; los registros siguen siendo la fuente de autoridad."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration key"
+msgstr "Clave de registro de la aplicación por identidad"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only typed principal installation identity; independent of physical location."
+msgstr "Identidad de instalación con tipo, exclusiva del sistema nativo e independiente de la ubicación física."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration complete"
+msgstr "Registro de la aplicación por identidad completado"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native recovery marker written after promotion reaches its drive destination."
+msgstr "Marca de recuperación nativa escrita cuando la promoción alcanza su destino en la unidad."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Registered principal App"
+msgstr "Aplicación por identidad registrada"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only registration target retained across same-drive moves."
+msgstr "Destino de registro exclusivo del sistema nativo que se conserva al moverlo dentro de la misma unidad."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration"
+msgstr "Registro de la aplicación por identidad"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native uniqueness registration outside any integration iframe write root."
+msgstr "Registro nativo de unicidad fuera de cualquier raíz de escritura del iframe de integración."

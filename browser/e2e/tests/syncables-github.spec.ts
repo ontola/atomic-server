@@ -74,12 +74,15 @@ interface MockConnection {
   label: string;
   key: string;
   delegations: [];
+  principal: { id: number; login: string; name: string; type: 'User' };
 }
 
 interface MockState {
   redeemed: string[];
   issueConnections: string[];
   repositoryRequests: number;
+  repositoryConnections: string[];
+  nextPrincipal: { id: number; login: string; name: string; type: 'User' };
   organizationRequests: number;
   providerRequests: string[];
   documentRequests: string[];
@@ -183,6 +186,8 @@ async function mockIntegrationProxy(
     principalConnections: [],
     issueConnections: [],
     repositoryRequests: 0,
+    repositoryConnections: [],
+    nextPrincipal: { id: 321, login: 'michiel', name: 'michiel', type: 'User' },
     organizationRequests: 0,
     providerRequests: [],
     documentRequests: [],
@@ -332,7 +337,13 @@ async function mockIntegrationProxy(
       const owner = requestSigner(request);
       const owned = [...connections.values()]
         .filter(connection => connection.owner === owner)
-        .map(connection => ({ ...connection, key: undefined }));
+        .map(connection => ({
+          connection_id: connection.connection_id,
+          platform: connection.platform,
+          owner: connection.owner,
+          label: connection.label,
+          delegations: connection.delegations,
+        }));
       await send({
         owner,
         connections: owned,
@@ -395,9 +406,10 @@ async function mockIntegrationProxy(
         connection_id,
         platform,
         owner,
-        label: 'michiel',
+        label: state.nextPrincipal.name,
         key: connection_key,
         delegations: [],
+        principal: { ...state.nextPrincipal },
       };
       connections.set(connection_id, connection);
       state.redeemed.push(connection_id);
@@ -451,7 +463,7 @@ async function mockIntegrationProxy(
         return;
       }
 
-      await send({ id: 321, login: 'michiel', name: 'michiel', type: 'User' });
+      await send(connection.principal);
 
       return;
     }
@@ -478,6 +490,7 @@ async function mockIntegrationProxy(
       providerPath === '/orgs/ontola/repos'
     ) {
       state.repositoryRequests++;
+      state.repositoryConnections.push(connectionId);
 
       if (providerPath.startsWith('/orgs/')) {
         // Related reads bind the collection's fixed query and use provider
@@ -643,6 +656,12 @@ async function sourceState(page: Page, subject: string) {
 
     return {
       subject: table.subject,
+      name: table.get(base + 'name'),
+      description: table.get(base + 'description'),
+      parent: table.get(base + 'parent'),
+      classes: table.getSubjects(base + 'isA'),
+      views: table.getSubjects(base + 'table-views'),
+      icon: table.get(base + 'icon'),
       localId: table.get(base + 'localId'),
       key: table.get(source) as string | undefined,
       config: table.get(config) as
@@ -691,6 +710,100 @@ async function sourceState(page: Page, subject: string) {
       ),
     };
   }, subject);
+}
+
+/** Read every installed principal App, not just resources loaded by the route. */
+async function principalApps(page: Page, platform = PLATFORM) {
+  await waitForSynced(page);
+  await waitForDriveSettled(page);
+
+  return page.evaluate(
+    async ({ wantedPlatform, proxy }) => {
+      const store = window.store;
+      const base = 'https://atomicdata.dev/properties/';
+      const terms = Object.fromEntries(
+        [...store.resources.values()].map(resource => [
+          resource.get(base + 'shortname'),
+          resource.subject,
+        ]),
+      );
+      const required = [
+        'app',
+        'app-data',
+        'syncable-node-kind',
+        'syncable-platform-id',
+        'syncable-proxy-origin',
+        'syncable-source-key',
+        'syncable-source-config',
+        'builtin-app',
+      ];
+      if (required.some(name => typeof terms[name] !== 'string'))
+        throw new Error('The principal App fixture schema is incomplete');
+      const drive = store.getDrive();
+      if (!drive) throw new Error('The principal App fixture has no drive');
+      const query = new URL('/query', store.getServerUrl());
+      for (const [name, value] of Object.entries({
+        drive,
+        property: terms['syncable-node-kind'],
+        value: 'principal',
+        page_size: '100',
+        current_page: '0',
+        include_nested: 'false',
+        filters: JSON.stringify([
+          { property: base + 'isA', value: terms.app },
+          { property: terms['syncable-platform-id'], value: wantedPlatform },
+          { property: terms['syncable-proxy-origin'], value: proxy },
+        ]),
+      }))
+        query.searchParams.set(name, value);
+      const result = await store.fetchResourceFromServer(query.href, {
+        noWebSocket: true,
+        forceOverride: true,
+      });
+      if (result.error) throw result.error;
+      const count = result.get(base + 'collection/totalMembers');
+      const members = result.getSubjects(base + 'collection/members');
+      // These isolated fixtures create at most three Apps. Never mistake a
+      // partial page or duplicate member for proof that installation is unique.
+      if (
+        typeof count !== 'number' ||
+        !Number.isSafeInteger(count) ||
+        count < 0 ||
+        count > 100 ||
+        members.length !== count ||
+        new Set(members).size !== count
+      )
+        throw new Error('The principal App fixture query is incomplete');
+
+      return Promise.all(
+        members.map(async subject => {
+          const app = await store.getResource(subject);
+          if (app.error) throw app.error;
+          const key = app.get(terms['syncable-source-key']);
+          if (typeof key !== 'string' || JSON.parse(key).kind !== 'principal')
+            throw new Error('The principal App fixture has an invalid source');
+
+          return {
+            subject,
+            drive,
+            name: app.get(base + 'name'),
+            description: app.get(base + 'description'),
+            parent: app.get(base + 'parent'),
+            localId: app.get(base + 'localId'),
+            key,
+            config: app.get(terms['syncable-source-config']),
+            classes: app.getSubjects(base + 'isA'),
+            isApp: app.getSubjects(base + 'isA').includes(terms.app),
+            appData: app.get(terms['app-data']),
+            builtin: app.get(terms['builtin-app']),
+            views: app.getSubjects(base + 'table-views'),
+            icon: app.get(base + 'icon'),
+          };
+        }),
+      );
+    },
+    { wantedPlatform: platform, proxy: PROXY },
+  );
 }
 
 async function sourceSubject(page: Page, kind: string, collection?: string) {
@@ -1086,6 +1199,23 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
     expect(await getCurrentSubject(page)).toBe(principalSubject);
     const directory = await browse(page);
+    const apps = await principalApps(page);
+    expect(apps).toHaveLength(1);
+    expect(apps[0]).toMatchObject({
+      subject: principalSubject,
+      parent: apps[0].drive,
+      name: 'GitHub · michiel',
+      isApp: true,
+      appData: principalSubject,
+      builtin: 'syncables',
+      key: saved.key,
+      localId: saved.localId,
+      views: saved.views,
+    });
+    expect(apps[0].classes).toEqual(expect.arrayContaining(saved.classes));
+    await expect(
+      page.getByRole('heading', { name: 'GitHub · michiel', exact: true }),
+    ).toBeVisible();
     await expect(
       directory.getByText('Organizations', { exact: true }),
     ).toBeVisible();
@@ -1120,6 +1250,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     ).toBeVisible({ timeout: 45_000 });
     const appUrl = page.url();
     const appSubject = await getCurrentSubject(page);
+    const manager = await sourceState(page, appSubject);
     await expect(frame).toHaveAttribute('sandbox', /\ballow-scripts\b/);
     await expect(frame).not.toHaveAttribute('sandbox', /\ballow-same-origin\b/);
     expect(await iframe.locator('html').evaluate(() => window.origin)).toBe(
@@ -1129,7 +1260,10 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.iconRequests).toEqual([GITHUB_ICON]);
     const sidebar = page.getByTestId('sidebar');
     await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
-    await testInfo.attach('github-app-direct-principals', {
+    await expect(
+      sidebar.getByRole('button', { name: 'GitHub', exact: true }),
+    ).toHaveCount(0);
+    await testInfo.attach('github-connection-manager', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
@@ -1149,10 +1283,37 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.providerRequests.every(path => path === '/user')).toBe(
       true,
     );
+    const savedPrincipalSubject = await sourceSubject(page, 'principal');
+    const savedPrincipal = await sourceState(page, savedPrincipalSubject);
     await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
     await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
     const principalSubject = await getCurrentSubject(page);
-    expect(principalSubject).not.toBe(appSubject);
+    expect(principalSubject).toBe(savedPrincipalSubject);
+    await browse(page);
+    const apps = await principalApps(page);
+    expect(apps).toHaveLength(1);
+    expect(apps[0]).toMatchObject({
+      subject: principalSubject,
+      parent: apps[0].drive,
+      name: 'GitHub · michiel',
+      isApp: true,
+      appData: principalSubject,
+      builtin: 'syncables',
+      key: savedPrincipal.key,
+      localId: savedPrincipal.localId,
+      views: savedPrincipal.views,
+      icon: manager.icon,
+    });
+    expect(typeof apps[0].icon).toBe('string');
+    expect(apps[0].classes).toEqual(
+      expect.arrayContaining(savedPrincipal.classes),
+    );
+    await expect(
+      sidebar.getByRole('button', { name: 'GitHub · michiel', exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      sidebar.getByRole('button', { name: 'GitHub', exact: true }),
+    ).toHaveCount(0);
     // Migration preserves this old localId; it must still form a navigable principal Table.
     await page.evaluate(
       async ({ subject, proxy, connection }) => {
@@ -1552,6 +1713,212 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(await sourceSubject(page, 'principal')).toBe(principalSubject);
   });
 
+  test('reuses a renamed and moved principal App across OAuth slots and isolates another principal', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    const requests = await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const managerUrl = page.url();
+    const managerSubject = await getCurrentSubject(page);
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    const principalSubject = await getCurrentSubject(page);
+    await browse(page);
+    const installed = await principalApps(page);
+    expect(installed).toHaveLength(1);
+    const originalApp = installed[0];
+    expect(originalApp).toMatchObject({
+      subject: principalSubject,
+      parent: originalApp.drive,
+      name: 'GitHub · michiel',
+      isApp: true,
+      appData: principalSubject,
+      config: {
+        principal: { kind: 'authenticated', subject: 321 },
+        connectionId: requests.redeemed[0],
+      },
+    });
+    await openRow(page, 'Repositories');
+    const repositoriesSubject = await getCurrentSubject(page);
+    await sync(page);
+    await browse(page);
+    const first = await sourceState(page, repositoriesSubject);
+    expect(first.rows).toHaveLength(3);
+    expect(first.config?.connectionId).toBe(requests.redeemed[0]);
+    const rowSubjects = first.rows.map(row => row.subject).sort();
+    const movedParent = await page.evaluate(async appSubject => {
+      const store = window.store;
+      const base = 'https://atomicdata.dev/properties/';
+      const folder = await store.newResource({
+        parent: store.getDrive(),
+        isA: ['https://atomicdata.dev/classes/Folder'],
+        propVals: { [base + 'name']: 'My integration folder' },
+      });
+      await folder.save();
+      const app = await store.getResource(appSubject);
+      await app.set(base + 'name', 'My linked GitHub');
+      await app.set(base + 'description', 'Keep my App note');
+      await app.set(base + 'parent', folder.subject);
+      await app.save();
+
+      return folder.subject;
+    }, principalSubject);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await page.goto(managerUrl);
+    await expect(
+      iframe.getByRole('button', { name: 'My linked GitHub', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    await expect.poll(() => requests.redeemed.length).toBe(2);
+    await expect(
+      iframe.getByRole('button', { name: 'My linked GitHub', exact: true }),
+    ).toHaveCount(1, { timeout: 45_000 });
+    await iframe
+      .getByRole('button', { name: 'My linked GitHub', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      principalSubject,
+    );
+    await browse(page);
+    const reused = await principalApps(page);
+    expect(reused).toHaveLength(1);
+    expect(reused[0]).toMatchObject({
+      subject: principalSubject,
+      parent: movedParent,
+      name: 'My linked GitHub',
+      description: 'Keep my App note',
+      key: originalApp.key,
+      localId: originalApp.localId,
+      classes: originalApp.classes,
+      views: originalApp.views,
+      icon: originalApp.icon,
+      config: { connectionId: requests.redeemed[1] },
+    });
+    const nativeReads = requests.providerRequests.length;
+    const nativeDocuments = requests.documentRequests.length;
+    await openRow(page, 'Repositories');
+    await browse(page);
+    expect(await getCurrentSubject(page)).toBe(repositoriesSubject);
+    const retained = await sourceState(page, repositoriesSubject);
+    expect(retained.key).toBe(first.key);
+    expect(retained.localId).toBe(first.localId);
+    expect(retained.rows.map(row => row.subject).sort()).toEqual(rowSubjects);
+    expect(retained.config?.connectionId).toBe(requests.redeemed[0]);
+    expect(requests.providerRequests).toHaveLength(nativeReads);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
+    // The collection still stores its historical slot. The host must bind its
+    // Sync worker to the principal App's freshly verified replacement instead.
+    requests.expiredPrincipalConnection = requests.redeemed[0];
+    await sync(page);
+    requests.expiredPrincipalConnection = undefined;
+    expect(requests.repositoryConnections.at(-1)).toBe(requests.redeemed[1]);
+    await browse(page);
+    expect(
+      (await sourceState(page, repositoriesSubject)).rows
+        .map(row => row.subject)
+        .sort(),
+    ).toEqual(rowSubjects);
+    await testInfo.attach('principal-app-reused-after-new-slot', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    // The old owned slot remains listed. Reopening the manager must not silently
+    // downgrade this App back to that orphan instead of its current binding.
+    await page.goto(managerUrl);
+    await iframe
+      .getByRole('button', { name: 'My linked GitHub', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      principalSubject,
+    );
+    await browse(page);
+    expect((await principalApps(page))[0]).toMatchObject({
+      subject: principalSubject,
+      config: { connectionId: requests.redeemed[1] },
+    });
+
+    // Another verified typed principal gets its own App and canonical storage,
+    // even when the provider returns repositories with the same remote IDs.
+    requests.nextPrincipal = {
+      id: 654,
+      login: 'other',
+      name: 'Other user',
+      type: 'User',
+    };
+    await page.goto(managerUrl);
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    await expect.poll(() => requests.redeemed.length).toBe(3);
+    await iframe
+      .getByRole('button', { name: 'Other user', exact: true })
+      .click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    const otherSubject = await getCurrentSubject(page);
+    expect(otherSubject).not.toBe(principalSubject);
+    await browse(page);
+    const separate = await principalApps(page);
+    expect(separate).toHaveLength(2);
+    expect(separate.find(app => app.subject === otherSubject)).toMatchObject({
+      parent: originalApp.drive,
+      name: 'GitHub · Other user',
+      isApp: true,
+      appData: otherSubject,
+      config: {
+        principal: { kind: 'authenticated', subject: 654 },
+        connectionId: requests.redeemed[2],
+      },
+    });
+    expect(
+      separate.find(app => app.subject === principalSubject),
+    ).toMatchObject({
+      parent: movedParent,
+      name: 'My linked GitHub',
+      description: 'Keep my App note',
+      key: originalApp.key,
+      localId: originalApp.localId,
+      config: { connectionId: requests.redeemed[1] },
+    });
+    await openRow(page, 'Repositories');
+    const otherRepositories = await getCurrentSubject(page);
+    expect(otherRepositories).not.toBe(repositoriesSubject);
+    await sync(page);
+    await browse(page);
+    const other = await sourceState(page, otherRepositories);
+    expect(other.rows).toHaveLength(3);
+    expect(other.rows.every(row => !rowSubjects.includes(row.subject))).toBe(
+      true,
+    );
+    expect(requests.repositoryConnections.at(-1)).toBe(requests.redeemed[2]);
+    expect(
+      (await sourceState(page, repositoriesSubject)).rows
+        .map(row => row.subject)
+        .sort(),
+    ).toEqual(rowSubjects);
+    await testInfo.attach('separate-principal-app-collections', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  });
+
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({
     page,
   }, testInfo) => {
@@ -1634,6 +2001,43 @@ test.describe('catalog-driven built-in Syncables', () => {
     const publicSubject = await getCurrentSubject(page);
     const publicUrl = page.url();
     const existingIssueTable = await sourceSubject(page, 'collection', 'issue');
+    const publicApps = await principalApps(page);
+    expect(publicApps).toHaveLength(1);
+    expect(publicApps[0]).toMatchObject({
+      subject: publicSubject,
+      parent: publicApps[0].drive,
+      name: 'GitHub · Public',
+      isApp: true,
+      appData: publicSubject,
+      builtin: 'syncables',
+      config: { principal: { kind: 'public' } },
+    });
+    expect(publicApps[0].classes).toContain(
+      'https://atomicdata.dev/classes/Table',
+    );
+    // Returning through the connection manager, including a cold reload, must
+    // reuse Public's App and its already provisioned canonical collections.
+    await page.goto(appUrl);
+    await expect(
+      iframe.getByRole('button', { name: 'GitHub · Public', exact: true }),
+    ).toHaveCount(1, { timeout: 45_000 });
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await page.reload();
+    await iframe
+      .getByRole('button', { name: 'GitHub · Public', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      publicSubject,
+    );
+    await browse(page);
+    expect(await principalApps(page)).toEqual(publicApps);
+    expect(await sourceSubject(page, 'collection', 'issue')).toBe(
+      existingIssueTable,
+    );
+    expect(metadataRequests).toEqual([]);
+    expect(publicIssuePages).toEqual([]);
     const legacy = await legacyPublicMirror(
       page,
       publicSubject,
@@ -1643,7 +2047,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await waitForDriveSettled(page);
     await page.goto(appUrl);
     await expect(
-      iframe.getByRole('button', { name: 'Public', exact: true }),
+      iframe.getByRole('button', { name: 'GitHub · Public', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
     await expect(iframe.getByRole('alert')).toHaveCount(0);
     await page.goto(publicUrl);
@@ -1914,6 +2318,21 @@ test.describe('catalog-driven built-in Syncables', () => {
     const appBeforePublic = await getCurrentSubject(page);
     await iframe.getByRole('button', { name: 'Public', exact: true }).click();
     await expect.poll(() => getCurrentSubject(page)).not.toBe(appBeforePublic);
+    const notebookSubject = await getCurrentSubject(page);
+    await browse(page);
+    const notebookApps = await principalApps(page, 'notebook');
+    expect(notebookApps).toHaveLength(1);
+    expect(notebookApps[0]).toMatchObject({
+      subject: notebookSubject,
+      parent: notebookApps[0].drive,
+      name: 'Notebook · Public',
+      isApp: true,
+      appData: notebookSubject,
+      config: { principal: { kind: 'public' } },
+    });
+    expect(notebookApps[0].classes).toContain(
+      'https://atomicdata.dev/classes/Table',
+    );
     const form = await publicForm(page, 'entries');
     await form.getByLabel('Workspace name', { exact: true }).fill('research');
     expect(reads).toEqual([]);

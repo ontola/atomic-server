@@ -764,12 +764,45 @@ export function createSyncApp(store, context) {
     return created;
   }
 
+  async function installedPrincipal(principal) {
+    const matches = (context.principalApps ?? []).filter(ref =>
+      same(ref.principal, principal),
+    );
+    if (matches.length > 1)
+      throw new Error('The installed principal identity is ambiguous');
+    if (!matches.length) return;
+    const row = await store.getResource(matches[0].subject);
+    const config = row.get(property('syncable-source-config'));
+    if (
+      row.error ||
+      !row.hasClasses(tableClass, klass('syncable-principal')) ||
+      row.get(property('syncable-source-key')) !==
+        identity({ kind: 'principal', principal }) ||
+      config?.version !== 2 ||
+      config.platform !== context.platform ||
+      config.proxyOrigin !== context.proxyOrigin ||
+      !same(config.principal, principal)
+    )
+      throw new Error('The saved principal App changed; reopen this service');
+
+    return row;
+  }
+
   async function openPrincipal(connectionId, navigate = true) {
     const principal = await resolveAuthenticatedPrincipal(readDocument(), {
       clientContext: context.clientContext,
       transport: request => transport(request, connectionId),
     });
     const durable = principalIdentity(principal);
+    const installed = await installedPrincipal(durable);
+
+    if (installed) {
+      // Its connection binding is updated by the native open preparation step.
+      if (navigate) await store.ui.openResource(installed.subject);
+
+      return installed;
+    }
+
     const key = identity({ kind: 'principal', principal: durable });
     const row = await ensureNode({
       key,
@@ -803,6 +836,14 @@ export function createSyncApp(store, context) {
 
   async function openPublic(navigate = true) {
     const principal = { kind: 'public' };
+    const installed = await installedPrincipal(principal);
+
+    if (installed) {
+      if (navigate) await store.ui.openResource(installed.subject);
+
+      return installed;
+    }
+
     const row = await ensureNode({
       key: identity({ kind: 'principal', principal }),
       kind: 'principal',
@@ -1264,6 +1305,19 @@ export function createSyncApp(store, context) {
       await resources({ property: core.parent, value: root })
     ).filter(row => row.hasClasses(klass('syncable-principal')));
 
+    for (const ref of context.principalApps ?? []) {
+      const row = await installedPrincipal(ref.principal);
+      if (!row) continue;
+
+      // Pending setup rows are retained; the registered App is the displayed choice.
+      for (let i = saved.length - 1; i >= 0; i--) {
+        const config = saved[i].get(property('syncable-source-config'));
+        if (same(config?.principal, ref.principal)) saved.splice(i, 1);
+      }
+
+      saved.push(row);
+    }
+
     for (const alias of context.legacySources ?? []) {
       if (
         alias.kind !== 'principal' ||
@@ -1291,6 +1345,10 @@ export function createSyncApp(store, context) {
       if (config?.version !== 2 || config.principal?.kind !== 'authenticated')
         continue;
       known.add(config.connectionId);
+      if (
+        (context.principalApps ?? []).some(ref => ref.subject === row.subject)
+      )
+        continue;
 
       try {
         await findNode(

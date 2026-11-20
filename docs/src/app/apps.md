@@ -26,17 +26,22 @@ It is then one more way to look at rows you already have.
 
 From My Drive, open the account menu and choose **Apps**. Turn on **Show
 experimental plugins** to see services from your configured integration proxy.
-Choose **Add to Drive** on GitHub. This installs a GitHub App with its provider
-icon saved as a File in your drive. Reopening the App preserves your chosen icon.
+Choose **Add to Drive** on GitHub to open its account chooser. Connect an account,
+then open its entry to install a principal App such as **GitHub · michiel**.
+**Public** installs a separate **GitHub · Public** App without signing in. The
+chooser stays in Apps; it does not add a provider folder to your drive.
 
-Connect your GitHub account from the App. Your authenticated identity appears
-directly beneath GitHub, alongside **Public**. There is no Accounts folder.
-The identity comes from the catalog's Authenticated Principal declaration.
+Each drive has one App for each configured proxy, provider and typed principal.
+The identity comes from the catalog's Authenticated Principal declaration, not a
+display name. Reconnecting the same account opens its existing App, including
+after you rename or move it within the drive. Its provider icon is saved in the
+drive, and reopening preserves an icon you chose yourself. Apps also lists your
+installed principal Apps so you can open them directly.
 
-Each account has one table per catalog resource type, such as **Organizations**,
+Each App has one table per catalog resource type, such as **Organizations**,
 **Repositories** and **Issues and pull requests**. Navigation stays at
-Drive → GitHub → account (or Public) → item type. An organization and a
-repository are rows, rather than folders containing another copy of each table.
+Drive → principal App → item type. An organization and a repository are rows,
+rather than folders containing another copy of each table.
 
 Choose a saved **Filter** to browse the rows observed through a particular
 catalog source. **All cached rows** shows the shared table across its filters.
@@ -53,7 +58,7 @@ or resources in the app; closing the app stops them. Paused status survives a
 reload. The Sync view also offers source setup for new saved filters; catalog
 inputs and relationships determine the available sources.
 
-To link a public repository, open **Public** beneath GitHub. In its Sync view,
+To link a public repository, open **GitHub · Public**. In its Sync view,
 select the Issues collection and the catalog's repository source, enter its
 owner/name, give the filter a name and choose **Save filter**. The source resolves
 to the repository's canonical identity. This branch uses GitHub's public API
@@ -74,8 +79,9 @@ using the historical `github-issues` identifier need reinstalling or reconnectin
 Stored Atomic resources are retained; the rename does not automatically remove
 them. Historical GitHub-specific view tabs still open the native Collection view.
 
-Within an installation, migration uses verified account identity to preserve
-existing resources across connection changes. It never matches accounts by
+Migration promotes an existing principal resource in place, preserving its
+collections, row identities, saved filters and user fields. Verified account
+identity preserves the same App across connection changes. It never matches accounts by
 display name. Conflicting saved entries are reported for review with their data
 retained. An expired connection offers recovery controls while cached collections
 remain available.

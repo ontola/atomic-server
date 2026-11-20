@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   core,
   Datatype,
+  dataBrowser,
+  pluginSchema,
   ensureSchema,
   type Store,
   type Resource,
@@ -20,7 +22,12 @@ import { defaultIntegrationProxy } from '@helpers/integrationProxy';
 import type { ProxyConnections } from '@helpers/proxyConnections';
 import { syncablePlatformSchema } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
-import { collectionIdentity, sourceKey } from './builtinSyncIdentity.js';
+import {
+  collectionIdentity,
+  sourceKey,
+  entityTableKey,
+  sourceConfigFingerprint,
+} from './builtinSyncIdentity.js';
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
@@ -364,6 +371,47 @@ const request = (
 });
 
 describe('generic saved source context', () => {
+  it('resolves a promoted principal before its provider App metadata', async () => {
+    const { store, resources } = fakeSchemaStore();
+    resources.set(core.properties.name, {
+      [core.properties.isA]: [core.classes.property],
+      [core.properties.datatype]: Datatype.STRING,
+      [core.properties.shortname]: 'name',
+    });
+    const h = await ensureSchema(store, 'drive', syncableHierarchySchema());
+    const p = await ensureSchema(store, 'drive', syncablePlatformSchema());
+    const config = {
+      version: 2 as const,
+      proxyOrigin: context.proxyOrigin,
+      platform: context.platform,
+      principal,
+      connectionId: slot,
+    };
+    const key = sourceKey({ ...config, kind: 'principal' });
+    resources.set('principal-app', {
+      [core.properties.parent]: 'drive',
+      [p.properties['syncable-platform-id']]: context.platform,
+      [p.properties['syncable-proxy-origin']]: context.proxyOrigin,
+      [h.properties['syncable-source-key']]: key,
+      [h.properties['syncable-source-config']]: config,
+    });
+    expect(
+      await syncAppContext(store as unknown as Store, 'drive', 'principal-app'),
+    ).toMatchObject({
+      kind: 'principal',
+      principal,
+      connectionId: slot,
+      sourceKey: key,
+    });
+    resources.get('principal-app')![h.properties['syncable-source-config']] = {
+      ...config,
+      principal: { ...principal, subject: '7' },
+    };
+    await expect(
+      syncAppContext(store as unknown as Store, 'drive', 'principal-app'),
+    ).rejects.toThrow('source identity');
+  });
+
   it('keeps moved collection identities and rejects source/config/principal disagreement', async () => {
     const { store, resources } = fakeSchemaStore();
     resources.set(core.properties.name, {
@@ -1138,4 +1186,101 @@ describe('catalog-derived host relay', () => {
       ),
     ).toThrow('source record identity');
   });
+});
+
+it('reports only actual catalog-verified typed principal responses to the native host', async () => {
+  const { proxy, rememberKeyedPrincipal } = setupProxy();
+  const verified = vi.fn();
+  const transport = syncProxyTransport(
+    proxy,
+    selected(),
+    () => undefined,
+    { document: apiDocument() },
+    () => undefined,
+    async () => false,
+    verified,
+  );
+  await transport.request!(request());
+  expect(rememberKeyedPrincipal).toHaveBeenCalled();
+  expect(verified).toHaveBeenCalledWith({
+    connectionId: slot,
+    principal,
+    activeId: 'active',
+  });
+});
+
+it('inherits a principal App binding for a moved collection and revokes it when the binding changes', async () => {
+  const { store, resources } = fakeSchemaStore();
+  const runtime = store as unknown as Store;
+  runtime.normalizeSubject = value => value;
+  runtime.resources.clear();
+  const load = store.getResource.bind(store);
+
+  store.getResource = async subject => {
+    const row = await load(subject);
+    runtime.resources.set(subject, row as unknown as Resource);
+
+    return row;
+  };
+
+  resources.set(core.properties.name, {
+    [core.properties.isA]: [core.classes.property],
+    [core.properties.datatype]: Datatype.STRING,
+    [core.properties.shortname]: 'name',
+  });
+  const h = await ensureSchema(store, 'drive', syncableHierarchySchema());
+  const p = await ensureSchema(store, 'drive', syncablePlatformSchema());
+  const a = await ensureSchema(store, 'drive', pluginSchema());
+  const principalConfig = {
+    version: 2 as const,
+    platform: context.platform,
+    proxyOrigin: context.proxyOrigin,
+    principal,
+    connectionId: 'n'.repeat(43),
+  };
+  const principalKey = sourceKey({ ...principalConfig, kind: 'principal' });
+  resources.get('drive')![p.properties['syncable-principal-app-index']] = {
+    [sourceConfigFingerprint(principalKey)]: 'principal-app',
+  };
+  resources.set('principal-app', {
+    [core.properties.parent]: 'drive',
+    [core.properties.isA]: [
+      dataBrowser.classes.table,
+      a.classes.app,
+      h.classes['syncable-principal'],
+    ],
+    [p.properties['builtin-app']]: 'syncables',
+    [p.properties['syncable-platform-id']]: context.platform,
+    [p.properties['syncable-proxy-origin']]: context.proxyOrigin,
+    [a.properties['app-data']]: 'principal-app',
+    [h.properties['syncable-node-kind']]: 'principal',
+    [h.properties['syncable-source-key']]: principalKey,
+    [h.properties['syncable-source-config']]: principalConfig,
+  });
+  resources.set('folder', { [core.properties.parent]: 'drive' });
+  const config = {
+    version: 3 as const,
+    kind: 'collection' as const,
+    platform: context.platform,
+    proxyOrigin: context.proxyOrigin,
+    principal,
+    resource: 'task',
+    connectionId: slot,
+  };
+  resources.set('moved-collection', {
+    [core.properties.parent]: 'folder',
+    [h.properties['syncable-source-key']]: entityTableKey(config),
+    [h.properties['syncable-source-config']]: config,
+  });
+  const resolved = await syncAppContext(runtime, 'drive', 'moved-collection');
+  expect(resolved).toMatchObject({
+    principalApp: 'principal-app',
+    connectionId: 'n'.repeat(43),
+  });
+  expect(config.connectionId).toBe(slot);
+  assertSyncAppContext(resolved);
+  principalConfig.connectionId = 'x'.repeat(43);
+  expect(() => assertSyncAppContext(resolved)).toThrow(
+    'principal App connection changed',
+  );
 });

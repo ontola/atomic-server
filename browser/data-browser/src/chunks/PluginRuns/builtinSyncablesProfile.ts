@@ -56,6 +56,11 @@ import {
 } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
+  findRegisteredSyncablePrincipalApp,
+  isSyncablePrincipalApp,
+  listSyncablePrincipalApps,
+} from './syncablePrincipalApp';
+import {
   resolveSyncableRule,
   type ResolvedSyncableRule,
   type SyncableRuleContext,
@@ -76,6 +81,8 @@ export interface SyncAppContext {
   mode?: 'public';
   principal?: SyncablePrincipal;
   connectionId?: string;
+  /** Native binding owner; stored collection identity does not depend on its slot. */
+  principalApp?: string;
   collection?: BoundCollection;
   navigation?: CollectionNavigation;
   sourceKey?: string;
@@ -196,7 +203,17 @@ export async function syncAppContext(
     },
   } as const;
 
-  if (typeof platform === 'string' && typeof proxyOrigin === 'string') {
+  const sourceProperty = h.properties?.['syncable-source-key'];
+  const configProperty = h.properties?.['syncable-source-config'];
+  const raw = sourceProperty && resource.get(sourceProperty);
+
+  // Principal Apps retain provider branding metadata as well as their source.
+  // An existing source must be validated before considering the setup context.
+  if (
+    typeof platform === 'string' &&
+    typeof proxyOrigin === 'string' &&
+    raw === undefined
+  ) {
     if (ruleSubject)
       throw new Error('Select a filter from an entity collection');
     platformLocalId(proxyOrigin, platform);
@@ -208,10 +225,12 @@ export async function syncAppContext(
     return { ...context, platform, proxyOrigin, kind: 'platform' };
   }
 
-  const sourceProperty = h.properties?.['syncable-source-key'];
-  const configProperty = h.properties?.['syncable-source-config'];
-  const raw = sourceProperty && resource.get(sourceProperty);
   const key = parseSyncableSourceKey(raw);
+  if (
+    (platform !== undefined && platform !== key.platform) ||
+    (proxyOrigin !== undefined && proxyOrigin !== key.proxyOrigin)
+  )
+    throw new Error('The App metadata does not match its source identity');
   if (key.proxyOrigin !== getIntegrationProxy())
     throw new Error('Select this integration proxy in Settings before syncing');
   if (key.version === 1)
@@ -256,6 +275,130 @@ export async function syncAppContext(
       : {}),
   };
 
+  const actor = store.getAgent?.()?.subject;
+  const currentServer = store.getServerUrl?.();
+  const sourceStamp = () =>
+    JSON.stringify([
+      resource.get(sourceProperty!),
+      resource.get(configProperty!),
+    ]);
+  const savedSourceStamp = sourceStamp();
+
+  const assertSourceCurrent = () => {
+    if (
+      store.getAgent?.()?.subject !== actor ||
+      store.getServerUrl?.() !== currentServer ||
+      resource.error ||
+      sourceStamp() !== savedSourceStamp
+    )
+      throw new Error(
+        'The Sync source or account changed; reopen this collection',
+      );
+  };
+
+  provenanceGuards.set(result, assertSourceCurrent);
+
+  const bindPrincipalApp = async () => {
+    if (key.kind !== 'collection') return result;
+    let registered = await findRegisteredSyncablePrincipalApp(store, {
+      drive,
+      proxyOrigin: key.proxyOrigin,
+      platform: key.platform,
+      principal: config.principal,
+      assertCurrent: assertSourceCurrent,
+    });
+
+    // A same-drive move is allowed even if the drive index was lost. The actual
+    // ancestor App is still a validated binding owner; metadata alone is not.
+    if (!registered) {
+      let parent = resource.get(core.properties.parent);
+      const seen = new Set<string>();
+
+      while (
+        typeof parent === 'string' &&
+        !seen.has(parent) &&
+        seen.size < 64 &&
+        !subjectsReferToSameResource(parent, drive)
+      ) {
+        seen.add(parent);
+        const candidate = await store.getResource(parent);
+        const candidateRaw = candidate.get(sourceProperty!);
+
+        if (
+          candidateRaw !== undefined &&
+          (await isSyncablePrincipalApp(store, drive, candidate))
+        ) {
+          const candidateConfig = parseSyncableSourceConfig(
+            candidate.get(configProperty!),
+          );
+
+          if (
+            candidateConfig.proxyOrigin === key.proxyOrigin &&
+            candidateConfig.platform === key.platform &&
+            same(candidateConfig.principal, config.principal)
+          ) {
+            registered = {
+              subject: candidate.subject,
+              principal: candidateConfig.principal,
+              name: String(candidate.get(core.properties.name) ?? key.platform),
+              ...(candidateConfig.connectionId
+                ? { connectionId: candidateConfig.connectionId }
+                : {}),
+            };
+            break;
+          }
+        }
+
+        parent = candidate.get(core.properties.parent);
+      }
+    }
+
+    if (
+      !registered &&
+      typeof store.fetchResourceFromServer === 'function' &&
+      !store.noServer
+    ) {
+      const matches = await listSyncablePrincipalApps(store, {
+        drive,
+        proxyOrigin: key.proxyOrigin,
+        platform: key.platform,
+        principal: config.principal,
+        assertCurrent: assertSourceCurrent,
+      });
+      if (matches.length > 1)
+        throw new Error('The principal App identity is ambiguous');
+      registered = matches[0];
+    }
+
+    assertSourceCurrent();
+    if (!registered) return result;
+    const principalApp = await store.getResource(registered.subject);
+    await cacheSyncAppDrive(store, drive, registered.subject);
+    const stamp = () =>
+      JSON.stringify([
+        principalApp.get(sourceProperty!),
+        principalApp.get(configProperty!),
+        principalApp.get(core.properties.isA),
+        principalApp.get(p.properties!['builtin-app']),
+        principalApp.get(p.properties!['syncable-platform-id']),
+        principalApp.get(p.properties!['syncable-proxy-origin']),
+      ]);
+    const saved = stamp();
+    const previous = provenanceGuards.get(result);
+    provenanceGuards.set(result, () => {
+      previous?.();
+      assertSyncAppDrive(store, drive, principalApp.subject);
+      if (stamp() !== saved)
+        throw new Error(
+          'The principal App connection changed; reopen this collection',
+        );
+    });
+    result.principalApp = principalApp.subject;
+    result.connectionId = registered.connectionId;
+
+    return result;
+  };
+
   if (key.version === 3) {
     if (config.version !== 3 || config.kind !== 'collection')
       throw new Error('Open a canonical entity collection');
@@ -296,10 +439,13 @@ export async function syncAppContext(
         definition: resolved.definition,
       };
       resolvedRules.set(result, resolved);
-      provenanceGuards.set(result, resolved.assertCurrent);
+      provenanceGuards.set(result, () => {
+        assertSourceCurrent();
+        resolved.assertCurrent();
+      });
     }
 
-    return result;
+    return bindPrincipalApp();
   }
 
   if (ruleSubject)
@@ -342,6 +488,7 @@ export async function syncAppContext(
       JSON.stringify([row.get(sourceProperty), row.get(configProperty!)]);
     const savedStamp = stamp();
     provenanceGuards.set(result, () => {
+      assertSourceCurrent();
       assertSyncAppDrive(store, drive, row.subject);
       if (stamp() !== savedStamp)
         throw new Error('The collection source record changed');
@@ -364,7 +511,7 @@ export async function syncAppContext(
     result.selection = selection;
   }
 
-  return result;
+  return bindPrincipalApp();
 }
 
 async function findSourceRecord(
@@ -539,6 +686,13 @@ export function canonicalSyncAppContext(
   return scoped({ collection });
 }
 
+/** Native-only evidence from an actual catalog-declared principal response. */
+export interface VerifiedSyncablePrincipal {
+  connectionId: string;
+  principal: Extract<SyncablePrincipal, { kind: 'authenticated' }>;
+  activeId: string;
+}
+
 /** Credentials remain in the shared keyed proxy client. The frame selects no authority. */
 export function syncProxyTransport(
   proxy: ProxyConnections,
@@ -547,6 +701,9 @@ export function syncProxyTransport(
   trusted: TrustedSyncableCatalog,
   assertProviderReadAllowed: () => void = () => undefined,
   canReconnectLegacy: (slot: string) => Promise<boolean> = async () => false,
+  onPrincipalVerified?: (
+    proof: VerifiedSyncablePrincipal,
+  ) => void | Promise<void>,
 ): ProxyHost {
   const assertCurrent = () => {
     assertSessionCurrent();
@@ -663,6 +820,7 @@ export function syncProxyTransport(
     operationId: string,
     response: TransportResponse,
     request: TransportRequest,
+    activeId: string,
   ) => {
     const resolved = await resolveAuthenticatedPrincipal(document, {
       operationId,
@@ -684,12 +842,42 @@ export function syncProxyTransport(
         'This connection belongs to a different authenticated principal',
       );
     assertReadCurrent();
+    if (
+      (await proxy.activeKeyedConnection(context.platform, slot)) !== activeId
+    )
+      throw new Error(
+        'The integration connection changed after identity verification',
+      );
+    assertReadCurrent();
     await proxy.rememberKeyedPrincipal(
       context.platform,
       slot,
       principal as ConnectionPrincipal,
       operationId,
     );
+    assertReadCurrent();
+    if (
+      (await proxy.activeKeyedConnection(context.platform, slot)) !== activeId
+    )
+      throw new Error(
+        'The integration connection changed after identity verification',
+      );
+    assertReadCurrent();
+    await onPrincipalVerified?.({
+      connectionId: slot,
+      principal: principal as Extract<
+        SyncablePrincipal,
+        { kind: 'authenticated' }
+      >,
+      activeId,
+    });
+    assertReadCurrent();
+    if (
+      (await proxy.activeKeyedConnection(context.platform, slot)) !== activeId
+    )
+      throw new Error(
+        'The integration connection changed after identity verification',
+      );
     assertReadCurrent();
   };
 
@@ -722,7 +910,7 @@ export function syncProxyTransport(
       });
       if (!actual || !response)
         throw new Error('Principal verification was not completed');
-      await remember(slot, descriptor.operationId, response, actual);
+      await remember(slot, descriptor.operationId, response, actual, active);
 
       return { active };
     })();
@@ -853,9 +1041,20 @@ export function syncProxyTransport(
             throw new Error('Unknown keyed integration connection');
         }
 
-        const response = await relay(request, slot, signal);
+        const active = await proxy.activeKeyedConnection(
+          context.platform,
+          slot!,
+        );
+        assertReadCurrent();
+        const response = await relay(request, slot, signal, active);
         if (response.status >= 200 && response.status < 300)
-          await remember(slot!, descriptor.operationId, response, request);
+          await remember(
+            slot!,
+            descriptor.operationId,
+            response,
+            request,
+            active,
+          );
         assertReadCurrent();
         signal?.throwIfAborted();
 

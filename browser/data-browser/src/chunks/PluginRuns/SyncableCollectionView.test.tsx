@@ -256,14 +256,18 @@ describe('native stored collections', () => {
   });
 
   it('opens a saved child in its installed generic view on the local server', async () => {
+    const research = location.origin + '/research';
     state.resources.set(
-      'research',
-      row('research', { [targetProperty]: child }),
+      research,
+      row(research, {
+        [nameProperty]: 'research',
+        [targetProperty]: child,
+      }),
     );
     state.resources.set(
       child,
       resource(child, {
-        [core.properties.parent]: 'research',
+        [core.properties.parent]: research,
         [core.properties.isA]: [dataBrowser.classes.table],
         [dataBrowser.properties.tableViews]: [
           'native-view',
@@ -298,7 +302,7 @@ describe('native stored collections', () => {
             : {}),
         }),
       );
-    render(view(collection(['research'])));
+    render(view(collection([research])));
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
     await waitFor(() =>
       expect(state.navigate).toHaveBeenCalledWith('/boards?view=native-view'),
@@ -329,14 +333,18 @@ describe('native stored collections', () => {
   });
 
   it('never selects an app iframe or unknown view as the raw Table fallback', async () => {
+    const research = location.origin + '/research';
     state.resources.set(
-      'research',
-      row('research', { [targetProperty]: child }),
+      research,
+      row(research, {
+        [nameProperty]: 'research',
+        [targetProperty]: child,
+      }),
     );
     state.resources.set(
       child,
       resource(child, {
-        [core.properties.parent]: 'research',
+        [core.properties.parent]: research,
         [core.properties.isA]: [dataBrowser.classes.table],
         [dataBrowser.properties.tableViews]: [
           'table-view',
@@ -358,7 +366,7 @@ describe('native stored collections', () => {
           [dataBrowser.properties.viewKind]: kind,
         }),
       );
-    render(view(collection(['research'])));
+    render(view(collection([research])));
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
     await waitFor(() =>
       expect(state.navigate).toHaveBeenCalledWith('/boards?view=table-view'),

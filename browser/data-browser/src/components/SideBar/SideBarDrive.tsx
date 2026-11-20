@@ -47,6 +47,7 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
     allSubjects: allChildren,
     loading: childrenLoading,
     total: totalChildren,
+    hiddenSubjects,
   } = useVisibleDriveChildren(drive, { limit: SIDEBAR_CHILD_LIMIT });
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
@@ -91,6 +92,7 @@ export function SideBarDrive({ onItemClick }: SideBarDriveProps): JSX.Element {
                       subject={child}
                       renderedHierarchy={driveHierarchy}
                       onClick={onItemClick}
+                      hiddenSubjects={hiddenSubjects}
                     />
                     <DropEdge
                       parentHierarchy={driveHierarchy}

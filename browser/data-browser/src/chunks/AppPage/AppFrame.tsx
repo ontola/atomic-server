@@ -60,6 +60,8 @@ export interface AppFrameProfile extends HostStoreProfile {
   proxy?: ProxyHost;
   /** Called after the existing native Connect dialog receives consent. */
   connect?: (platform: string, connectionId?: string) => Promise<string>;
+  /** Native setup step before the existing host navigation operation. */
+  prepareOpenResource?: (subject: string) => Promise<string>;
 }
 
 /** Source authority comes from the native mount, confined to its own node. */
@@ -351,6 +353,31 @@ function AppFrameSession({
         assertHostProfile(selected);
       } catch (reason) {
         session.post({ id: data.id, error: String(reason?.message ?? reason) });
+
+        return;
+      }
+
+      const prepareOpenResource = profile?.prepareOpenResource;
+
+      if (data.op === 'openResource' && prepareOpenResource) {
+        void (async () => {
+          assertHostProfile(selected);
+          if (typeof data.subject !== 'string' || !data.subject)
+            throw new Error('A resource subject is required');
+          const subject = await prepareOpenResource(data.subject);
+          assertHostProfile(selected);
+          if (typeof subject !== 'string' || !subject)
+            throw new Error('The prepared resource is unavailable');
+          handleUI(
+            { ...data, subject } as unknown as Parameters<typeof handleUI>[0],
+            session.post,
+          );
+        })().catch(reason => {
+          session.post({
+            id: data.id,
+            error: String(reason?.message ?? reason),
+          });
+        });
 
         return;
       }

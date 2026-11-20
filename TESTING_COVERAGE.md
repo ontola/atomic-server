@@ -1281,7 +1281,7 @@ This does not yet prove restoration of the user's private staging workspace.
 
 - `browser/e2e/tests/syncables-github.spec.ts` exercises the real built app and
   Atomic Server against a protocol-checking proxy/provider fixture. The GitHub
-  journeys cover direct App → authenticated principal/Public → catalog collection
+  journeys cover drive-level principal/Public Apps and catalog collection
   navigation, Organizations without synthetic owners, scoped organization →
   repositories → Issues/pull requests response Links, public owner/name setup
   resolved to canonical repository IDs, typed/idempotent updates, pagination,
@@ -1316,6 +1316,17 @@ This does not yet prove restoration of the user's private staging workspace.
   react in place, and ordinary tables incur no Syncables schema lookup.
 - Browser storage assertions query complete signed canonical row sets independently
   of the active filter and the browser's partially materialized resource cache.
+- `syncablePrincipalApp.test.ts` verifies one App per typed principal/Public,
+  authoritative drive lookup, native registration outside iframe write roots,
+  collision/interruption recovery, moved Apps, preserved subjects/local IDs and
+  refusal of conflicting, forged or foreign-drive sources.
+- Principal-App browser regressions reinstall Public after reload and reconnect
+  an authenticated principal through a new OAuth slot after rename/move. They
+  preserve cached table/row IDs, switch child sync to the new binding, retain the
+  binding on later chooser entry and isolate another principal's tables/rows.
+- App page and setup-visibility tests verify native principal-App browsing without
+  an iframe, validated setup-only hiding, metadata installed after drive entry,
+  reactive role changes and rejection of external editable-index URLs.
 - `syncablePlatform.test.ts`, App resolver and sidebar tests cover direct App
   mounting, idempotent installation, preserved icons, verified legacy Accounts
   relocation and hiding, interrupted migration and user-moved resources.

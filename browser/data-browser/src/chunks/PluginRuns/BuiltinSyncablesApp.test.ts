@@ -1,18 +1,26 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/lib';
 import type { AppExecutionRegistry } from '@chunks/AppPage/AppExecutionRuntime';
-import { appProfile } from './BuiltinSyncablesApp';
+import {
+  appProfile,
+  prepareSyncablePrincipalAppOpen,
+} from './BuiltinSyncablesApp';
+import type { SyncablePrincipalAppRef } from './syncablePrincipalApp';
+import { prepareDocument } from 'syncables/browser';
 import { collectSyncableLegacySources } from './syncableLegacy';
 import { syncableApiSchema } from './syncableApiSchema';
 import { syncProxyTransport } from './builtinSyncablesProfile';
 import {
   ruleSourceKey,
   sourceConfigFingerprint,
+  sourceKey,
 } from './builtinSyncIdentity.js';
 import { CollectionBuilder, core, dataBrowser } from '@tomic/lib';
 import { readSelectionKey } from 'syncables/browser';
 
 const state = vi.hoisted(() => ({
+  principalApps: [] as SyncablePrincipalAppRef[],
+  promote: vi.fn(async (..._args: unknown[]) => 'atomic:principal-app'),
   actor: { subject: 'atomic:agent:person' },
   installation: 'atomic:installation' as string | undefined,
   kind: 'platform' as 'platform' | 'legacy' | 'collection',
@@ -30,6 +38,18 @@ const state = vi.hoisted(() => ({
     canWrite: vi.fn(async () => [true]),
   },
   proxy: {
+    preferredKeyedConnection: vi.fn(
+      async (..._args: unknown[]): Promise<string | undefined> => undefined,
+    ),
+    consumePreferredKeyedConnection: vi.fn(
+      async (..._args: unknown[]) => undefined,
+    ),
+    activeKeyedConnection: vi.fn(async () => 'active'),
+    keyedPrincipalProvenance: vi.fn(
+      async (
+        ..._args: unknown[]
+      ): Promise<{ principal?: object } | undefined> => undefined,
+    ),
     listKeyed: vi.fn(async () => [
       { connection_id: 's'.repeat(43), platform: 'calendar-service' },
     ]),
@@ -87,6 +107,10 @@ vi.mock('./syncableDocument', () => ({
 }));
 vi.mock('./syncablePlatform', () => ({
   findSyncablePlatform: vi.fn(async () => state.installation),
+}));
+vi.mock('./syncablePrincipalApp', () => ({
+  listSyncablePrincipalApps: vi.fn(async () => state.principalApps),
+  ensureSyncablePrincipalApp: (...args: unknown[]) => state.promote(...args),
 }));
 vi.mock('./syncableLegacy', () => ({
   collectSyncableLegacySources: vi.fn(async () => state.legacy),
@@ -201,6 +225,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   state.actor = { subject: 'atomic:agent:person' };
+  state.principalApps = [];
+  state.promote.mockResolvedValue('atomic:principal-app');
+  state.proxy.preferredKeyedConnection.mockResolvedValue(undefined);
+  state.proxy.activeKeyedConnection.mockResolvedValue('active');
+  state.proxy.keyedPrincipalProvenance.mockResolvedValue(undefined);
   state.boundSlot = undefined;
   state.flat = false;
   state.runSchema = false;
@@ -349,6 +378,7 @@ it('passes validated installation aliases and blocking warnings into the existin
     expect.objectContaining({ subject: 'atomic:source' }),
     expect.any(Function),
     expect.objectContaining({ document: state.document }),
+    expect.any(Function),
     expect.any(Function),
     expect.any(Function),
   );
@@ -660,4 +690,236 @@ it('advances beyond durable orders across filters and run ledgers after a clock 
     (worker.profile.context!.rule as { run: { startOrder: number } }).run
       .startOrder,
   ).toBeGreaterThan(8_000_000_000_000_000);
+});
+
+const chosenPrincipal = {
+  kind: 'authenticated' as const,
+  namespace: 'https://identity.example',
+  subject: 7,
+};
+const chosenSlot = 's'.repeat(43);
+
+function principalPreparation(
+  principal: typeof chosenPrincipal | { kind: 'public' } = chosenPrincipal,
+) {
+  const context = {
+    subject: 'atomic:source',
+    drive: 'drive',
+    proxyOrigin: 'https://proxy.example',
+    platform: 'calendar-service',
+    kind: 'platform' as const,
+    proxyTransport: 'host' as const,
+    schema: {
+      classes: {},
+      properties: {
+        'syncable-source-key': 'atomic:source-key',
+        'syncable-source-config': 'atomic:source-config',
+      },
+    },
+  };
+  const config = {
+    version: 2 as const,
+    platform: context.platform,
+    proxyOrigin: context.proxyOrigin,
+    principal,
+    ...(principal.kind === 'authenticated' ? { connectionId: chosenSlot } : {}),
+  };
+  const key = sourceKey({ ...config, kind: 'principal' });
+  const row = {
+    subject: 'atomic:chosen',
+    get: (property: string) =>
+      property === 'atomic:source-key'
+        ? key
+        : property === 'atomic:source-config'
+          ? config
+          : undefined,
+  };
+  vi.mocked(store.getResource).mockResolvedValue(row as never);
+  const document = prepareDocument({
+    ...state.document,
+    paths: {
+      '/session': {
+        get: {
+          operationId: 'currentPrincipal',
+          security: [{ oauth: [] }],
+          'x-authenticated-principal': {
+            kind: 'user',
+            namespace: chosenPrincipal.namespace,
+            subject: '$response.body#/id',
+            identifier: { scope: 'provider', stable: true, reassigned: false },
+          },
+          responses: { '200': { description: 'Current identity' } },
+        },
+      },
+    },
+  });
+
+  return {
+    row,
+    config,
+    options: {
+      store,
+      drive: 'drive',
+      setup: 'atomic:source',
+      context,
+      trusted: { document },
+      proxy:
+        state.proxy as unknown as import('@helpers/proxyConnections').ProxyConnections,
+      verified: new Map([
+        [
+          chosenSlot,
+          {
+            connectionId: chosenSlot,
+            principal: chosenPrincipal,
+            activeId: 'active',
+          },
+        ],
+      ]),
+      principalApps: [] as SyncablePrincipalAppRef[],
+      assertCurrent: vi.fn(),
+    },
+  };
+}
+
+it('promotes only the catalog-verified typed principal through native preparation', async () => {
+  const { options } = principalPreparation();
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).resolves.toBe('atomic:principal-app');
+  expect(state.promote).toHaveBeenCalledWith(
+    store,
+    expect.objectContaining({
+      setup: 'atomic:source',
+      subject: 'atomic:chosen',
+      principal: chosenPrincipal,
+      providerName: 'Fixture',
+    }),
+  );
+});
+
+it('rejects a forged principal even when its editable key and config agree', async () => {
+  const { options } = principalPreparation({ ...chosenPrincipal, subject: 8 });
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).rejects.toThrow('principal');
+  expect(state.promote).not.toHaveBeenCalled();
+});
+
+it('does not promote after the observed connection slot changes', async () => {
+  const { options } = principalPreparation();
+  state.proxy.activeKeyedConnection.mockResolvedValue('replacement');
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).rejects.toThrow('connection changed');
+  expect(state.promote).not.toHaveBeenCalled();
+});
+
+it('can promote a historical principal using host-held typed proof without a provider read', async () => {
+  const { options } = principalPreparation();
+  options.verified.clear();
+  state.proxy.keyedPrincipalProvenance.mockResolvedValue({
+    principal: chosenPrincipal,
+  });
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).resolves.toBe('atomic:principal-app');
+  expect(state.proxy.keyedPrincipalProvenance).toHaveBeenCalledWith(
+    'calendar-service',
+    chosenSlot,
+  );
+});
+
+it('opens an existing registered principal App without refreshing or changing its connection', async () => {
+  const { options } = principalPreparation();
+  options.verified.clear();
+  const ref = {
+    subject: 'atomic:chosen',
+    principal: chosenPrincipal,
+    name: 'Custom App',
+  };
+  options.principalApps = [ref];
+  state.principalApps = [ref];
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).resolves.toBe('atomic:chosen');
+  expect(state.promote).not.toHaveBeenCalled();
+  expect(state.proxy.keyedPrincipalProvenance).not.toHaveBeenCalled();
+});
+
+it('does not install a Public App for a catalog without anonymous reads', async () => {
+  const { options } = principalPreparation({ kind: 'public' });
+  options.verified.clear();
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).rejects.toThrow('Public App');
+  expect(state.promote).not.toHaveBeenCalled();
+});
+
+it('rechecks the native session after loading a promotion candidate', async () => {
+  const { options } = principalPreparation();
+  let active = true;
+  options.assertCurrent = vi.fn(() => {
+    if (!active) throw new Error('Account changed');
+  });
+  const load = vi.mocked(store.getResource).getMockImplementation()!;
+  vi.mocked(store.getResource).mockImplementation(async subject => {
+    const result = await load(subject);
+    active = false;
+
+    return result;
+  });
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).rejects.toThrow('Account changed');
+  expect(state.promote).not.toHaveBeenCalled();
+});
+
+it('keeps an existing binding when discovery verifies an older orphan slot', async () => {
+  const { options } = principalPreparation();
+  const ref = {
+    subject: 'atomic:chosen',
+    principal: chosenPrincipal,
+    name: 'Saved App',
+  };
+  options.principalApps = [ref];
+  state.principalApps = [ref];
+  options.verified.set('o'.repeat(43), {
+    connectionId: 'o'.repeat(43),
+    principal: chosenPrincipal,
+    activeId: 'active',
+  });
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).resolves.toBe('atomic:chosen');
+  expect(state.promote).not.toHaveBeenCalled();
+});
+
+it('updates the existing binding only for a matching explicit OAuth selection and consumes it after success', async () => {
+  const { options } = principalPreparation();
+  const ref = {
+    subject: 'atomic:chosen',
+    principal: chosenPrincipal,
+    name: 'Saved App',
+  };
+  options.principalApps = [ref];
+  state.principalApps = [ref];
+  const next = 'n'.repeat(43);
+  options.verified.set(next, {
+    connectionId: next,
+    principal: chosenPrincipal,
+    activeId: 'active',
+  });
+  state.proxy.preferredKeyedConnection.mockResolvedValue(next);
+  await expect(
+    prepareSyncablePrincipalAppOpen(options, 'atomic:chosen'),
+  ).resolves.toBe('atomic:principal-app');
+  expect(state.promote).toHaveBeenCalledWith(
+    store,
+    expect.objectContaining({ connectionId: next }),
+  );
+  expect(state.proxy.consumePreferredKeyedConnection).toHaveBeenCalledWith(
+    { drive: 'drive', app: 'atomic:source' },
+    'calendar-service',
+    next,
+  );
 });

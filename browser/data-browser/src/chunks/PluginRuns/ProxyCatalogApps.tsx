@@ -24,6 +24,10 @@ import { resolveBuiltinApp } from '@chunks/AppPage/builtinApp';
 import { useProxyCatalog } from './proxyCatalog';
 import { fetchSyncableDocument, syncableBranding } from './syncableDocument';
 import { installIntegrationIcon } from './installIntegrationIcon';
+import {
+  listSyncablePrincipalApps,
+  type SyncablePrincipalAppRef,
+} from './syncablePrincipalApp';
 
 /** Display names only. Source IDs are always the proxy's own canonical IDs. */
 export function platformDisplayName(id: string): string {
@@ -72,6 +76,9 @@ export function ProxyCatalogApps({
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const [existing, setExisting] = useState<Record<string, string>>({});
+  const [principalApps, setPrincipalApps] = useState<
+    Record<string, readonly SyncablePrincipalAppRef[]>
+  >({});
   const [lookupError, setLookupError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string>();
@@ -83,26 +90,32 @@ export function ProxyCatalogApps({
 
     let active = true;
     setExisting({});
+    setPrincipalApps({});
     setLookupError(undefined);
     setLoading(true);
     void Promise.all(
       ready.platforms.map(async platform => {
-        const subject = await findSyncablePlatform(store, {
-          drive,
-          proxyOrigin: ready.origin,
-          platform,
-        });
+        const scope = { drive, proxyOrigin: ready.origin, platform };
+        const [subject, principals] = await Promise.all([
+          findSyncablePlatform(store, scope),
+          listSyncablePrincipalApps(store, scope),
+        ]);
 
-        return [platform, subject] as const;
+        return [platform, subject, principals] as const;
       }),
     )
       .then(found => {
         if (active) {
           setExisting(
             Object.fromEntries(
-              found.filter(
-                (entry): entry is readonly [string, string] => !!entry[1],
-              ),
+              found
+                .filter(([, subject]) => !!subject)
+                .map(([platform, subject]) => [platform, subject!]),
+            ),
+          );
+          setPrincipalApps(
+            Object.fromEntries(
+              found.map(([platform, , principals]) => [platform, principals]),
             ),
           );
         }
@@ -263,6 +276,22 @@ export function ProxyCatalogApps({
                           : 'Add to Drive'}
                     </Button>
                   </Row>
+                  {(principalApps[platform]?.length ?? 0) > 0 && (
+                    <Column gap='0.5rem'>
+                      <small>Connected apps</small>
+                      {principalApps[platform].map(principal => (
+                        <Button
+                          key={principal.subject}
+                          subtle
+                          onClick={() =>
+                            navigate(constructOpenURL(principal.subject))
+                          }
+                        >
+                          {principal.name}
+                        </Button>
+                      ))}
+                    </Column>
+                  )}
                 </Column>
               </Card>
             );

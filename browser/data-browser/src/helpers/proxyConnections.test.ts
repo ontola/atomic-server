@@ -954,3 +954,59 @@ describe('capability vector', () => {
     );
   });
 });
+
+it('keeps a successful keyed OAuth selection scoped to the owner, drive, setup and platform until consumed', async () => {
+  const storage = new MemoryStorage();
+  const fixture = fakeProxy(true);
+  let now = 1_790_000_000_000;
+  const proxy = new ProxyConnections(
+    storage,
+    ORIGIN,
+    user,
+    fixture.http,
+    () => now,
+  );
+  const connect = async () =>
+    proxy.finish(
+      callback(
+        await proxy.startKeyed(SCOPE, 'pets', `${PAGE}/x`, 'Pets', PAGE),
+      ),
+    );
+  const first = (await connect()).connectionId!;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(first);
+  const calls = fixture.calls.length;
+  expect(
+    await proxy.preferredKeyedConnection(
+      { ...SCOPE, drive: 'atomic:other-drive' },
+      'pets',
+    ),
+  ).toBeUndefined();
+  expect(
+    await proxy.preferredKeyedConnection(
+      { ...SCOPE, app: 'atomic:other-app' },
+      'pets',
+    ),
+  ).toBeUndefined();
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'other')).toBeUndefined();
+  const anotherUser = new Agent(
+    new JSCryptoProvider('AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+  );
+  const other = new ProxyConnections(
+    storage,
+    ORIGIN,
+    () => anotherUser,
+    fixture.http,
+    () => now,
+  );
+  expect(await other.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
+  expect(fixture.calls).toHaveLength(calls);
+  const second = (await connect()).connectionId!;
+  await proxy.consumePreferredKeyedConnection(SCOPE, 'pets', first);
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(second);
+  await proxy.consumePreferredKeyedConnection(SCOPE, 'pets', second);
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
+  const third = (await connect()).connectionId!;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(third);
+  now += 600_001;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
+});

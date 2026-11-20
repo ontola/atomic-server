@@ -22,6 +22,11 @@ vi.mock('@chunks/PluginRuns/BuiltinSyncablesApp', () => ({
     <div data-testid='builtin-app'>{table}</div>
   ),
 }));
+vi.mock('@chunks/TablePage/TableResource', () => ({
+  TableResource: ({ resource }: { resource: Resource }) => (
+    <div data-testid='principal-app-collections'>{resource.subject}</div>
+  ),
+}));
 vi.mock('@components/Loader', () => ({ LoaderBlock: () => <p>Loading</p> }));
 
 afterEach(() => {
@@ -56,6 +61,20 @@ it('keeps ordinary App entrypoints on the existing AppFrame path', async () => {
     'installed-app',
   );
   expect(screen.queryByTestId('builtin-app')).toBeNull();
+});
+
+it('opens a principal App as native stored collections without mounting an iframe', async () => {
+  vi.mocked(resolveBuiltinApp).mockResolvedValue({
+    kind: 'syncables',
+    table: 'installed-app',
+    principal: true,
+  });
+  open();
+  expect(
+    (await screen.findByTestId('principal-app-collections')).textContent,
+  ).toBe('installed-app');
+  expect(screen.queryByTestId('builtin-app')).toBeNull();
+  expect(screen.queryByTestId('ordinary-app')).toBeNull();
 });
 
 it('refuses an invalid built-in binding before mounting any execution host', async () => {

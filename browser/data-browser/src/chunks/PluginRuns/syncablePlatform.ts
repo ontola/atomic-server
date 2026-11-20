@@ -1,9 +1,7 @@
 /**
- * A provider installation is an ordinary drive App with direct principal children.
- *
- * This is the first provisioning slice of planning/builtin-syncables-apps.md.
- * Source connections and sandboxed view mounting are deliberately separate:
- * installing an app must never silently authorize an external service.
+ * Provision the provider connection manager reached through Apps. Principal
+ * resources are promoted separately into the drive's user-facing Apps.
+ * Installing metadata never silently authorizes an external service.
  */
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
@@ -16,6 +14,9 @@ import {
   findSchema,
   pluginSchema,
   subjectsReferToSameResource,
+  isAtomicIdentifier,
+  readConnectionSubjects,
+  type Store,
   type PropertySpec,
   type SchemaSpec,
   type SchemaStore,
@@ -63,6 +64,41 @@ export const syncablePlatformSchema = (): SchemaSpec => ({
       datatype: Datatype.JSON,
     },
     {
+      shortname: 'syncable-platform-setup',
+      name: 'Integration connection manager',
+      description:
+        'A native provider setup resource accessed from Apps rather than the drive tree.',
+      datatype: Datatype.BOOLEAN,
+    },
+    {
+      shortname: 'syncable-principal-app-index',
+      name: 'Principal App index',
+      description:
+        'Native lookup hint for validated principal Apps; registrations remain authoritative.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-principal-app-key',
+      name: 'Principal App registration key',
+      description:
+        'Native-only typed principal installation identity; independent of physical location.',
+      datatype: Datatype.STRING,
+    },
+    {
+      shortname: 'syncable-principal-app-ready',
+      name: 'Principal App registration complete',
+      description:
+        'Native recovery marker written after promotion reaches its drive destination.',
+      datatype: Datatype.BOOLEAN,
+    },
+    {
+      shortname: 'syncable-principal-app-target',
+      name: 'Registered principal App',
+      description:
+        'Native-only registration target retained across same-drive moves.',
+      datatype: Datatype.ATOMIC_URL,
+    },
+    {
       shortname: 'syncable-platform-index',
       name: 'Connected platform tables',
       description:
@@ -84,6 +120,16 @@ export const syncablePlatformSchema = (): SchemaSpec => ({
     },
   ],
   classes: [
+    {
+      shortname: 'syncable-principal-app-registration',
+      name: 'Principal App registration',
+      description:
+        'Native uniqueness registration outside any integration iframe write root.',
+      recommends: [
+        'syncable-principal-app-key',
+        'syncable-principal-app-target',
+      ],
+    },
     {
       shortname: 'syncable-account',
       name: 'Syncable account',
@@ -110,7 +156,10 @@ export function platformLocalId(proxyOrigin: string, platform: string): string {
   return `syncables:platform:${encodeURIComponent(proxyOrigin)}:${platform}`;
 }
 
-export interface PlatformProvisioner extends SchemaStore {}
+export interface PlatformProvisioner extends SchemaStore {
+  getServerUrl?: Store['getServerUrl'];
+  fetchResourceFromServer?: Store['fetchResourceFromServer'];
+}
 
 const DRIVE_PROPERTY = 'https://atomicdata.dev/properties/drive';
 const provisioning = new WeakMap<SchemaStore, Map<string, Promise<unknown>>>();
@@ -139,12 +188,49 @@ export async function queueSyncableProvisioning<T>(
   }
 }
 
+/** Reject external navigation/index subjects before the store can fetch them. */
+export function assertSyncableLocalSubject(
+  store: SchemaStore,
+  subject: unknown,
+): asserts subject is string {
+  if (typeof subject !== 'string' || !subject || subject.includes('#'))
+    throw new Error('The integration resource belongs to another server');
+  if (isAtomicIdentifier(subject)) return;
+  const getServerUrl = (store as PlatformProvisioner).getServerUrl;
+
+  if (!getServerUrl) {
+    // Embedded SchemaStores have opaque local keys and no HTTP transport.
+    if (subject.includes('://') || subject.startsWith('//'))
+      throw new Error('The integration resource belongs to another server');
+
+    return;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(subject);
+  } catch {
+    throw new Error('Invalid integration resource subject');
+  }
+
+  if (
+    url.origin !== new URL(getServerUrl.call(store)).origin ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw new Error('The integration resource belongs to another server');
+}
+
 export async function loadSyncableResource(
   store: SchemaStore,
   subject: string,
 ): Promise<SchemaResource | undefined> {
   try {
+    assertSyncableLocalSubject(store, subject);
     const resource = await store.getResource(subject);
+    assertSyncableLocalSubject(store, resource.subject);
     if ('error' in resource && resource.error) throw resource.error;
 
     return resource;
@@ -196,6 +282,7 @@ export async function findSyncablePlatform(
   input: { drive: string; proxyOrigin: string; platform: string },
 ): Promise<string | undefined> {
   const { drive, proxyOrigin, platform } = input;
+  assertSyncableLocalSubject(store, drive);
   const localId = platformLocalId(proxyOrigin, platform);
   const schema = await findSchema(store, drive, syncablePlatformSchema());
   const indexProperty = schema.properties?.['syncable-platform-index'];
@@ -204,12 +291,15 @@ export async function findSyncablePlatform(
   if (!platformProperty || !proxyProperty) return undefined;
 
   const app = await findSchema(store, drive, pluginSchema());
+  const hierarchy = await findSchema(store, drive, syncableHierarchySchema());
+  const principalKind = hierarchy.properties?.['syncable-node-kind'];
   const builtinProperty = schema.properties?.['builtin-app'];
 
   const isMatchingInstallation = (target: SchemaResource) => {
     const classes = target.get(core.properties.isA);
 
     return (
+      (!principalKind || target.get(principalKind) !== 'principal') &&
       Array.isArray(classes) &&
       (classes.includes(dataBrowser.classes.table) ||
         (app.classes?.app &&
@@ -240,6 +330,35 @@ export async function findSyncablePlatform(
         }
       }
     }
+  }
+
+  // The index is a hint. A complete drive query also finds a moved setup when
+  // a concurrent index update or an interrupted installation lost that hint.
+  if (store.getServerUrl && store.fetchResourceFromServer) {
+    const candidates = await readConnectionSubjects(
+      store as Pick<Store, 'getServerUrl' | 'fetchResourceFromServer'>,
+      drive,
+      core.properties.localId,
+      localId,
+    );
+    const matching: string[] = [];
+
+    for (const subject of candidates) {
+      const target = await loadSyncableResource(store, subject);
+      if (
+        target &&
+        isMatchingInstallation(target) &&
+        (await isSyncableResourceInDrive(store, drive, target.subject))
+      )
+        matching.push(target.subject);
+    }
+
+    if (matching.length > 1)
+      throw new Error(
+        'This integration has conflicting connection managers; review the existing copies',
+      );
+
+    return matching[0];
   }
 
   // Compatibility with tables provisioned before the drive index existed.
@@ -539,6 +658,7 @@ async function provisionPlatform(
     );
   }
 
+  await root.set(schema.properties['syncable-platform-setup'], true);
   await root.set(app.properties['app-data'], subject);
   await root.set(schema.properties['builtin-app'], 'syncables');
   await root.set(core.properties.isA, [

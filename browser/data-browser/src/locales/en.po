@@ -12069,6 +12069,7 @@ msgstr "<0/> asks to use your Atomic data. It has its own key, so your secret st
 msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
 msgstr "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
 
+#: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/routes/SettingsAgent.tsx
 msgid "Connected apps"
 msgstr "Connected apps"
@@ -14017,3 +14018,51 @@ msgstr "This saved filter is unavailable or no longer belongs to this collection
 #: src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "All cached rows"
 msgstr "All cached rows"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration connection manager"
+msgstr "Integration connection manager"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A native provider setup resource accessed from Apps rather than the drive tree."
+msgstr "A native provider setup resource accessed from Apps rather than the drive tree."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App index"
+msgstr "Principal App index"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native lookup hint for validated principal Apps; registrations remain authoritative."
+msgstr "Native lookup hint for validated principal Apps; registrations remain authoritative."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration key"
+msgstr "Principal App registration key"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only typed principal installation identity; independent of physical location."
+msgstr "Native-only typed principal installation identity; independent of physical location."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration complete"
+msgstr "Principal App registration complete"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native recovery marker written after promotion reaches its drive destination."
+msgstr "Native recovery marker written after promotion reaches its drive destination."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Registered principal App"
+msgstr "Registered principal App"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only registration target retained across same-drive moves."
+msgstr "Native-only registration target retained across same-drive moves."
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration"
+msgstr "Principal App registration"
+
+#: src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native uniqueness registration outside any integration iframe write root."
+msgstr "Native uniqueness registration outside any integration iframe write root."

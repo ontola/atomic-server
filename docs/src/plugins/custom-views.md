@@ -149,6 +149,15 @@ It uses no frame or provider connection. The separate Sync app saves its schema
 labels, fields and declared relationship navigation. Refreshing a provider belongs
 to that Sync app; stored fields remain browsable and update during a background run.
 
+A built-in integration uses one drive-level App per typed principal (or Public).
+The existing principal resource keeps its Table capabilities and stored views,
+so opening the App renders native collections. The provider's account chooser is
+reached through Apps rather than another folder in the drive tree. Installing or
+reconnecting the same principal reuses its App after renaming or moving it.
+A native preparation step on the existing `openResource` bridge validates the
+host's identity proof and provisions the App without expanding iframe writes to
+the drive. Connection-slot changes preserve the App's collection and row IDs.
+
 Built-in Syncables store one entity table per drive, proxy, platform, typed
 principal and exact catalog CRUD resource. Rows use the catalog's typed canonical
 identity, independently of discovery paths or physical location. A saved filter is

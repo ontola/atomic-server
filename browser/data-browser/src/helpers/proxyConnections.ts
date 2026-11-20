@@ -27,6 +27,7 @@ import {
   AGENT_VAULT_PROOF_MESSAGE,
   SIGNATURE_VERSION_HEADER,
   agentSubject,
+  canonicalizeScheme,
   decodeB64,
   requestSignatureMessageV2,
   sha256Hex,
@@ -37,6 +38,7 @@ import { agentVaultProof } from './managed/vault';
 
 const PENDING = 'atomic-proxy-connect-v2:';
 const KEYED_CONNECTION = 'atomic-proxy-keyed-v1:';
+const KEYED_SELECTION = 'atomic-proxy-keyed-selection-v1:';
 const CONNECTION_KEY_HEADER = 'x-connection-key';
 const PROXY_READ_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
 const MAX_BODY = 10 * 1024 * 1024;
@@ -725,6 +727,15 @@ export class ProxyConnections {
       await this.delegate(result.connection_id, c.appAgent, c.label);
     }
 
+    if (keyed && !keyed.reconnect)
+      this.storage.setItem(
+        this.keyedSelectionMarker(c, c.platform, keyed.owner),
+        JSON.stringify({
+          connectionId,
+          expires: this.now() + 600_000,
+        }),
+      );
+
     return {
       returnTo: c.returnTo,
       connected: true,
@@ -755,6 +766,71 @@ export class ProxyConnections {
         ...row,
         delegations: Array.isArray(row.delegations) ? row.delegations : [],
       }));
+  }
+
+  private keyedSelectionMarker(
+    scope: Pick<ConnectScope, 'drive' | 'app'>,
+    platform: string,
+    owner: string,
+  ) {
+    return (
+      KEYED_SELECTION +
+      JSON.stringify([
+        this.origin,
+        owner,
+        canonicalizeScheme(scope.drive),
+        canonicalizeScheme(scope.app),
+        platform,
+      ])
+    );
+  }
+
+  /** Native-only explicit OAuth choice; routine discovery never selects an older slot. */
+  async preferredKeyedConnection(
+    scope: Pick<ConnectScope, 'drive' | 'app'>,
+    platform: string,
+  ): Promise<string | undefined> {
+    const owner = await this.user().subject;
+    const key = this.keyedSelectionMarker(scope, platform, owner);
+    const raw = this.storage.getItem(key);
+    if (!raw) return;
+
+    try {
+      const selection = JSON.parse(raw) as {
+        connectionId?: unknown;
+        expires?: unknown;
+      };
+      if (
+        validConnectionId(selection.connectionId) &&
+        typeof selection.expires === 'number' &&
+        selection.expires > this.now() &&
+        selection.expires <= this.now() + 600_000 &&
+        this.keyedSlot(owner, platform, selection.connectionId)
+      )
+        return selection.connectionId;
+    } catch {
+      // Invalid metadata is not a connection choice.
+    }
+
+    this.storage.removeItem(key);
+  }
+
+  async consumePreferredKeyedConnection(
+    scope: Pick<ConnectScope, 'drive' | 'app'>,
+    platform: string,
+    connectionId: string,
+  ): Promise<void> {
+    const owner = await this.user().subject;
+    const key = this.keyedSelectionMarker(scope, platform, owner);
+    const raw = this.storage.getItem(key);
+    if (!raw) return;
+
+    try {
+      if (JSON.parse(raw).connectionId === connectionId)
+        this.storage.removeItem(key);
+    } catch {
+      this.storage.removeItem(key);
+    }
   }
 
   private keyedConnectionMarker(owner: string, connectionId: string): string {

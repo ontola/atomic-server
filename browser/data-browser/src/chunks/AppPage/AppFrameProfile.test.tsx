@@ -171,3 +171,65 @@ it('opens native consent before invoking the host-selected account flow', async 
   expect(start).toHaveBeenCalledWith('provider', 'existing');
   page.fetch.mockRestore();
 });
+
+async function openResource(
+  page: Awaited<ReturnType<typeof mount>>,
+  subject: string,
+) {
+  await act(async () => {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: page.iframe.contentWindow,
+        data: {
+          type: 'atomic.view.request',
+          version: 1,
+          id: 'open',
+          op: 'openResource',
+          args: { subject },
+        },
+      }),
+    );
+  });
+}
+
+it('prepares host-selected navigation through the existing openResource operation', async () => {
+  const prepare = vi.fn(async () => 'https://node.test/principal-app');
+  const page = await mount(profile({ prepareOpenResource: prepare }));
+  await openResource(page, 'https://node.test/principal');
+  expect(prepare).toHaveBeenCalledWith('https://node.test/principal');
+  expect(fixture.handleUI).toHaveBeenCalledWith(
+    expect.objectContaining({
+      op: 'openResource',
+      subject: 'https://node.test/principal-app',
+    }),
+    expect.any(Function),
+  );
+});
+
+it('does not navigate after preparation loses its selected authority', async () => {
+  let current = true;
+  const page = await mount(
+    profile({
+      access: {
+        root: 'https://node.test/table',
+        assertCurrent: () => {
+          if (!current) throw new Error('Source changed');
+        },
+      },
+      prepareOpenResource: async () => {
+        current = false;
+
+        return 'https://node.test/principal-app';
+      },
+    }),
+  );
+  await openResource(page, 'https://node.test/principal');
+  expect(fixture.handleUI).not.toHaveBeenCalled();
+  expect(page.post).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'open',
+      error: expect.stringContaining('Source changed'),
+    }),
+    '*',
+  );
+});

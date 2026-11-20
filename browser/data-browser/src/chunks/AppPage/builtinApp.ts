@@ -5,6 +5,7 @@ import {
   subjectsReferToSameResource,
   type SchemaStore,
 } from '@tomic/lib';
+import { isSyncablePrincipalApp } from '@chunks/PluginRuns/syncablePrincipalApp';
 import {
   isSyncableResourceInDrive,
   findSyncableLegacyAccounts,
@@ -13,7 +14,7 @@ import {
 } from '@chunks/PluginRuns/syncablePlatform';
 
 /** Closed native registration: provider metadata never selects executable code. */
-export type BuiltinApp = { kind: 'syncables'; table: string };
+export type BuiltinApp = { kind: 'syncables'; table: string; principal?: true };
 
 /** Read saved installation data without provisioning, OAuth or provider reads. */
 export async function resolveBuiltinApp(
@@ -54,6 +55,14 @@ export async function resolveBuiltinApp(
   const legacy = legacyProperty && resource.get(legacyProperty);
   if (typeof binding !== 'string')
     throw new Error('This built-in App has no saved source root');
+
+  if (await isSyncablePrincipalApp(store, drive, resource))
+    return { kind: 'syncables', table: subject, principal: true };
+  if (
+    resource.get(core.properties.localId) !==
+    platformLocalId(proxyOrigin, platformId)
+  )
+    throw new Error('This built-in App has no matching integration identity');
 
   if (!subjectsReferToSameResource(binding, subject) || legacy !== undefined) {
     if (!(await findSyncableLegacyAccounts(store, drive, subject)))

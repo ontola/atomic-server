@@ -26,6 +26,16 @@ import {
 } from '@helpers/integrationProxy';
 import { AtomicLink } from '@components/AtomicLink';
 import { findSyncablePlatform } from './syncablePlatform';
+import {
+  ensureSyncablePrincipalApp,
+  listSyncablePrincipalApps,
+  type SyncablePrincipalAppRef,
+} from './syncablePrincipalApp';
+import {
+  parseSyncableSourceConfig,
+  parseSyncableSourceKey,
+  sourceConfigMatchesKey,
+} from './syncableSource';
 import { collectSyncableLegacySources } from './syncableLegacy';
 import {
   collectSyncableFlatAdoption,
@@ -44,6 +54,7 @@ import { syncableApiSchema } from './syncableApiSchema';
 import {
   ruleSourceKey,
   sourceConfigFingerprint,
+  canonicalValue,
 } from './builtinSyncIdentity.js';
 import {
   parseSyncableRuleConfig,
@@ -56,7 +67,211 @@ import {
   canonicalSyncAppContext,
   syncAppContext,
   syncProxyTransport,
+  type SyncAppContext,
+  type TrustedSyncableCatalog,
+  type VerifiedSyncablePrincipal,
 } from './builtinSyncablesProfile';
+
+// @wc-ignore
+/** Native installation preparation; frame metadata never establishes identity proof. */
+export async function prepareSyncablePrincipalAppOpen(
+  {
+    store,
+    drive,
+    setup,
+    context,
+    trusted,
+    proxy,
+    verified,
+    principalApps,
+    assertCurrent,
+  }: {
+    store: Store;
+    drive: string;
+    setup: string;
+    context: SyncAppContext;
+    trusted: TrustedSyncableCatalog;
+    proxy: ProxyConnections;
+    verified: Map<string, VerifiedSyncablePrincipal>;
+    principalApps: readonly SyncablePrincipalAppRef[];
+    assertCurrent: () => void;
+  },
+  subject: string,
+): Promise<string> {
+  assertCurrent();
+
+  if (!isAtomicIdentifier(subject)) {
+    const target = new URL(subject);
+    if (
+      target.origin !== new URL(store.getServerUrl()).origin ||
+      target.username ||
+      target.password ||
+      target.hash
+    )
+      throw new Error('A principal App must belong to the selected server');
+  }
+
+  const row = await store.getResource(subject);
+  assertCurrent();
+  const p = context.schema.properties;
+  const raw = row.get(p['syncable-source-key']);
+  if (raw === undefined) return subject;
+  const key = parseSyncableSourceKey(raw);
+  if (key.version !== 2 || key.kind !== 'principal') return subject;
+  const config = parseSyncableSourceConfig(
+    row.get(p['syncable-source-config']),
+  );
+  if (
+    config.version !== 2 ||
+    typeof raw !== 'string' ||
+    !sourceConfigMatchesKey(config, key, raw) ||
+    config.proxyOrigin !== context.proxyOrigin ||
+    config.platform !== context.platform
+  )
+    throw new Error('The chosen principal does not belong to this integration');
+  const same = (a: unknown, b: unknown) =>
+    JSON.stringify(canonicalValue(a)) === JSON.stringify(canonicalValue(b));
+  const preferred = await proxy.preferredKeyedConnection(
+    { drive, app: setup },
+    context.platform,
+  );
+  assertCurrent();
+  const preferredProof = preferred ? verified.get(preferred) : undefined;
+  const observed =
+    preferredProof && same(preferredProof.principal, config.principal)
+      ? preferredProof
+      : config.connectionId
+        ? verified.get(config.connectionId)
+        : undefined;
+  if (observed && !same(observed.principal, config.principal))
+    throw new Error('The observed connection belongs to a different principal');
+  const existing = principalApps.find(
+    ref =>
+      subjectsReferToSameResource(ref.subject, subject) &&
+      same(ref.principal, config.principal),
+  );
+
+  if (
+    existing &&
+    !(preferredProof && same(preferredProof.principal, config.principal))
+  ) {
+    // Already installed resources may be browsed from cached data, without OAuth
+    // or a provider refresh. The native registry validates this readonly lookup.
+    const current = await listSyncablePrincipalApps(store, {
+      drive,
+      platform: context.platform,
+      proxyOrigin: context.proxyOrigin,
+      principal: config.principal,
+      assertCurrent,
+    });
+    assertCurrent();
+    if (
+      !current.some(
+        ref =>
+          subjectsReferToSameResource(ref.subject, subject) &&
+          same(ref.principal, config.principal),
+      )
+    )
+      throw new Error('The saved principal App changed; reopen this service');
+
+    return subject;
+  }
+
+  let connectionId: string | undefined;
+
+  if (config.principal.kind === 'public') {
+    const collections = describeCollections(trusted.document);
+    if (
+      !collections.some(
+        item =>
+          item.allowsAnonymous ||
+          item.entrypoints.some(entry => entry.allowsAnonymous),
+      )
+    )
+      throw new Error('This catalog does not permit a Public App');
+  } else if (observed) {
+    if (
+      (await proxy.activeKeyedConnection(
+        context.platform,
+        observed.connectionId,
+      )) !== observed.activeId
+    )
+      throw new Error(
+        'The verified connection changed; reconnect this account',
+      );
+    assertCurrent();
+    connectionId = observed.connectionId;
+  } else {
+    connectionId = config.connectionId;
+    if (!connectionId)
+      throw new Error('This principal has no saved connection proof');
+    const proof = await proxy.keyedPrincipalProvenance(
+      context.platform,
+      connectionId,
+    );
+    assertCurrent();
+    const principal = config.principal;
+    const definitions = describeAuthenticatedPrincipals(
+      trusted.document,
+    ).filter(
+      item =>
+        item.namespace === principal.namespace &&
+        item.identifier.stable === true &&
+        item.identifier.reassigned === false,
+    );
+    const matches = proof?.principal && same(proof.principal, config.principal);
+    const legacy =
+      !matches &&
+      (await proxy.canReconnectLegacyKeyed(
+        context.platform,
+        connectionId,
+        config.principal,
+        definitions,
+      ));
+    assertCurrent();
+    if (definitions.length !== 1 || (!matches && !legacy))
+      throw new Error(
+        'The saved principal has no matching host identity proof; reconnect it',
+      );
+  }
+
+  assertCurrent();
+  const info = trusted.document.info as { title?: unknown } | undefined;
+  const providerName =
+    typeof info?.title === 'string' ? info.title : context.platform;
+  const destination = await ensureSyncablePrincipalApp(store, {
+    drive,
+    setup,
+    subject,
+    proxyOrigin: context.proxyOrigin,
+    platform: context.platform,
+    principal: config.principal,
+    providerName,
+    assertCurrent,
+    ...(connectionId && connectionId === preferred ? { connectionId } : {}),
+  });
+  assertCurrent();
+  if (
+    observed &&
+    (await proxy.activeKeyedConnection(
+      context.platform,
+      observed.connectionId,
+    )) !== observed.activeId
+  )
+    throw new Error('The verified connection changed while opening the App');
+  assertCurrent();
+
+  if (preferred && observed?.connectionId === preferred) {
+    await proxy.consumePreferredKeyedConnection(
+      { drive, app: setup },
+      context.platform,
+      preferred,
+    );
+    assertCurrent();
+  }
+
+  return destination;
+}
 
 export const syncableExecutionKey = (
   drive: string,
@@ -299,6 +514,17 @@ export async function appProfile(
     querySelection: metadata.querySelection as QuerySelection | undefined,
   };
   const principalDescriptions = describeAuthenticatedPrincipals(document);
+  const verifiedPrincipals = new Map<string, VerifiedSyncablePrincipal>();
+  const principalApps =
+    context.kind === 'platform'
+      ? await listSyncablePrincipalApps(store, {
+          drive,
+          platform: context.platform,
+          proxyOrigin: context.proxyOrigin,
+          assertCurrent,
+        })
+      : [];
+  assertCurrent();
   context = canonicalSyncAppContext(context, trusted);
   const installationApp = await findSyncablePlatform(store, {
     drive,
@@ -455,6 +681,7 @@ export async function appProfile(
     const subjects = new Set([
       table,
       ...(context.rule ? [context.rule.subject] : []),
+      ...(context.principalApp ? [context.principalApp] : []),
     ]);
     const removes = [...subjects].map(subject =>
       store.subscribe(subject, () => {
@@ -493,6 +720,7 @@ export async function appProfile(
     source: server + '/builtin-syncables-ui?format=html',
     context: {
       ...context,
+      ...(context.kind === 'platform' ? { principalApps } : {}),
       document,
       querySelection: trusted.querySelection,
       apiSchema,
@@ -518,7 +746,30 @@ export async function appProfile(
           throw new Error('Resume this collection before syncing');
       },
       async slot => !!(await legacyReconnectPrincipal(slot)),
+      proof => {
+        assertCurrent();
+        verifiedPrincipals.set(proof.connectionId, proof);
+      },
     ),
+    ...(!worker && context.kind === 'platform'
+      ? {
+          prepareOpenResource: (subject: string) =>
+            prepareSyncablePrincipalAppOpen(
+              {
+                store,
+                drive,
+                setup: table,
+                context,
+                trusted,
+                proxy,
+                verified: verifiedPrincipals,
+                principalApps,
+                assertCurrent,
+              },
+              subject,
+            ),
+        }
+      : {}),
     execution: async action => {
       assertCurrent();
 

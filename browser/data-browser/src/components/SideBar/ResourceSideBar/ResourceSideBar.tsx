@@ -51,11 +51,12 @@ interface ResourceSideBarProps {
   renderedHierarchy: string[];
   /** When a SideBar item is clicked, we should close the SideBar (on mobile devices) */
   onClick?: () => unknown;
+  hiddenSubjects?: ReadonlySet<string>;
 }
 
 /** Renders a Resource as a nav item for in the sidebar. */
 export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
-  ({ subject, renderedHierarchy, onClick }) => {
+  ({ subject, renderedHierarchy, onClick, hiddenSubjects }) => {
     if (renderedHierarchy.length === 0) {
       throw new Error('renderedHierarchy should not be empty');
     }
@@ -148,6 +149,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
         legacyNavigation?.drive !== drive);
     const hiddenNavigation = [
       ...navigationDecorations,
+      ...(hiddenSubjects ?? []),
       ...(isPlatformRoot && legacyNavigation?.hidden
         ? [legacyNavigation.hidden]
         : []),
@@ -348,6 +350,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                     subject={child}
                     renderedHierarchy={hierarchyWithItself}
                     onClick={onClick}
+                    hiddenSubjects={hiddenSubjects}
                   />
                   {!hideDropTargets && (
                     <DropEdge
