@@ -40,7 +40,7 @@ managedDriveTest(
     });
     managedExpect(result).toEqual({ homeLocal: true, createdLocal: true });
     await managedExpect(
-      page.getByRole('button', { name: 'Report', exact: true }),
+      page.getByRole('button', { name: /^Report( this error)?$/ }),
     ).toHaveCount(0);
   },
 );
@@ -69,7 +69,7 @@ managedDriveTest(
     );
 
     await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    await page.getByRole('button', { name: 'Report this error' }).click();
     const dialog = page.getByRole('dialog');
     await managedExpect(
       dialog.getByRole('heading', { name: 'Report this error' }),
