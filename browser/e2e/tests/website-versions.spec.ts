@@ -20,18 +20,20 @@ test('website versions deduplicate without creating sidebar resources', async ({
       ...artifact,
       createdAt: new Date().toISOString(),
     });
-    const { schema } = await readWebsite(store, drive, site);
+    const { terms } = await readWebsite(store, drive, site);
 
     return {
       subject: site.subject,
       first,
       again,
-      release: site.get(schema.properties!['website-release']),
+      release: site.get(terms.properties.release!),
+      source: terms.source,
     };
   });
   expect(saved.again.state!.deployments).toHaveLength(1);
   expect(saved.again.state!.revision).toBe(saved.first.state!.revision);
   expect(saved.release).toBeFalsy();
+  expect(saved.source).toBe('fixed');
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}`,
   );

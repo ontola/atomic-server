@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Websites use the fixed, embedded `website/v1` vocabulary (`websiteSchema` in `@tomic/lib`: `website-project`, `website-export`, `website-design`, `website-release`, `website-artifact`) instead of per-drive `ensureSchema` terms, so the IDs are the same on every drive. Existing websites keep working and move to the fixed terms the next time they are saved; nothing changes in the UI.
 - Settings is one page: the User page (profile, account recovery, connected apps, this device), My drives and the Sync & devices page are now sections of `/app/settings`, all covered by the settings search and by the command palette. The atomic.place account (sign in, recovery, plan, Cloud Vault, Cloud Server) sits under "Account & security"; "Sync & devices" lists only devices. `/app/agent` and `/app/server` redirect there, and `?section=<id>` opens and scrolls to a section. Drive settings stay in the drive page's dialog. Settings checkboxes share one `SettingCheckbox`, the device lock uses `RadioInput`. The share dialog shows people with the clickable avatar (yours has "Edit profile"), the Messages sidebar panel appears once you have a conversation, and an app page no longer pads the app's frame. #2566
 
 ## [v0.41.0-beta.9] - 2026-11-18

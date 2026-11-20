@@ -21,7 +21,6 @@ import { ValueForm } from '../../components/forms/ValueForm';
 import FileCard from '../File/FileCard';
 import { defaultHiddenProps } from '../ResourcePageDefault';
 import { MessageCard } from './MessageCard';
-import { BookmarkCard } from './BookmarkCard.jsx';
 import { CardViewProps, CardViewPropsBase } from './CardViewProps';
 import { ElementCard } from './ElementCard';
 import { ArticleCard } from '../Article';
@@ -117,8 +116,6 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <FileCard resource={resource} {...props} />;
     case dataBrowser.classes.message:
       return <MessageCard resource={resource} {...props} />;
-    case dataBrowser.classes.bookmark:
-      return <BookmarkCard resource={resource} {...props} />;
     case dataBrowser.classes.paragraph:
       return <ElementCard resource={resource} {...props} />;
     case dataBrowser.classes.article:

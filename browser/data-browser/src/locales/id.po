@@ -138,7 +138,6 @@ msgstr "Agen AI"
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -954,14 +953,6 @@ msgstr "Gunakan proksi"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Mengambil URL dari Atomic-Server Anda saat ini ({0}), bukan langsung dari URL tersebut. Ini berguna jika URL tidak dapat diakses, tetapi sumber dayanya tersimpan dalam cache server Anda."
 
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "URL markah"
-
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Tidak ada URL"
-
 #: src/views/Card/MessageCard.tsx
 #: src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1059,7 +1050,6 @@ msgid "Copy message text"
 msgstr "Salin teks pesan"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
-#: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "memuat..."
@@ -1955,14 +1945,6 @@ msgstr "<0/> Kembali"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> sumber daya merujuk ke{0} {1}"
 
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "tidak ada pratinjau..."
-
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "Tidak dapat memuat pratinjau 😞"
-
 #: src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "Tidak ada plugin yang diinstal"
@@ -1987,10 +1969,6 @@ msgstr "dokumen"
 #: src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "folder"
-
-#: src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Buka situs"
 
 #: src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2054,12 +2032,6 @@ msgstr "Nama singkat"
 msgid "Create"
 msgstr "Buat"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Markah baru"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Oke"
@@ -11417,11 +11389,6 @@ msgstr "Pencarian mencocokkan nama dan deskripsi sumber daya. Anda juga dapat me
 #: src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Publik (siapa pun){0}"
-
-#. 0: ' '
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Buka situs{0}"
 
 #: src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"

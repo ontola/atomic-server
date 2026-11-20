@@ -18,7 +18,9 @@ import 'package:atomic_chat/atomic_chat.dart'
         defaultAttachmentPicker;
 import 'assistant/atomic_assistant_api.dart';
 import 'assistant/file_attachment_picker.dart';
+import 'atomic/account_store.dart';
 import 'atomic/bridge_peer_link_backend.dart';
+import 'atomic/sign_in_link.dart';
 import 'bootstrap.dart';
 import 'perf_seed.dart';
 import 'screens/login_screen.dart';
@@ -261,6 +263,12 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(String uri) {
+    if (SignInLink.parse(uri,
+            portal: Uri.parse(AccountStore.defaultPortal)) !=
+        null) {
+      unawaited(_redeemSignInLink(uri));
+      return;
+    }
     final peer = PairScreen.parsePeerInfo(uri);
     if (peer == null) return;
     final nodeId = peer.nodeId;
@@ -271,6 +279,21 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
         PairScreen.show(ctx, nodeId: nodeId);
       }
     });
+  }
+
+  /// The mailed sign-in link opened in the app: spend its token and save the
+  /// session. A failure (expired, used, offline) is said once, calmly.
+  Future<void> _redeemSignInLink(String link) async {
+    try {
+      if (await AccountStore.redeemSignInLink(link)) {
+        _toasts.show('sign-in-link:ok', 'Signed in', icon: Icons.check);
+      }
+    } on StateError catch (e) {
+      _toasts.show('sign-in-link:error', e.message, icon: Icons.error_outline);
+    } catch (_) {
+      _toasts.show('sign-in-link:error', 'Could not sign in with the link',
+          icon: Icons.error_outline);
+    }
   }
 
   void _onLoggedIn() {

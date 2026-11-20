@@ -138,7 +138,6 @@ msgstr "Agentes de IA"
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -954,14 +953,6 @@ msgstr "Usar proxy"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Obtiene la URL de tu Atomic-Server actual ({0}), en lugar de la URL real. Puede ser útil si la URL no funciona, pero el recurso está almacenado en caché en tu servidor."
 
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "URL del marcador"
-
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Sin URL"
-
 #: src/views/Card/MessageCard.tsx
 #: src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1059,7 +1050,6 @@ msgid "Copy message text"
 msgstr "Copiar texto del mensaje"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
-#: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "cargando..."
@@ -1955,14 +1945,6 @@ msgstr "<0/> Volver"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> recursos referencian{0} {1}"
 
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "sin vista previa..."
-
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "No se pudo cargar la vista previa 😞"
-
 #: src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "No hay plugins instalados"
@@ -1987,10 +1969,6 @@ msgstr "documento"
 #: src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "carpeta"
-
-#: src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Abrir sitio"
 
 #: src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2054,12 +2032,6 @@ msgstr "Shortname"
 msgid "Create"
 msgstr "Crear"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Nuevo marcador"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Aceptar"
@@ -11410,11 +11382,6 @@ msgstr "La búsqueda encuentra coincidencias en los nombres y descripciones de l
 #: src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Público (cualquiera){0}"
-
-#. 0: ' '
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Abrir sitio{0}"
 
 #: src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"

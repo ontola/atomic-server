@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal Links: the sign-in link atomic.place mails (/signin) opens
+	     the app. Needs the Associated Domains capability on the App ID and the
+	     applinks section of https://atomic.place/.well-known/apple-app-site-association
+	     (the portal serves it when APPLE_APPLINKS_APP_IDS is set). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:atomic.place</string>
+	</array>
+</dict>
+</plist>

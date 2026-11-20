@@ -138,7 +138,6 @@ msgstr "AI-agenten"
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/EditFormDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -954,14 +953,6 @@ msgstr "Proxy gebruiken"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Haalt de URL op via je huidige Atomic-Server ({0}) in plaats van rechtstreeks via de URL. Dit kan handig zijn als de URL niet beschikbaar is, maar de resource in de cache van je server staat."
 
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "Bladwijzer voor URL maken"
-
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Geen URL"
-
 #: src/views/Card/MessageCard.tsx
 #: src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1059,7 +1050,6 @@ msgid "Copy message text"
 msgstr "Berichttekst kopiëren"
 
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
-#: src/views/BookmarkPage/BookmarkPreview.tsx
 #: src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "laden..."
@@ -1955,14 +1945,6 @@ msgstr "<0/> Terug"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> resources verwijzen naar{0} {1}"
 
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "geen voorbeeld..."
-
-#: src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "Kan voorbeeld niet laden 😞"
-
 #: src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "Geen plugins geïnstalleerd"
@@ -1987,10 +1969,6 @@ msgstr "document"
 #: src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "map"
-
-#: src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Site openen"
 
 #: src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2054,12 +2032,6 @@ msgstr "Korte naam"
 msgid "Create"
 msgstr "Maken"
 
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Nieuwe bladwijzer"
-
-#: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Oké"
@@ -11420,11 +11392,6 @@ msgstr "Zoeken zoekt in namen en beschrijvingen van resources. Je kunt ook zoeke
 #: src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Openbaar (iedereen){0}"
-
-#. 0: ' '
-#: src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Site openen{0}"
 
 #: src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"
