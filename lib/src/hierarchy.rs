@@ -204,7 +204,9 @@ pub fn check_rights_cached<'a, S: Storelike>(
             None => {}
         }
 
-        let result = check_rights_impl(store, resource, for_agent_enum, right, cache).await;
+        let result = check_rights_impl(store, resource, for_agent_enum, right, cache)
+            .await
+            .map_err(|e| code_write_denial(e, right));
 
         if let Some(cache) = cache {
             if let Ok(mut guard) = cache.lock() {
@@ -224,6 +226,28 @@ pub fn check_rights_cached<'a, S: Storelike>(
 /// Returns string with explanation if allowed.
 #[tracing::instrument(skip_all)]
 pub async fn check_append(
+    store: &impl Storelike,
+    resource: &Resource,
+    for_agent: &ForAgent,
+) -> AtomicResult<String> {
+    check_append_inner(store, resource, for_agent)
+        .await
+        .map_err(|e| code_write_denial(e, Right::Append))
+}
+
+/// A refusal to write or append is `UNAUTHORIZED_WRITE`: the signer may not
+/// do this here, and only a rights change helps. Reads carry no commit code.
+fn code_write_denial(e: crate::errors::AtomicError, right: Right) -> crate::errors::AtomicError {
+    if !matches!(right, Right::Read)
+        && e.code == 0
+        && e.error_type == crate::errors::AtomicErrorType::UnauthorizedError
+    {
+        return e.with_code(crate::sync::protocol::error_code::UNAUTHORIZED_WRITE);
+    }
+    e
+}
+
+async fn check_append_inner(
     store: &impl Storelike,
     resource: &Resource,
     for_agent: &ForAgent,
@@ -449,7 +473,11 @@ pub fn check_rights<'a>(
     for_agent_enum: &'a ForAgent,
     right: Right,
 ) -> AsyncResult<'a, AtomicResult<String>> {
-    check_rights_impl(store, resource, for_agent_enum, right, None)
+    Box::pin(async move {
+        check_rights_impl(store, resource, for_agent_enum, right, None)
+            .await
+            .map_err(|e| code_write_denial(e, right))
+    })
 }
 
 fn check_rights_impl<'a, S: Storelike>(
@@ -509,7 +537,8 @@ fn check_rights_impl<'a, S: Storelike>(
                             .await?;
                     check_rights_cached(store, &target, for_agent_enum, right, cache).await
                 }
-                Right::Write => Err("Commits cannot be edited.".into()),
+                Right::Write => Err(crate::errors::AtomicError::from("Commits cannot be edited.")
+                    .with_code(crate::sync::protocol::error_code::IMMUTABLE_COMMIT)),
                 Right::Append => {
                     Err("Commits cannot have children, you cannot Append to them.".into())
                 }
@@ -1275,6 +1304,11 @@ mod test {
         assert!(
             refused.is_err(),
             "agent A has no append on B's folder; moving a resource there must be refused"
+        );
+        assert_eq!(
+            refused.unwrap_err().code,
+            crate::sync::protocol::error_code::UNAUTHORIZED_WRITE,
+            "a refused move is an unauthorized write, whatever the wording"
         );
         let still = store.get_resource(&x).await.unwrap();
         assert_eq!(

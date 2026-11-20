@@ -147,12 +147,13 @@ export type {
 } from './client-db.js';
 export {
   LocalOutbox,
-  isTerminalCommitErrorMessage,
-  isUnrecoverableCommitErrorMessage,
+  legacyRefusalCode,
+  refusalCode,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
-  isNotEnrolledMessage,
+  isNotEnrolledRefusal,
+  isNotEnrolledError,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';

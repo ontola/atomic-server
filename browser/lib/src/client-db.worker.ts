@@ -114,6 +114,31 @@ export interface ClientDbRpc {
     },
     void,
   ];
+  /** A resource written from its Loro snapshot alone: the WASM side derives the
+   *  row and the indexes from the doc, in one transaction, and the outbox rows
+   *  and the flush are as for `putResourceWithSnapshot`. `lastCommit` is the
+   *  one value no doc holds. */
+  putLoroSnapshot: [
+    {
+      subject: string;
+      snapshot: Uint8Array;
+      lastCommit?: string;
+      outbox?: ClientDbOutboxWrite;
+    },
+    void,
+  ];
+  /** Written in one transaction and made durable by one flush. */
+  putLoroSnapshots: [
+    {
+      items: {
+        subject: string;
+        snapshot: Uint8Array;
+        lastCommit?: string;
+        outbox?: ClientDbOutboxWrite;
+      }[];
+    },
+    void,
+  ];
   outboxEntries: [{ agent: string }, string[] | null];
   outboxWrite: [{ durable: boolean } & ClientDbOutboxWrite, void];
   applyCommit: [{ commitJsonAd: string }, void];
@@ -332,6 +357,27 @@ const handlers: Handlers = {
     await db!.putResourcesWithSnapshots(
       m.items.map(item => item.jsonAd),
       m.items.map(item => item.snapshot ?? null),
+    );
+
+    for (const item of m.items) {
+      if (item.outbox) writeOutbox(item.outbox);
+    }
+
+    flushNow();
+  },
+  putLoroSnapshot: async m => {
+    await db!.putLoroSnapshot(m.subject, m.snapshot, m.lastCommit ?? null);
+
+    // Same durability contract as `putResourceWithSnapshot`.
+    if (m.outbox) writeOutbox(m.outbox);
+
+    flushNow();
+  },
+  putLoroSnapshots: async m => {
+    await db!.putLoroSnapshots(
+      m.items.map(item => item.subject),
+      m.items.map(item => item.snapshot),
+      m.items.map(item => item.lastCommit ?? null),
     );
 
     for (const item of m.items) {

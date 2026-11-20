@@ -27,7 +27,7 @@ use crate::commit::{CommitBuilder, CommitResponse};
 use crate::db::trees::{Method, Operation, Tree};
 use crate::errors::AtomicResult;
 use crate::loro::AtomicLoroDoc;
-use crate::sync::protocol::{classify_commit_error, error_code};
+use crate::sync::protocol::error_code;
 use crate::{Db, Storelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -91,33 +91,17 @@ pub struct OutboxEntry {
 /// Why a hub refused a commit, as the `ERROR` frame carries it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitRefused {
-    /// One of [`error_code`], or `UNKNOWN` when the hub did not classify.
+    /// One of [`error_code`], or `UNKNOWN` when the hub did not classify. The
+    /// drain decides on this alone, never on the message.
     pub code: u16,
     pub message: String,
 }
 
 impl CommitRefused {
-    /// A refusal from a message alone, classified the way the hub would.
-    pub fn from_message(message: impl Into<String>) -> Self {
-        let message = message.into();
-        Self {
-            code: classify_commit_error(&message),
-            message,
-        }
-    }
-
-    fn effective_code(&self) -> u16 {
-        if self.code == error_code::UNKNOWN {
-            classify_commit_error(&self.message)
-        } else {
-            self.code
-        }
-    }
-
     /// The write can never succeed: drop it.
     pub fn is_terminal(&self) -> bool {
         matches!(
-            self.effective_code(),
+            self.code,
             error_code::GENESIS_COLLISION
                 | error_code::MISSING_REQUIRED_PROPERTY
                 | error_code::IMMUTABLE_COMMIT
@@ -127,10 +111,11 @@ impl CommitRefused {
     /// Retrying cannot help but the write is not necessarily lost: park it.
     pub fn is_blocking(&self) -> bool {
         matches!(
-            self.effective_code(),
+            self.code,
             error_code::UNAUTHORIZED_WRITE
                 | error_code::MISSING_CLASS
                 | error_code::SYNC_REJECTED
+                | error_code::MISSING_PARENT
                 | error_code::INVALID_SIGNATURE
                 | error_code::CAUSALITY_CONFLICT
         )
@@ -472,6 +457,11 @@ impl Outbox {
                     entry.last_error = None;
                     self.put(&entry)?;
                 }
+                // The destroy has nothing left to do: its goal is met.
+                Err(refused) if entry.destroy && refused.code == error_code::DESTROY_SETTLED => {
+                    self.clear(&subject)?;
+                    return Ok(SubjectOutcome::Sent(sent));
+                }
                 Err(refused) => return self.record_refusal(entry, refused),
             }
         }
@@ -526,7 +516,14 @@ impl Outbox {
                 }
                 Ok(SubjectOutcome::Sent(sent))
             }
-            Err(refused) => self.record_refusal(entry, refused),
+            Err(refused) => {
+                // The delta starts past ops the hub never got: send the whole
+                // snapshot next time, which always merges.
+                if refused.code == error_code::PENDING_DEPS {
+                    entry.base_version = None;
+                }
+                self.record_refusal(entry, refused)
+            }
         }
     }
 
@@ -865,12 +862,108 @@ mod tests {
         }
     }
 
+    /// The codes and dispositions every client shares, with the TypeScript
+    /// outbox (`browser/lib/src/local-outbox.test.ts` reads the same file).
+    fn fixture() -> Vec<serde_json::Value> {
+        let raw = include_str!("../../tests/fixtures/commit-refusals.json");
+        serde_json::from_str::<serde_json::Value>(raw).unwrap()["codes"]
+            .as_array()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn dispositions_match_the_shared_fixture() {
+        for row in fixture() {
+            let code = row["code"].as_u64().unwrap() as u16;
+            let refused = CommitRefused {
+                code,
+                message: "wording is irrelevant".into(),
+            };
+            let got = match (refused.is_terminal(), refused.is_blocking()) {
+                (true, false) => "drop",
+                (false, true) => "park",
+                (false, false) => "retry",
+                (true, true) => "both",
+            };
+            assert_eq!(got, row["disposition"], "{row}");
+        }
+    }
+
+    /// A new `error_code` constant without a fixture row fails here, so a code
+    /// cannot be added to Rust alone.
+    #[test]
+    fn every_error_code_has_a_fixture_row() {
+        let source = include_str!("protocol.rs");
+        let block = &source[source.find("pub mod error_code {").unwrap()..];
+        let block = &block[..block.find("\n}\n").unwrap()];
+        let mut declared = vec![];
+        for line in block.lines() {
+            if let Some(rest) = line.trim().strip_prefix("pub const ") {
+                let (name, value) = rest.split_once(": u16 = ").unwrap();
+                declared.push((name.to_string(), value.trim_end_matches(';').parse::<u64>().unwrap()));
+            }
+        }
+        let rows: Vec<(String, u64)> = fixture()
+            .iter()
+            .map(|r| (r["name"].as_str().unwrap().to_string(), r["code"].as_u64().unwrap()))
+            .collect();
+        assert_eq!(declared, rows);
+    }
+
+    #[tokio::test]
+    async fn pending_deps_resends_a_snapshot_not_the_delta() {
+        let device = Db::init_temp("outbox_pending_deps").await.unwrap();
+        let (_alice, drive) = device.setup("Alice").await.unwrap();
+        let (subject, edit) = create_and_edit(&device, &drive).await;
+        let outbox = Outbox::new(device.clone());
+        outbox.mark_dirty(&edit).await.unwrap();
+        assert!(outbox.get(&subject).unwrap().unwrap().base_version.is_some());
+
+        let mut transport = Refusing(CommitRefused {
+            code: error_code::PENDING_DEPS,
+            message: "depends on ops the server does not have".into(),
+        });
+        outbox.drain(&mut transport).await.unwrap();
+        let entry = outbox.get(&subject).unwrap().unwrap();
+        assert!(entry.base_version.is_none(), "{entry:?}");
+        assert!(!entry.blocked);
+    }
+
+    #[tokio::test]
+    async fn a_settled_destroy_is_acknowledged_by_its_refusal() {
+        let device = Db::init_temp("outbox_settled_destroy").await.unwrap();
+        let outbox = Outbox::new(device.clone());
+        let subject = "did:ad:gone".to_string();
+        outbox
+            .put(&OutboxEntry {
+                subject: subject.clone(),
+                enqueued_at: 0,
+                generation: 1,
+                base_version: None,
+                envelope_json: Some("{}".into()),
+                destroy: true,
+                failures: 0,
+                last_attempt_at: None,
+                last_error: None,
+                blocked: false,
+            })
+            .unwrap();
+        let mut transport = Refusing(CommitRefused {
+            code: error_code::DESTROY_SETTLED,
+            message: "has no such resource to destroy".into(),
+        });
+        let report = outbox.drain(&mut transport).await.unwrap();
+        assert_eq!(report.remaining, 0, "{report:?}");
+        assert!(!outbox.has_pending(&subject));
+    }
+
     #[test]
     fn causality_conflict_is_blocking_not_terminal() {
-        let refusal = CommitRefused::from_message(
-            "Commit's Loro update produced no state changes — its writes were silently dropped",
-        );
-        assert_eq!(refusal.code, error_code::CAUSALITY_CONFLICT);
+        let refusal = CommitRefused {
+            code: error_code::CAUSALITY_CONFLICT,
+            message: "stale".into(),
+        };
         assert!(refusal.is_blocking());
         assert!(!refusal.is_terminal());
     }
@@ -925,9 +1018,10 @@ mod tests {
         let (subject, edit) = create_and_edit(&device, &drive).await;
         let outbox = Outbox::new(device.clone());
         outbox.mark_dirty(&edit).await.unwrap();
-        let mut transport = Refusing(CommitRefused::from_message(
-            "is_genesis: true, but the resource already exists",
-        ));
+        let mut transport = Refusing(CommitRefused {
+            code: error_code::GENESIS_COLLISION,
+            message: "is_genesis: true, but the resource already exists".into(),
+        });
         let report = outbox.drain(&mut transport).await.unwrap();
         assert_eq!(report.dropped, 1, "{report:?}");
         assert!(!outbox.has_pending(&subject));

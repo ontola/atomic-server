@@ -26,6 +26,10 @@ pub struct AtomicError {
     pub message: String,
     pub error_type: AtomicErrorType,
     pub subject: Option<String>,
+    /// Why a commit was refused, as one of [`crate::sync::protocol::error_code`];
+    /// `error_code::UNKNOWN` (0) when the error is not a classified refusal. Set
+    /// where the refusal is raised, so nothing downstream reads the message.
+    pub code: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +56,7 @@ impl AtomicError {
             message: message.into(),
             error_type: AtomicErrorType::MethodNotAllowed,
             subject: None,
+            code: 0,
         }
     }
 
@@ -62,6 +67,7 @@ impl AtomicError {
             message: format!("Resource not found. {}", message),
             error_type: AtomicErrorType::NotFoundError,
             subject: None,
+            code: 0,
         }
     }
 
@@ -71,6 +77,7 @@ impl AtomicError {
             message: format!("Unauthorized. {}", message),
             error_type: AtomicErrorType::UnauthorizedError,
             subject: None,
+            code: 0,
         }
     }
 
@@ -86,6 +93,7 @@ impl AtomicError {
                 message: format!("Unauthorized. {}", self.message),
                 error_type: AtomicErrorType::UnauthorizedError,
                 subject: self.subject,
+                code: self.code,
             },
         }
     }
@@ -96,6 +104,7 @@ impl AtomicError {
             message,
             error_type: AtomicErrorType::OtherError,
             subject: None,
+            code: 0,
         }
     }
 
@@ -105,6 +114,7 @@ impl AtomicError {
             message: format!("{UPSTREAM_UNREACHABLE_MARKER}{message}"),
             error_type: AtomicErrorType::UpstreamUnreachable,
             subject: None,
+            code: 0,
         }
     }
 
@@ -129,6 +139,7 @@ impl AtomicError {
         AtomicError {
             message: msg,
             subject: None,
+            code: 0,
             error_type: AtomicErrorType::ParseError,
         }
     }
@@ -138,7 +149,22 @@ impl AtomicError {
         let mut r = Resource::new(subject);
         r.set_class(urls::ERROR)?;
         r.set_unsafe(urls::DESCRIPTION.into(), Value::String(self.message))?;
+        if self.code != 0 {
+            r.set_unsafe(urls::ERROR_CODE.into(), Value::Integer(self.code.into()))?;
+        }
         Ok(r)
+    }
+
+    /// Mark this error as a classified commit refusal, one of
+    /// [`crate::sync::protocol::error_code`].
+    pub fn with_code(mut self, code: u16) -> Self {
+        self.code = code;
+        self
+    }
+
+    /// A new message about the same refusal: the code is kept, the type is not.
+    pub fn wrap(self, message: String) -> Self {
+        AtomicError::from(message).with_code(self.code)
     }
 
     pub fn set_subject(mut self, subject: &str) -> Self {
@@ -160,6 +186,7 @@ impl From<&str> for AtomicError {
             message: message.into(),
             error_type: AtomicErrorType::OtherError,
             subject: None,
+            code: 0,
         }
     }
 }
@@ -169,6 +196,7 @@ impl From<String> for AtomicError {
         AtomicError {
             message,
             subject: None,
+            code: 0,
             error_type: AtomicErrorType::OtherError,
         }
     }
@@ -185,6 +213,7 @@ macro_rules! other_error_from_display {
                     AtomicError {
                         message: error.to_string(),
                         subject: None,
+                        code: 0,
                         error_type: AtomicErrorType::OtherError,
                     }
                 }
@@ -215,6 +244,7 @@ impl<T> From<std::sync::PoisonError<T>> for AtomicError {
             message: error.to_string(),
             error_type: AtomicErrorType::OtherError,
             subject: None,
+            code: 0,
         }
     }
 }

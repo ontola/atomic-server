@@ -103,6 +103,9 @@ export function createMockHost(): NativeChannel & {
       const r = JSON.parse(j as string) as JsonAd;
       resources.set(r['@id'], r);
     },
+    // The page's cache write-back is Loro bytes only; this mock keeps JSON-AD
+    // rows and has nothing to derive one from, so the write is dropped.
+    putLoroSnapshot: () => undefined,
     applyCommit: () => undefined,
     applyPeerCommit: () => undefined,
     removeResource: ([s]) => {
