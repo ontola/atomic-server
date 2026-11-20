@@ -1917,6 +1917,61 @@ test.describe('catalog-driven built-in Syncables', () => {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
+
+    const chooserReads = requests.providerRequests.length;
+    const chooserDocuments = requests.documentRequests.length;
+    await clickAccountMenuItem(page, 'Apps');
+    const connectedCard = page.locator(`[data-proxy-platform="${PLATFORM}"]`);
+    await expect(
+      connectedCard.getByText('Connected apps', { exact: true }),
+    ).toHaveCount(1);
+    const firstAppButton = connectedCard.getByRole('button', {
+      name: 'My linked GitHub',
+      exact: true,
+    });
+    const otherAppButton = connectedCard.getByRole('button', {
+      name: 'GitHub · Other user',
+      exact: true,
+    });
+    await expect(firstAppButton).toHaveCount(1);
+    await expect(otherAppButton).toHaveCount(1);
+    await connectedCard.scrollIntoViewIfNeeded();
+    await expect(firstAppButton).toBeInViewport();
+    await expect(otherAppButton).toBeInViewport();
+    await testInfo.attach('connected-principal-apps-chooser-desktop', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    const viewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    const sidebar = page.getByTestId('sidebar');
+    if (
+      (await sidebar.isVisible()) &&
+      (await sidebar.evaluate(node => getComputedStyle(node).opacity !== '0'))
+    )
+      await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+    await connectedCard.scrollIntoViewIfNeeded();
+    await expect(firstAppButton).toBeInViewport();
+    await expect(otherAppButton).toBeInViewport();
+    await testInfo.attach('connected-principal-apps-chooser-mobile', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize(viewport);
+    expect(requests.providerRequests).toHaveLength(chooserReads);
+    expect(requests.documentRequests).toHaveLength(chooserDocuments);
+    await firstAppButton.click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      principalSubject,
+    );
+    const restoredDirectory = await browse(page);
+    await expect(
+      restoredDirectory.getByText('Repositories', { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('iframe[title="App"]')).toHaveCount(0);
+    expect(requests.providerRequests).toHaveLength(chooserReads);
+    expect(requests.documentRequests).toHaveLength(chooserDocuments);
   });
 
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({
