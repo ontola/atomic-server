@@ -311,6 +311,7 @@ describe('isHostRequest', () => {
 describe('integration-proxy capabilities', () => {
   const minted = {
     capability: 'payload.sig',
+    connectionKey: 's1.grant',
     aud: 'https://proxy.example',
     exp: 1,
     connectionId: 'c1',
@@ -428,7 +429,11 @@ describe('proxyFetch', () => {
       req('proxyFetch', {
         url: 'https://proxy.example/proxy/c1/pets/pets',
         method: 'GET',
-        headers: { Authorization: 'Capability x', 'x-atomic-agent': 'a' },
+        headers: {
+          Authorization: 'Capability x',
+          'x-atomic-agent': 'a',
+          'x-connection-key': 's1.grant',
+        },
         ...extra,
       }),
       undefined,
@@ -459,6 +464,9 @@ describe('proxyFetch', () => {
     )[1];
     expect(init.credentials).toBe('omit');
     expect(init.redirect).toBe('error');
+    // The key grant reaches the proxy; it is the only way to open the
+    // connection's credential.
+    expect(new Headers(init.headers).get('x-connection-key')).toBe('s1.grant');
   });
 
   it('refuses another origin, a non-proxy path and bad methods', async () => {

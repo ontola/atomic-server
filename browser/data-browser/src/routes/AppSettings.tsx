@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
@@ -7,7 +7,6 @@ import { Button } from '../components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { DarkModeOption } from '../helpers/useDarkMode';
 import { Column, Row } from '../components/Row';
-import { Checkbox, CheckboxLabel } from '../components/forms/Checkbox';
 import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
@@ -21,11 +20,30 @@ import { useLocale } from '@components/LocaleContext';
 import { SUPPORTED_LOCALES } from '@helpers/preloadLocale';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { styled } from 'styled-components';
+import { isAtomicIdentifier } from '@tomic/react';
 import {
+  SettingCheckbox,
+  SettingField,
   SettingsGroup,
   SettingsSection,
   SettingsSearchProvider,
 } from '@components/Settings';
+// Web-only sections, out of the Flutter embed's first-use bundle.
+const AccountSettings = lazy(() =>
+  import('@components/Settings/AccountSettings').then(m => ({
+    default: m.AccountSettings,
+  })),
+);
+const DriveSettings = lazy(() =>
+  import('@components/Settings/DriveSettings').then(m => ({
+    default: m.DriveSettings,
+  })),
+);
+const SyncSettings = lazy(() =>
+  import('@components/Settings/SyncSettings').then(m => ({
+    default: m.SyncSettings,
+  })),
+);
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
@@ -34,6 +52,7 @@ import {
   showSettingsHeader,
   showSettingsSection,
 } from '../embed/settings';
+import { settingsKeywords } from '@components/Settings/settingsKeywords';
 
 /** Touch screens: focusing a field there raises the keyboard. */
 const isTouchDevice = () =>
@@ -44,9 +63,14 @@ export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
   validateSearch: (
     search: Record<string, unknown>,
-  ): { q?: string; section?: string } => ({
+  ): { q?: string; section?: string; drive?: string } => ({
     q: typeof search.q === 'string' ? search.q : undefined,
     section: typeof search.section === 'string' ? search.section : undefined,
+    // The drive the Sync section shows (`?section=sync&drive=`).
+    drive:
+      typeof search.drive === 'string' && isAtomicIdentifier(search.drive)
+        ? search.drive
+        : undefined,
   }),
   component: () => <AppSettings />,
   getParentRoute: () => appRoute,
@@ -79,14 +103,9 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
-  const { q, section } = AppSettingsRoute.useSearch();
-  const [searchQuery, setSearchQuery] = useState(
-    q ?? (section === 'ai' ? 'ai' : ''),
-  );
-  useEffect(
-    () => setSearchQuery(q ?? (section === 'ai' ? 'ai' : '')),
-    [q, section],
-  );
+  const { q, section, drive } = AppSettingsRoute.useSearch();
+  const [searchQuery, setSearchQuery] = useState(q ?? '');
+  useEffect(() => setSearchQuery(q ?? ''), [q]);
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 
@@ -101,9 +120,19 @@ const AppSettings: React.FunctionComponent = () => {
   // In the Flutter embed only part of the page applies (embed/settings.ts).
   const show = showAppearanceOption;
 
+  // One section open at a time; `?section=` picks the first.
+  const [openSection, setOpenSection] = useState<string | undefined>(section);
+  useEffect(() => setOpenSection(section), [section]);
+
   const searchContext = useMemo(
-    () => ({ query: searchQuery, parentMatched: false }),
-    [searchQuery],
+    () => ({
+      query: searchQuery,
+      parentMatched: false,
+      section,
+      openSection,
+      setOpenSection,
+    }),
+    [searchQuery, section, openSection],
   );
 
   const header = showSettingsHeader();
@@ -138,17 +167,32 @@ const AppSettings: React.FunctionComponent = () => {
         )}
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
+            <Suspense>
+              {showSettingsSection('account') && <AccountSettings />}
+              {showSettingsSection('drive') && <DriveSettings />}
+            </Suspense>
+            {showSettingsSection('sync') && (
+              <SettingsSection
+                label='Sync & devices'
+                id='sync'
+                childSearchKeywords={settingsKeywords.sync}
+              >
+                <Suspense>
+                  <SyncSettings requestedDrive={drive} />
+                </Suspense>
+              </SettingsSection>
+            )}
             {showSettingsSection('appearance') && (
               <SettingsSection
                 label='Appearance'
+                id='appearance'
                 // The only section in the embed: open from the start.
                 {...(header ? {} : { open: true, initialState: true })}
-                childSearchKeywords='sidebar icons pictures avatars language locale panels messages favorites shared with me templates ontology aichats hide templates'
+                childSearchKeywords={settingsKeywords.appearance}
               >
                 <Column gap='1rem'>
                   {show('theme') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>Theme</SubLabel>
+                    <SettingField label='Theme'>
                       <Row>
                         <Button
                           subtle={!(darkModeSetting === DarkModeOption.auto)}
@@ -170,11 +214,10 @@ const AppSettings: React.FunctionComponent = () => {
                           Light
                         </Button>
                       </Row>
-                    </Column>
+                    </SettingField>
                   )}
                   {show('navbarPosition') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>NavBar position</SubLabel>
+                    <SettingField label='NavBar position'>
                       <Row>
                         <Button
                           subtle={!navbarTop}
@@ -189,40 +232,32 @@ const AppSettings: React.FunctionComponent = () => {
                           Bottom
                         </Button>
                       </Row>
-                    </Column>
+                    </SettingField>
                   )}
                   {show('mainColor') && (
-                    <Column gap='0.5rem'>
-                      <SubLabel>Main color</SubLabel>
+                    <SettingField label='Main color'>
                       <MainColorPicker />
-                    </Column>
+                    </SettingField>
                   )}
                   {show('colorfulMode') && (
-                    <CheckboxLabel>
-                      <Checkbox
-                        checked={colorfulMode}
-                        onChange={setColorfulMode}
-                      />{' '}
-                      <span>Colorful mode</span>
-                    </CheckboxLabel>
+                    <SettingCheckbox
+                      checked={colorfulMode}
+                      onChange={setColorfulMode}
+                    >
+                      Colorful mode
+                    </SettingCheckbox>
                   )}
                   {show('sidebarIcons') && (
-                    <CheckboxLabel>
-                      <Checkbox
-                        checked={showSidebarIcons}
-                        onChange={setShowSidebarIcons}
-                      />{' '}
-                      <span>
-                        Show icons in the sidebar
-                        <SettingHint>
-                          Show icons and pictures next to items in the sidebar
-                        </SettingHint>
-                      </span>
-                    </CheckboxLabel>
+                    <SettingCheckbox
+                      checked={showSidebarIcons}
+                      onChange={setShowSidebarIcons}
+                      hint='Show icons and pictures next to items in the sidebar'
+                    >
+                      Show icons in the sidebar
+                    </SettingCheckbox>
                   )}
                   {show('language') && (
-                    <Column gap='0.5rem'>
-                      <label htmlFor='settings-language'>Language</label>
+                    <SettingField label='Language' htmlFor='settings-language'>
                       <BasicSelect
                         id='settings-language'
                         value={locale}
@@ -234,7 +269,7 @@ const AppSettings: React.FunctionComponent = () => {
                           </option>
                         ))}
                       </BasicSelect>
-                    </Column>
+                    </SettingField>
                   )}
                   <SettingsSection
                     label={show('panels') ? 'Panels & Templates' : 'Templates'}
@@ -242,58 +277,51 @@ const AppSettings: React.FunctionComponent = () => {
                     <Column gap='0.5rem'>
                       {show('panels') && (
                         <>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.Messages)}
-                              onChange={changePanelPref(Panel.Messages)}
-                            />{' '}
-                            <span>Show Messages panel</span>
-                          </CheckboxLabel>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.Favorites)}
-                              onChange={changePanelPref(Panel.Favorites)}
-                            />{' '}
-                            <span>Show Favorites panel</span>
-                          </CheckboxLabel>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.SharedWithMe)}
-                              onChange={changePanelPref(Panel.SharedWithMe)}
-                            />{' '}
-                            <span>Show Shared with me panel</span>
-                          </CheckboxLabel>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.Apps)}
-                              onChange={changePanelPref(Panel.Apps)}
-                            />{' '}
-                            <span>Show Apps panel</span>
-                          </CheckboxLabel>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.Ontologies)}
-                              onChange={changePanelPref(Panel.Ontologies)}
-                            />{' '}
-                            <span>Enable Ontology panel</span>
-                          </CheckboxLabel>
-                          <CheckboxLabel>
-                            <Checkbox
-                              checked={enabledPanels.has(Panel.AIChats)}
-                              onChange={changePanelPref(Panel.AIChats)}
-                            />{' '}
-                            <span>Enable AI Chats panel</span>
-                          </CheckboxLabel>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.Messages)}
+                            onChange={changePanelPref(Panel.Messages)}
+                          >
+                            Show Messages panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.Favorites)}
+                            onChange={changePanelPref(Panel.Favorites)}
+                          >
+                            Show Favorites panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.SharedWithMe)}
+                            onChange={changePanelPref(Panel.SharedWithMe)}
+                          >
+                            Show Shared with me panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.Apps)}
+                            onChange={changePanelPref(Panel.Apps)}
+                          >
+                            Show Apps panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.Ontologies)}
+                            onChange={changePanelPref(Panel.Ontologies)}
+                          >
+                            Enable Ontology panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
+                            checked={enabledPanels.has(Panel.AIChats)}
+                            onChange={changePanelPref(Panel.AIChats)}
+                          >
+                            Enable AI Chats panel
+                          </SettingCheckbox>
                         </>
                       )}
                       {show('hideTemplates') && (
-                        <CheckboxLabel>
-                          <Checkbox
-                            checked={hideTemplates}
-                            onChange={setHideTemplates}
-                          />{' '}
-                          <span>Hide templates on new resource page</span>
-                        </CheckboxLabel>
+                        <SettingCheckbox
+                          checked={hideTemplates}
+                          onChange={setHideTemplates}
+                        >
+                          Hide templates on new resource page
+                        </SettingCheckbox>
                       )}
                     </Column>
                   </SettingsSection>
@@ -303,42 +331,38 @@ const AppSettings: React.FunctionComponent = () => {
             {showSettingsSection('accessibility') && (
               <SettingsSection
                 label='Accessibility'
-                childSearchKeywords='enable disable page transition animations view transitions motion'
+                id='accessibility'
+                childSearchKeywords={settingsKeywords.accessibility}
               >
                 <Column gap='0.5rem'>
-                  <CheckboxLabel>
-                    <Checkbox
-                      checked={viewTransitionsEnabled}
-                      onChange={checked => setViewTransitionsEnabled(checked)}
-                    />{' '}
-                    <span>
-                      Enable page transition animations (experimental, known to
-                      misbehave outside Chromium on desktop)
-                    </span>
-                  </CheckboxLabel>
-                  <CheckboxLabel>
-                    <Checkbox
-                      checked={sidebarKeyboardDndEnabled}
-                      onChange={checked =>
-                        setSidebarKeyboardDndEnabled(checked)
-                      }
-                    />{' '}
-                    <span>Enable keyboard drag & drop in sidebar</span>
-                  </CheckboxLabel>
+                  <SettingCheckbox
+                    checked={viewTransitionsEnabled}
+                    onChange={checked => setViewTransitionsEnabled(checked)}
+                  >
+                    Enable page transition animations (experimental, known to
+                    misbehave outside Chromium on desktop)
+                  </SettingCheckbox>
+                  <SettingCheckbox
+                    checked={sidebarKeyboardDndEnabled}
+                    onChange={checked => setSidebarKeyboardDndEnabled(checked)}
+                  >
+                    Enable keyboard drag & drop in sidebar
+                  </SettingCheckbox>
                 </Column>
               </SettingsSection>
             )}
             {showSettingsSection('notifications') && (
               <SettingsSection
                 label='Notifications'
-                childSearchKeywords='notify notifications alerts messages comments replies push'
+                id='notifications'
+                childSearchKeywords={settingsKeywords.notifications}
               >
                 <NotificationSettings />
               </SettingsSection>
             )}
             {showSettingsSection('virtualDrive') &&
               isVirtualDriveAvailable() && (
-                <SettingsSection label='Virtual drive'>
+                <SettingsSection label='Virtual drive' id='virtual-drive'>
                   <VirtualDriveSettings />
                 </SettingsSection>
               )}
@@ -441,15 +465,4 @@ const ClearButton = styled.button`
   &:hover {
     color: ${p => p.theme.colors.text};
   }
-`;
-
-const SettingHint = styled.span`
-  display: block;
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const SubLabel = styled.span`
-  font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
 `;

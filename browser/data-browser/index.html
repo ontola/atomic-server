@@ -298,6 +298,60 @@
           --orbit-period: 6s;
         }
       }
+
+      /* Shown by the boot error script below when the app crashes before it
+         has drawn anything. Plain markup and no translations on purpose: it
+         has to work when the app and its catalogs never loaded. */
+      #boot-error {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483001;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background-color: var(--background-color);
+        color: var(--text-splash);
+        font:
+          400 1rem/1.5 'Open Sans',
+          'Helvetica Neue',
+          sans-serif;
+      }
+
+      #boot-error > div {
+        max-width: 38rem;
+        width: 100%;
+      }
+
+      #boot-error h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.4rem;
+      }
+
+      #boot-error p {
+        margin: 0 0 0.75rem;
+      }
+
+      #boot-error pre {
+        margin: 0 0 1rem;
+        padding: 0.75rem;
+        overflow: auto;
+        max-height: 40vh;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.85rem;
+        border: 1px solid currentColor;
+        border-radius: 0.5rem;
+      }
+
+      #boot-error button {
+        font: inherit;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
     </style>
     <!-- Meta tags and code added by Atomic-Server -->
     <!-- { inject_html_head } -->
@@ -391,6 +445,64 @@
       <p class="boot-caption">Loading __APP_NAME__…</p>
     </div>
     <div id="root"></div>
+    <script>
+      // A crash while the app starts used to leave the splash spinning for
+      // good. While the splash still covers the page, show the error instead.
+      // Uncaught exceptions show at once; a rejected promise only if the
+      // splash is still up after a few seconds, as a stray one is harmless.
+      (function () {
+        function splashUp() {
+          var splash = document.getElementById('boot-splash');
+          return (
+            !!splash && splash.className.indexOf('boot-splash-leaving') === -1
+          );
+        }
+
+        function show(reason) {
+          if (document.getElementById('boot-error')) return;
+          var message = String(
+            (reason && (reason.stack || reason.message)) || reason || 'Unknown error',
+          );
+          var box = document.createElement('div');
+          box.id = 'boot-error';
+          box.setAttribute('role', 'alert');
+          var inner = document.createElement('div');
+          var title = document.createElement('h1');
+          title.textContent = 'Could not start the app';
+          var hint = document.createElement('p');
+          hint.textContent =
+            'Something went wrong while loading. Some features need a secure ' +
+            'connection: open this page over https or on localhost, or reload ' +
+            'to try again.';
+          var details = document.createElement('pre');
+          details.textContent = message.slice(0, 2000);
+          var reload = document.createElement('button');
+          reload.type = 'button';
+          reload.textContent = 'Reload';
+          reload.onclick = function () {
+            location.reload();
+          };
+          inner.appendChild(title);
+          inner.appendChild(hint);
+          inner.appendChild(details);
+          inner.appendChild(reload);
+          box.appendChild(inner);
+          document.body.appendChild(box);
+        }
+
+        window.addEventListener('error', function (event) {
+          // Resource load failures have no message and are handled above.
+          if (!event.message || !splashUp()) return;
+          show(event.error || event.message);
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+          setTimeout(function () {
+            if (splashUp()) show(event.reason);
+          }, 4000);
+        });
+      })();
+    </script>
 
     <script type="module" src="/src/index.tsx"></script>
   </body>

@@ -116,3 +116,15 @@ describe('matchActionsForPalette', () => {
     ).toContain('delete');
   });
 });
+
+describe('settings in the palette', () => {
+  it('finds a settings section by the words its own search uses', async () => {
+    const { appActions } = await import('./appActions');
+    const ids = (q: string) =>
+      matchActionsForPalette(q, appActions, ctx).map(a => a.id);
+
+    expect(ids('uitloggen')).toContain('settings-profile');
+    expect(ids('passkey')).toContain('settings-account');
+    expect(ids('thema')).toContain('settings-appearance');
+  });
+});

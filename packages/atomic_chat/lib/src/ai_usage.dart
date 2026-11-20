@@ -140,7 +140,7 @@ class _AllAiModelsPageState extends State<AllAiModelsPage> {
           ),
           Expanded(
             child: all == null && !_failed
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: shared.AtomicSpinner())
                 : _failed
                     ? const Center(child: Text('Could not load the models.'))
                     : ListView.builder(

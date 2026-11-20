@@ -4,6 +4,7 @@ use crate::{appstate::AppState, errors::AtomicServerResult, helpers::get_client_
 use actix_web::http::header::{ContentDisposition, DispositionParam, DispositionType};
 use actix_web::{web, HttpResponse};
 use atomic_lib::agents::ForAgent;
+use atomic_lib::db::drive_prefix_from_subject;
 use atomic_lib::errors::AtomicResult;
 use atomic_lib::storelike::Query;
 use atomic_lib::values::SubResource;
@@ -179,7 +180,14 @@ impl<'a> CSVExporter<'a> {
             include_nested: true,
             exclude_trashed: false,
             for_agent: self.agent.clone(),
-            drive: None,
+            // Indexed queries must be drive-scoped. Same derivation as the
+            // forms and collections paths: the resource's `drive` propval,
+            // else the prefix of its subject.
+            drive: Some(
+                resource
+                    .get_drive()
+                    .unwrap_or_else(|| drive_prefix_from_subject(resource.get_subject())),
+            ),
             aggregation: None,
             expression_filters: Vec::new(),
         };
@@ -319,5 +327,127 @@ impl<'a> CSVExporter<'a> {
         } else {
             no_quotes
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atomic_lib::test_utils::init_store;
+
+    /// Exporting a Table runs a `parent` query for its rows. Indexed queries
+    /// must be drive-scoped, so this fails with "Indexed queries require a
+    /// drive scope" if the exporter leaves `Query::drive` unset.
+    #[tokio::test]
+    async fn exports_table_rows_to_csv() {
+        let store = init_store().await;
+
+        let mut property = Resource::new_instance(urls::PROPERTY, &store)
+            .await
+            .unwrap();
+        property
+            .set(urls::SHORTNAME.into(), Value::Slug("email".into()), &store)
+            .await
+            .unwrap();
+        property
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("An email address".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        property
+            .set(
+                urls::DATATYPE_PROP.into(),
+                Value::AtomicUrl(urls::STRING.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        property.save_locally(&store).await.unwrap();
+        let property_subject = property.get_subject().to_string();
+
+        let mut class = Resource::new_instance(urls::CLASS, &store).await.unwrap();
+        class
+            .set(
+                urls::SHORTNAME.into(),
+                Value::Slug("contact".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        class
+            .set(
+                urls::DESCRIPTION.into(),
+                Value::Markdown("A contact".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        class
+            .set(
+                urls::REQUIRES.into(),
+                Value::ResourceArray(vec![property_subject.clone().into()]),
+                &store,
+            )
+            .await
+            .unwrap();
+        class.save_locally(&store).await.unwrap();
+        let class_subject = class.get_subject().to_string();
+
+        let mut table = Resource::new_instance(urls::TABLE, &store).await.unwrap();
+        table
+            .set(urls::NAME.into(), Value::String("Contacts".into()), &store)
+            .await
+            .unwrap();
+        table
+            .set(
+                urls::CLASSTYPE_PROP.into(),
+                Value::AtomicUrl(class_subject.clone().into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        table.save_locally(&store).await.unwrap();
+        let table_subject = table.get_subject().to_string();
+
+        for email in ["alice@example.com", "bob@example.com"] {
+            let mut row = Resource::new_instance(&class_subject, &store)
+                .await
+                .unwrap();
+            row.set(
+                urls::PARENT.into(),
+                Value::AtomicUrl(table_subject.clone().into()),
+                &store,
+            )
+            .await
+            .unwrap();
+            row.set(
+                property_subject.clone(),
+                Value::String(email.into()),
+                &store,
+            )
+            .await
+            .unwrap();
+            row.save_locally(&store).await.unwrap();
+        }
+
+        let exporter = CSVExporter {
+            store: &store,
+            agent: &ForAgent::Sudo,
+            display_refs_as_name: false,
+        };
+
+        let (filename, csv) = exporter.resource_to_csv(&table_subject).await.unwrap();
+
+        assert_eq!(filename, "Contacts.csv");
+        let mut lines = csv.lines();
+        let header = lines.next().unwrap();
+        assert!(header.starts_with("subject,email"), "{header}");
+        let rows: Vec<&str> = lines.collect();
+        assert_eq!(rows.len(), 2, "one CSV line per table row: {csv}");
+        assert!(csv.contains("alice@example.com"), "{csv}");
+        assert!(csv.contains("bob@example.com"), "{csv}");
     }
 }

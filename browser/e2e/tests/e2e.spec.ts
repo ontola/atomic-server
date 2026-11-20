@@ -15,7 +15,6 @@ import {
   changeDrive,
   contextMenu,
   contextMenuClick,
-  currentDialogOkButton,
   currentDriveTitle,
   openCurrentDrive,
   editProfileAndCommit,
@@ -456,25 +455,6 @@ test.describe('data-browser', async () => {
     await expect(page2.locator(`text=${teststring2}`)).toBeVisible();
   });
 
-  test('bookmark', async ({ page }) => {
-    await newResource('bookmark', page);
-
-    const input = page.locator('[placeholder="https\\:\\/\\/example\\.com"]');
-    await input.click();
-    await input.fill('https://ontola.io');
-    await page.locator(currentDialogOkButton).click();
-
-    // Verify the bookmark imported page content. Use a substring + role
-    // pairing that the live site is unlikely to change in casing or layout
-    // (the `:text-is("Full-service")` strict match was already brittle and
-    // fails now that the site uses "full-service" inline rather than as its
-    // own element).
-    await expect(
-      page.getByRole('heading', { name: /software development/i }).first(),
-      'Page contents not properly imported',
-    ).toBeVisible();
-  });
-
   // Resource-level favorites. Favoriting writes the `favorites` ResourceArray
   // on the user's PRIVATE DRIVE (home index), which the sidebar's bottom
   // "Favorites" panel reads back. Requires a server whose default store defines
@@ -611,13 +591,11 @@ test.describe('data-browser', async () => {
     const initialDriveTitle = await currentDriveTitle(page).textContent();
 
     await openConfigureDrive(page);
-    await expect(
-      page.getByRole('heading', { name: 'My drives' }),
-    ).toBeVisible();
+    await expect(page.getByText('My drives', { exact: true })).toBeVisible();
     // Personal and saved drives don't count as "recently visited"; with no
     // other drives opened yet the section hides entirely.
     await expect(
-      page.getByRole('heading', { name: 'Recently visited' }),
+      page.getByText('Recently visited', { exact: true }),
     ).not.toBeVisible();
 
     const { driveTitle: secondDriveTitle } = await newDrive(page);
@@ -645,7 +623,7 @@ test.describe('data-browser', async () => {
     // on its own. Measured here, four workers on a four-core box: the whole
     // body is 17.5 to 18.6s, of which `devDrive` alone is 11.5s, against 7.4s
     // when the box is idle. Run 4714 on CI spent the 60s default before the
-    // `/app/agent` render at the end, and the wall then named that page's
+    // settings render at the end, and the wall then named that page's
     // heading assertion, which had 10s of its own and never got to use it, plus
     // a `Protocol error ... session closed` as the page was torn down. Same
     // trap as run 4686's two calendar reds.
@@ -663,7 +641,7 @@ test.describe('data-browser', async () => {
     await otherContext.close();
     await openConfigureDrive(page);
     await expect(
-      page.getByRole('heading', { name: 'Recently visited' }),
+      page.getByText('Recently visited', { exact: true }),
     ).toBeVisible();
   });
 

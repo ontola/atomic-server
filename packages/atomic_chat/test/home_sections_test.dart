@@ -44,6 +44,23 @@ void main() {
     expect(layout.hidden, {HomeSection.drives});
   });
 
+  test('Drives and Activity start off, also next to an older layout',
+      () async {
+    HomeLayout.fresh = HomeLayout.closed;
+    SharedPreferences.setMockInitialValues({});
+    expect((await HomeLayout.load()).hidden, HomeLayout.offByDefault);
+    SharedPreferences.setMockInitialValues({
+      homeLegacyHiddenKey: ['messages'],
+    });
+    expect((await HomeLayout.load()).hidden,
+        {...HomeLayout.offByDefault, HomeSection.messages});
+  });
+
+  test('Reset to default leaves Drives and Activity off', () {
+    final reset = const HomeLayout().reset();
+    expect(reset.hidden, HomeLayout.offByDefault);
+  });
+
   test('persists per device', () async {
     SharedPreferences.setMockInitialValues({});
     await const HomeLayout()

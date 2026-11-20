@@ -368,7 +368,9 @@ it.each([true, false])(
         target: { value: 'test-secret' },
       });
     });
-    expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+    expect(state.navigate).toHaveBeenCalledWith(
+      '/app/settings?section=account',
+    );
     expect(state.restoreVault).not.toHaveBeenCalled();
   },
 );
@@ -529,7 +531,7 @@ it('signs out of the account only once the user picks the secret', async () => {
   });
   expect(logoutManagedSession).toHaveBeenCalledTimes(1);
   expect(state.setAgent).toHaveBeenCalled();
-  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+  expect(state.navigate).toHaveBeenCalledWith('/app/settings?section=account');
 });
 
 it('signs in without asking when the secret is the account agent', async () => {
@@ -544,5 +546,5 @@ it('signs in without asking when the secret is the account agent', async () => {
     });
   });
   expect(logoutManagedSession).not.toHaveBeenCalled();
-  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+  expect(state.navigate).toHaveBeenCalledWith('/app/settings?section=account');
 });

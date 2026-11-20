@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:atomic_flutter/atomic_flutter.dart'
-    show AppColorsExt, ErrorText, HoldFan, HoldFanItem, SectionHeaderStyle;
+    show AppColorsExt, ErrorText, HoldFan, HoldFanItem, SectionHeaderStyle, AtomicSpinner;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -882,7 +882,7 @@ class DriveTreeState extends State<DriveTree> {
         child: SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2)),
+            child: AtomicSpinner()),
       ),
     );
   }

@@ -6,7 +6,6 @@ import {
   FaPlus,
   FaPowerOff,
   FaRightLeft,
-  FaUser,
 } from 'react-icons/fa6';
 import { useSettings } from '../helpers/AppSettings';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -78,7 +77,14 @@ export function useAppMenuItems(): {
       id: 'app-open-settings',
       label: 'Open settings',
       icon: <FaGear />,
-      keywords: ['preferences', 'theme', 'language'],
+      keywords: [
+        'preferences',
+        'theme',
+        'language',
+        'account',
+        'profile',
+        'drive',
+      ],
       searchOnly: true,
       onClick: () => navigate(paths.appSettings),
     },
@@ -108,14 +114,6 @@ export function useAppMenuItems(): {
       keywords: ['sync', 'devices', 'backup', 'cloud', 'server'],
       searchOnly: true,
       onClick: () => navigate(paths.sync),
-    },
-    {
-      id: 'app-user-settings',
-      label: 'Open user settings',
-      icon: <FaUser />,
-      keywords: ['account', 'profile', 'agent'],
-      searchOnly: true,
-      onClick: () => navigate(paths.agentSettings),
     },
     {
       id: 'app-feedback',

@@ -1,9 +1,89 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/lib';
-import { deviceHasDriveData, driveHasServer } from './driveData';
+import {
+  deviceHasDriveData,
+  driveHasServer,
+  keepUnhostedRestoreLocal,
+} from './driveData';
 import { isOriginWithoutNode } from './originNode';
+import { getManagedEnrollments } from './managed/enrollmentApi';
+import { fetchManagedInfo, EMPTY_NODE_INFO } from './managedServer';
 
 vi.mock('./originNode', () => ({ isOriginWithoutNode: vi.fn() }));
+vi.mock('./managed/enrollmentApi', () => ({ getManagedEnrollments: vi.fn() }));
+vi.mock('./managedServer', async importOriginal => ({
+  ...(await importOriginal<typeof import('./managedServer')>()),
+  fetchManagedInfo: vi.fn(),
+}));
+
+describe('keepUnhostedRestoreLocal', () => {
+  const managedNode = { ...EMPTY_NODE_INFO, managed: true };
+
+  const store = () => ({
+    normalizeSubject: (s: string) => s,
+    getServerUrl: () => 'https://node1.example',
+    registerLocalOnlyDrive: vi.fn(),
+  });
+  const enrollment = (drive_subject: string, status = 'Active') => ({
+    drive_subject,
+    status,
+    agent_subject: null,
+  });
+
+  it.each([
+    ['no enrollment', []],
+    ['another drive only', [enrollment('did:ad:other')]],
+    ['a disabled enrollment', [enrollment('did:ad:drive', 'Disabled')]],
+  ])('registers the drive local-only with %s', async (_, list) => {
+    vi.mocked(fetchManagedInfo).mockResolvedValue(managedNode);
+    vi.mocked(getManagedEnrollments).mockResolvedValue(list);
+    const s = store();
+
+    await keepUnhostedRestoreLocal(s as unknown as Store, 'did:ad:drive');
+    expect(getManagedEnrollments).toHaveBeenCalledWith(true);
+    expect(s.registerLocalOnlyDrive).toHaveBeenCalledWith('did:ad:drive');
+  });
+
+  it('leaves a hosted drive on its node', async () => {
+    vi.mocked(fetchManagedInfo).mockResolvedValue(managedNode);
+    vi.mocked(getManagedEnrollments).mockResolvedValue([
+      enrollment('did:ad:drive'),
+    ]);
+    const s = store();
+
+    await keepUnhostedRestoreLocal(s as unknown as Store, 'did:ad:drive');
+    expect(s.registerLocalOnlyDrive).not.toHaveBeenCalled();
+  });
+
+  it('does not read a failed lookup as "not hosted"', async () => {
+    vi.mocked(fetchManagedInfo).mockResolvedValue(managedNode);
+    vi.mocked(getManagedEnrollments).mockRejectedValue(new Error('offline'));
+    const s = store();
+
+    await keepUnhostedRestoreLocal(s as unknown as Store, 'did:ad:drive');
+    expect(s.registerLocalOnlyDrive).not.toHaveBeenCalled();
+  });
+
+  // Enrollments only list Cloud Server hosting. A self-hosted server has none
+  // either way, and a server that cannot be asked reads as "not managed" too.
+  it('leaves a drive on a non-managed server alone without a confirmed absence', async () => {
+    vi.mocked(fetchManagedInfo).mockResolvedValue(EMPTY_NODE_INFO);
+    vi.mocked(getManagedEnrollments).mockResolvedValue([]);
+    const s = store();
+
+    await keepUnhostedRestoreLocal(s as unknown as Store, 'did:ad:drive');
+    expect(s.registerLocalOnlyDrive).not.toHaveBeenCalled();
+  });
+
+  it('skips the lookup when the node already said the drive is not there', async () => {
+    vi.mocked(getManagedEnrollments).mockClear();
+    const s = store();
+
+    await keepUnhostedRestoreLocal(s as unknown as Store, 'did:ad:drive', true);
+    expect(getManagedEnrollments).not.toHaveBeenCalled();
+    expect(s.registerLocalOnlyDrive).toHaveBeenCalledWith('did:ad:drive');
+  });
+});
 
 describe('refreshing drive availability', () => {
   it('rechecks an earlier failure after data arrives instead of retaining the miss', async () => {
