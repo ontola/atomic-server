@@ -91,6 +91,7 @@ import {
 } from '../../helpers/sentry';
 import { SyncProviderAccount } from '../../components/Cloud/SyncProviderAccount';
 import {
+  accountAddress,
   getManagedAccount,
   type ManagedAccount,
 } from '../../helpers/managed/session';
@@ -147,6 +148,7 @@ import { paths } from '../../routes/paths';
 import { useSettings } from '../../helpers/AppSettings';
 import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
 import { useAccountAddress } from '../SideBar/useAccountAddress';
+import { pickAccountAddress } from '../SideBar/accountRowName';
 import { serverURLStorage } from '../../helpers/serverURLStorage';
 
 function nodeDidToRaw(nodeDid: string): string | undefined {
@@ -1390,7 +1392,11 @@ export function SyncSettings({
    * never heard of a portal.
    */
   // Never the opaque `acct_` id: the address, else a generic label.
-  const accountAddressLabel = useAccountAddress();
+  const knownAddress = useAccountAddress();
+  const accountAddressLabel = pickAccountAddress(
+    managedAccount ? accountAddress(managedAccount) : undefined,
+    knownAddress,
+  );
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;
