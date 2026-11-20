@@ -13643,3 +13643,7 @@ msgstr "Verbrauchte Credits: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Profil bearbeiten"
+
+#: src/components/Toaster.tsx
+msgid "<0/> Report"
+msgstr "<0/> Melden"

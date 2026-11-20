@@ -102,6 +102,12 @@ export interface OutboxEntry {
    *  scheduler stops waking for it. Cleared by `markDirty` — a fresh local edit
    *  is a new signal worth re-attempting (rights may have since been granted). */
   blocked?: boolean;
+  /** Set once the person was told this entry could not sync. Persisted, unlike
+   *  `blocked`: a reload retries the entry, it blocks again for the same
+   *  reason, and without this it was announced again on every page load. The
+   *  entry still retries each session; only the announcement is once. Cleared
+   *  by a fresh edit (`markDirty`), so a new failed attempt is announced. */
+  blockedNotified?: boolean;
   /** Set once a finished drive resync has re-armed this entry after the server
    *  refused it for a missing parent. One automatic re-arm per entry: if the
    *  resync did not deliver the parent, a second block is final until the next
@@ -502,6 +508,7 @@ interface PersistedEntry {
   signedGenesis?: unknown;
   signedDestroy?: unknown;
   baseVersion?: string;
+  blockedNotified?: boolean;
 }
 
 export class LocalOutbox {
@@ -826,6 +833,8 @@ export class LocalOutbox {
         existing.rearmedAfterResync = false;
       }
 
+      existing.blockedNotified = undefined;
+
       this.changed(subject);
 
       return;
@@ -936,6 +945,8 @@ export class LocalOutbox {
       entry.blocked = false;
       entry.failures = 0;
     }
+
+    entry.blockedNotified = undefined;
 
     this.entries.set(subject, entry);
     this.changed(subject);
@@ -1533,6 +1544,7 @@ function toPersisted(e: OutboxEntry): PersistedEntry {
       ? commitToJsonADObject(e.signedDestroy)
       : undefined,
     baseVersion: e.baseVersion,
+    blockedNotified: e.blockedNotified ? true : undefined,
   };
 }
 
@@ -1588,6 +1600,7 @@ function parseEntry(p: unknown): OutboxEntry | undefined {
     signedDestroy,
     baseVersion:
       typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
+    blockedNotified: obj.blockedNotified === true ? true : undefined,
   };
 }
 
