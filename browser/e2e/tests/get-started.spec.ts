@@ -174,7 +174,7 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   await expect(
     dialog.getByRole('heading', { name: 'Connect a device' }),
   ).toBeVisible();
-  await expect(dialog).toContainText('saved on this device');
+  await expect(dialog).toContainText('Only this browser can open your work');
   await expect(page).toHaveURL(drive);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
