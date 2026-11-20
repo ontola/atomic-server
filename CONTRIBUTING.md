@@ -350,7 +350,7 @@ Note:
 ### CI/CD pipeline
 
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
-- Github Action for green `develop`: deploy staging, then production + live docs, and upload to TestFlight and Play internal testing (`deploy_staging.yml`, `flutter-develop.yml`)
+- Github Action for green `develop`: ask atomic-saas to deploy atomic.place, deploy staging, then atomicdata.dev + live docs, and upload to TestFlight and Play internal testing (`deploy_staging.yml`, `flutter-develop.yml`)
 - Github Action for `tag`: create release + publish binaries + crates.io + npm + Docker (no deploy)
 - Docker tags should include immutable release tags such as `0.41.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
 

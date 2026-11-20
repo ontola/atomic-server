@@ -1,4 +1,4 @@
-name: "Deploy develop: staging, then production"
+name: "Deploy develop: atomic.place, staging, then atomicdata.dev"
 
 # Production follows green `develop`, the same commit staging just took. Staging
 # is the canary: deployment.yml health-checks the host and rolls back, so a
@@ -66,6 +66,32 @@ jobs:
             echo "Skipping staging: successful run $RUN_SHA was superseded by $tip"
             echo 'current=false' >> "$GITHUB_OUTPUT"
           fi
+
+  # atomic.place is the production that matters. Its deploy lives in
+  # ontola/atomic-saas, which embeds this repo; tell it a new green develop
+  # exists. Independent of staging.atomicdata.dev on purpose: a broken staging
+  # host must not hold atomic.place back. The saas gate re-reads which develop
+  # commit is green itself and requires its own main to be green too.
+  atomic-place:
+    needs: check-current-tip
+    if: needs.check-current-tip.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Ask atomic-saas to deploy atomic.place
+        env:
+          GH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::ATOMIC_SAAS_DISPATCH_TOKEN is not set; atomic.place will only pick up $SHA on its daily schedule."
+            exit 1
+          fi
+          gh api repos/ontola/atomic-saas/dispatches \
+            -f event_type=atomic-server-develop-green \
+            -f "client_payload[sha]=$SHA"
+          echo "Asked atomic-saas to deploy atomic.place with atomic-server develop $SHA." >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:
     needs: check-current-tip

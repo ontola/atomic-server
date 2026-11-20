@@ -85,8 +85,9 @@ Remove planning documents that are completed.
 
 ## Git
 
-Default branch is `develop`. Open PRs against it. A green `develop` goes to
-staging, then (once staging is healthy and the commit is still the tip) to
+Default branch is `develop`. Open PRs against it. A green `develop` tip asks
+ontola/atomic-saas to deploy atomic.place (its own gate also requires saas
+`main` green), and goes to staging, then (once staging is healthy and the commit is still the tip) to
 production and the live docs, and to TestFlight and Google Play internal
 testing. Store releases (App Store, Play production) stay manual. Release tags
 are plain `vX.Y.Z` (no pre-release suffixes), pushed only by the owner; they
