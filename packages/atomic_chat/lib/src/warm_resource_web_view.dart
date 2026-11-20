@@ -71,6 +71,17 @@ bool acceptsChannelMessage(String expected, String raw) =>
 String channelReadyMessage(String token) =>
     '{"token":${jsonEncode(token)},"method":"ready"}';
 
+/// [script] as the app runs it in its own page. The channel only takes
+/// messages that carry the page's token ([acceptsChannelMessage]), so the
+/// `AtomicFlutter` a script posts its answers to (`revealed`, `flushed`,
+/// `painted`) is one that adds it. Without it those answers were dropped,
+/// and every warm open waited out the 2 s reveal cap, every leave the 2 s
+/// flush timeout.
+String withChannelScript(String script, String token) =>
+    '(function(AtomicFlutter){$script\n})({postMessage:function(m){'
+    'window.AtomicFlutter.postMessage('
+    '${jsonEncode('{"token":${jsonEncode(token)},')}+String(m).slice(1))}});';
+
 /// Makes a [WarmPage] that sends its messages to [onMessage] from the start
 /// (the page asks the store for the agent while it boots).
 typedef WarmPageBuilder = Future<WarmPage> Function(
@@ -79,7 +90,9 @@ typedef WarmPageBuilder = Future<WarmPage> Function(
 /// The embedded renderer in a real web view. [create] starts the load; the
 /// cold path of a [ResourceView] and the [WarmResourceWebView] both use it.
 class WebViewEmbedPage implements WarmPage {
-  WebViewEmbedPage._(this.controller);
+  WebViewEmbedPage._(this.controller, this._token);
+
+  final String _token;
 
   final WebViewController controller;
 
@@ -185,7 +198,7 @@ class WebViewEmbedPage implements WarmPage {
     if (!Platform.isMacOS) {
       unawaited(controller.setBackgroundColor(Colors.transparent));
     }
-    page = WebViewEmbedPage._(controller)
+    page = WebViewEmbedPage._(controller, token)
       .._onMessage = onMessage
       .._onLoaded = onLoaded;
     // Debug and profile builds can be inspected from chrome://inspect (the
@@ -239,7 +252,8 @@ class WebViewEmbedPage implements WarmPage {
   }
 
   @override
-  Future<void> runJavaScript(String script) => controller.runJavaScript(script);
+  Future<void> runJavaScript(String script) =>
+      controller.runJavaScript(withChannelScript(script, _token));
 
   @override
   Future<Object> runJavaScriptReturningResult(String script) =>

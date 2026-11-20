@@ -25,4 +25,15 @@ void main() {
     expect(a, hasLength(32));
     expect(newChannelToken(), isNot(newChannelToken()));
   });
+
+  test("the app's own scripts post with the token", () {
+    // `revealed` and `flushed` were dropped without it: every warm open
+    // waited out the reveal cap.
+    final js = withChannelScript(
+        'AtomicFlutter.postMessage(JSON.stringify({method:"flushed"}))',
+        'abc123');
+    expect(js, startsWith('(function(AtomicFlutter){'));
+    expect(js, contains('window.AtomicFlutter.postMessage('));
+    expect(js, contains(r'"{\"token\":\"abc123\","+String(m).slice(1)'));
+  });
 }
