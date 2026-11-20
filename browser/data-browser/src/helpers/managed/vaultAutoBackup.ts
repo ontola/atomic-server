@@ -33,6 +33,9 @@ import {
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
+import { isHostedDistribution } from '../managedServer';
+import { getManagedApiBase } from './api';
+import { canHoldProviderCookie } from './providerCookie';
 import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { asError } from '@tomic/react';
 
@@ -111,9 +114,11 @@ const OPT_OUT_KEY = 'atomic.vault.optOut';
  * which is the scope the choice was made in. Without this, every sign-in would
  * switch back on the thing the user just switched off.
  */
-function readOptOuts(): Set<string> {
+const OPT_IN_KEY = 'atomic.vault.optIn';
+
+function readDrives(key: string): Set<string> {
   try {
-    const raw = localStorage.getItem(OPT_OUT_KEY);
+    const raw = localStorage.getItem(key);
 
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
@@ -121,21 +126,43 @@ function readOptOuts(): Set<string> {
   }
 }
 
-export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
-  const drives = readOptOuts();
-
-  if (optedOut) drives.add(driveSubject);
-  else drives.delete(driveSubject);
-
+function writeDrives(key: string, drives: Set<string>): void {
   try {
-    localStorage.setItem(OPT_OUT_KEY, JSON.stringify([...drives]));
+    localStorage.setItem(key, JSON.stringify([...drives]));
   } catch {
     // Storage disabled: the choice lasts the session, which is all we can do.
   }
 }
 
+/** Turning backup on by hand lifts an opt-out and, off the service's site, is the opt-in. */
+export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
+  for (const [key, member] of [
+    [OPT_OUT_KEY, optedOut],
+    [OPT_IN_KEY, !optedOut],
+  ] as const) {
+    const drives = readDrives(key);
+
+    if (member) drives.add(driveSubject);
+    else drives.delete(driveSubject);
+
+    writeDrives(key, drives);
+  }
+}
+
+/**
+ * Whether automatic backup stays away from `driveSubject`: switched off on
+ * purpose, or not yet switched on by hand. Only the service's own site (the
+ * cookie origin) and the hosted app turn it on by themselves after sign-in; a
+ * self-hosted node sends a person's data to the service only after a click on
+ * the Vault's "turn on backup".
+ */
 export function isVaultOptedOut(driveSubject: string): boolean {
-  return readOptOuts().has(driveSubject);
+  if (readDrives(OPT_OUT_KEY).has(driveSubject)) return true;
+
+  const automatic =
+    canHoldProviderCookie(getManagedApiBase()) || isHostedDistribution();
+
+  return !automatic && !readDrives(OPT_IN_KEY).has(driveSubject);
 }
 
 const defaultDeps: VaultAutoBackupDeps = {
