@@ -64,12 +64,14 @@ function portalOrigin(): string | null {
  */
 export async function signInAccountWithAgent(
   agent: Agent | undefined,
-  { proven = false }: { proven?: boolean } = {},
+  { proven = false, retry = false }: { proven?: boolean; retry?: boolean } = {},
 ): Promise<boolean> {
   const subject = agent?.subject;
   if (!agent || !subject) return false;
   if (!hasManagedApi() || getManagedDeviceToken()) return false;
   if (!canHoldProviderCookie(portalOrigin())) return false;
+  // A pasted secret is an explicit try, so it may be repeated.
+  if (retry) attempted.delete(subject);
   if (attempted.has(subject)) return false;
   if (!proven && !knownAccountIdentity(subject)) return false;
 
