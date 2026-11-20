@@ -1,3 +1,4 @@
+import { rowFromLoroSnapshot } from './test-client-db-row.js';
 import { enableLoro } from './loro-loader.js';
 import { describe, it, vi, afterEach } from 'vitest';
 import { Resource, Store, core, Core, Datatype } from './index.js';
@@ -410,7 +411,7 @@ describe('Store', () => {
       blake3Hash: async () => new Uint8Array(32),
       putBlob: async () => undefined,
       flush: async () => undefined,
-      putResourceWithSnapshot: async () => undefined,
+      putLoroSnapshot: async () => undefined,
     };
     const [subject] = await store.uploadFiles(
       [new File(['hello'], 'hello.txt')],
@@ -453,11 +454,11 @@ describe('Store', () => {
       resource.getLoroDoc()!.export({ mode: 'snapshot' }),
       true,
     );
-    const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+    const putLoroSnapshot = vi.fn().mockResolvedValue(undefined);
     store.setClientDb({
       isReady: true,
       flush: async () => undefined,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as Parameters<Store['setClientDb']>[0]);
     await resource.set(core.properties.name, 'After', false);
     await resource.save();
@@ -465,9 +466,13 @@ describe('Store', () => {
     expect(
       store.resources.get(resource.subject)!.get(core.properties.name),
     ).toBe('After');
-    expect(putResourceWithSnapshot).toHaveBeenCalled();
-    const [, json, snapshot] = putResourceWithSnapshot.mock.calls.at(-1)!;
-    expect(JSON.parse(json)[core.properties.name]).toBe('After');
+    expect(putLoroSnapshot).toHaveBeenCalled();
+    const [, snapshot] = putLoroSnapshot.mock.calls.at(-1)!;
+    expect(
+      JSON.parse(rowFromLoroSnapshot(resource.subject, snapshot))[
+        core.properties.name
+      ],
+    ).toBe('After');
     const persisted = new Resource(resource.subject);
     persisted.setStore(store);
     persisted.importLoroUpdate(snapshot, true);
@@ -489,12 +494,12 @@ describe('Store', () => {
     const pendingWrite = new Promise<void>(resolve => {
       release = resolve;
     });
-    const putResourceWithSnapshot = vi.fn(() => pendingWrite);
+    const putLoroSnapshot = vi.fn(() => pendingWrite);
     const flush = vi.fn(() => Promise.reject(new Error('worker destroyed')));
     store.setClientDb({
       isReady: true,
       flush,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as Parameters<Store['setClientDb']>[0]);
     await resource.set(core.properties.name, 'After', false);
     let finished = false;
@@ -503,9 +508,7 @@ describe('Store', () => {
     });
 
     try {
-      await vi.waitFor(() =>
-        expect(putResourceWithSnapshot).toHaveBeenCalled(),
-      );
+      await vi.waitFor(() => expect(putLoroSnapshot).toHaveBeenCalled());
       // The server is already mocked as acknowledged; only the local write
       // remains blocked. Leaving now must not expose the pre-edit cache.
       await new Promise(resolve => setTimeout(resolve, 20));
@@ -523,19 +526,17 @@ describe('Store', () => {
     expect,
   }) => {
     const store = new Store();
-    const putResourceWithSnapshot = vi
-      .fn()
-      .mockRejectedValue(new Error('unsupported'));
+    const putLoroSnapshot = vi.fn().mockRejectedValue(new Error('unsupported'));
     store.setClientDb({
       initError: new Error('unsupported'),
       unsupportedEnvironment: true,
       flush: async () => undefined,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as Parameters<Store['setClientDb']>[0]);
     const resource = new Resource('did:ad:server-only');
     resource.setStore(store);
     await resource.persistToClientDb();
-    expect(putResourceWithSnapshot).not.toHaveBeenCalled();
+    expect(putLoroSnapshot).not.toHaveBeenCalled();
   });
 
   it('waits for the replacement database after an identity detaches its worker', async ({
@@ -573,16 +574,16 @@ describe('Store', () => {
     });
     await Promise.resolve();
     expect(finished).toBe(false);
-    const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+    const putLoroSnapshot = vi.fn().mockResolvedValue(undefined);
     store.setClientDb({
       isReady: true,
       flush: async () => undefined,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as Parameters<Store['setClientDb']>[0]);
     await persisted;
-    expect(putResourceWithSnapshot).toHaveBeenCalledWith(
+    expect(putLoroSnapshot).toHaveBeenCalledWith(
       resource.subject,
-      expect.any(String),
+      expect.any(Uint8Array),
       undefined,
       undefined,
     );
@@ -593,11 +594,11 @@ describe('Store', () => {
   }) => {
     await enableLoro();
     const store = new Store({ serverUrl: 'https://example.com' });
-    const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+    const putLoroSnapshot = vi.fn().mockResolvedValue(undefined);
     store.setClientDb({
       isReady: true,
       flush: async () => undefined,
-      putResourceWithSnapshot,
+      putLoroSnapshot,
     } as unknown as Parameters<Store['setClientDb']>[0]);
 
     const binaryProp = 'https://example.com/properties/bytes';
@@ -622,20 +623,23 @@ describe('Store', () => {
     expect(resource.getEntries().map(([k]) => k)).toContain(binaryProp);
 
     store.addResource(resource);
-    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    expect(putLoroSnapshot).toHaveBeenCalledTimes(1);
     await resource.persistToClientDb();
-    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(2);
+    expect(putLoroSnapshot).toHaveBeenCalledTimes(2);
 
-    const [, rowFromAddResource, snapshotFromAddResource] =
-      putResourceWithSnapshot.mock.calls[0];
-    const [, rowFromPersist, snapshotFromPersist] =
-      putResourceWithSnapshot.mock.calls[1];
-    expect(rowFromPersist).toBe(rowFromAddResource);
-    expect(rowFromPersist).toBe(resource.toClientDbJsonAd());
+    const [, snapshotFromAddResource, lastCommitFromAddResource] =
+      putLoroSnapshot.mock.calls[0];
+    const [, snapshotFromPersist, lastCommitFromPersist] =
+      putLoroSnapshot.mock.calls[1];
     expect(snapshotFromAddResource).toBeInstanceOf(Uint8Array);
     expect(snapshotFromPersist).toBeInstanceOf(Uint8Array);
+    expect(snapshotFromPersist).toEqual(snapshotFromAddResource);
+    expect(lastCommitFromPersist).toBe(lastCommitFromAddResource);
 
-    const row = JSON.parse(rowFromPersist);
+    // Only Loro bytes travel; the row is what the database derives from them.
+    const row = JSON.parse(
+      rowFromLoroSnapshot(resource.subject, snapshotFromPersist),
+    );
     expect(row['@id']).toBe(resource.subject);
     expect(row[core.properties.name]).toBe('Same row');
     expect(row[core.properties.isA]).toEqual([
@@ -652,11 +656,11 @@ describe('Store', () => {
 
     const build = async () => {
       const store = new Store({ serverUrl: 'https://example.com' });
-      const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+      const putLoroSnapshot = vi.fn().mockResolvedValue(undefined);
       store.setClientDb({
         isReady: true,
         flush: async () => undefined,
-        putResourceWithSnapshot,
+        putLoroSnapshot,
       } as unknown as Parameters<Store['setClientDb']>[0]);
       // Canonical spelling: `persistToClientDb` keys the row by the
       // resource's own subject, which `addResource` would otherwise rewrite.
@@ -666,21 +670,21 @@ describe('Store', () => {
       resource.loading = false;
       resource.new = false;
 
-      return { store, resource, putResourceWithSnapshot };
+      return { store, resource, putLoroSnapshot };
     };
 
     // Control: the ingress path writes a resource the store has not seen.
     const control = await build();
     control.store.addResource(control.resource);
-    expect(control.putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    expect(control.putLoroSnapshot).toHaveBeenCalledTimes(1);
 
     // The durable save path wrote the row; the ingress that follows (a WS
     // echo, a notify) finds the same state on disk and skips its write.
-    const { store, resource, putResourceWithSnapshot } = await build();
+    const { store, resource, putLoroSnapshot } = await build();
     await resource.persistToClientDb();
-    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    expect(putLoroSnapshot).toHaveBeenCalledTimes(1);
     store.addResource(resource);
-    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    expect(putLoroSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it('clears the previous identity drive before sign-out authentication changes', async ({

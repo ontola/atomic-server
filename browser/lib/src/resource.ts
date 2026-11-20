@@ -51,7 +51,7 @@ import {
   type QuickAccessPropType,
 } from './ontology.js';
 import type { ChangeSource, Store } from './store.js';
-import type { ClientDbOutboxWrite } from './client-db.js';
+import type { ClientDbOutboxWrite, ClientDbRow } from './client-db.js';
 import {
   forkResource,
   isFork,
@@ -2820,22 +2820,48 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
-   * The JSON-AD row the client database (OPFS) stores for this resource:
-   * `@id` plus every non-binary propval. Binary aux values are left out — a
-   * blob lives in the blob store, keyed by hash, and the snapshot travels next
-   * to this row (see `ClientDb.putResourceWithSnapshot`).
+   * What the client database (OPFS) is written for this resource, or `null`
+   * when there is nothing to write (no non-binary propvals at all, unless
+   * `allowEmpty`: a durable caller expects a row to exist).
    *
-   * The one serializer for that row: `Store.addResource` and
+   * A resource with a Loro doc is written as that doc alone: the database
+   * derives the row and the indexes from it, and the one value no doc holds,
+   * `lastCommit`, goes beside it. Pending ops are sealed first, so a mid-edit
+   * persist keeps the edit's history token.
+   *
+   * The JSON-AD row (`@id` plus every non-binary propval; a blob lives in the
+   * blob store, keyed by hash) remains for a Commit, which is not a CRDT
+   * resource, and for a page where Loro is not loaded.
+   *
+   * The one place that decides it: `Store.addResource` and
    * {@link persistToClientDb} both write through it, so the store's
-   * "already persisted" stamp (`Store.persistState`) is computed over
-   * exactly the bytes either path writes.
-   *
-   * Returns `null` when the resource has no non-binary propvals at all.
+   * "already persisted" stamp (`Store.persistState`) is computed over exactly
+   * what either path writes.
    */
-  public toClientDbJsonAd(): string | null {
+  public toClientDbRow({
+    allowEmpty = false,
+  }: { allowEmpty?: boolean } = {}): ClientDbRow | null {
     const obj = this.toObject({ includeBinary: false });
 
-    return obj ? JSON.stringify(obj) : null;
+    if (!obj && !allowEmpty) return null;
+
+    const doc = isCommitSubject(this._subject) ? undefined : this.getLoroDoc();
+
+    if (!doc) {
+      return {
+        kind: 'jsonAd',
+        jsonAd: JSON.stringify(obj ?? { '@id': this.subject }),
+      };
+    }
+
+    this.sealPendingEdits();
+    const lastCommit = this.#cache[properties.commit.lastCommit];
+
+    return {
+      kind: 'loro',
+      snapshot: loroCall('export', doc, () => doc.export({ mode: 'snapshot' })),
+      lastCommit: typeof lastCommit === 'string' ? lastCommit : undefined,
+    };
   }
 
   /** Compact debug representation for error messages. */
@@ -4147,17 +4173,11 @@ export class Resource<C extends OptionalClass = any> {
     const withOutbox =
       outbox && this.store.outbox.isStoredIn(clientDb) ? outbox : undefined;
 
-    // A resource without propvals still gets its `@id` row: this path is the
+    // A resource without propvals still gets its row: this path is the
     // durable one, and a caller that awaited it expects a row to exist.
-    const jsonAd =
-      this.toClientDbJsonAd() ?? JSON.stringify({ '@id': this.subject });
+    const row = this.toClientDbRow({ allowEmpty: true });
 
-    // The export seals pending ops; keep them under their history token.
-    this.sealPendingEdits();
-    const doc = this._loroDoc;
-    const snapshot = doc
-      ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
-      : undefined;
+    if (!row) return false;
 
     // Await the OPFS write — when `save()` resolves the edit MUST survive a
     // reload. A non-awaited write left a reload reading OPFS before the
@@ -4168,7 +4188,7 @@ export class Resource<C extends OptionalClass = any> {
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
       // When the drain already wrote this exact state, this awaits that write.
-      await this.store.persistState(clientDb, this.subject, jsonAd, snapshot, {
+      await this.store.persistState(clientDb, this.subject, row, {
         exact: true,
         outbox: withOutbox,
       });

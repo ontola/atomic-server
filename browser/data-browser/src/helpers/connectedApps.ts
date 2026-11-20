@@ -1,4 +1,4 @@
-import { dataBrowser, isNotEnrolledMessage, type Store } from '@tomic/react';
+import { dataBrowser, isNotEnrolledError, type Store } from '@tomic/react';
 
 const APPS = dataBrowser.properties.resources;
 
@@ -32,7 +32,7 @@ export async function rememberConnectedApp(
     drive.push(APPS, [agent], true);
     await drive.save();
   } catch (e) {
-    if (!isNotEnrolledMessage(e instanceof Error ? e.message : String(e))) {
+    if (!isNotEnrolledError(e)) {
       throw e;
     }
   }

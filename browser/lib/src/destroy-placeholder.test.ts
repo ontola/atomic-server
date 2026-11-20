@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isSettledDestroyErrorMessage } from './local-outbox.js';
+import { isSettledDestroyRefusal } from './local-outbox.js';
 import { Resource } from './resource.js';
 import { isNewPlaceholderSubject } from './subject.js';
 import { testStore } from './test-store.js';
@@ -48,7 +48,7 @@ describe('Resource.destroy() of a placeholder that never reached the server', ()
 
   it('treats the server saying there is nothing to destroy as settled', () => {
     expect(
-      isSettledDestroyErrorMessage(
+      isSettledDestroyRefusal(
         'Destroy commit for internal:/_new:x has no such resource to destroy on this node',
       ),
     ).toBe(true);

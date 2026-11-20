@@ -541,7 +541,7 @@ impl EmbedHost {
             // The page's local cache writes back what it just read, or what a
             // commit it gave `applyCommit` already wrote here: the real store
             // has it, so there is nothing to keep. An edit never travels this way.
-            "putResourceWithSnapshot" => {
+            "putResourceWithSnapshot" | "putLoroSnapshot" => {
                 warn_unkept_local_edit(method, args.get(3));
                 Json::Null
             }

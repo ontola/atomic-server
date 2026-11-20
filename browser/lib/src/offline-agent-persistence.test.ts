@@ -1,5 +1,6 @@
+import { rowFromLoroSnapshot } from './test-client-db-row.js';
 import { beforeAll, describe, it, expect } from 'vitest';
-import { Store, Agent, JSCryptoProvider, core, commits } from './index.js';
+import { Store, Agent, JSCryptoProvider, core } from './index.js';
 import { LoroLoader } from './loro-loader.js';
 
 beforeAll(async () => {
@@ -34,12 +35,15 @@ describe('Offline Agent Persistence', () => {
       waitForReady: async () => true,
       waitForInit: async () => undefined,
       flush: async () => undefined,
-      putResourceWithSnapshot: async (
+      putLoroSnapshot: async (
         subject: string,
-        jsonAd: string,
-        snapshot: Uint8Array | null,
+        snapshot: Uint8Array,
+        lastCommit?: string,
       ) => {
-        storageMap.set(subject, { jsonAd, snapshot });
+        storageMap.set(subject, {
+          jsonAd: rowFromLoroSnapshot(subject, snapshot, lastCommit),
+          snapshot,
+        });
       },
       getResourceWithSnapshot: async (subject: string) => {
         const hit = storageMap.get(subject);
@@ -68,9 +72,10 @@ describe('Offline Agent Persistence', () => {
     // Verify it was persisted to mockClientDb
     expect(storageMap.has(agentSubject)).toBe(true);
     const savedData = storageMap.get(agentSubject)!;
+    // Only Loro bytes are written; `createdAt` lives in the tab's cache alone,
+    // so the database derives it (from the doc's first change), not the tab.
     expect(JSON.parse(savedData.jsonAd)).toEqual({
       '@id': agentSubject,
-      [commits.properties.createdAt]: expect.any(Number),
       [core.properties.publicKey]: keys.publicKey,
       [core.properties.isA]: [core.classes.agent],
       [core.properties.name]: 'Offline Tester',
