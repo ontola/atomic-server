@@ -188,7 +188,7 @@
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "follow-level",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-    "https://atomicdata.dev/properties/description": "`everything` (new items and changes), `newItems` (only new resources below `about`) or `muted` (nothing, also not what a Follow higher up would send)."
+    "https://atomicdata.dev/properties/description": "`everything` (new items and changes), `newItems` (only new resources below `about`), `changes` (only changes, no new items) or `muted` (nothing, also not what a Follow higher up would send)."
   },
   {
     "@id": "https://atomicdata.dev/properties/followClasses",

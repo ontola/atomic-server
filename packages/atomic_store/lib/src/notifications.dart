@@ -39,11 +39,14 @@ abstract final class NotifyNs {
   static const pushEndpoint = '${_p}pushEndpoint';
 }
 
-/// How much a [Follow] tells: new items and changes, only new items, or
-/// nothing (also silencing a follow higher up).
+/// How much a [Follow] tells: new items and changes, only new items, only
+/// changes, or nothing (also silencing a follow higher up).
 enum FollowLevel {
   everything('everything'),
   newItems('newItems'),
+
+  /// Only changes, not new items.
+  changes('changes'),
   muted('muted');
 
   const FollowLevel(this.value);
@@ -51,6 +54,7 @@ enum FollowLevel {
 
   static FollowLevel parse(String? s) => switch (s) {
         'newItems' => FollowLevel.newItems,
+        'changes' => FollowLevel.changes,
         'muted' => FollowLevel.muted,
         _ => FollowLevel.everything,
       };

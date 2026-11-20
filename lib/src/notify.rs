@@ -14,7 +14,7 @@
 //! Inbox:
 //!
 //! - **`Follow`** (a child of the Inbox): `about` a resource, folder or drive,
-//!   with a `followLevel` (`everything`, `newItems` or `muted`) and optionally
+//!   with a `followLevel` (`everything`, `newItems`, `changes` or `muted`) and optionally
 //!   `followClasses` / `followProperties` to narrow it ("only meetings", "only
 //!   when the date changes"). A follow covers everything below `about`; the
 //!   nearest one wins, so a muted folder inside a followed drive is quiet.
@@ -104,6 +104,8 @@ const DIGEST_DAY_KEY: &str = "notify-digest-day/v1";
 pub enum Level {
     Everything,
     NewItems,
+    /// Only changes, not new items: "tell me when a decision is filled in".
+    Changes,
     Muted,
 }
 
@@ -111,6 +113,7 @@ impl Level {
     fn parse(s: &str) -> Level {
         match s {
             "newItems" | "new-items" | "new" => Level::NewItems,
+            "changes" => Level::Changes,
             "muted" | "none" => Level::Muted,
             _ => Level::Everything,
         }
@@ -510,10 +513,10 @@ impl Notifier {
             }
             let matches = |f: &&FollowRow| -> Option<&'static str> {
                 let kind = match (f.level, created) {
-                    (Level::Muted, _) => return None,
+                    (Level::Muted, _) | (Level::Changes, true) => return None,
                     (_, true) => "created",
                     (Level::NewItems, false) => return None,
-                    (Level::Everything, false) => "changed",
+                    (Level::Everything | Level::Changes, false) => "changed",
                 };
                 // A follow on the thing itself is not about "new items" in it.
                 if kind == "created" && depth == 0 {

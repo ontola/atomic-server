@@ -500,3 +500,17 @@ async fn two_follows_on_one_drive_each_narrow_their_own_kind() {
     assert_eq!(changed.len(), 1, "{changed:?}");
     assert_eq!(pure(&changed[0].about), pure(&doc));
 }
+
+#[tokio::test]
+async fn the_changes_level_skips_new_items() {
+    let w = World::new().await;
+    w.follow(&w.council, "changes", vec![]).await;
+    let n = w.notifier();
+    n.tick(crate::utils::now()).await.unwrap();
+    let m = create_as(&w.store, &w.bert, MEETING, Some(&w.council), "Raad", vec![]).await;
+    assert!(n.tick(later()).await.unwrap().is_empty());
+    edit_as(&w.store, &w.bert, &m, START, Value::Timestamp(9)).await;
+    let d = n.tick(later() + 60_000).await.unwrap();
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].kind, "changed");
+}
