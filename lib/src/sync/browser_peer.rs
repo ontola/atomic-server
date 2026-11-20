@@ -412,7 +412,9 @@ impl BrowserPeerSession {
             // which is right, but failing the session makes the link redial
             // and get the same stale destroy again, forever. The resource is
             // alive and unchanged here, so the replay is a settled no-op.
-            Err(err) if is_destroy && err.code == crate::sync::protocol::error_code::DESTROY_SETTLED => {
+            Err(err)
+                if is_destroy && err.code == crate::sync::protocol::error_code::DESTROY_SETTLED =>
+            {
                 Ok(())
             }
             result => {

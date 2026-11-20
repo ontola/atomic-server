@@ -895,10 +895,12 @@ impl Resource {
                     }),
                 }
             }
-            Err(e) => Err(
-                crate::errors::AtomicError::from(format!("Parent of {} not found: {}", self.get_subject(), e))
-                    .with_code(crate::sync::protocol::error_code::MISSING_PARENT),
-            ),
+            Err(e) => Err(crate::errors::AtomicError::from(format!(
+                "Parent of {} not found: {}",
+                self.get_subject(),
+                e
+            ))
+            .with_code(crate::sync::protocol::error_code::MISSING_PARENT)),
         }
     }
 

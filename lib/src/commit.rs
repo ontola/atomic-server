@@ -496,7 +496,8 @@ impl Commit {
         let signature = match commit.signature.as_ref() {
             Some(sig) => sig,
             None => {
-                return Err(AtomicError::from("No signature set").with_code(crate::sync::protocol::error_code::INVALID_SIGNATURE))
+                return Err(AtomicError::from("No signature set")
+                    .with_code(crate::sync::protocol::error_code::INVALID_SIGNATURE))
             }
         };
         let signer_subject = store.normalize_subject(&commit.signer);
@@ -819,7 +820,11 @@ impl Commit {
                     "Commit for {} has is_genesis: false, but the resource does not exist yet.",
                     commit.subject
                 ))
-                .with_code(if settled { crate::sync::protocol::error_code::DESTROY_SETTLED } else { 0 }));
+                .with_code(if settled {
+                    crate::sync::protocol::error_code::DESTROY_SETTLED
+                } else {
+                    0
+                }));
             }
         }
 
@@ -3288,7 +3293,11 @@ mod test {
             ..CommitOpts::no_validations_no_index()
         };
         let err = store.apply_commit(commit, &opts).await.unwrap_err();
-        assert_eq!(err.code, crate::sync::protocol::error_code::INVALID_SIGNATURE, "{err}");
+        assert_eq!(
+            err.code,
+            crate::sync::protocol::error_code::INVALID_SIGNATURE,
+            "{err}"
+        );
         assert!(
             err.to_string().to_lowercase().contains("signature"),
             "expected a signature error, got: {}",
@@ -3990,7 +3999,10 @@ mod test {
             .apply_commit(commit2, &OPTS)
             .await
             .expect_err("an unseeded doc losing every write is still a rejection");
-        assert_eq!(error.code, crate::sync::protocol::error_code::CAUSALITY_CONFLICT);
+        assert_eq!(
+            error.code,
+            crate::sync::protocol::error_code::CAUSALITY_CONFLICT
+        );
         let error = error.to_string();
 
         assert!(
@@ -4237,7 +4249,11 @@ mod test {
             .apply_commit(child_commit, &rights_opts())
             .await
             .expect_err("a stranger must not create children in someone else's drive");
-        assert_eq!(err.code, crate::sync::protocol::error_code::UNAUTHORIZED_WRITE, "{err}");
+        assert_eq!(
+            err.code,
+            crate::sync::protocol::error_code::UNAUTHORIZED_WRITE,
+            "{err}"
+        );
         assert!(
             store
                 .get_resource(&child_subject.as_str().into())
