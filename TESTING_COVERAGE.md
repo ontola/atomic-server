@@ -1317,8 +1317,12 @@ This does not yet prove restoration of the user's private staging workspace.
 - `syncableReferenceRecords.test.ts` covers native projection of catalog-declared
   supplied/identity references from host observations, canonical reuse, partial
   records, raw/custom field preservation and guarded same-drive target writes.
+  New reference labels prefer human-readable text over URI fields and preserve
+  existing names.
   `builtinSyncApp.test.ts` covers source links, whole-field invalidation, omitted
   versus null fields and later partial-record enrichment without new identities.
+  Authenticated pagination covers reads beyond the old 20-request limit and
+  confirms the 128-request bound still retains only the accepted prefix.
   Native response-journal callbacks are covered by `builtinSyncablesProfile.test.ts`.
 - `syncableApiSchema.test.ts` and `syncableApiSchemaViews.test.ts` cover resource-
   specific link datatypes, retained immutable JSON properties, optional unresolved

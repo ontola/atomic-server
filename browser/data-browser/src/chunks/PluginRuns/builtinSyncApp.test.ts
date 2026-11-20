@@ -1313,6 +1313,38 @@ describe('shared entity tables and independent saved filters', () => {
     expect(row[prop('rule-memberships')]).toEqual([other.subject]);
     expect(row[set.context.apiSchema.properties.name]).toBe('A workspace');
   });
+  it.each([25, 130])(
+    'pages authenticated filters beyond 20 requests while retaining the 128-request bound (%i pages)',
+    async pages => {
+      const set = await ready();
+      const table = tableFor(set, 'workspace'),
+        rule = ruleFor(set, table);
+      set.request.mockClear();
+      set.request.mockImplementation(async request => {
+        const page = Number(request.query?.page ?? '1');
+        const headers: Record<string, string> =
+          page < pages
+            ? {
+                link: `<https://api.example/v2/me/workspaces?page=${page + 1}>; rel="next"`,
+              }
+            : {};
+
+        return {
+          status: 200,
+          headers,
+          body: [{ ...workspace, id: 1000 + page, name: `Workspace ${page}` }],
+        };
+      });
+      const result = await worker(set, table, rule).refresh();
+      expect(result.incomplete).toBe(pages > 128);
+      expect(set.request.mock.calls).toHaveLength(Math.min(pages, 128));
+      const records = nodes(set.data, 'record').filter(
+        ([, props]) => config(props).resource === 'workspace',
+      );
+      expect(records).toHaveLength(Math.min(pages, 128));
+      if (pages > 128) expect(result.error).toContain('128 requests');
+    },
+  );
   it('retains old memberships and accepted partial observations when a later page fails', async () => {
     const set = await ready();
     const table = tableFor(set, 'workspace'),

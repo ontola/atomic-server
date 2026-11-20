@@ -99,6 +99,8 @@ function document(): OpenApiDocument {
             type: 'object',
             required: ['id', 'name', 'email'],
             properties: {
+              portrait: { type: 'string', format: 'uri' },
+              published: { type: 'string', format: 'date-time' },
               id: { oneOf: [{ type: 'integer' }, { type: 'string' }] },
               name: { type: 'string' },
               email: { type: 'string' },
@@ -438,6 +440,61 @@ describe('native direct reference records', () => {
       ),
     ).toBe(true);
     expect(f.owner(await f.run({ owner: person() }))).toBe(id);
+  });
+
+  it('prefers usable human text over earlier URI/date columns and preserves an existing custom name', async () => {
+    const f = await fixture();
+    const portrait = 'https://images.example/portrait/7';
+    const id = f.owner(
+      await f.run({
+        owner: person({ portrait, published: '2026-11-20T12:00:00Z' }),
+      }),
+    );
+    const row = await f.wrap(id);
+    expect(row.get(core.properties.name)).toBe('API Person');
+    await row.set(core.properties.name, 'My custom name');
+    await f.run({
+      owner: person({
+        portrait: 'https://images.example/new',
+        name: 'Updated provider label',
+      }),
+    });
+    expect(row.get(core.properties.name)).toBe('My custom name');
+  });
+
+  it('skips blank labels and falls back to another supplied string or the canonical path', async () => {
+    const f = await fixture();
+    const email = f.owner(
+      await f.run({
+        owner: person({
+          id: 8,
+          portrait: 'https://images.example/8',
+          name: '  ',
+          email: 'contact@example.test',
+        }),
+      }),
+    );
+    expect(f.resources.get(email)![core.properties.name]).toBe(
+      'contact@example.test',
+    );
+    const url = f.owner(
+      await f.run({
+        owner: person({
+          id: 9,
+          portrait: 'https://images.example/9',
+          name: '',
+        }),
+      }),
+    );
+    expect(f.resources.get(url)![core.properties.name]).toBe(
+      'https://images.example/9',
+    );
+    const path = f.owner(
+      await f.run({ owner: { kind: 'Person', id: 10, name: '  ' } }),
+    );
+    expect(f.resources.get(path)![core.properties.name]).toBe(
+      '/workspaces/9/people/10',
+    );
   });
 
   it('retains typed and composite identities and ordered array duplicates', async () => {

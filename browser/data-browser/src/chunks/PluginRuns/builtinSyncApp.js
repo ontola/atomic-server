@@ -1416,7 +1416,7 @@ export function createSyncApp(store, context) {
           querySelection: context.querySelection,
           maxPartitions: 32,
           limits: {
-            maxRequests: context.principal.kind === 'public' ? 40 : 20,
+            maxRequests: 128,
             maxRecords: 4000,
             timeoutMs: 120000,
             maxRetries: 0,

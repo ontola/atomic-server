@@ -3,6 +3,7 @@
 import {
   core,
   dataBrowser,
+  Datatype,
   readConnectionSubjects,
   subjectsReferToSameResource,
   type JSONValue,
@@ -827,12 +828,27 @@ export async function materializeSyncableReferences(
           ...(complete ? [fullClass] : []),
         ]),
       ];
-      const name = types
-        .find(type => type.resource === target.resource)
-        ?.presentation.columns.map(column => target.fields[column.property])
-        .find(
-          field => field?.kind === 'value' && typeof field.value === 'string',
-        );
+      const labels =
+        types
+          .find(type => type.resource === target.resource)
+          ?.presentation.columns.flatMap(column => {
+            const field = target.fields[column.property];
+
+            return field?.kind === 'value' &&
+              typeof field.value === 'string' &&
+              field.value.trim()
+              ? [{ column, value: field.value }]
+              : [];
+          }) ?? [];
+      const name =
+        labels.find(
+          ({ column, value }) =>
+            column.datatype === Datatype.STRING &&
+            !/^(?:uri|iri|url)(?:-reference)?$/i.test(column.format ?? '') &&
+            !/^(?:[a-z][a-z0-9+.-]*:\S|\/\/)/i.test(value.trim()),
+        )?.value ??
+        labels[0]?.value ??
+        target.entity.path;
       const values = {
         ...supplied,
         [p['syncable-source-config']]: config,
@@ -844,8 +860,7 @@ export async function materializeSyncableReferences(
 
       if (!row)
         row = await create(table, {
-          [core.properties.name]:
-            name?.kind === 'value' ? name.value : target.entity.path,
+          [core.properties.name]: name,
           [core.properties.localId]: localId(key),
           [p['syncable-source-key']]: key,
           [p['syncable-node-kind']]: 'record',
