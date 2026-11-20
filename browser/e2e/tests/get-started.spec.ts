@@ -40,7 +40,7 @@ test('Get started opens a workspace of your own, without an account', async ({
     'Make something',
     'Talk to the AI',
     'Invite someone',
-    'Connect a device',
+    'Save your work',
   ]) {
     await expect(panel.getByText(step, { exact: true })).toBeVisible();
   }
@@ -164,15 +164,14 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Not linked to an account: the panel's last row says so, with the next step.
   const row = panel.getByTestId('guest-save-row');
   await expect(row).toContainText('Only saved on this device');
-  // Self-hosted, with no portal: nothing here asks for an email.
-  await expect(row).toContainText('Connect a device');
+  await expect(row).toContainText('Save your work');
 
   // Clicking it opens the dialog and leaves the page where it is.
   const drive = page.url();
   await row.click();
   const dialog = page.getByRole('dialog');
   await expect(
-    dialog.getByRole('heading', { name: 'Connect a device' }),
+    dialog.getByRole('heading', { name: 'Save your work' }),
   ).toBeVisible();
   await expect(dialog).toContainText('Only this browser can open your work');
   await expect(page).toHaveURL(drive);

@@ -28,6 +28,7 @@ import { createManagedSyncEnrollment, genesisCertOf } from './enrollment';
 import { getManagedEnrollments } from './enrollmentApi';
 import type { ManagedInfo } from '../managedServer';
 import { isRunningInTauri } from '../tauri';
+import { isE2E } from '../../config';
 import { signRequest, type Store } from '@tomic/react';
 
 /**
@@ -54,7 +55,7 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
  * The account service (sign-up, backup, hosting) this install offers, or null
  * when there is none: the configured or remembered portal, else
  * `VITE_DEFAULT_ACCOUNT_PORTAL`, else atomic.place. The value `none` turns it
- * off (an empty value counts as unset).
+ * off (an empty value counts as unset), and an e2e build has none by default.
  *
  * An offer, not a connection: nothing contacts it until a flow engages it
  * (`engageAccountService`). Offers show with a service, features that need an
@@ -72,6 +73,10 @@ export function getAccountServiceUrl(info?: ManagedInfo | null): string | null {
     | undefined;
 
   if (fromEnv === 'none') return null;
+
+  // An e2e build never dials the public service: specs that need a portal
+  // name one (managed `/server` info, or a configured URL).
+  if (!fromEnv && isE2E()) return null;
 
   return safePortalUrl(fromEnv || 'https://atomic.place') ?? null;
 }
