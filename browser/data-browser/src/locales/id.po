@@ -282,7 +282,6 @@ msgid "Choose a default model"
 msgstr "Pilih model bawaan"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Kembali"
 
@@ -4265,8 +4264,6 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
 #: src/components/ConnectServerDialog.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
@@ -8497,7 +8494,9 @@ msgid "Pinned to <0/>"
 msgstr "Disematkan ke <0/>"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "dari {0}"
 
@@ -11446,11 +11445,6 @@ msgstr "Ambil ruang kerja"
 msgid "Search again"
 msgstr "Cari lagi"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Ingin server sendiri?{0} <0>Dapatkan server yang dihosting</0>{1} atau{2} <1>jalankan sendiri</1> ."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11609,14 +11603,6 @@ msgstr "Masuk ke akun {0} Anda belum membuka identitas ini: cadangan ini dibuat 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Masuk ke akun {0} Anda belum membuka identitas ini: cadangan ini dibuat sebelum hal itu memungkinkan. Konfirmasi sekali dengan kode pemulihan Anda untuk mengaktifkannya."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "Lihat paket Cloud Server"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Sinkronisasi browser telah mencapai batas koneksi peer. Cloud Server di atomic.place menjaga ruang kerja ini tetap sinkron untuk semua orang, tanpa peer."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -12387,10 +12373,6 @@ msgstr "Hapus sumber daya ini secara permanen. Ini tidak dapat diurungkan."
 #: src/chunks/RTE/useFormattingToolbarVisible.tsx
 msgid "Hide formatting toolbar"
 msgstr "Sembunyikan bilah alat pemformatan"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Sinkronisasi browser gratis ditujukan untuk kelompok kecil hingga 4 orang. Untuk lebih banyak orang, gunakan Cloud Server di atomic.place."
 
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
@@ -13323,10 +13305,6 @@ msgstr "Disimpan sebagai {0}"
 msgid "Saving your work to your account…"
 msgstr "Menyimpan pekerjaanmu ke akunmu…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device to open your work on it"
-msgstr "Hubungkan perangkat untuk membuka pekerjaanmu di sana"
-
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
 msgstr "Kembali ke drive sebelumnya di sini"
@@ -13338,14 +13316,6 @@ msgstr "Klik di sini untuk memberi nama drive Anda"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Bicara dengan AI di sini"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email here"
-msgstr "Tambahkan email Anda di sini"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device here"
-msgstr "Hubungkan perangkat di sini"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make something"
@@ -13396,15 +13366,9 @@ msgstr "Hanya tersimpan di perangkat ini"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "Anda sudah masuk, tetapi penyimpanan pekerjaan Anda ke akun belum selesai. Periksa koneksi Anda lalu coba lagi."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Daftar dengan email"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Register your email to keep it safe on every device"
-msgstr "Daftarkan emailmu agar tetap aman di setiap perangkat"
 
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Invite link"
@@ -13536,22 +13500,6 @@ msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang h
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "No second device?"
-msgstr "Tidak punya perangkat kedua?"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Sign in with atomic.place"
-msgstr "Masuk dengan atomic.place"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
-msgstr "Hanya browser ini yang bisa membuka pekerjaanmu. Hubungkan perangkat lain atau masuk agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
-msgstr "Hanya browser ini yang bisa membuka pekerjaanmu. Masuk atau daftar dengan emailmu agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
-
 #: src/actions/appActions.ts
 msgid "Profile settings"
 msgstr "Pengaturan profil"
@@ -13635,3 +13583,57 @@ msgstr "Kredit terpakai: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Edit profil"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Tidak ada yang menjaga drive ini tetap online saat perangkatmu mati."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Dapatkan server yang selalu aktif"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Sinkronisasi browser telah mencapai batas koneksi peer."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Jaga semua orang tetap sinkron dengan Cloud Server"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Ingin server sendiri?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Minta dihosting"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Sinkronisasi browser gratis ditujukan untuk kelompok kecil hingga 4 orang."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "Untuk lebih banyak orang, gunakan Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Hanya browser ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Simpan pekerjaanmu"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Daftarkan emailmu atau hubungkan perangkat untuk membukanya di tempat lain"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Simpan pekerjaanmu di sini"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Emailmu dan cadangan terenkripsi identitasmu dikirim ke {0}."
