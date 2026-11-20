@@ -68,10 +68,12 @@ pub async fn handle_download(
                 atomic_lib::errors::AtomicError::not_found(format!("Blob not found: {hash_hex}"))
             })?;
             if params.q.is_none() && params.w.is_none() && params.f.is_none() {
-                return Ok(user_blob_response(mimetype, bytes));
+                return Ok(immutable(user_blob_response(mimetype, bytes)));
             }
             let hash_bytes = hex::decode(hash_hex).expect("validated hash");
-            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate).await;
+            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate)
+                .await
+                .map(immutable);
         }
     }
 
@@ -99,6 +101,23 @@ pub async fn handle_download(
         .to_single();
 
     download_file_handler_partial(&resource, &req, &params, &appstate).await
+}
+
+/// A content-addressed answer (`/download/files/<hash>`, with or without image
+/// params) never changes, and needs no rights to read: let the browser keep
+/// it. Without this every page that showed an image fetched it again, so
+/// images in a reopened document popped in late (worst in the app, where each
+/// open is a fresh web view).
+fn immutable(mut response: HttpResponse) -> HttpResponse {
+    if response.status().is_success() {
+        response.headers_mut().insert(
+            actix_web::http::header::CACHE_CONTROL,
+            actix_web::http::header::HeaderValue::from_static(
+                "public, max-age=31536000, immutable",
+            ),
+        );
+    }
+    response
 }
 
 /// Serves user-uploaded blob bytes as a forced download rather than rendering

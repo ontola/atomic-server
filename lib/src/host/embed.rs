@@ -522,7 +522,27 @@ impl EmbedHost {
             // Nothing in the page syncs with a server, so nothing diffs versions.
             "getAllVersionVectors" => json!({}),
             "historyAttribution" => Json::Null,
-            "getBlob" => Json::Null,
+            // The page's blob cache is this device's blob store: a file's
+            // bytes this device has (its own uploads, synced blobs) show from
+            // here instead of over the network on every open.
+            "getBlob" => {
+                let hash = crate::agents::decode_base64(str_arg(&args, 0)?).map_err(err)?;
+                match store.get_blob(&hash).await.map_err(err)? {
+                    Some(bytes) => json!(b64(&bytes)),
+                    None => Json::Null,
+                }
+            }
+            // Bytes the page hashed itself (an upload). Kept only under their
+            // own BLAKE3 hash: the store is content-addressed.
+            "putBlob" => {
+                let hash = crate::agents::decode_base64(str_arg(&args, 0)?).map_err(err)?;
+                let bytes = crate::agents::decode_base64(str_arg(&args, 1)?).map_err(err)?;
+                if blake3::hash(&bytes).as_bytes().as_slice() != hash.as_slice() {
+                    return Err("putBlob: the bytes do not match their hash".into());
+                }
+                store.put_blob(&hash, &bytes).await.map_err(err)?;
+                Json::Null
+            }
             "flush" => Json::Null,
             // `opened(subject, drive)`: the page settled on this resource.
             "opened" => match &self.recents {
@@ -545,9 +565,7 @@ impl EmbedHost {
                 warn_unkept_local_edit(method, args.get(3));
                 Json::Null
             }
-            "putResource" | "putResources" | "putBlob" | "applyPeerCommit" | "removeResource" => {
-                Json::Null
-            }
+            "putResource" | "putResources" | "applyPeerCommit" | "removeResource" => Json::Null,
             "publicKey" => match store.get_default_agent() {
                 Ok(agent) => json!(agent.public_key),
                 Err(_) => Json::Null,
@@ -682,6 +700,31 @@ mod tests {
             ask(&host(&d), "opened", json!(["x", d.drive])).await,
             json!(false)
         );
+    }
+
+    #[tokio::test]
+    async fn the_page_reads_and_keeps_blobs_on_this_device() {
+        let d = Device::new().await;
+        let h = host(&d);
+        let bytes = b"a picture";
+        let hash = blake3::hash(bytes);
+        let hash_b64 = b64(hash.as_bytes());
+
+        assert_eq!(ask(&h, "getBlob", json!([hash_b64])).await, Json::Null);
+
+        ask(&h, "putBlob", json!([hash_b64, b64(bytes)])).await;
+        let got = ask(&h, "getBlob", json!([hash_b64])).await;
+        assert_eq!(
+            crate::agents::decode_base64(got.as_str().unwrap()).unwrap(),
+            bytes
+        );
+
+        // Bytes under someone else's hash are refused.
+        let other = b64(blake3::hash(b"other").as_bytes());
+        assert!(h
+            .call("putBlob", &json!([other, b64(bytes)]).to_string())
+            .await
+            .is_err());
     }
 
     #[tokio::test]
