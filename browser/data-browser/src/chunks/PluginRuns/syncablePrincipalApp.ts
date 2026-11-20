@@ -27,6 +27,7 @@ import {
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   isSyncableResourceInDrive,
+  classifySyncableResourceDrive,
   assertSyncableLocalSubject,
   platformLocalId,
   queueSyncableProvisioning,
@@ -211,6 +212,28 @@ export async function findRegisteredSyncablePrincipalApp(
   };
 }
 
+/** The server index can include unstamped legacy rows from another Drive. */
+async function principalSubjectsInDrive(
+  store: Store,
+  drive: string,
+  property: string,
+  value: string,
+  assertCurrent: () => void,
+) {
+  assertCurrent();
+  const subjects = await readConnectionSubjects(store, drive, property, value);
+  assertCurrent();
+  const scoped: string[] = [];
+
+  for (const subject of subjects) {
+    const included = await classifySyncableResourceDrive(store, drive, subject);
+    assertCurrent();
+    if (included) scoped.push(subject);
+  }
+
+  return scoped;
+}
+
 /** Complete server-authoritative lookup; a browser cache or root index cannot prove absence. */
 export async function listSyncablePrincipalApps(
   store: Store,
@@ -238,11 +261,12 @@ export async function listSyncablePrincipalApps(
   const expectedKey = scope.principal
     ? sourceKey({ ...scope, principal: scope.principal, kind: 'principal' })
     : undefined;
-  const subjects = await readConnectionSubjects(
+  const subjects = await principalSubjectsInDrive(
     store,
     scope.drive,
     expectedKey ? t.h['syncable-source-key'] : kind,
     expectedKey ?? 'principal',
+    check,
   );
   check();
   const apps: SyncablePrincipalAppRef[] = [];
@@ -442,11 +466,12 @@ async function promote(
     throw new Error(
       'The uninstalled principal moved; reopen its original connection manager',
     );
-  const matches = await readConnectionSubjects(
+  const matches = await principalSubjectsInDrive(
     store,
     drive,
     t.h['syncable-source-key'],
     expectedKey,
+    check,
   );
   check();
   if (matches.length !== 1 || !same(matches[0], row.subject))
@@ -471,11 +496,12 @@ async function promote(
     'syncables:principal-app:' + sourceConfigFingerprint(expectedKey);
 
   const findClaim = async () => {
-    const subjects = await readConnectionSubjects(
+    const subjects = await principalSubjectsInDrive(
       store,
       drive,
       core.properties.localId,
       claimId,
+      check,
     );
     check();
     const found: Resource[] = [];

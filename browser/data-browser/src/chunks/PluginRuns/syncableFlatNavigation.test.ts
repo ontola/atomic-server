@@ -4,6 +4,7 @@ import {
   CollectionBuilder,
   core,
   dataBrowser,
+  server,
   type Resource,
   type Store,
 } from '@tomic/lib';
@@ -213,6 +214,7 @@ function fixture(queryGate?: () => Promise<void>) {
             await queryGate();
         },
         totalMembers: matching.length,
+        getAllMembers: async () => matching,
         getMemberWithIndex: async (index: number) => {
           if (index >= matching.length) throw new Error('Index out of bounds');
 
@@ -397,4 +399,54 @@ it('opens the same logical destination after it was moved elsewhere in the same 
     'atomic:drive',
   );
   expect(store.newResource).toHaveBeenCalledTimes(1);
+});
+
+it('opens its cached target despite a matching unstamped table in another Drive without provider access', async () => {
+  const { store, table, values } = fixture();
+  const otherDrive = 'atomic:other-drive';
+  values.set(otherDrive, { [core.properties.isA]: [server.classes.drive] });
+  values.set('atomic:foreign-tasks', {
+    ...values.get('atomic:tasks'),
+    [core.properties.parent]: otherDrive,
+  });
+  const remote = vi.fn(() => {
+    throw new Error('Cached native Open must stay offline');
+  });
+  Object.assign(store, { fetchResourceFromServer: remote, noServer: true });
+  expect(
+    await saveFlatSyncableSelection(
+      store,
+      'atomic:drive',
+      table,
+      related,
+      'Tasks',
+    ),
+  ).toMatchObject({ subject: 'atomic:tasks' });
+  values.set('atomic:foreign-rule', {
+    ...values.get('atomic:saved-rule'),
+    [core.properties.parent]: 'atomic:foreign-tasks',
+  });
+  expect(
+    await saveFlatSyncableSelection(
+      store,
+      'atomic:drive',
+      table,
+      related,
+      'Tasks',
+    ),
+  ).toMatchObject({ subject: 'atomic:tasks', view: 'atomic:saved-rule' });
+  expect(store.newResource).toHaveBeenCalledTimes(1);
+  expect(remote).not.toHaveBeenCalled();
+});
+
+it('refuses an unproven target query member instead of treating it as foreign absence', async () => {
+  const { store, table, values } = fixture();
+  values.set('atomic:unknown-tasks', {
+    ...values.get('atomic:tasks'),
+    [core.properties.parent]: 'atomic:missing-parent',
+  });
+  await expect(
+    saveFlatSyncableSelection(store, 'atomic:drive', table, related, 'Tasks'),
+  ).rejects.toThrow('ancestry');
+  expect(store.newResource).not.toHaveBeenCalled();
 });

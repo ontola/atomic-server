@@ -74,6 +74,7 @@ async function fixture() {
   const originalNew = f.store.newResource.bind(f.store);
   const cache = new Map<string, Awaited<ReturnType<typeof originalGet>>>();
   const persisted = new Set(f.resources.keys());
+  const legacyQueryMembers = new Set<string>();
   const actor = {
     current: 'actor',
     server: 'http://localhost:9988',
@@ -155,7 +156,7 @@ async function fixture() {
       .filter(
         ([s, values]) =>
           persisted.has(s) &&
-          beneath(s) &&
+          (beneath(s) || legacyQueryMembers.has(s)) &&
           (value === null
             ? values[p] !== undefined
             : Array.isArray(values[p])
@@ -245,6 +246,7 @@ async function fixture() {
     actor,
     query,
     persisted,
+    legacyQueryMembers,
   };
 }
 
@@ -553,4 +555,50 @@ describe('one native Syncables App per typed principal', () => {
     await expect(f.promote(row.subject)).rejects.toThrow('Incomplete');
     expect(JSON.stringify([...f.resources])).toBe(before);
   });
+});
+
+it('filters a proven foreign unstamped principal before promotion counts and App listing', async () => {
+  const f = await fixture();
+  const row = await f.add();
+  const foreign = 'atomic:foreign-principal';
+  const otherDrive = 'atomic:other-drive';
+  f.resources.set(otherDrive, {
+    [core.properties.isA]: [server.classes.drive],
+  });
+  f.resources.set(foreign, {
+    ...f.resources.get(row.subject),
+    [core.properties.parent]: otherDrive,
+  });
+  f.persisted.add(foreign);
+  f.legacyQueryMembers.add(foreign);
+
+  expect(await f.promote(row.subject)).toBe(row.subject);
+  f.resources.set(foreign, {
+    ...f.resources.get(row.subject),
+    [core.properties.parent]: otherDrive,
+    [f.app.properties!['app-data']]: foreign,
+  });
+  expect(
+    (await listSyncablePrincipalApps(f.store, scope)).map(ref => ref.subject),
+  ).toEqual([row.subject]);
+  expect(f.resources.get(foreign)![core.properties.parent]).toBe(otherDrive);
+});
+
+it('does not infer principal installation absence from unproven query-member ancestry', async () => {
+  const f = await fixture();
+  const row = await f.add();
+  const unknown = 'atomic:unknown-principal';
+  f.resources.set(unknown, {
+    ...f.resources.get(row.subject),
+    [core.properties.parent]: 'atomic:missing-parent',
+  });
+  f.persisted.add(unknown);
+  f.legacyQueryMembers.add(unknown);
+  await expect(f.promote(row.subject)).rejects.toThrow('ancestry');
+  expect(f.resources.get(row.subject)![core.properties.isA]).not.toContain(
+    f.app.classes!.app,
+  );
+  await expect(listSyncablePrincipalApps(f.store, scope)).rejects.toThrow(
+    'ancestry',
+  );
 });

@@ -7,6 +7,7 @@ import {
   findSchema,
   subjectsReferToSameResource,
   type JSONValue,
+  type Collection,
   type Resource,
   type Store,
 } from '@tomic/lib';
@@ -28,7 +29,10 @@ import {
 } from './syncableSource';
 import { parseSyncableRuleConfig } from './syncableRules';
 import { syncableHierarchySchema } from './syncableHierarchy';
-import { isSyncableResourceInDrive } from './syncablePlatform';
+import {
+  isSyncableResourceInDrive,
+  classifySyncableResourceDrive,
+} from './syncablePlatform';
 import { assertSyncAppDrive } from './builtinSyncablesProfile';
 
 const object = (raw: unknown): raw is Record<string, unknown> =>
@@ -44,6 +48,32 @@ function captureSession(store: Store) {
         'The active account or server changed; reopen this collection',
       );
   };
+}
+
+/** Keep cached/offline Open, but classify every match before identity counts. */
+async function storedSubjectsInDrive(
+  store: Store,
+  drive: string,
+  query: Collection,
+  assertCurrent: () => void,
+) {
+  await query.waitForReady();
+  assertCurrent();
+  if (query.totalMembers > 10_000)
+    throw new Error('The saved identity lookup exceeds its limit');
+  const subjects = await query.getAllMembers();
+  assertCurrent();
+  if (subjects.length !== query.totalMembers)
+    throw new Error('The saved identity lookup is incomplete; reopen it');
+  const scoped: string[] = [];
+
+  for (const subject of subjects) {
+    const included = await classifySyncableResourceDrive(store, drive, subject);
+    assertCurrent();
+    if (included) scoped.push(subject);
+  }
+
+  return scoped;
 }
 
 /** Explicit native Open saves a scope under an existing sibling table; no provider reads. */
@@ -302,12 +332,17 @@ export async function saveFlatSyncableSelection(
     .setValue(targetKey)
     .setPageSize(2)
     .build();
-  await query.waitForReady();
-  if (query.totalMembers !== 1)
+  const targets = await storedSubjectsInDrive(
+    store,
+    drive,
+    query,
+    assertSource,
+  );
+  if (targets.length !== 1)
     throw new Error(
       'The target entity collection is missing or ambiguous. Open the app Sync view to prepare its collections.',
     );
-  const subject = await query.getMemberWithIndex(0);
+  const subject = targets[0];
   if (!subject || !(await isSyncableResourceInDrive(store, drive, subject)))
     throw new Error('The target collection is outside this drive');
   const target = await store.getResource(subject);
@@ -359,13 +394,15 @@ export async function saveFlatSyncableSelection(
     .setValue(stableKey)
     .setPageSize(2)
     .build();
-  await ruleQuery.waitForReady();
-  if (ruleQuery.totalMembers > 1)
+  const rules = await storedSubjectsInDrive(
+    store,
+    drive,
+    ruleQuery,
+    assertSource,
+  );
+  if (rules.length > 1)
     throw new Error('This saved filter has conflicting identities');
-  const existing =
-    ruleQuery.totalMembers === 1
-      ? await ruleQuery.getMemberWithIndex(0)
-      : undefined;
+  const existing = rules[0];
   let rule: Resource;
   await assertCurrent();
 
