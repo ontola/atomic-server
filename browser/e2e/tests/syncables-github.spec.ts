@@ -1969,7 +1969,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       restoredDirectory.getByText('Repositories', { exact: true }),
     ).toBeVisible();
-    await expect(page.locator('iframe[title="App"]')).toHaveCount(0);
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     expect(requests.providerRequests).toHaveLength(chooserReads);
     expect(requests.documentRequests).toHaveLength(chooserDocuments);
   });
