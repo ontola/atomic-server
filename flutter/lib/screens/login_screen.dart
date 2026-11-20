@@ -147,14 +147,18 @@ class _LoginScreenState extends State<LoginScreen> {
   /// server settings use. Empty stays empty: no hub is a valid choice.
   String get _serverOrigin => normalizeServerUrl(_serverController.text);
 
-  /// True when the active drive exists in the local DB (name property readable).
+  /// True when the active drive exists in the local DB, as the store's own
+  /// `resume` check has it. Not "has a name": the Personal drive stores none
+  /// (its label follows the language), so a name test kept a signed-in
+  /// person on the device search.
   Future<bool> _driveReady() async {
     final drive = AtomicClient.getActiveDrive();
     if (drive == null) return false;
     try {
-      final name = await AtomicClient.getProperty(
+      // Throws when the resource is not here; an unset name reads as ''.
+      await AtomicClient.getProperty(
           drive, 'https://atomicdata.dev/properties/name');
-      return name.isNotEmpty;
+      return true;
     } catch (_) {
       return false;
     }
@@ -774,16 +778,9 @@ class _LoginScreenState extends State<LoginScreen> {
   /// drive arrived.
   Future<void> _pairThenCheck(String? nodeId) async {
     await PairScreen.show(context, nodeId: nodeId);
-    final drive = AtomicClient.getActiveDrive();
-    if (drive != null) {
-      try {
-        final name = await AtomicClient.getProperty(
-            drive, 'https://atomicdata.dev/properties/name');
-        if (name.isNotEmpty) {
-          _done();
-          return;
-        }
-      } catch (_) {}
+    if (await _driveReady()) {
+      _done();
+      return;
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
