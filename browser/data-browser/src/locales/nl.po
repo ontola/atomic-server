@@ -12148,9 +12148,6 @@ msgstr "Back-upbestand"
 msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
 msgstr "Dit is geen Atomic-kluisback-upbestand. Kies een bestand dat eindigt op .atomic-vault."
 
-#~ msgid "Atomic vault backup"
-#~ msgstr "Atomic-kluisback-up"
-
 #: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
 msgstr "Dit back-upbestand is onvolledig. Download het opnieuw."

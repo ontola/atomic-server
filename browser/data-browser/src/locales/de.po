@@ -12145,9 +12145,6 @@ msgstr "Sicherungsdatei"
 msgid "This is not an Atomic vault backup file. Pick a file ending in .atomic-vault."
 msgstr "Dies ist keine Atomic-Vault-Sicherungsdatei. Wähle eine Datei mit der Endung .atomic-vault."
 
-#~ msgid "Atomic vault backup"
-#~ msgstr "Atomic-Vault-Sicherung"
-
 #: src/helpers/managed/vaultFile.ts
 msgid "This backup file is incomplete. Download it again."
 msgstr "Diese Sicherungsdatei ist unvollständig. Lade sie erneut herunter."
