@@ -164,6 +164,40 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// The active drive is not on this device, but others are: open the one
+  /// used most recently instead of holding a signed-in person on the device
+  /// search. The session is resumed again on that drive, so its server
+  /// connection, the peers and the listed drives come up as on any start.
+  /// False when no other drive is here (a new device), which leaves the
+  /// search as the way in.
+  Future<bool> _resumeOnALocalDrive(String serverUrl, String secret) async {
+    final missing = AtomicClient.getActiveDrive();
+    final List<String> drives;
+    try {
+      drives = await AtomicClient.listDrives();
+    } catch (_) {
+      return false;
+    }
+    for (final drive in drives) {
+      if (drive == missing) continue;
+      try {
+        await AtomicClient.getProperty(
+            drive, 'https://atomicdata.dev/properties/name');
+      } catch (_) {
+        continue;
+      }
+      final status = await AtomicClient.resumeSession(
+        serverUrl: serverUrl,
+        secret: secret,
+        drive: drive,
+      );
+      if (status != 'ok' || !await _driveReady()) return false;
+      await AtomicSession.saveDrive(drive);
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _tryAutoLogin() async {
     try {
       final session = await AtomicSession.loadEarly();
@@ -188,6 +222,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (status == 'ok' && await _driveReady()) {
+        _done();
+        return;
+      }
+      if (await _resumeOnALocalDrive(session.serverUrl, session.secret)) {
         _done();
         return;
       }
@@ -398,7 +436,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (activeDrive != null) {
       await AtomicSession.saveDrive(activeDrive);
     }
-    return status == 'ok' && await _driveReady();
+    if (status == 'ok' && await _driveReady()) return true;
+    return _resumeOnALocalDrive(serverUrl, secret);
   }
 
   Future<void> _signInWithSecret(String secret, {String? drive}) async {
