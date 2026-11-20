@@ -46,6 +46,7 @@ import {
   RequestCancelledError,
   ErrorType,
   isTransportError,
+  isUnreachableLoopbackSubject,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
   notInHostStoreMessage,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
@@ -4798,6 +4799,14 @@ export class Store {
     return resource.getPropVals();
   }
 
+  private isUnreachableLoopback(subject: string): boolean {
+    return isUnreachableLoopbackSubject(
+      subject,
+      globalThis.location?.hostname,
+      this.serverUrl,
+    );
+  }
+
   public async fetchResourceFromServer<C extends OptionalClass = UnknownClass>(
     /** The resource URL to be fetched */
     subject: string,
@@ -4924,6 +4933,15 @@ export class Store {
       this.addResource(local, { skipCommitCompare: true });
 
       return local;
+    }
+
+    // Never ask the network for a loopback subject a hosted page cannot reach:
+    // it only triggers a local-network prompt and a CORS error.
+    if (this.isUnreachableLoopback(normalizedSubject)) {
+      throw new AtomicError(
+        `Not fetched: ${normalizedSubject} is on this device's loopback address, which a hosted page cannot reach.`,
+        ErrorType.Transport,
+      );
     }
 
     if (opts.setLoading) {
@@ -5983,6 +6001,17 @@ export class Store {
       const erroredOffline = isTransportError(resource.error);
       const stuckLoading = resource.loading && !resource.new;
       if (!erroredOffline && !stuckLoading) continue;
+      // Reconnecting our own server does not bring back a loopback subject
+      // of another machine, nor a foreign origin that already failed.
+      if (this.isUnreachableLoopback(subject)) continue;
+
+      if (
+        erroredOffline &&
+        this.foreignHttpOrigin(subject) &&
+        !isEmbeddedVocabulary(subject)
+      ) {
+        continue;
+      }
 
       resource.error = undefined;
       resource.loading = true;
