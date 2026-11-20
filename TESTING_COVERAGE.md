@@ -1324,6 +1324,8 @@ This does not yet prove restoration of the user's private staging workspace.
   an authenticated principal through a new OAuth slot after rename/move. They
   preserve cached table/row IDs, switch child sync to the new binding, retain the
   binding on later chooser entry and isolate another principal's tables/rows.
+- Save-filter adoption migrates proven legacy rows before navigation remounts the
+  Sync profile; runtime tests cover both discovery and direct filter creation.
 - App page and setup-visibility tests verify native principal-App browsing without
   an iframe, validated setup-only hiding, metadata installed after drive entry,
   reactive role changes and rejection of external editable-index URLs.

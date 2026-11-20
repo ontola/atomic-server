@@ -640,12 +640,13 @@ export function createSyncApp(store, context) {
     return rule;
   }
 
-  async function adoptFlatRows(principal) {
+  async function adoptFlatRows(principal, resource) {
     for (const alias of context.flatIdentityAliases ?? []) {
       const config = alias.canonicalConfig;
       if (
         !config ||
         config.kind !== 'record' ||
+        (resource && config.resource !== resource) ||
         !same(config.principal, principal)
       )
         continue;
@@ -926,6 +927,9 @@ export function createSyncApp(store, context) {
       },
       filterName || collection.presentation.title,
     );
+    // A fresh profile after navigation must see the table and its proven rows
+    // on the same identity version; the old parent key cannot prove a v3 table.
+    await adoptFlatRows(context.principal, collection.resource);
     await store.ui.openResource(rule.subject);
 
     return rule;

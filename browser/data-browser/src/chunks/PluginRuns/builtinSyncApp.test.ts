@@ -1277,128 +1277,149 @@ describe('shared entity tables and independent saved filters', () => {
     ).toHaveLength(1);
     expect(set.data.get(subject)![P + 'parent']).toBe('atomic:outside-table');
   });
-  it('preserves the old saved read rule before table rekey and adopts row identity metadata without provider reads', async () => {
-    const set = await ready();
-    const table = tableFor(set, 'workspace'),
-      rule = ruleFor(set, table);
-    await worker(set, table, rule).refresh();
-    const [subject, row] = nodes(set.data, 'record').find(
-      ([, props]) => config(props).resource === 'workspace',
-    )!;
-    const original = structuredClone(config(row));
-    const canonicalSourceKey = row[prop('source-key')] as string;
-    const canonicalTableKey = set.data.get(table)![
-      prop('source-key')
-    ] as string;
-    const bound = bindCollection(set.context.document, {
-      collection: 'teamWorkspaces',
-      context: { handle: 'old-handle' },
-    });
-    const oldTableKey = sourceKey({
-      ...set.context,
-      kind: 'collection',
-      collection: {
-        name: bound.collection,
-        resource: bound.resource,
+  it.each(['discovery', 'save filter'])(
+    'preserves the old saved read rule and adopts proven row metadata before navigation during %s',
+    async entry => {
+      const set = await ready();
+      const table = tableFor(set, 'workspace'),
+        rule = ruleFor(set, table);
+      await worker(set, table, rule).refresh();
+      const [subject, row] = nodes(set.data, 'record').find(
+        ([, props]) => config(props).resource === 'workspace',
+      )!;
+      const original = structuredClone(config(row));
+      const canonicalSourceKey = row[prop('source-key')] as string;
+      const canonicalTableKey = set.data.get(table)![
+        prop('source-key')
+      ] as string;
+      const bound = bindCollection(set.context.document, {
+        collection: 'teamWorkspaces',
+        context: { handle: 'old-handle' },
+      });
+      const oldTableKey = sourceKey({
+        ...set.context,
+        kind: 'collection',
+        collection: {
+          name: bound.collection,
+          resource: bound.resource,
+          context: bound.pathParams,
+        },
+      });
+      const oldRowKey = sourceKey({
+        ...set.context,
+        kind: 'record',
+        collection: { name: bound.collection, resource: bound.resource },
+        parentSourceKey: oldTableKey,
+        remoteId: 200,
+      });
+      const tableProps = set.data.get(table)!;
+      tableProps[prop('source-key')] = oldTableKey;
+      tableProps[P + 'localId'] =
+        'syncables:node:' + encodeURIComponent(oldTableKey);
+      tableProps[prop('source-config')] = {
+        version: 2,
+        proxyOrigin: origin,
+        platform: set.context.platform,
+        principal,
+        connectionId: 'slot',
+        collection: bound,
+      };
+      row[prop('source-key')] = oldRowKey;
+      row[P + 'localId'] = 'syncables:node:' + encodeURIComponent(oldRowKey);
+      row[prop('source-config')] = {
+        version: 2,
+        proxyOrigin: origin,
+        platform: set.context.platform,
+        principal,
+        connectionId: 'slot',
+        parentSourceKey: oldTableKey,
+        resource: 'workspace',
+        record: workspace,
         context: bound.pathParams,
-      },
-    });
-    const oldRowKey = sourceKey({
-      ...set.context,
-      kind: 'record',
-      collection: { name: bound.collection, resource: bound.resource },
-      parentSourceKey: oldTableKey,
-      remoteId: 200,
-    });
-    const tableProps = set.data.get(table)!;
-    tableProps[prop('source-key')] = oldTableKey;
-    tableProps[P + 'localId'] =
-      'syncables:node:' + encodeURIComponent(oldTableKey);
-    tableProps[prop('source-config')] = {
-      version: 2,
-      proxyOrigin: origin,
-      platform: set.context.platform,
-      principal,
-      connectionId: 'slot',
-      collection: bound,
-    };
-    row[prop('source-key')] = oldRowKey;
-    row[P + 'localId'] = 'syncables:node:' + encodeURIComponent(oldRowKey);
-    row[prop('source-config')] = {
-      version: 2,
-      proxyOrigin: origin,
-      platform: set.context.platform,
-      principal,
-      connectionId: 'slot',
-      parentSourceKey: oldTableKey,
-      resource: 'workspace',
-      record: workspace,
-      context: bound.pathParams,
-      managedProperties: original.managedProperties,
-    };
-    row[P + 'description'] = 'Keep user field';
-    const oldLocalId = row[P + 'localId'];
-    Object.assign(set.context, {
-      flatIdentityAliases: [
-        {
-          canonicalSourceKey: canonicalTableKey,
-          subject: table,
-          previousSourceKey: oldTableKey,
-          localId: tableProps[P + 'localId'],
-          sourceConfigFingerprint: sourceConfigFingerprint(config(tableProps)),
-        },
-        {
-          canonicalSourceKey,
-          subject,
-          previousSourceKey: oldRowKey,
-          localId: oldLocalId,
-          sourceConfigFingerprint: sourceConfigFingerprint(config(row)),
-          entityTableSourceKey: canonicalTableKey,
-          canonicalConfig: {
-            ...original,
-            context: bound.pathParams,
-            read: bound,
+        managedProperties: original.managedProperties,
+      };
+      row[P + 'description'] = 'Keep user field';
+      const oldLocalId = row[P + 'localId'];
+      Object.assign(set.context, {
+        flatIdentityAliases: [
+          {
+            canonicalSourceKey: canonicalTableKey,
+            subject: table,
+            previousSourceKey: oldTableKey,
+            localId: tableProps[P + 'localId'],
+            sourceConfigFingerprint: sourceConfigFingerprint(
+              config(tableProps),
+            ),
           },
-        },
-      ],
-      flatAdoptionRules: [
-        {
-          tableSourceKey: canonicalTableKey,
-          definition: {
-            version: 1,
-            resource: 'workspace',
-            source: { kind: 'bound', bound },
+          {
+            canonicalSourceKey,
+            subject,
+            previousSourceKey: oldRowKey,
+            localId: oldLocalId,
+            sourceConfigFingerprint: sourceConfigFingerprint(config(row)),
+            entityTableSourceKey: canonicalTableKey,
+            canonicalConfig: {
+              ...original,
+              context: bound.pathParams,
+              read: bound,
+            },
           },
-          label: 'Previously synced collection',
-        },
-      ],
-    });
-    set.saves.length = 0;
-    set.request.mockClear();
-    const result = await set.app.discoverPrincipals();
-    expect(result.errors).toEqual([]);
-    expect(set.request).not.toHaveBeenCalled();
-    const adoptedRule = ruleFor(set, table, 'teamWorkspaces');
-    const tableWrites = set.saves.filter(save => save.subject === table);
-    const firstRuleWrite = tableWrites.findIndex(save =>
-      (save.props?.[P + 'table-views'] as string[] | undefined)?.includes(
-        adoptedRule,
-      ),
-    );
-    const firstRekey = tableWrites.findIndex(
-      save =>
-        (save.props?.[prop('source-config')] as { version?: number })
-          ?.version === 3,
-    );
-    expect(firstRuleWrite).toBeGreaterThanOrEqual(0);
-    expect(firstRuleWrite).toBeLessThan(firstRekey);
-    expect(row[prop('source-key')]).toBe(canonicalSourceKey);
-    expect(row[P + 'localId']).toBe(oldLocalId);
-    expect(config(row).version).toBe(3);
-    expect(config(row).read).toEqual(bound);
-    expect(row[P + 'description']).toBe('Keep user field');
-    expect(row[prop('entity-table')]).toBe(table);
-  });
+        ],
+        flatAdoptionRules: [
+          {
+            tableSourceKey: canonicalTableKey,
+            definition: {
+              version: 1,
+              resource: 'workspace',
+              source: { kind: 'bound', bound },
+            },
+            label: 'Previously synced collection',
+          },
+        ],
+      });
+      set.saves.length = 0;
+      set.request.mockClear();
+      set.store.ui.openResource.mockClear();
+
+      if (entry === 'discovery') {
+        const result = await set.app.discoverPrincipals();
+        expect(result.errors).toEqual([]);
+      } else {
+        set.store.ui.openResource.mockImplementation(async () => {
+          expect(row[prop('source-key')]).toBe(canonicalSourceKey);
+          expect(config(row).version).toBe(3);
+        });
+        await createSyncApp(set.store, {
+          ...set.context,
+          subject: tableProps[P + 'parent'],
+          kind: 'principal',
+        }).createCollection('teamWorkspaces', { handle: 'old-handle' });
+        expect(set.store.ui.openResource).toHaveBeenCalledOnce();
+      }
+
+      expect(set.request).not.toHaveBeenCalled();
+      const adoptedRule = ruleFor(set, table, 'teamWorkspaces');
+      const tableWrites = set.saves.filter(save => save.subject === table);
+      const firstRuleWrite = tableWrites.findIndex(save =>
+        (save.props?.[P + 'table-views'] as string[] | undefined)?.includes(
+          adoptedRule,
+        ),
+      );
+      const firstRekey = tableWrites.findIndex(
+        save =>
+          (save.props?.[prop('source-config')] as { version?: number })
+            ?.version === 3,
+      );
+      expect(firstRuleWrite).toBeGreaterThanOrEqual(0);
+      expect(firstRuleWrite).toBeLessThan(firstRekey);
+      expect(row[prop('source-key')]).toBe(canonicalSourceKey);
+      expect(row[P + 'localId']).toBe(oldLocalId);
+      expect(config(row).version).toBe(3);
+      expect(config(row).read).toEqual(bound);
+      expect(row[P + 'description']).toBe('Keep user field');
+      expect(row[prop('entity-table')]).toBe(table);
+    },
+  );
 
   it('blocks fresh shared-table allocation while older same-principal collections remain unresolved', async () => {
     const set = setup('platform');
