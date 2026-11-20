@@ -1488,6 +1488,60 @@ export class Store {
   }
 
   /**
+   * Put the signed-in agent's profile (name, picture) on the server that hosts
+   * their personal drive.
+   *
+   * Onboarding without a node keeps the agent resource local-only next to the
+   * drive. When that drive is later hosted, only the drive is promoted, so the
+   * agent stayed behind: the node held a bare agent it made itself, and other
+   * devices and collaborators saw no name. Once the personal drive is no
+   * longer local-only the agent resource is lifted too, merged with whatever
+   * the node holds (Loro merges the two documents; neither replaces the
+   * other) and pushed. Safe to call repeatedly: it does nothing unless the
+   * agent is still registered local-only while its drive is hosted.
+   */
+  public async publishAgentProfile(): Promise<void> {
+    const agent = this.getAgent();
+    if (!agent?.subject || this.noServer || !this._serverConnected) return;
+
+    const subject = this.normalizeSubject(agent.subject);
+    if (!this.localOnlyDrives.has(subject)) return;
+
+    const personal = await this.resolvePrivateDriveSubject(agent);
+    if (this.isLocalOnlyDrive(personal)) return;
+    if (this.getAgent()?.subject !== agent.subject) return;
+
+    // Lifted for the duration of the push only: `save()` skips the server for
+    // a local-only subject. Registered again unless the push went through, so
+    // a profile that was not loaded yet, or a node that could not be reached,
+    // is tried again on the next connection instead of being given up on.
+    this.unregisterLocalOnlyDrive(subject);
+    let published = false;
+
+    try {
+      if (this.resources.get(subject)?.isReady()) {
+        // Merge in the node's copy first, so the push builds on its history.
+        await this.fetchResourceFromServer(subject, { noWebSocket: true });
+        const profile = this.resources.get(subject);
+
+        if (profile?.isReady() && this.getAgent()?.subject === agent.subject) {
+          // A commit carrying the whole document: everything signed so far
+          // stayed on this device, and the node's own bare agent has none of
+          // those ops.
+          profile.clearLoroSaveCursor();
+          profile.markDirty();
+          await profile.save();
+          published = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[Store] could not publish the agent profile:', e);
+    }
+
+    if (!published) this.registerLocalOnlyDrive(subject);
+  }
+
+  /**
    * Reconcile `drive` with the connected server and wait until that server's
    * inventory covers everything held locally (the drive root included).
    * Unlike `promoteLocalDrive`, which only kicks the reconcile off, this
@@ -1517,6 +1571,7 @@ export class Store {
 
     this.unregisterLocalOnlyDrive(normalized);
     this.subscribeWebSocket(normalized);
+    void this.publishAgentProfile();
 
     const deadline = Date.now() + timeoutMs;
     let lastProblem = 'The server has not received this drive yet.';
@@ -3023,7 +3078,16 @@ export class Store {
       !!change.replaceLoroDocsFromRemote &&
       !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
-      !this.outbox.mayHavePending(subject);
+      !this.outbox.mayHavePending(subject) &&
+      // A doc with real history of its own is merged into, never swapped for
+      // the sender's document. A node answers for an agent it made itself (a
+      // bare stub under its own peer) with a full snapshot; replacing the
+      // local profile with it threw away the name and its history, and the
+      // two documents could no longer be merged afterwards. Replacing is for
+      // a placeholder or a doc rebuilt without history (see
+      // `replayOnLocalBase`, which makes the same call).
+      (this._withoutLoroHistory.has(subject) ||
+        !this.hasRenderableContent(resource));
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Full state: the doc holds the real history now, merged or replaced.
@@ -5958,6 +6022,8 @@ export class Store {
     }
 
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
+
+    if (connected) void this.publishAgentProfile();
     this.eventManager.emit(StoreEvents.ConnectionChanged, connected);
     this.emitSyncStatus();
 
