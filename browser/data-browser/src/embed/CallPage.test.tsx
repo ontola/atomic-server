@@ -18,7 +18,6 @@ const state = vi.hoisted(() => ({
   adopt: vi.fn(),
   livekitToken: vi.fn(),
   report: vi.fn(),
-  sources: [] as unknown[],
 }));
 
 vi.mock('@tomic/react', async importOriginal => ({
@@ -34,24 +33,24 @@ vi.mock('./hostActions', () => ({
   livekitToken: state.livekitToken,
   reportCallTransport: state.report,
 }));
-vi.mock('../chunks/Conference/callTransport', () => ({
-  setLivekitTokenSource: (s: unknown) => state.sources.push(s),
-}));
 vi.mock('../chunks/Conference/ConferenceRoom', () => ({
   default: ({
     subject,
     onLeave,
     compact,
     onTransport,
+    livekitToken,
   }: {
     subject: string;
     onLeave: () => void;
     compact?: boolean;
     onTransport?: (t: string) => void;
+    livekitToken?: unknown;
   }) => (
     <div data-compact={String(!!compact)}>
       <span>room {subject}</span>
       <button onClick={() => onTransport?.('livekit')}>joined</button>
+      {livekitToken === state.livekitToken && <span>grants from the app</span>}
       <button onClick={onLeave}>hang up</button>
     </div>
   ),
@@ -62,7 +61,6 @@ afterEach(() => {
   state.leave.mockReset();
   state.adopt.mockReset();
   state.report.mockReset();
-  state.sources.length = 0;
 });
 
 const renderPage = () =>
@@ -105,12 +103,9 @@ it('is compact in the narrow floating tile and full when expanded', async () => 
 
 it('takes LiveKit grants from the app, and tells it the transport', async () => {
   state.adopt.mockResolvedValue(undefined);
-  const { unmount } = renderPage();
+  renderPage();
 
-  expect(state.sources).toEqual([state.livekitToken]);
+  expect(await screen.findByText('grants from the app')).toBeTruthy();
   fireEvent.click(await screen.findByText('joined'));
   expect(state.report).toHaveBeenCalledWith('livekit');
-
-  unmount();
-  expect(state.sources).toEqual([state.livekitToken, undefined]);
 });

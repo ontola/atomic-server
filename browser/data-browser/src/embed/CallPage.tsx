@@ -8,7 +8,6 @@ import {
   livekitToken,
   reportCallTransport,
 } from './hostActions';
-import { setLivekitTokenSource } from '../chunks/Conference/callTransport';
 
 const ConferenceRoom = lazy(
   () => import('../chunks/Conference/ConferenceRoom'),
@@ -26,15 +25,6 @@ export function CallPage({ meeting }: { meeting: string }): React.JSX.Element {
   // are read from it.
   const [ready, setReady] = useState(false);
   const compact = useCompact();
-
-  // The app holds the account: LiveKit grants come from it.
-  useEffect(() => {
-    if (!hasActionsHost()) return;
-
-    setLivekitTokenSource(livekitToken);
-
-    return () => setLivekitTokenSource(undefined);
-  }, []);
 
   useEffect(() => {
     let live = true;
@@ -56,6 +46,8 @@ export function CallPage({ meeting }: { meeting: string }): React.JSX.Element {
             subject={meeting}
             onLeave={leaveCall}
             onTransport={reportCallTransport}
+            // The app holds the account: LiveKit grants come from it.
+            livekitToken={hasActionsHost() ? livekitToken : undefined}
             compact={compact}
           />
         </Suspense>

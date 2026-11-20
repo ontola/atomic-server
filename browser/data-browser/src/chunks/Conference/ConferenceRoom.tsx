@@ -17,7 +17,12 @@ import {
   IconButtonVariant,
 } from '../../components/IconButton/IconButton';
 import { AgentAvatar } from '../../components/Presence/AgentAvatar';
-import { joinCall, type CallTransport, type PeerState } from './callTransport';
+import {
+  joinCall,
+  type CallTransport,
+  type LivekitTokenSource,
+  type PeerState,
+} from './callTransport';
 import { hasManagedApi } from '../../helpers/managed/api';
 import {
   startRecording,
@@ -38,6 +43,8 @@ export interface ConferenceRoomProps {
   compact?: boolean;
   /** Told how the call is carried once it is joined. */
   onTransport?: (transport: CallTransport) => void;
+  /** Where LiveKit grants come from; the managed saas when not given. */
+  livekitToken?: LivekitTokenSource;
 }
 
 /**
@@ -50,6 +57,7 @@ export default function ConferenceRoom({
   onLeave,
   compact = false,
   onTransport,
+  livekitToken,
 }: ConferenceRoomProps): React.JSX.Element {
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
@@ -120,6 +128,7 @@ export default function ConferenceRoom({
             return next;
           }),
         onTransport: setTransport,
+        livekitToken,
         onRecording: setRecorded,
       });
 
@@ -142,7 +151,7 @@ export default function ConferenceRoom({
       setTransport(undefined);
       setRecorded(false);
     };
-  }, [subject, agentSubject]);
+  }, [subject, agentSubject, livekitToken]);
 
   useEffect(() => {
     if (transport) onTransport?.(transport);

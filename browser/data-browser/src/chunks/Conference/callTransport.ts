@@ -29,6 +29,12 @@ export interface CallContext {
   onTransport?: (transport: CallTransport) => void;
   /** Whether the room is being recorded, by anyone (LiveKit tells everyone). */
   onRecording?: (recording: boolean) => void;
+  /**
+   * Where LiveKit grants come from instead of the managed saas: an app that
+   * holds the account itself (the Flutter app's call page asks the app, which
+   * calls the saas with its own session).
+   */
+  livekitToken?: LivekitTokenSource;
 }
 
 /** What a LiveKit room needs: the server's `wss://` URL and an access token. */
@@ -45,17 +51,6 @@ export type LivekitTokenSource = (
   room: string,
   name: string,
 ) => Promise<LivekitGrant | null>;
-
-let tokenSource: LivekitTokenSource | undefined;
-
-/**
- * Where LiveKit grants come from instead of the managed saas: an app that
- * holds the account itself (the Flutter app's call page asks the app, which
- * calls the saas with its own session). Undefined restores the default.
- */
-export function setLivekitTokenSource(source: LivekitTokenSource | undefined) {
-  tokenSource = source;
-}
 
 /** The managed saas mints the token for the signed-in account. */
 const managedToken: LivekitTokenSource = async (room, name) => {
@@ -114,11 +109,11 @@ export const joinMesh: Transport = async ctx => {
 };
 
 /**
- * SFU via LiveKit; the token comes from the {@link setLivekitTokenSource}
+ * SFU via LiveKit; the token comes from the `livekitToken` of the context
  * source, else the managed saas. Throws if unavailable.
  */
 export const joinLivekit: Transport = async ctx => {
-  const grant = await (tokenSource ?? managedToken)(
+  const grant = await (ctx.livekitToken ?? managedToken)(
     roomId(ctx.subject),
     (ctx.agentSubject ?? ctx.subject).slice(0, 128),
   );
@@ -189,7 +184,7 @@ export async function joinCall(
   },
   managed: () => boolean = hasManagedApi,
 ): Promise<() => void> {
-  if (tokenSource || managed()) {
+  if (ctx.livekitToken || managed()) {
     try {
       return await transports.livekit(ctx);
     } catch (err) {

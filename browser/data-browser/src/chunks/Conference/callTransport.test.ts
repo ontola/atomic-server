@@ -37,7 +37,6 @@ import {
   joinCall,
   joinLivekit,
   joinMesh,
-  setLivekitTokenSource,
   type CallContext,
 } from './callTransport';
 
@@ -53,10 +52,7 @@ const ctx = (): CallContext => ({
 const run = (c = ctx()) =>
   joinCall(c, { livekit: joinLivekit, mesh: joinMesh });
 
-afterEach(() => {
-  vi.clearAllMocks();
-  setLivekitTokenSource(undefined);
-});
+afterEach(() => vi.clearAllMocks());
 
 describe('joinCall transport selection', () => {
   it('uses LiveKit when the token endpoint answers', async () => {
@@ -129,8 +125,7 @@ describe('joinCall transport selection', () => {
 
   it('takes the grant from a token source instead of the saas', async () => {
     const source = vi.fn().mockResolvedValue({ url: 'wss://app', token: 'a' });
-    setLivekitTokenSource(source);
-    const c = { ...ctx(), onTransport: vi.fn() };
+    const c = { ...ctx(), onTransport: vi.fn(), livekitToken: source };
     // Even where no managed api is known: the app holds the account.
     const leave = await joinCall(
       c,
@@ -150,8 +145,11 @@ describe('joinCall transport selection', () => {
 
   it('goes peer-to-peer when the token source has no grant', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    setLivekitTokenSource(async () => null);
-    const c = { ...ctx(), onTransport: vi.fn() };
+    const c = {
+      ...ctx(),
+      onTransport: vi.fn(),
+      livekitToken: async () => null,
+    };
     const leave = await joinCall(
       c,
       { livekit: joinLivekit, mesh: joinMesh },
