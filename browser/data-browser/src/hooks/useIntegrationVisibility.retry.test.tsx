@@ -30,11 +30,12 @@ const store = {
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
   useStore: () => store,
-  useResource: () => ({
-    ...driveResource,
-    isReady: () => driveResource.isReady(),
+  useResourceSnapshot: () => ({
+    resource: driveResource,
+    ready: driveResource.isReady(),
+    loading: driveResource.loading,
+    error: driveResource.error,
   }),
-  useCanWrite: () => false,
   useValue: (resource: typeof driveResource) => [resource.get(), vi.fn()],
   useCurrentAgent: () => [{ subject: ACTOR }],
 }));
