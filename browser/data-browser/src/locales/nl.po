@@ -13560,3 +13560,11 @@ msgstr "Opname stoppen"
 #: src/chunks/Conference/ConferenceRoom.tsx
 msgid "Record this call"
 msgstr "Dit gesprek opnemen"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Via the LiveKit server"
+msgstr "Via de LiveKit-server"
+
+#: src/chunks/Conference/ConferenceRoom.tsx
+msgid "Peer-to-peer, without a server"
+msgstr "Peer-to-peer, zonder server"

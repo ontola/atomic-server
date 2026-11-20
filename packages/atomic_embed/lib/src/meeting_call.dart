@@ -9,10 +9,22 @@ import 'document_view.dart' show EmbedStoreCall;
 import 'embed_page.dart';
 import 'embed_server.dart';
 
+/// Hands out a LiveKit grant for [room] (the sha256 of the meeting subject, as
+/// the page derives it), with [name] as what the others see; null when there
+/// is no LiveKit (not signed in, the portal runs none). `AtomicAccountClient
+/// .livekitToken` of atomic_flutter fits.
+typedef LivekitTokenSource = Future<({String url, String token})?> Function(
+    String room, String name);
+
+/// How a call is carried: the LiveKit server, or directly between the
+/// participants (peer-to-peer, for a handful of people).
+enum CallTransport { livekit, mesh }
+
 /// The audio/video call of a meeting, in a web view of its own.
 ///
 /// The call is the web app's `ConferenceRoom` (WebRTC over public signaling
-/// relays; one implementation), loaded as the embed's call page
+/// relays, or a LiveKit server when [livekitToken] gives a grant; one
+/// implementation), loaded as the embed's call page
 /// (`embed.html?call=<meeting>`). It is not one of the resource pages: those
 /// are replaced when the app follows a leader and recycled by the warm pool,
 /// which would hang up. The shell owns one [MeetingCall]; whoever has a
@@ -22,7 +34,19 @@ class MeetingCall extends ChangeNotifier {
   MeetingCall({
     required this.call,
     this.permissions = const SystemCallPermissions(),
+    this.livekitToken,
   });
+
+  /// Where the page gets a LiveKit grant from; null: the call is always
+  /// peer-to-peer. Asked each time a call starts, so signing in or out in
+  /// between counts.
+  final LivekitTokenSource? livekitToken;
+
+  CallTransport? _transport;
+
+  /// How the running call is carried, once the page has joined; null before
+  /// that and when there is no call.
+  CallTransport? get transport => _transport;
 
   /// Answers the page's store calls, for example `AtomicStore.embedCall`.
   final EmbedStoreCall call;
@@ -75,6 +99,7 @@ class MeetingCall extends ChangeNotifier {
     _meeting = meeting;
     _expanded = true;
     _error = null;
+    _transport = null;
     notifyListeners();
     try {
       final params = {'call': meeting, 'scheme': scheme};
@@ -122,6 +147,7 @@ class MeetingCall extends ChangeNotifier {
     _page = null;
     _meeting = null;
     _expanded = false;
+    _transport = null;
     notifyListeners();
     page?.release();
   }
@@ -184,9 +210,22 @@ class MeetingCall extends ChangeNotifier {
     final method = request['method'];
     if (id is! int || method is! String) return;
     String reply;
+    final args = request['args'] is List ? request['args'] as List : const [];
     if (method == 'leaveCall') {
       reply = 'true,${jsonEncode('true')}';
       leave();
+    } else if (method == 'callTransport') {
+      final transport = CallTransport.values
+          .where((t) => t.name == (args.isEmpty ? null : args.first))
+          .firstOrNull;
+      debugPrint('[call] carried by ${transport?.name ?? 'unknown'}');
+      if (transport != _transport) {
+        _transport = transport;
+        notifyListeners();
+      }
+      reply = 'true,${jsonEncode('true')}';
+    } else if (method == 'livekitToken') {
+      reply = 'true,${jsonEncode(await _grant(args))}';
     } else {
       try {
         final answer = _acknowledged.contains(method)
@@ -200,6 +239,23 @@ class MeetingCall extends ChangeNotifier {
     try {
       await page?.runJavaScript('window.__atomicReply($id,$reply)');
     } catch (_) {}
+  }
+
+  /// The page's `livekitToken(room, name)`: the grant as JSON, or `null`
+  /// (peer-to-peer) when there is none or it could not be had.
+  Future<String> _grant(List args) async {
+    final source = livekitToken;
+    final room = args.isNotEmpty ? args[0] : null;
+    final name = args.length > 1 ? args[1] : null;
+    if (source == null || room is! String) return 'null';
+    try {
+      final grant = await source(room, name is String ? name : '');
+      if (grant == null) return 'null';
+      return jsonEncode({'url': grant.url, 'token': grant.token});
+    } catch (e) {
+      debugPrint('[call] no LiveKit grant: $e');
+      return 'null';
+    }
   }
 
   @override

@@ -2,7 +2,12 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { styled } from 'styled-components';
 import { adoptDriveOf } from './embedStore';
-import { leaveCall } from './hostActions';
+import {
+  hasActionsHost,
+  leaveCall,
+  livekitToken,
+  reportCallTransport,
+} from './hostActions';
 
 const ConferenceRoom = lazy(
   () => import('../chunks/Conference/ConferenceRoom'),
@@ -40,6 +45,9 @@ export function CallPage({ meeting }: { meeting: string }): React.JSX.Element {
           <ConferenceRoom
             subject={meeting}
             onLeave={leaveCall}
+            onTransport={reportCallTransport}
+            // The app holds the account: LiveKit grants come from it.
+            livekitToken={hasActionsHost() ? livekitToken : undefined}
             compact={compact}
           />
         </Suspense>

@@ -204,6 +204,37 @@ export async function joinCall(meeting: string): Promise<boolean> {
   }
 }
 
+/**
+ * The call page asks the app for a LiveKit grant for `room` (the sha256 of
+ * the meeting subject): the app holds the account and calls the saas itself,
+ * so no session or CORS is needed in the page. Null when the app has none
+ * (not signed in, an older app): the call goes peer-to-peer.
+ */
+export async function livekitToken(
+  room: string,
+  name: string,
+): Promise<{ url: string; token: string } | null> {
+  if (!host) return null;
+
+  try {
+    const grant = (await host.call('livekitToken', [room, name])) as {
+      url?: unknown;
+      token?: unknown;
+    } | null;
+
+    return typeof grant?.url === 'string' && typeof grant.token === 'string'
+      ? { url: grant.url, token: grant.token }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The call page tells the app how its call is carried, for the app to show. */
+export function reportCallTransport(transport: 'livekit' | 'mesh'): void {
+  host?.call('callTransport', [transport]).catch(() => undefined);
+}
+
 /** The call page's Leave button: the app ends the call (and its tile). */
 export function leaveCall(): void {
   host?.call('leaveCall', []).catch(() => undefined);

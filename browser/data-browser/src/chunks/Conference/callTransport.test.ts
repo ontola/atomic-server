@@ -122,4 +122,42 @@ describe('joinCall transport selection', () => {
     leave();
     expect(mocks.leave).toHaveBeenCalled();
   });
+
+  it('takes the grant from a token source instead of the saas', async () => {
+    const source = vi.fn().mockResolvedValue({ url: 'wss://app', token: 'a' });
+    const c = { ...ctx(), onTransport: vi.fn(), livekitToken: source };
+    // Even where no managed api is known: the app holds the account.
+    const leave = await joinCall(
+      c,
+      { livekit: joinLivekit, mesh: joinMesh },
+      () => false,
+    );
+
+    expect(source).toHaveBeenCalledWith(
+      expect.stringMatching(/^[0-9a-f]{64}$/),
+      'did:ad:agent:abc',
+    );
+    expect(mocks.managedFetch).not.toHaveBeenCalled();
+    expect(mocks.connect).toHaveBeenCalledWith('wss://app', 'a');
+    expect(c.onTransport).toHaveBeenCalledWith('livekit');
+    leave();
+  });
+
+  it('goes peer-to-peer when the token source has no grant', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const c = {
+      ...ctx(),
+      onTransport: vi.fn(),
+      livekitToken: async () => null,
+    };
+    const leave = await joinCall(
+      c,
+      { livekit: joinLivekit, mesh: joinMesh },
+      () => false,
+    );
+
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect(c.onTransport).toHaveBeenCalledWith('mesh');
+    leave();
+  });
 });

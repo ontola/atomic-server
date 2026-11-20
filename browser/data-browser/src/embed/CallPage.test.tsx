@@ -13,7 +13,12 @@ import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../styling';
 import { CallPage } from './CallPage';
 
-const state = vi.hoisted(() => ({ leave: vi.fn(), adopt: vi.fn() }));
+const state = vi.hoisted(() => ({
+  leave: vi.fn(),
+  adopt: vi.fn(),
+  livekitToken: vi.fn(),
+  report: vi.fn(),
+}));
 
 vi.mock('@tomic/react', async importOriginal => ({
   ...(await importOriginal<typeof import('@tomic/react')>()),
@@ -22,19 +27,30 @@ vi.mock('@tomic/react', async importOriginal => ({
 vi.mock('./embedStore', () => ({
   adoptDriveOf: (...args: unknown[]) => state.adopt(...args),
 }));
-vi.mock('./hostActions', () => ({ leaveCall: () => state.leave() }));
+vi.mock('./hostActions', () => ({
+  leaveCall: () => state.leave(),
+  hasActionsHost: () => true,
+  livekitToken: state.livekitToken,
+  reportCallTransport: state.report,
+}));
 vi.mock('../chunks/Conference/ConferenceRoom', () => ({
   default: ({
     subject,
     onLeave,
     compact,
+    onTransport,
+    livekitToken,
   }: {
     subject: string;
     onLeave: () => void;
     compact?: boolean;
+    onTransport?: (t: string) => void;
+    livekitToken?: unknown;
   }) => (
     <div data-compact={String(!!compact)}>
       <span>room {subject}</span>
+      <button onClick={() => onTransport?.('livekit')}>joined</button>
+      {livekitToken === state.livekitToken && <span>grants from the app</span>}
       <button onClick={onLeave}>hang up</button>
     </div>
   ),
@@ -44,6 +60,7 @@ afterEach(() => {
   cleanup();
   state.leave.mockReset();
   state.adopt.mockReset();
+  state.report.mockReset();
 });
 
 const renderPage = () =>
@@ -82,4 +99,13 @@ it('is compact in the narrow floating tile and full when expanded', async () => 
     window.dispatchEvent(new Event('resize'));
   });
   expect(container.querySelector('[data-compact=false]')).toBeTruthy();
+});
+
+it('takes LiveKit grants from the app, and tells it the transport', async () => {
+  state.adopt.mockResolvedValue(undefined);
+  renderPage();
+
+  expect(await screen.findByText('grants from the app')).toBeTruthy();
+  fireEvent.click(await screen.findByText('joined'));
+  expect(state.report).toHaveBeenCalledWith('livekit');
 });

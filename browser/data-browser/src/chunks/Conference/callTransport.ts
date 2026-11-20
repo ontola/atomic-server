@@ -14,6 +14,9 @@ export interface PeerState {
   stream?: MediaStream;
 }
 
+/** LiveKit's server (SFU), or directly between the participants. */
+export type CallTransport = 'livekit' | 'mesh';
+
 export interface CallContext {
   /** Subject of the meeting resource; both transports derive the room from it. */
   subject: string;
@@ -23,10 +26,49 @@ export interface CallContext {
   setPeer: (id: string, patch: PeerState) => void;
   removePeer: (id: string) => void;
   /** Which transport carries the call: only an SFU call can be recorded. */
-  onTransport?: (transport: 'livekit' | 'mesh') => void;
+  onTransport?: (transport: CallTransport) => void;
   /** Whether the room is being recorded, by anyone (LiveKit tells everyone). */
   onRecording?: (recording: boolean) => void;
+  /**
+   * Where LiveKit grants come from instead of the managed saas: an app that
+   * holds the account itself (the Flutter app's call page asks the app, which
+   * calls the saas with its own session).
+   */
+  livekitToken?: LivekitTokenSource;
 }
+
+/** What a LiveKit room needs: the server's `wss://` URL and an access token. */
+export interface LivekitGrant {
+  url: string;
+  token: string;
+}
+
+/**
+ * Hands out a LiveKit grant for `room` (the sha256 of the meeting subject),
+ * with `name` as the participant's name. Null: no LiveKit here.
+ */
+export type LivekitTokenSource = (
+  room: string,
+  name: string,
+) => Promise<LivekitGrant | null>;
+
+/** The managed saas mints the token for the signed-in account. */
+const managedToken: LivekitTokenSource = async (room, name) => {
+  const res = await managedFetch('/meetings/livekit-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room, name }),
+    signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`livekit-token: HTTP ${res.status}`);
+  }
+
+  const { url, token } = (await res.json()) as LivekitGrant;
+
+  return { url, token };
+};
 
 /** A transport joins the call and resolves to its leave function. */
 type Transport = (ctx: CallContext) => Promise<() => void>;
@@ -66,23 +108,21 @@ export const joinMesh: Transport = async ctx => {
   return () => room.leave();
 };
 
-/** SFU via LiveKit; the managed saas hands out the token. Throws if unavailable. */
+/**
+ * SFU via LiveKit; the token comes from the `livekitToken` of the context
+ * source, else the managed saas. Throws if unavailable.
+ */
 export const joinLivekit: Transport = async ctx => {
-  const res = await managedFetch('/meetings/livekit-token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      room: roomId(ctx.subject),
-      name: (ctx.agentSubject ?? ctx.subject).slice(0, 128),
-    }),
-    signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
-  });
+  const grant = await (ctx.livekitToken ?? managedToken)(
+    roomId(ctx.subject),
+    (ctx.agentSubject ?? ctx.subject).slice(0, 128),
+  );
 
-  if (!res.ok) {
-    throw new Error(`livekit-token: HTTP ${res.status}`);
+  if (!grant) {
+    throw new Error('livekit-token: none offered');
   }
 
-  const { url, token } = (await res.json()) as { url: string; token: string };
+  const { url, token } = grant;
   const { Room, RoomEvent, Track } = await import('livekit-client');
   const room = new Room();
 
@@ -132,9 +172,9 @@ export const joinLivekit: Transport = async ctx => {
 };
 
 /**
- * Use the LiveKit SFU when the managed saas offers one; in every other case
- * (self-hosted, not configured, 503, timeout, connect failure) fall back to
- * the peer-to-peer mesh.
+ * Use the LiveKit SFU when the app or the managed saas offers one; in every
+ * other case (self-hosted, not configured, 503, timeout, connect failure)
+ * fall back to the peer-to-peer mesh.
  */
 export async function joinCall(
   ctx: CallContext,
@@ -144,7 +184,7 @@ export async function joinCall(
   },
   managed: () => boolean = hasManagedApi,
 ): Promise<() => void> {
-  if (managed()) {
+  if (ctx.livekitToken || managed()) {
     try {
       return await transports.livekit(ctx);
     } catch (err) {

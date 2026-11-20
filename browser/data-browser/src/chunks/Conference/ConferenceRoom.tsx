@@ -17,7 +17,13 @@ import {
   IconButtonVariant,
 } from '../../components/IconButton/IconButton';
 import { AgentAvatar } from '../../components/Presence/AgentAvatar';
-import { joinCall, type PeerState } from './callTransport';
+import {
+  joinCall,
+  type CallTransport,
+  type LivekitTokenSource,
+  type PeerState,
+} from './callTransport';
+import { hasManagedApi } from '../../helpers/managed/api';
 import {
   startRecording,
   stopRecording,
@@ -35,6 +41,10 @@ export interface ConferenceRoomProps {
   /** A small tile (the app's floating call): the others first, no controls.
    *  The person expands the tile to get the controls. */
   compact?: boolean;
+  /** Told how the call is carried once it is joined. */
+  onTransport?: (transport: CallTransport) => void;
+  /** Where LiveKit grants come from; the managed saas when not given. */
+  livekitToken?: LivekitTokenSource;
 }
 
 /**
@@ -46,6 +56,8 @@ export default function ConferenceRoom({
   subject,
   onLeave,
   compact = false,
+  onTransport,
+  livekitToken,
 }: ConferenceRoomProps): React.JSX.Element {
   const [agent] = useCurrentAgent();
   const agentSubject = agent?.subject;
@@ -56,7 +68,7 @@ export default function ConferenceRoom({
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [hasCamera, setHasCamera] = useState(true);
-  const [transport, setTransport] = useState<'livekit' | 'mesh'>();
+  const [transport, setTransport] = useState<CallTransport>();
   /** The room is being recorded, by anyone. */
   const [recorded, setRecorded] = useState(false);
   /** The recording this person started, to stop it. */
@@ -116,6 +128,7 @@ export default function ConferenceRoom({
             return next;
           }),
         onTransport: setTransport,
+        livekitToken,
         onRecording: setRecorded,
       });
 
@@ -138,7 +151,11 @@ export default function ConferenceRoom({
       setTransport(undefined);
       setRecorded(false);
     };
-  }, [subject, agentSubject]);
+  }, [subject, agentSubject, livekitToken]);
+
+  useEffect(() => {
+    if (transport) onTransport?.(transport);
+  }, [transport, onTransport]);
 
   const toggleMic = () => {
     localStream?.getAudioTracks().forEach(track => {
@@ -197,6 +214,13 @@ export default function ConferenceRoom({
         <RecordingBadge $compact={compact} role='status'>
           <FaCircle /> Recording
         </RecordingBadge>
+      )}
+      {transport && !compact && (
+        <TransportNote data-testid='call-transport' data-transport={transport}>
+          {transport === 'livekit'
+            ? 'Via the LiveKit server'
+            : 'Peer-to-peer, without a server'}
+        </TransportNote>
       )}
       {error ? (
         <ErrorMessage>
@@ -262,17 +286,19 @@ export default function ConferenceRoom({
           >
             {camOn && hasCamera ? <FaVideo /> : <FaVideoSlash />}
           </IconButton>
-          {transport === 'livekit' && (!recorded || running) && (
-            <IconButton
-              variant={IconButtonVariant.Square}
-              title={running ? 'Stop recording' : 'Record this call'}
-              size='1.1rem'
-              disabled={recordBusy}
-              onClick={toggleRecording}
-            >
-              {running ? <FaStop /> : <FaCircle />}
-            </IconButton>
-          )}
+          {transport === 'livekit' &&
+            hasManagedApi() &&
+            (!recorded || running) && (
+              <IconButton
+                variant={IconButtonVariant.Square}
+                title={running ? 'Stop recording' : 'Record this call'}
+                size='1.1rem'
+                disabled={recordBusy}
+                onClick={toggleRecording}
+              >
+                {running ? <FaStop /> : <FaCircle />}
+              </IconButton>
+            )}
           <IconButton
             variant={IconButtonVariant.Colored}
             color='alert'
@@ -341,6 +367,13 @@ const RecordingBadge = styled.div<{ $compact?: boolean }>`
     left: 0.4rem;
     z-index: 1;
   `}
+`;
+
+/** How the call is carried, so a demo (or a support question) can tell. */
+const TransportNote = styled.span`
+  align-self: flex-start;
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const CallSection = styled(Column)<{ $compact?: boolean }>`
