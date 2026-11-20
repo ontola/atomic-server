@@ -354,6 +354,46 @@ impl AtomicStore {
             .check_expiry(atomic_lib::utils::now())
             .map_err(|_| AtomicError::invalid(invite::EXPIRED))?;
         let target = parsed.target.to_string();
+
+        // Connected to a server: accept it there. The server adds this agent
+        // to the target's rights, so nothing waits on the inviter's devices.
+        if let Some(origin) = self.sync.origin() {
+            use atomic_lib::Storelike;
+            if let Ok(agent) = self.db.get_default_agent() {
+                match atomic_lib::client::helpers::accept_invite_at_server(
+                    &origin,
+                    token.trim(),
+                    &agent,
+                )
+                .await
+                {
+                    Ok(()) => {
+                        let sync_pending = self.sync.follow_drive(&self.db, &target).await.is_err();
+                        let is_drive = self
+                            .db
+                            .get_resource(&target.as_str().into())
+                            .await
+                            .ok()
+                            .and_then(|r| r.get(atomic_lib::urls::IS_A).ok().map(|v| v.to_string()))
+                            .is_some_and(|classes| classes.contains(atomic_lib::urls::DRIVE));
+                        if is_drive {
+                            let _ = self.db.list_drive_in_home(&target).await;
+                            let _ = self.switch_drive(target.clone());
+                        }
+                        return Ok(AcceptedInvite {
+                            drive: target,
+                            write: parsed.write,
+                            imported: 0,
+                            sync_pending,
+                        });
+                    }
+                    Err(e) => {
+                        tracing::info!("{origin} did not accept the invite, asking devices: {e}");
+                    }
+                }
+            }
+        }
+
         let mine = self.start_peer().await?;
         let endpoint = atomic_lib::sync::peer::endpoint()
             .ok_or_else(|| AtomicError::network("Peer not started."))?;
