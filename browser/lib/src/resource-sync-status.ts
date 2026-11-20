@@ -1,9 +1,17 @@
+import {
+  PersistenceEvidenceRegistry,
+  decodePersistenceVersion,
+  persistenceVersion,
+  resourcePersistenceVersion,
+  type PersistenceEvidenceScope,
+} from './persistence-evidence.js';
 import { LoroLoader } from './loro-loader.js';
 import type { Resource } from './resource.js';
 import {
   parseSerializedServerReceipt,
   type ResourceSyncEvidence,
   type SerializedServerReceipt,
+  type StoredServerReceipt,
 } from './resource-sync-evidence.js';
 
 /** Evidence for this resource's current CRDT state, not a drive-wide guess.
@@ -16,17 +24,20 @@ export interface ResourceSyncStatus {
     error?: string;
   }>;
   readonly server: Readonly<{
+    /** Transport acceptance (legacy). Use stored for a durable copy. */
     state: 'confirmed' | 'pending' | 'unknown' | 'not-configured';
     url?: string;
     confirmedAt?: number;
+    /** Acceptance and persistent storage are independent boundaries. */
+    accepted?: 'confirmed' | 'pending' | 'unknown';
+    stored?: 'confirmed' | 'pending' | 'unknown';
+    storageId?: string;
+    generation?: string;
   }>;
 }
 
 type Version = Map<string, number>;
-type Receipt = { version: Version; confirmedAt?: number };
 type Evidence = {
-  local?: Receipt;
-  server?: Receipt;
   pendingWrites: number;
   writeSequence: number;
   localError?: string;
@@ -47,20 +58,6 @@ function carriedVersion(bytes: Uint8Array | undefined): Version | undefined {
   }
 }
 
-function covers(receipt: Receipt | undefined, resource: Resource): boolean {
-  if (!receipt || !resource.hasLoroDoc()) return false;
-  const doc = resource.getLoroDoc();
-  if (!doc || doc.getPendingTxnLength() > 0) return false;
-  const current = doc.oplogVersion().toJSON();
-
-  return (
-    current.size > 0 &&
-    [...current].every(
-      ([peer, count]) => (receipt.version.get(peer) ?? 0) >= count,
-    )
-  );
-}
-
 /** Internal receipt ledger. Store owns scope, normalization and subscriptions. */
 export class ResourceSyncStatusTracker {
   private evidence = new Map<string, Evidence>();
@@ -70,6 +67,71 @@ export class ResourceSyncStatusTracker {
     callback: () => void;
   }>();
   private epoch = 0;
+  private local: PersistenceEvidenceScope;
+  private server: PersistenceEvidenceScope;
+  private serverStores = new Map<
+    string,
+    {
+      scope: PersistenceEvidenceScope;
+      replica: Pick<StoredServerReceipt, 'storageId' | 'generation'>;
+    }
+  >();
+  private serverSubjects = new Map<string, string>();
+
+  constructor(private registry = new PersistenceEvidenceRegistry()) {
+    this.local = registry.open('local');
+    this.server = registry.open('server');
+  }
+
+  private serverStore(
+    drive: string,
+    replica: Pick<StoredServerReceipt, 'storageId' | 'generation'>,
+    replace: boolean,
+  ) {
+    let store = this.serverStores.get(drive);
+
+    if (
+      !store ||
+      (replace &&
+        (store.replica.storageId !== replica.storageId ||
+          store.replica.generation !== replica.generation))
+    ) {
+      store = {
+        scope: this.registry.open(`server-stored:${drive}`),
+        replica: Object.freeze({
+          storageId: replica.storageId,
+          generation: replica.generation,
+        }),
+      };
+      this.serverStores.set(drive, store);
+    }
+
+    return store;
+  }
+
+  storedServer(
+    subject: string,
+    version: string,
+    barrier: string,
+    replica: Pick<StoredServerReceipt, 'storageId' | 'generation'>,
+    drive: string,
+  ): void {
+    const decoded = decodePersistenceVersion(version);
+    if (!decoded || !drive) return;
+    const { scope } = this.serverStore(drive, replica, true);
+    this.serverSubjects.set(subject, drive);
+    this.server.record(subject, 'accepted', {
+      version: decoded,
+      confirmedAt: Date.now(),
+    });
+    scope.record(subject, 'stored', {
+      version: decoded,
+      barrier,
+      confirmedAt: Date.now(),
+    });
+    // A generation change can invalidate other subjects in this drive too.
+    for (const listener of this.listeners) this.notify(listener.callback);
+  }
 
   private entry(subject: string): Evidence {
     let entry = this.evidence.get(subject);
@@ -100,11 +162,22 @@ export class ResourceSyncStatusTracker {
   reset(): void {
     this.epoch++;
     this.evidence.clear();
+    this.local = this.registry.open('local');
+    this.server = this.registry.open('server');
+    for (const store of this.serverStores.values()) store.scope.close();
+    this.serverStores.clear();
+    this.serverSubjects.clear();
     for (const listener of this.listeners) this.notify(listener.callback);
   }
 
   remove(subject: string): void {
     this.evidence.delete(subject);
+    this.local.remove(subject);
+    this.server.remove(subject);
+    this.serverStores
+      .get(this.serverSubjects.get(subject) ?? '')
+      ?.scope.remove(subject);
+    this.serverSubjects.delete(subject);
     this.changed(subject);
   }
 
@@ -134,13 +207,17 @@ export class ResourceSyncStatusTracker {
         this.evidence.get(subject) !== entry
       )
         return;
-      const merged = new Map(entry.server?.version);
-
-      for (const [peer, count] of version) {
-        merged.set(peer, Math.max(merged.get(peer) ?? 0, count));
-      }
-
-      entry.server = { version: merged, confirmedAt: Date.now() };
+      // Acceptance concerns operations: successive authenticated UPDATE
+      // deltas may carry disjoint peers. Accumulate accepted operations only;
+      // persistent snapshot barriers remain distinct observations.
+      const accepted = { ...persistenceVersion(version)! };
+      for (const prior of this.server.receipts(subject, 'accepted'))
+        for (const [peer, count] of Object.entries(prior.version))
+          accepted[peer] = Math.max(accepted[peer] ?? 0, count);
+      this.server.record(subject, 'accepted', {
+        version: accepted,
+        confirmedAt: Date.now(),
+      });
       const receipt = this.serverReceipt(subject);
       this.changed(subject);
 
@@ -150,13 +227,28 @@ export class ResourceSyncStatusTracker {
 
   /** A copy of proven server coverage, never the live resource's version. */
   serverReceipt(subject: string): SerializedServerReceipt | undefined {
-    const receipt = this.evidence.get(subject)?.server;
+    const receipt = this.server.latest(subject, 'accepted');
     if (!receipt || receipt.confirmedAt === undefined) return undefined;
+
+    const drive = this.serverSubjects.get(subject);
+    const store = drive ? this.serverStores.get(drive) : undefined;
+    const stored = store?.scope.latest(subject, 'stored');
 
     return {
       subject,
-      version: Object.fromEntries(receipt.version),
+      version: { ...receipt.version },
       confirmedAt: receipt.confirmedAt,
+      ...(stored?.confirmedAt !== undefined && stored.barrier && store && drive
+        ? {
+            stored: {
+              version: { ...stored.version },
+              confirmedAt: stored.confirmedAt,
+              barrier: stored.barrier,
+              drive,
+              ...store.replica,
+            },
+          }
+        : {}),
     };
   }
 
@@ -183,7 +275,10 @@ export class ResourceSyncStatusTracker {
         } else if (restoredVersion) {
           // This is a fresh verification of stored bytes, not knowledge of
           // when they were originally saved.
-          entry.local = { version: restoredVersion };
+          this.local.record(subject, 'stored', {
+            version: persistenceVersion(restoredVersion)!,
+            barrier: 'local-storage-flush',
+          });
           entry.localError = undefined;
         }
       }
@@ -193,19 +288,23 @@ export class ResourceSyncStatusTracker {
         : undefined;
 
       if (server && server.subject === subject) {
-        const version = new Map(entry.server?.version);
+        this.server.record(subject, 'accepted', {
+          version: server.version,
+          confirmedAt: server.confirmedAt,
+        });
 
-        for (const [peer, count] of Object.entries(server.version)) {
-          version.set(peer, Math.max(version.get(peer) ?? 0, count));
+        if (server.stored) {
+          const stored = server.stored;
+          const store = this.serverStore(stored.drive, stored, false);
+
+          if (
+            store.replica.storageId === stored.storageId &&
+            store.replica.generation === stored.generation
+          ) {
+            this.serverSubjects.set(subject, stored.drive);
+            store.scope.record(subject, 'stored', stored);
+          }
         }
-
-        entry.server = {
-          version,
-          confirmedAt: Math.max(
-            entry.server?.confirmedAt ?? 0,
-            server.confirmedAt,
-          ),
-        };
       }
 
       this.changed(subject);
@@ -233,9 +332,12 @@ export class ResourceSyncStatusTracker {
             error instanceof Error ? error.message : String(error);
         } else {
           entry.localError = undefined;
-          entry.local = version
-            ? { version, confirmedAt: Date.now() }
-            : undefined;
+          if (version)
+            this.local.record(subject, 'stored', {
+              version: persistenceVersion(version)!,
+              barrier: 'local-storage-flush',
+              confirmedAt: Date.now(),
+            });
         }
       }
 
@@ -250,29 +352,43 @@ export class ResourceSyncStatusTracker {
   ): ResourceSyncStatus {
     const entry = this.evidence.get(subject);
     const localError = input.localError ?? entry?.localError;
+    const target = resourcePersistenceVersion(resource);
+    const localReceipt = this.local.latest(subject, 'stored');
+    const acceptedReceipt = this.server.latest(subject, 'accepted');
+    const serverStore = this.serverStores.get(
+      this.serverSubjects.get(subject) ?? '',
+    );
+    const storedReceipt = serverStore?.scope.latest(subject, 'stored');
+    const accepted = this.server.covering(subject, 'accepted', target)
+      ? 'confirmed'
+      : acceptedReceipt
+        ? 'pending'
+        : 'unknown';
+    const stored = serverStore?.scope.covering(subject, 'stored', target)
+      ? 'confirmed'
+      : storedReceipt
+        ? 'pending'
+        : 'unknown';
     const local: ResourceSyncStatus['local'] = {
       state: localError
         ? 'error'
         : !input.localAvailable
           ? 'unavailable'
-          : covers(entry?.local, resource)
+          : this.local.covering(subject, 'stored', target)
             ? 'confirmed'
-            : entry?.pendingWrites || entry?.local
+            : entry?.pendingWrites || localReceipt
               ? 'pending'
               : 'unknown',
-      confirmedAt: entry?.local?.confirmedAt,
+      confirmedAt: localReceipt?.confirmedAt,
       error: localError,
     };
     const server: ResourceSyncStatus['server'] = {
-      state: !input.serverUrl
-        ? 'not-configured'
-        : covers(entry?.server, resource)
-          ? 'confirmed'
-          : entry?.server
-            ? 'pending'
-            : 'unknown',
+      state: !input.serverUrl ? 'not-configured' : accepted,
       url: input.serverUrl,
-      confirmedAt: entry?.server?.confirmedAt,
+      confirmedAt: storedReceipt?.confirmedAt ?? acceptedReceipt?.confirmedAt,
+      accepted,
+      stored,
+      ...serverStore?.replica,
     };
     const previous = this.snapshots.get(resource);
 

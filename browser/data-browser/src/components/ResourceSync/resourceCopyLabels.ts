@@ -57,7 +57,7 @@ export function serverCopyLabel(
   if (save.kind === 'saving') return 'Saving changes…';
   if (save.kind === 'queued' || status.state === 'pending')
     return 'Changes waiting to sync';
-  if (status.state === 'confirmed') return 'Latest changes saved';
+  if (status.stored === 'confirmed') return 'Latest changes saved';
 
   return 'Copy not confirmed';
 }

@@ -96,7 +96,12 @@ export function ResourceSyncIndicator({
               }}
               aria-label={`Copies and sync for ${title}: ${presentation.label}`}
               data-testid='resource-sync-indicator'
-              data-sync-state={status.server.state}
+              data-sync-state={
+                status.server.state === 'not-configured'
+                  ? 'not-configured'
+                  : (status.server.stored ?? 'unknown')
+              }
+              data-server-accepted-state={status.server.accepted}
               data-vault-sync-state={vault.state}
               data-peer-sync-state={peers.state}
               data-content-required={contents.required}

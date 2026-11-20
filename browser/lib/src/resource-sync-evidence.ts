@@ -6,10 +6,20 @@ export interface ResourceSyncScope {
   serverUrl: string;
 }
 
+export interface StoredServerReceipt {
+  drive: string;
+  version: Record<string, number>;
+  confirmedAt: number;
+  barrier: string;
+  storageId: string;
+  generation: string;
+}
+
 export interface SerializedServerReceipt {
   subject: string;
   version: Record<string, number>;
   confirmedAt: number;
+  stored?: StoredServerReceipt;
 }
 
 export interface ResourceSyncEvidence {
@@ -70,9 +80,38 @@ export function parseSerializedServerReceipt(
     version[peer] = counter;
   }
 
+  let stored: StoredServerReceipt | undefined;
+
+  if (row.stored !== undefined) {
+    const candidate = row.stored;
+    if (!candidate || typeof candidate !== 'object') return undefined;
+    const parsed = parseSerializedServerReceipt({
+      subject: row.subject,
+      version: candidate?.version,
+      confirmedAt: candidate?.confirmedAt,
+    });
+    if (
+      !parsed ||
+      !Object.keys(parsed.version).length ||
+      typeof candidate.drive !== 'string' ||
+      !candidate.drive ||
+      typeof candidate.barrier !== 'string' ||
+      !candidate.barrier ||
+      !/^[a-f0-9]{64}$/.test(candidate.storageId) ||
+      !/^[a-f0-9]{64}$/.test(candidate.generation)
+    )
+      return undefined;
+    stored = {
+      ...candidate,
+      drive: canonicalizeScheme(candidate.drive),
+      version: parsed.version,
+    };
+  }
+
   return {
     subject: canonicalizeScheme(row.subject),
     version,
     confirmedAt: row.confirmedAt!,
+    ...(stored ? { stored } : {}),
   };
 }

@@ -1,3 +1,4 @@
+import { persistenceCopyComplete } from '@tomic/lib';
 import type {
   ResourcePeerSyncStatus,
   ResourceSaveState,
@@ -25,6 +26,8 @@ export type ResourceVaultPresentationStatus = {
 };
 
 export type AttachmentCopyPresentationStatus = {
+  storageId?: string;
+  generation?: string;
   state:
     | 'confirmed'
     | 'pending'
@@ -154,8 +157,13 @@ export function resourceSyncPresentation(
   }
 
   if (
-    status.server.state === 'confirmed' &&
-    (!contents?.required || contents.server.state === 'confirmed')
+    persistenceCopyComplete(
+      status.server.stored ?? 'unknown',
+      contents?.required ?? false,
+      contents?.server.state,
+      status.server,
+      contents?.server,
+    )
   ) {
     return {
       label: contents?.required
@@ -175,8 +183,11 @@ export function resourceSyncPresentation(
   }
 
   if (
-    vault.state === 'confirmed' &&
-    (!contents?.required || contents.vault.state === 'confirmed')
+    persistenceCopyComplete(
+      vault.state,
+      contents?.required ?? false,
+      contents?.vault.state,
+    )
   ) {
     return {
       label: contents?.required
@@ -217,7 +228,7 @@ export function resourceSyncPresentation(
   }
 
   if (contents?.required) {
-    if (status.server.state === 'confirmed') {
+    if (status.server.stored === 'confirmed') {
       return {
         label: 'Server file contents not confirmed',
         tone: contents.server.state === 'pending' ? 'pending' : 'neutral',
@@ -254,7 +265,10 @@ export function resourceSyncPresentation(
     }
   }
 
-  if (status.server.state === 'unknown') {
+  if (
+    status.server.state !== 'not-configured' &&
+    status.server.stored !== 'confirmed'
+  ) {
     return {
       label: 'Server copy not confirmed',
       tone: 'neutral',

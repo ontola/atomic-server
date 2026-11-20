@@ -22,6 +22,8 @@ pub struct ResourceAttachmentEvidence {
     pub manifest: Option<AttachmentManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmed_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replica: Option<crate::db::kv_store::ReplicaIdentity>,
 }
 
 #[derive(Default)]
@@ -249,6 +251,7 @@ pub async fn resource_attachment_evidence(
             version: None,
             manifest: None,
             confirmed_at: None,
+            replica: None,
         };
         if !admitted || crate::utils::now().saturating_sub(started) > 10_000 {
             rows.push(row);
@@ -313,11 +316,12 @@ pub async fn resource_attachment_evidence(
                         if remote_stable
                             && db.write_log().generation() == generation
                             && db.write_log().blob_generation() == Some(blob_generation)
-                            && db.kv.replica_identity(&drive)? == Some(identity)
+                            && db.kv.replica_identity(&drive)? == Some(identity.clone())
                         {
                             let at = cached.unwrap_or_else(crate::utils::now);
                             row.state = "confirmed";
                             row.confirmed_at = Some(at);
+                            row.replica = Some(identity);
                             if cached.is_none() {
                                 if let Ok(mut cache) = db.attachment_cache.lock() {
                                     if cache.entries.len() >= 128 {

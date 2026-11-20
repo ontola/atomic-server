@@ -1,3 +1,4 @@
+import { PersistenceEvidenceRegistry } from './persistence-evidence.js';
 import {
   ResourceAttachmentSync,
   type AttachmentPeerReceipt,
@@ -890,6 +891,32 @@ export class Store {
 
   /** @internal Observer failures cannot change a save or its storage evidence. */
   public notifyServerReplicaReceipt(receipt: ServerReplicaReceipt): void {
+    const barrier = receipt.observation.barrier;
+    const replica = receipt.observation.replica;
+
+    if (
+      receipt.clientAgent === this.agent?.subject &&
+      receipt.identityGeneration === this.identityGeneration &&
+      receipt.databaseGeneration === this.clientDbGeneration &&
+      receipt.serverOrigin === this.resourceSyncScope()?.serverUrl &&
+      replica &&
+      replica.storageId !== receipt.source?.storageId &&
+      receipt.observation.capability === 'supported' &&
+      barrier?.state === 'completed' &&
+      barrier.storage === 'persistent' &&
+      barrier.version &&
+      barrier.name
+    ) {
+      this.resourceSyncStatus.storedServer(
+        this.normalizeSubject(barrier.subject),
+        barrier.version,
+        barrier.name,
+        replica,
+        this.normalizeSubject(receipt.drive),
+      );
+      this.queueResourceSyncReceipt(this.normalizeSubject(barrier.subject));
+    }
+
     void this.eventManager
       .emit(StoreEvents.ServerReplicaReceipt, receipt)
       .catch(() => undefined);
@@ -1335,9 +1362,87 @@ export class Store {
 
     const added = await this.outbox.attachDatabase(agent, db);
 
-    for (const entry of added) this.hydrateCommitLogFromOutbox(entry);
+    let draftsDurable = false;
+
+    if (
+      added.some(entry => entry.draft) &&
+      db.supportsDurablePersistence === true
+    ) {
+      try {
+        await db.flush();
+        draftsDurable = true;
+      } catch {
+        /* Hydrate without proof. */
+      }
+
+      if (this.agent?.subject !== agent || this.clientDb !== db) return;
+    }
+
+    for (const entry of added) {
+      if (entry.draft) {
+        const restored = this.restoreResourceDraft(entry);
+        if (restored && draftsDurable)
+          this.resourceSyncStatus.restore(entry.subject)({
+            subject: entry.subject,
+            snapshot: decodeB64(entry.draft.snapshot),
+          });
+        if (restored && entry.draft.waitingForParent)
+          this.batchResource(entry.subject);
+      } else this.hydrateCommitLogFromOutbox(entry);
+    }
 
     this.scheduleOutboxDrain();
+  }
+
+  private restoreResourceDraft(
+    entry: import('./local-outbox.js').OutboxEntry,
+  ): boolean {
+    if (!entry.draft || this.isDestroyed(entry.subject)) return false;
+    const resource =
+      this.resources.get(entry.subject) ?? new Resource(entry.subject);
+    resource.setStore(this);
+
+    try {
+      resource.importLoroUpdate(decodeB64(entry.draft.snapshot), true);
+    } catch {
+      return false;
+    }
+
+    if (entry.draft.baseVersion)
+      resource.restoreSaveCursor(entry.draft.baseVersion);
+    if (entry.signedGenesis) resource.stashGenesis(entry.signedGenesis);
+    resource.new = entry.draft.held;
+    resource.loading = false;
+    this.resources.set(entry.subject, resource);
+    this.notifyResourceUpdated(resource);
+
+    return true;
+  }
+
+  /** @internal Private drafts cross the same local barrier as published state. */
+  public async persistResourceDraft(
+    subject: string,
+    snapshot: Uint8Array,
+    draft: import('./local-outbox.js').DraftCheckpoint,
+    genesis?: Commit,
+  ): Promise<void> {
+    if (
+      this.clientDb?.supportsDurablePersistence !== true ||
+      !this.outbox.isStoredIn(this.clientDb)
+    )
+      throw new Error('Draft storage is unavailable');
+    const settle = this.resourceSyncStatus.localWrite(
+      this.normalizeSubject(subject),
+      snapshot,
+    );
+
+    try {
+      await this.outbox.recordDraft(subject, draft, genesis);
+      settle();
+    } catch (error) {
+      settle(error);
+      throw error;
+    }
   }
 
   /**
@@ -2168,6 +2273,16 @@ export class Store {
       return;
     }
 
+    // A browser delivery starts from replayable local state, even online.
+    // Native renderer adapters deliberately advertise no snapshot durability.
+    if (this.clientDb?.supportsDurablePersistence === true) {
+      const resource =
+        this.resources.get(subject) ?? (await this.getResource(subject));
+      assertCurrent();
+      await resource.persistPendingToClientDb();
+      assertCurrent();
+    }
+
     // Step 1: POST the pre-signed genesis if present. The genesis
     // commit's `loroUpdate` was captured in `signChanges` at sign
     // time; `_loroVersionAtLastSave` was advanced THERE to the same
@@ -2180,6 +2295,21 @@ export class Store {
 
     if (entry.signedGenesis) {
       const genesis = entry.signedGenesis;
+
+      // Older queues omitted the replay baseline for an unposted genesis.
+      // Recover it before clearing the envelope; the cold snapshot can contain
+      // later edits that must still be exported after the genesis is accepted.
+      if (!entry.baseVersion && genesis.loroUpdate) {
+        this.outbox.setBaseVersion(
+          subject,
+          encodeB64(
+            LoroLoader.Loro.decodeImportBlobMeta(
+              genesis.loroUpdate,
+              false,
+            ).partialEndVersionVector.encode(),
+          ),
+        );
+      }
 
       // Ours, from before the POST: the echo can land before the ack and
       // must be recognised either way (see `applyIncoming`).
@@ -4604,6 +4734,9 @@ export class Store {
    *   that silence as "not stored locally".
    */
   private hydrateFromLocalDb(subject: string): Promise<boolean | undefined> {
+    const draft = this.outbox.getEntry(subject);
+    if (draft?.draft && this.restoreResourceDraft(draft))
+      return Promise.resolve(true);
     const inFlight = this._inFlightLocalHydration.get(subject);
     if (inFlight) return inFlight;
 
@@ -6363,6 +6496,7 @@ export class Store {
     }
   }
 
+  public readonly persistenceEvidence = new PersistenceEvidenceRegistry();
   private resourceAttachmentSync = new ResourceAttachmentSync(
     this,
     async (subjects, signal) => {
@@ -6409,7 +6543,9 @@ export class Store {
     this.resourceAttachmentSync.acknowledge(receipt);
   }
 
-  private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker();
+  private resourcePeerSyncStatus = new ResourcePeerSyncStatusTracker(
+    this.persistenceEvidence,
+  );
   private peerSyncGeneration = 0;
   private resourcePeerWatchers = new Map<Resource, number>();
   private nativePeerReadTokens = new Map<string, object>();
@@ -6559,24 +6695,8 @@ export class Store {
         const accepted = requested.filter(valid);
         const acceptedSet = new Set(accepted);
 
-        for (const subject of accepted) {
-          if (!valid(subject)) continue;
-          this.resourceAttachmentSync.replaceNative(
-            subject,
-            evidence.connections.flatMap(connection =>
-              (connection.attachmentReceipts ?? [])
-                .filter(
-                  receipt => this.normalizeSubject(receipt.subject) === subject,
-                )
-                .map(receipt => ({
-                  ...receipt,
-                  subject,
-                  connectionId: connection.connectionId,
-                })),
-            ),
-          );
-        }
-
+        // Register the host's current sessions before admitting their byte
+        // receipts; closed sessions cannot contribute delayed observations.
         this.resourcePeerSyncStatus.replaceNative(
           accepted,
           {
@@ -6594,6 +6714,24 @@ export class Store {
           },
           valid,
         );
+
+        for (const subject of accepted) {
+          if (!valid(subject)) continue;
+          this.resourceAttachmentSync.replaceNative(
+            subject,
+            evidence.connections.flatMap(connection =>
+              (connection.attachmentReceipts ?? [])
+                .filter(
+                  receipt => this.normalizeSubject(receipt.subject) === subject,
+                )
+                .map(receipt => ({
+                  ...receipt,
+                  subject,
+                  connectionId: connection.connectionId,
+                })),
+            ),
+          );
+        }
       }
     } catch {
       // Availability diagnostics must not affect accepted native saves. A
@@ -6651,6 +6789,11 @@ export class Store {
   }
 
   /** @internal Only the negotiated authenticated receipt consumer may call this. */
+  /** @internal A closed session cannot contribute a delayed new observation. */
+  public isResourcePeerConnectionActive(id: string): boolean {
+    return this.resourcePeerSyncStatus.isConnected(id);
+  }
+
   public acknowledgeResourcePeerReceipt(receipt: BrowserReplicaReceipt): void {
     if (
       this.isDestroyed(receipt.subject) ||
@@ -6735,7 +6878,9 @@ export class Store {
     };
   }
 
-  private resourceSyncStatus = new ResourceSyncStatusTracker();
+  private resourceSyncStatus = new ResourceSyncStatusTracker(
+    this.persistenceEvidence,
+  );
   private resourceSyncEpoch = 0;
   private resourceSyncWatchers = new Map<Resource, number>();
   private resourceSyncReads = new Map<string, object>();
@@ -6792,6 +6937,7 @@ export class Store {
     const subject = this.normalizeSubject(subjectRaw);
     if (
       !db ||
+      db.supportsDurablePersistence !== true ||
       typeof db.getResourceSyncEvidence !== 'function' ||
       this.resourceSyncReads.has(subject) ||
       this.isDestroyed(subject) ||
@@ -6963,7 +7109,10 @@ export class Store {
       this.normalizeSubject(target.subject),
       target,
       {
-        localAvailable: !!db && !db.unsupportedEnvironment,
+        localAvailable:
+          !!db &&
+          !db.unsupportedEnvironment &&
+          db.supportsDurablePersistence === true,
         localError: db?.initError?.message,
         serverUrl:
           this.noServer ||
@@ -9358,8 +9507,10 @@ export class Store {
 
     try {
       for (const resourceSubject of subjects) {
-        const resource = this._resources.get(resourceSubject);
-        await resource?.save();
+        const resource =
+          this._resources.get(resourceSubject) ??
+          (await this.getResource(resourceSubject));
+        await resource.save();
         subjects.delete(resourceSubject);
       }
     } catch (error) {
@@ -9539,7 +9690,7 @@ export class Store {
     };
     const receiptEpoch = this.resourceSyncEpoch;
     const settle =
-      db === this.clientDb
+      db === this.clientDb && db.supportsDurablePersistence === true
         ? this.resourceSyncStatus.localWrite(
             this.normalizeSubject(subject),
             snapshot,

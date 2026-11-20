@@ -28,6 +28,7 @@
   - [Transports](atomic-sync/transports.md)
   - [How sync works](sync.md)
   - [Local-first Sync Engine](sync-engine.md)
+  - [Persistence and copies](persistence.md)
   - [Personal Data Store](personal-data-store.md)
   - [Identity: Agents](agents.md)
   - [Authentication](authentication.md)

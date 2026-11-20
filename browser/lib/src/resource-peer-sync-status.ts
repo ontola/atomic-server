@@ -1,6 +1,10 @@
 import type { ResourcePeerEvidence } from './resource-peer-evidence.js';
-import { decodeB64 } from './base64.js';
-import { LoroLoader } from './loro-loader.js';
+import {
+  PersistenceEvidenceRegistry,
+  decodePersistenceVersion,
+  resourcePersistenceVersion,
+  type PersistenceEvidenceScope,
+} from './persistence-evidence.js';
 import type {
   BrowserReplicaReceipt,
   ReplicaIdentity,
@@ -14,9 +18,11 @@ export interface ResourcePeerCopy {
   readonly confirmedAt?: number;
   readonly storageId?: string;
   readonly generation?: string;
+  /** Reachability is separate from a historical storage receipt. */
+  readonly connected?: boolean;
 }
 
-/** Live browser or native peer connections only. Counts never imply physical independence,
+/** Historical browser receipts and current native observations. Counts never imply physical independence,
  * attachment coverage, continued retention, or a recoverable backup.
  */
 export interface ResourcePeerSyncStatus {
@@ -28,28 +34,14 @@ export interface ResourcePeerSyncStatus {
   readonly peers: readonly ResourcePeerCopy[];
 }
 
-type Receipt = { version: Map<string, number>; confirmedAt: number };
 type Connection = {
+  connected?: boolean;
   drive: string;
   peerAgent: string;
   source?: ReplicaIdentity;
   replica?: ReplicaIdentity;
-  receipts: Map<string, Receipt>;
+  receipts: PersistenceEvidenceScope;
 };
-
-function covers(receipt: Receipt, resource: Resource): boolean {
-  if (!resource.hasLoroDoc()) return false;
-  const doc = resource.getLoroDoc();
-  if (!doc || doc.getPendingTxnLength() > 0) return false;
-  const current = doc.oplogVersion().toJSON();
-
-  return (
-    current.size > 0 &&
-    [...current].every(
-      ([peer, counter]) => (receipt.version.get(peer) ?? 0) >= counter,
-    )
-  );
-}
 
 /** Store owns identity/database epochs and resource change subscriptions. */
 export class ResourcePeerSyncStatusTracker {
@@ -61,6 +53,8 @@ export class ResourcePeerSyncStatusTracker {
     callback: () => void;
   }>();
   private snapshots = new WeakMap<Resource, ResourcePeerSyncStatus>();
+
+  constructor(private registry = new PersistenceEvidenceRegistry()) {}
 
   private changed(subject?: string, drive?: string): void {
     for (const listener of this.listeners) {
@@ -89,19 +83,39 @@ export class ResourcePeerSyncStatusTracker {
   }
 
   reset(): void {
+    for (const c of this.connections.values()) c.receipts.close();
+    for (const cs of this.native.values())
+      for (const c of cs.values()) c.receipts.close();
     this.connections.clear();
     this.native.clear();
     this.changed();
   }
 
   open(connectionId: string, drive: string, peerAgent: string): () => void {
-    const connection: Connection = { drive, peerAgent, receipts: new Map() };
+    const connection: Connection = {
+      connected: true,
+      drive,
+      peerAgent,
+      receipts: this.registry.open(`peer:${connectionId}`),
+    };
     this.connections.set(connectionId, connection);
+    const disconnected = [...this.connections].filter(
+      ([, c]) => c.connected === false,
+    );
+
+    for (const [id, old] of disconnected.slice(
+      0,
+      Math.max(0, disconnected.length - 128),
+    )) {
+      old.receipts.close();
+      this.connections.delete(id);
+    }
+
     this.changed(undefined, drive);
 
     return () => {
       if (this.connections.get(connectionId) !== connection) return;
-      this.connections.delete(connectionId);
+      connection.connected = false;
       this.changed(undefined, drive);
     };
   }
@@ -116,10 +130,10 @@ export class ResourcePeerSyncStatusTracker {
   }
 
   remove(subject: string): void {
-    this.native.delete(subject);
+    this.clearNative(subject);
 
     for (const connection of this.connections.values()) {
-      connection.receipts.delete(subject);
+      connection.receipts.remove(subject);
     }
 
     this.changed(subject);
@@ -135,20 +149,23 @@ export class ResourcePeerSyncStatusTracker {
   ): void {
     for (const subject of subjects) {
       if (!valid(subject)) continue;
+      this.clearNative(subject);
       const connections = new Map<string, Connection>();
 
       for (const connection of evidence?.connections ?? []) {
         const receipt = connection.receipts.find(
           entry => entry.subject === subject,
         );
-        const receipts = new Map<string, Receipt>();
+        const receipts = this.registry.open(
+          `native-peer:${subject}:${connection.connectionId}`,
+        );
+        const version = receipt && decodePersistenceVersion(receipt.version);
 
-        if (receipt) {
-          receipts.set(subject, {
-            version: LoroLoader.Loro.VersionVector.decode(
-              decodeB64(receipt.version),
-            ).toJSON(),
+        if (receipt && version) {
+          receipts.record(subject, 'stored', {
+            version,
             confirmedAt: receipt.confirmedAt,
+            barrier: 'peer-storage-flush',
           });
         }
 
@@ -171,54 +188,53 @@ export class ResourcePeerSyncStatusTracker {
     const subjects = subject ? [subject] : [...this.native.keys()];
 
     for (const key of subjects) {
+      for (const c of this.native.get(key)?.values() ?? []) c.receipts.close();
       if (this.native.delete(key)) this.changed(key);
     }
+  }
+
+  isConnected(id: string): boolean {
+    const browser = this.connections.get(id);
+    if (browser) return browser.connected !== false;
+
+    return [...this.native.values()].some(connections => connections.has(id));
   }
 
   acknowledge(receipt: BrowserReplicaReceipt): void {
     const connection = this.connections.get(receipt.connectionId);
     if (
       !connection ||
+      connection.connected === false ||
       connection.drive !== receipt.drive ||
       connection.peerAgent !== receipt.peerAgent
     )
       return;
 
-    let version: Map<string, number>;
-
-    try {
-      version = LoroLoader.Loro.VersionVector.decode(
-        decodeB64(receipt.version),
-      ).toJSON();
-      if (
-        !version.size ||
-        [...version.values()].some(
-          count => !Number.isSafeInteger(count) || count <= 0,
-        )
-      )
-        return;
-    } catch {
-      return;
-    }
+    const version = decodePersistenceVersion(receipt.version);
+    if (!version || Object.values(version).some(count => count <= 0)) return;
 
     const identityChanged =
       !connection.replica ||
       connection.replica.storageId !== receipt.replica.storageId ||
       connection.replica.generation !== receipt.replica.generation;
     if (identityChanged) connection.receipts.clear();
-    connection.source = receipt.source;
-    connection.replica = receipt.replica;
-    const prior = connection.receipts.get(receipt.subject);
 
-    if (prior) {
-      for (const [peer, counter] of prior.version) {
-        version.set(peer, Math.max(counter, version.get(peer) ?? 0));
-      }
+    // A fresh incarnation supersedes old history for this physical store.
+    for (const prior of this.connections.values()) {
+      if (
+        prior !== connection &&
+        prior.replica?.storageId === receipt.replica.storageId &&
+        prior.replica.generation !== receipt.replica.generation
+      )
+        prior.receipts.clear();
     }
 
-    connection.receipts.set(receipt.subject, {
+    connection.source = receipt.source;
+    connection.replica = receipt.replica;
+    connection.receipts.record(receipt.subject, 'stored', {
       version,
-      confirmedAt: Math.max(prior?.confirmedAt ?? 0, receipt.confirmedAt),
+      confirmedAt: receipt.confirmedAt,
+      barrier: 'peer-storage-flush',
     });
     this.changed(
       identityChanged ? undefined : receipt.subject,
@@ -239,19 +255,24 @@ export class ResourcePeerSyncStatusTracker {
       ...(this.native.get(subject) ?? []),
     ]) {
       if (!drive || connection.drive !== drive) continue;
-      connectedCount++;
+      if (connection.connected !== false) connectedCount++;
       const { replica, source } = connection;
       // A second tab or a byte-cloned DB is not another independent copy.
       if (replica && replica.storageId === source?.storageId) continue;
-      const receipt = connection.receipts.get(subject);
+      const receipt = connection.receipts.latest(subject, 'stored');
       const state = receipt
-        ? covers(receipt, resource)
+        ? connection.receipts.covering(
+            subject,
+            'stored',
+            resourcePersistenceVersion(resource),
+          )
           ? 'confirmed'
           : 'pending'
         : 'unknown';
       const copy: ResourcePeerCopy = Object.freeze({
         connectionId,
         peerAgent: connection.peerAgent,
+        connected: connection.connected !== false,
         state,
         ...(receipt ? { confirmedAt: receipt.confirmedAt } : {}),
         ...(replica ? replica : {}),
@@ -264,6 +285,7 @@ export class ResourcePeerSyncStatusTracker {
       if (
         !prior ||
         (state === 'confirmed' && prior.state !== 'confirmed') ||
+        (state === prior.state && copy.connected && !prior.connected) ||
         (state === prior.state &&
           (copy.confirmedAt ?? 0) > (prior.confirmedAt ?? 0)) ||
         (state === 'pending' && prior.state === 'unknown')

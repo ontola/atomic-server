@@ -21,6 +21,7 @@ const hex = /^[0-9a-f]{64}$/;
 /** Historical authenticated server storage evidence. This does not establish
  * physical independence, current retention, blobs, or recoverable backups. */
 export interface ServerReplicaReceipt {
+  readonly drive: string;
   readonly observation: ReplicaObservation;
   readonly source?: ReplicaIdentity;
   readonly endpoint: string;
@@ -559,6 +560,7 @@ export class ServerReceiptRequests {
       this.store.notifyServerReplicaReceipt(
         Object.freeze({
           observation,
+          drive: target.drive,
           ...(source ? { source } : {}),
           endpoint: target.transport.endpoint,
           serverOrigin: new URL(target.transport.endpoint).origin,

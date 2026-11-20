@@ -73,6 +73,7 @@ pub async fn attachment_evidence(
                     version: None,
                     manifest: None,
                     confirmed_at: None,
+                    replica: None,
                 },
             )
             .collect(),

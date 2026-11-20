@@ -1,3 +1,4 @@
+import { encodeB64 } from './base64.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Resource } from './resource.js';
 import { Store } from './store.js';
@@ -39,11 +40,96 @@ function snapshot(resource: Resource) {
 function database(put = vi.fn(async () => {})) {
   return {
     isReady: true,
+    supportsDurablePersistence: true,
+    waitForInit: async () => true,
+    getResourcesWithSnapshots: async (subjects: string[]) =>
+      subjects.map(() => ({ jsonAd: null, snapshot: null })),
     putResourceWithSnapshot: put,
   } as unknown as ClientDbWorker;
 }
 
 describe('resource copy evidence', () => {
+  it('requires an actual server barrier and fences generations per drive', async () => {
+    const { store } = await testStore();
+    const resource = await store.newResource({
+      isA: core.classes.Drive,
+      noParent: true,
+    });
+    await resource.save();
+    expect(store.getResourceSyncStatus(resource).server).toMatchObject({
+      accepted: 'confirmed',
+      stored: 'unknown',
+    });
+    const emit = (
+      target: Resource,
+      drive: string,
+      generation = 'b'.repeat(64),
+    ) =>
+      store.notifyServerReplicaReceipt({
+        drive,
+        endpoint: 'https://example.com/storage-receipt',
+        serverOrigin: 'https://example.com',
+        transport: 'http',
+        clientAgent: store.getAgent()!.subject!,
+        identityGeneration: store.getIdentityGeneration(),
+        databaseGeneration: store.getClientDbGeneration(),
+        connectionId: 'test-session',
+        observation: {
+          provider: 'test',
+          capability: 'supported',
+          replica: { storageId: 'a'.repeat(64), generation },
+          barrier: {
+            subject: target.subject,
+            version: encodeB64(target.getLoroDoc()!.oplogVersion().encode()),
+            name: 'atomic-redb-flush-v1',
+            storage: 'persistent',
+            state: 'completed',
+          },
+        },
+      });
+    emit(resource, resource.subject);
+    expect(store.getResourceSyncStatus(resource).server.stored).toBe(
+      'confirmed',
+    );
+    store.setServerConnected(false);
+    expect(store.getResourceSyncStatus(resource).server.stored).toBe(
+      'confirmed',
+    );
+    const other = localResource(store, 'https://example.com/other');
+    emit(other, 'https://example.com/other-drive', 'c'.repeat(64));
+    expect(store.getResourceSyncStatus(resource).server.stored).toBe(
+      'confirmed',
+    );
+    emit(other, resource.subject, 'd'.repeat(64));
+    expect(store.getResourceSyncStatus(resource).server.stored).toBe('unknown');
+    emit(resource, resource.subject, 'd'.repeat(64));
+    resource
+      .getLoroDoc()!
+      .getMap('properties')
+      .set(core.properties.name, 'New edit');
+    resource.sealPendingEdits();
+    expect(store.getResourceSyncStatus(resource).server.stored).toBe('pending');
+  });
+
+  it('never labels a memory adapter write as persistent local storage', async () => {
+    const { store } = await testStore();
+    const resource = localResource(store);
+    const db = {
+      ...database(),
+      supportsDurablePersistence: false,
+    } as ClientDbWorker;
+    store.setClientDb(db);
+    await store.persistState(
+      db,
+      resource.subject,
+      JSON.stringify({ '@id': resource.subject }),
+      snapshot(resource),
+    );
+    expect(store.getResourceSyncStatus(resource).local.state).toBe(
+      'unavailable',
+    );
+  });
+
   it('persists server metadata carried by a deduplicated own commit echo without notifying resource consumers', async () => {
     const { store } = await testStore();
     const resource = await store.newResource({

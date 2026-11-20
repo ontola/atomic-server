@@ -1,3 +1,4 @@
+import type { ReplicaIdentity } from './replica-evidence.js';
 import type { Resource } from './resource.js';
 import type { Store } from './store.js';
 import { canonicalizeScheme } from './subject.js';
@@ -12,6 +13,7 @@ export interface AttachmentManifest {
 export interface ResourceAttachmentEvidence {
   readonly subject: string;
   readonly version?: string;
+  readonly replica?: ReplicaIdentity;
   readonly manifest?: AttachmentManifest;
   readonly state: 'confirmed' | 'unknown';
   readonly confirmedAt?: number;
@@ -36,6 +38,8 @@ export type AttachmentCopyStatus = Readonly<{
     | 'not-configured';
   confirmedAt?: number;
   error?: string;
+  storageId?: string;
+  generation?: string;
 }>;
 export interface ResourceAttachmentSyncStatus {
   readonly required: boolean;
@@ -244,6 +248,13 @@ export function parseResourceAttachmentEvidence(
         row.confirmedAt < 0)
     )
       return undefined;
+    if (
+      row.replica !== undefined &&
+      (!row.replica ||
+        !/^[a-f0-9]{64}$/.test(row.replica.storageId) ||
+        !/^[a-f0-9]{64}$/.test(row.replica.generation))
+    )
+      return undefined;
     out.push(
       Object.freeze({
         subject: row.subject,
@@ -251,6 +262,14 @@ export function parseResourceAttachmentEvidence(
         manifest,
         state: row.state,
         confirmedAt: row.confirmedAt,
+        ...(row.replica
+          ? {
+              replica: Object.freeze({
+                storageId: row.replica.storageId,
+                generation: row.replica.generation,
+              }),
+            }
+          : {}),
       }),
     );
   }

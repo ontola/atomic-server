@@ -1,3 +1,7 @@
+import {
+  type PersistenceEvidenceScope,
+  type PersistenceContentReceipt,
+} from './persistence-evidence.js';
 import { isNativePeerConnectionId } from './resource-peer-evidence.js';
 import { StoreEvents, type Store } from './store.js';
 import { ResourceEvents, type Resource } from './resource.js';
@@ -21,7 +25,7 @@ export interface AttachmentPeerReceipt {
   source: ReplicaIdentity;
   replica: ReplicaIdentity;
 }
-type Proof = { manifest: AttachmentManifest; confirmedAt: number };
+type Proof = PersistenceContentReceipt;
 type Watch = {
   resource: Resource;
   callbacks: Set<() => void>;
@@ -35,9 +39,9 @@ const UNKNOWN: AttachmentCopyStatus = Object.freeze({ state: 'unknown' });
 /** Byte evidence has its own identity; a metadata-only edit does not alter it. */
 export class ResourceAttachmentSync {
   private watches = new Map<Resource, Watch>();
-  private local = new Map<string, Proof>();
-  private server = new Map<string, Proof>();
-  private peers = new Map<string, Map<string, AttachmentPeerReceipt>>();
+  private local: PersistenceEvidenceScope;
+  private server: PersistenceEvidenceScope;
+  private peers = new Map<string, PersistenceEvidenceScope>();
   private snapshots = new WeakMap<Resource, ResourceAttachmentSyncStatus>();
   private scope?: string;
   private db?: ReturnType<Store['getClientDb']>;
@@ -55,7 +59,10 @@ export class ResourceAttachmentSync {
       subjects: string[],
       signal: AbortSignal,
     ) => Promise<unknown>,
-  ) {}
+  ) {
+    this.local = store.persistenceEvidence.open('local-contents');
+    this.server = store.persistenceEvidence.open('server-contents');
+  }
 
   private currentScope(): string {
     return JSON.stringify([
@@ -73,6 +80,7 @@ export class ResourceAttachmentSync {
     this.epoch++;
     this.local.clear();
     this.server.clear();
+    for (const peerScope of this.peers.values()) peerScope.close();
     this.peers.clear();
   }
   private notify(subject?: string): void {
@@ -186,8 +194,8 @@ export class ResourceAttachmentSync {
             other => this.store.normalizeSubject(other.subject) === subject,
           )
         ) {
-          this.local.delete(subject);
-          this.server.delete(subject);
+          this.local.removeContents(subject);
+          this.server.removeContents(subject);
         }
       }
 
@@ -207,33 +215,37 @@ export class ResourceAttachmentSync {
   remove(subject: string): void {
     subject = this.store.normalizeSubject(subject);
     for (const rows of [this.local, this.server, ...this.peers.values()])
-      for (const [root, proof] of rows)
+      for (const [root, proof] of rows.contentEntries())
         if (
           root === subject ||
           proof.manifest.files.some(
             file => this.store.normalizeSubject(file.subject) === subject,
           )
         )
-          rows.delete(root);
+          rows.removeContents(root);
 
     for (const watch of this.watches.values())
       if (watch.dependencies.includes(subject)) {
         watch.token = {};
         const root = this.store.normalizeSubject(watch.resource.subject);
-        this.local.delete(root);
-        this.server.delete(root);
-        for (const receipts of this.peers.values()) receipts.delete(root);
+        this.local.removeContents(root);
+        this.server.removeContents(root);
+        for (const receipts of this.peers.values())
+          receipts.removeContents(root);
       }
 
     this.notify();
   }
   closePeer(connection: string): void {
-    this.peers.delete(connection);
+    // Keep historical byte evidence while the peer is offline. Identity
+    // replacement and account reset still fence it in the normal paths.
+    void connection;
     this.notify();
   }
   acknowledge(receipt: AttachmentPeerReceipt): void {
     this.syncScope();
     if (
+      !this.store.isResourcePeerConnectionActive(receipt.connectionId) ||
       this.store.isDestroyed(receipt.subject) ||
       this.store.hasPendingDestroy(receipt.subject) ||
       receipt.source.storageId === receipt.replica.storageId
@@ -242,19 +254,32 @@ export class ResourceAttachmentSync {
     let rows = this.peers.get(receipt.connectionId);
 
     if (!rows) {
-      rows = new Map();
+      rows = this.store.persistenceEvidence.open(
+        `peer-contents:${receipt.connectionId}`,
+      );
       this.peers.set(receipt.connectionId, rows);
     }
 
-    const old = rows.get(receipt.subject);
-    if (old && old.confirmedAt > receipt.confirmedAt) return;
-    rows.set(this.store.normalizeSubject(receipt.subject), receipt);
-    while (rows.size > 128) rows.delete(rows.keys().next().value!);
+    if (this.peers.size > 256) {
+      for (const [id, old] of this.peers) {
+        if (this.peers.size <= 256) break;
+
+        if (!this.store.isResourcePeerConnectionActive(id)) {
+          old.close();
+          this.peers.delete(id);
+        }
+      }
+    }
+
+    rows.recordContents(this.store.normalizeSubject(receipt.subject), receipt);
+    const entries = [...rows.contentEntries()];
+    for (const [subject] of entries.slice(0, Math.max(0, entries.length - 128)))
+      rows.removeContents(subject);
     this.notify(receipt.subject);
   }
   replaceNative(subject: string, receipts: AttachmentPeerReceipt[]): void {
     for (const [id, rows] of this.peers)
-      if (isNativePeerConnectionId(id)) rows.delete(subject);
+      if (isNativePeerConnectionId(id)) rows.removeContents(subject);
     for (const receipt of receipts) this.acknowledge(receipt);
     this.notify(subject);
   }
@@ -271,19 +296,22 @@ export class ResourceAttachmentSync {
         : descriptor.manifest &&
             attachmentManifestKey(proof.manifest) ===
               attachmentManifestKey(descriptor.manifest)
-          ? { state: 'confirmed', confirmedAt: proof.confirmedAt }
+          ? {
+              state: 'confirmed',
+              confirmedAt: proof.confirmedAt,
+              ...proof.replica,
+            }
           : { state: 'pending', confirmedAt: proof.confirmedAt };
     const serverUrl = this.store.getResourceSyncStatus(resource).server.url;
     const peers = this.store
       .getResourcePeerSyncStatus(resource)
       .peers.map(peer => {
-        const receipt = this.peers.get(peer.connectionId)?.get(subject);
+        const receipt = this.peers.get(peer.connectionId)?.content(subject);
         const matching =
           receipt &&
-          receipt.replica.storageId === peer.storageId &&
-          receipt.replica.generation === peer.generation &&
-          receipt.confirmedAt <= Date.now() &&
-          Date.now() - receipt.confirmedAt < 30_000;
+          receipt.replica?.storageId === peer.storageId &&
+          receipt.replica?.generation === peer.generation &&
+          receipt.confirmedAt <= Date.now();
 
         return {
           ...state(matching ? receipt : undefined),
@@ -296,10 +324,10 @@ export class ResourceAttachmentSync {
       required: descriptor.required,
       manifest: descriptor.manifest,
       local: this.store.getClientDb()
-        ? state(this.local.get(subject))
+        ? state(this.local.content(subject))
         : { state: 'unavailable' },
       server: serverUrl
-        ? { ...state(this.server.get(subject)), url: serverUrl }
+        ? { ...state(this.server.content(subject)), url: serverUrl }
         : { state: 'not-configured' },
       peers,
     };
@@ -347,17 +375,22 @@ export class ResourceAttachmentSync {
       !this.store.isDestroyed(subject) &&
       !this.store.hasPendingDestroy(subject);
 
-    const apply = (raw: unknown, target: Map<string, Proof>) => {
+    const apply = (raw: unknown, target: PersistenceEvidenceScope) => {
+      // A failed request says nothing about retention. An authenticated
+      // successful inventory reporting a missing copy does invalidate proof.
+      if (raw === undefined) return;
       const rows = parseResourceAttachmentEvidence(raw);
+      if (!rows) return;
       for (const subject of subjects)
-        if (valid(subject)) target.delete(subject);
+        if (valid(subject)) target.removeContents(subject);
 
       for (const row of rows ?? []) {
         const subject = this.store.normalizeSubject(row.subject);
         if (valid(subject) && row.state === 'confirmed' && row.manifest)
-          target.set(subject, {
+          target.recordContents(subject, {
             manifest: row.manifest,
             confirmedAt: row.confirmedAt!,
+            replica: row.replica,
           });
       }
     };

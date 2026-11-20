@@ -112,6 +112,7 @@ beforeEach(() => {
   status = {
     local: { state: 'confirmed', confirmedAt: 100 },
     server: {
+      stored: 'confirmed',
       state: 'confirmed',
       url: 'https://studio.example',
       confirmedAt: 100,
@@ -296,7 +297,10 @@ it('updates an open panel when a newer edit is queued while keeping its local co
   fireEvent.click(screen.getByTestId('resource-sync-indicator'));
   await screen.findByTestId('resource-sync-panel');
 
-  status = { ...status, server: { ...status.server, state: 'pending' } };
+  status = {
+    ...status,
+    server: { ...status.server, state: 'pending', stored: 'pending' },
+  };
   save = { ...save, kind: 'queued', reason: 'offline' };
   rendered.rerender(view());
   const panel = screen.getByTestId('resource-sync-panel');

@@ -18,12 +18,24 @@ const confirmed: ResourceSyncStatus = {
   local: { state: 'confirmed', confirmedAt: 100 },
   server: {
     state: 'confirmed',
+    stored: 'confirmed',
+    storageId: 'server-store',
+    generation: 'server-generation',
     url: 'https://studio.example',
     confirmedAt: 100,
   },
 };
 
 describe('resource sync presentation', () => {
+  it('does not label transport acceptance as persistent server storage', () => {
+    const accepted: ResourceSyncStatus = {
+      local: { state: 'confirmed' },
+      server: { state: 'confirmed', accepted: 'confirmed', stored: 'unknown' },
+    };
+    expect(resourceSyncPresentation(accepted, idle).tone).not.toBe('confirmed');
+    expect(serverCopyLabel(accepted.server, idle)).toBe('Copy not confirmed');
+  });
+
   it('does not turn an idle save queue into a confirmed remote copy', () => {
     const status: ResourceSyncStatus = {
       local: { state: 'confirmed' },
@@ -132,7 +144,11 @@ describe('attachment confirmation presentation', () => {
     expect(
       resourceSyncPresentation(confirmed, idle, undefined, undefined, {
         ...contents,
-        server: { state: 'confirmed' },
+        server: {
+          state: 'confirmed',
+          storageId: 'server-store',
+          generation: 'server-generation',
+        },
       }),
     ).toMatchObject({
       label: 'Resource and file contents saved to server',
@@ -207,7 +223,11 @@ describe('attachment confirmation presentation', () => {
         undefined,
         {
           ...contents,
-          server: { state: 'confirmed' },
+          server: {
+            state: 'confirmed',
+            storageId: 'server-store',
+            generation: 'server-generation',
+          },
         },
       ),
     ).toMatchObject({ label: 'Changes waiting to save', tone: 'pending' });
@@ -218,7 +238,11 @@ describe('attachment confirmation presentation', () => {
       resourceSyncPresentation(confirmed, idle, undefined, undefined, {
         ...contents,
         local: { state: 'error' },
-        server: { state: 'confirmed' },
+        server: {
+          state: 'confirmed',
+          storageId: 'server-store',
+          generation: 'server-generation',
+        },
       }),
     ).toMatchObject({
       label: 'Could not confirm file contents on this device',

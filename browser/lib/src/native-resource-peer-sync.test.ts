@@ -375,7 +375,9 @@ describe.each(['iroh', 'webrtc'] as const)(
       const contents = () =>
         h.store.getResourceAttachmentSyncStatus(h.resource);
       h.respond(data);
-      await h.poll();
+      h.watch();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(h.calls).toHaveLength(1);
       expect(contents()).toMatchObject({
         required: true,
         peers: [{ state: 'confirmed' }],

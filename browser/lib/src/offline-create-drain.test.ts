@@ -1,3 +1,5 @@
+import { encodeB64 } from './base64.js';
+import { LoroLoader } from './loro-loader.js';
 import { describe, it, vi, expect as assert } from 'vitest';
 import { server } from './ontologies/server.js';
 import { mockLocalPersistence, testStore } from './test-store.js';
@@ -13,7 +15,7 @@ import { canonicalizeScheme, isAtomicIdentifier } from './subject.js';
  * `pendingDirtyCount` stuck at 1, `hasSignedGenesis` false.
  */
 describe('offline create drain', () => {
-  it('does not capture a rewind baseline on an unposted genesis', async ({
+  it('captures the genesis baseline without stranding a genesis-only queue', async ({
     expect,
   }) => {
     const { store } = await testStore();
@@ -31,7 +33,14 @@ describe('offline create drain', () => {
 
     for (const entry of pending) {
       if (entry.signedGenesis) {
-        expect(entry.baseVersion).toBeUndefined();
+        expect(entry.baseVersion).toBe(
+          encodeB64(
+            LoroLoader.Loro.decodeImportBlobMeta(
+              entry.signedGenesis.loroUpdate!,
+              false,
+            ).partialEndVersionVector.encode(),
+          ),
+        );
       }
     }
   });
