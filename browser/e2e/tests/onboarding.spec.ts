@@ -108,8 +108,9 @@ test.describe('onboarding', () => {
     });
     await page2.getByLabel('Agent secret').fill(secret!);
 
-    // The agent route passes return_to=agent through the unified sign-in flow.
-    await expect(page2).toHaveURL(/\/app\/settings\?section=profile$/, {
+    // The agent route passes return_to=agent through the unified sign-in flow,
+    // which lands on the account settings.
+    await expect(page2).toHaveURL(/\/app\/settings\?section=account$/, {
       timeout: 10000,
     });
     await expect(page2.locator('[data-test="sign-out"]')).toBeVisible({

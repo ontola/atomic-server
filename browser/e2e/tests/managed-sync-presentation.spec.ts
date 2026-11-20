@@ -116,6 +116,9 @@ for (const localOnly of [true, false]) {
         page.getByRole('button', { name: 'Switch', exact: true }),
       ).toHaveCount(0);
     } else {
+      // The provider card (vault, plan, account session) lives under
+      // Account & security, not under Sync & devices.
+      await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
       await expect(
         page.getByText(
           'Your account session has ended. Sign in again to resume backup.',
@@ -126,6 +129,8 @@ for (const localOnly of [true, false]) {
         page.getByText('Invalid hook call.', { exact: false }),
       ).toHaveCount(0);
 
+      // The sync summary and the per-drive toggle stay under Sync & devices.
+      await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
       await expect(
         page.getByText(
           'This drive is still syncing with a server, but Cloud Server hosting has not been confirmed.',
