@@ -9,12 +9,15 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use super::trees::Tree;
+use crate::sync::engine::WalkedSubject;
 
 const RING_CAP: usize = 4096;
 const CACHE_CAP: usize = 128;
+/// How many entries keep their walk (a big drive's is megabytes).
+const WALK_CAP: usize = 8;
 
 #[derive(Default)]
 struct LogState {
@@ -106,6 +109,9 @@ struct ProbeEntry {
     /// Subjects outside the drive that the read decision consulted: the
     /// drive root's ancestors and the `drive` stamps of its resources.
     externals: HashSet<String>,
+    /// The walk's result, kept for the reconcile that follows a probe miss.
+    /// Only the newest [`WALK_CAP`] entries hold one.
+    walked: Option<Arc<Vec<WalkedSubject>>>,
 }
 
 #[derive(Default)]
@@ -134,15 +140,38 @@ impl ProbeCache {
     }
 
     /// The cached hash if no write since it was computed can have changed it.
-    /// A logged subject invalidates when it was in the drive (edited, moved
-    /// out, destroyed, rights changed), was consulted for rights, or now has
-    /// a parent inside the drive (new child, or a subtree moved in).
     pub fn lookup(
         &self,
         log: &WriteLog,
         key: &ProbeKey,
         parent_of: impl Fn(&str) -> Option<String>,
     ) -> Option<(String, usize)> {
+        self.valid(log, key, parent_of, |e| {
+            Some((e.hash.clone(), e.subjects.len()))
+        })
+    }
+
+    /// The walk behind the cached hash, on the same terms as [`Self::lookup`].
+    pub fn walked(
+        &self,
+        log: &WriteLog,
+        key: &ProbeKey,
+        parent_of: impl Fn(&str) -> Option<String>,
+    ) -> Option<Arc<Vec<WalkedSubject>>> {
+        self.valid(log, key, parent_of, |e| e.walked.clone())
+    }
+
+    /// `read` of the entry if no write since it was computed can have changed
+    /// it. A logged subject invalidates when it was in the drive (edited,
+    /// moved out, destroyed, rights changed), was consulted for rights, or now
+    /// has a parent inside the drive (new child, or a subtree moved in).
+    fn valid<T>(
+        &self,
+        log: &WriteLog,
+        key: &ProbeKey,
+        parent_of: impl Fn(&str) -> Option<String>,
+        read: impl FnOnce(&ProbeEntry) -> Option<T>,
+    ) -> Option<T> {
         let mut entries = self.entries.lock().ok()?;
         let entry = entries.map.get_mut(key)?;
         let (now, written) = log.since(entry.generation)?;
@@ -155,8 +184,9 @@ impl ProbeCache {
             }
         }
         entry.generation = now;
+        let found = read(entry)?;
         self.hits.fetch_add(1, Ordering::Relaxed);
-        Some((entry.hash.clone(), entry.subjects.len()))
+        Some(found)
     }
 
     /// Remember `hash`, computed from reads made after `generation` was read.
@@ -167,6 +197,7 @@ impl ProbeCache {
         hash: String,
         subjects: HashSet<String>,
         externals: HashSet<String>,
+        walked: Arc<Vec<WalkedSubject>>,
     ) {
         let Ok(mut entries) = self.entries.lock() else {
             return;
@@ -190,8 +221,16 @@ impl ProbeCache {
                 hash,
                 subjects,
                 externals,
+                walked: Some(walked),
             },
         );
+        let stale = entries.order.len().saturating_sub(WALK_CAP);
+        let Entries { map, order } = &mut *entries;
+        for old in order.iter().take(stale) {
+            if let Some(entry) = map.get_mut(old) {
+                entry.walked = None;
+            }
+        }
     }
 }
 
@@ -386,5 +425,159 @@ mod tests {
         let stranger = ForAgent::AgentSubject(mallory.subject.clone());
         assert!(probe(&db, &drive, &stranger).await.is_err());
         assert_eq!(probe(&db, &drive, &owner).await.unwrap(), as_owner);
+    }
+    use crate::sync::engine::handle_sync_vv_reconcile;
+    use crate::sync::protocol::{decode_sync_diff, tag};
+    use std::collections::HashMap;
+
+    type Vvs = HashMap<String, HashMap<String, i32>>;
+
+    /// A full `SYNC` after a probe that missed, as the hash-first client sends it.
+    async fn reconcile(db: &Db, drive: &str, agent: &ForAgent, client: &Vvs) -> Vec<Vec<u8>> {
+        handle_sync_vv_reconcile(
+            drive,
+            "stale-client-hash",
+            2,
+            || client.clone(),
+            None,
+            db,
+            agent,
+            WireScheme::CANONICAL,
+            false,
+        )
+        .await
+    }
+
+    /// The reconcile as a cold server would answer it.
+    async fn cold(db: &Db, drive: &str, agent: &ForAgent, client: &Vvs) -> Vec<Vec<u8>> {
+        db.probe_cache().clear();
+        reconcile(db, drive, agent, client).await
+    }
+
+    async fn server_vvs(db: &Db, drive: &str) -> Vvs {
+        let drive = crate::Subject::from_raw(drive, db.get_base_domain().as_deref());
+        let subjects = crate::sync::engine::collect_drive_subjects(db, &drive).await;
+        crate::sync::engine::build_drive_vvs(db, &subjects)
+    }
+
+    fn diff(frames: &[Vec<u8>]) -> crate::sync::protocol::DecodedSyncDiff {
+        assert_eq!(frames[0][0], tag::SYNC_DIFF);
+        decode_sync_diff(&frames[0][1..]).unwrap()
+    }
+
+    /// What the cache must not change: the frames, down to the byte.
+    #[tokio::test]
+    async fn a_reconcile_after_a_probe_answers_as_a_cold_one() {
+        let db = Db::init_temp("walk_cache_same").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let owner = ForAgent::AgentSubject(alice.subject.clone());
+        let ahead = child(&db, &drive, "ahead").await;
+        let behind = child(&db, &drive, "behind").await;
+        let unknown = child(&db, &drive, "unknown-to-client").await;
+        let gone = child(&db, &drive, "gone").await;
+        let blob = child(&db, &drive, "file").await;
+        let mut file = db.get_resource(&blob.as_str().into()).await.unwrap();
+        let missing = crate::identifiers::blob_subject(&"ab".repeat(32));
+        file.set(urls::BLOB.into(), Value::AtomicUrl(missing.into()), &db)
+            .await
+            .unwrap();
+        file.save_locally(&db).await.unwrap();
+
+        // The client holds everything except `unknown`, is empty-handed on
+        // `ahead`, holds a subject the server never had, and still has `gone`.
+        let mut client = server_vvs(&db, &drive).await;
+        let pure = |s: &str| crate::Subject::from_raw(s, db.get_base_domain().as_deref()).pure_id();
+        let gone_vv = client[&pure(&gone)].clone();
+        client.remove(&pure(&unknown));
+        client.insert(pure(&ahead), HashMap::new());
+        client.insert(pure(&behind), HashMap::from([("1".to_string(), 99)]));
+        client.insert(
+            "did:ad:only-on-the-client".into(),
+            HashMap::from([("7".into(), 1)]),
+        );
+        db.remove_resource(&crate::Subject::from_raw(&gone, None))
+            .await
+            .unwrap();
+        client.insert(pure(&gone), gone_vv);
+
+        for agent in [&owner, &ForAgent::Sudo] {
+            db.probe_cache().clear();
+            probe(&db, &drive, agent).await.unwrap();
+            let hits = db.probe_cache().hits();
+            let cached = reconcile(&db, &drive, agent, &client).await;
+            assert_eq!(db.probe_cache().hits(), hits + 1, "walk reused");
+            let uncached = cold(&db, &drive, agent, &client).await;
+            assert_eq!(cached, uncached);
+            let d = diff(&cached);
+            assert!(d.push.contains(&pure(&ahead)) && d.push.contains(&pure(&unknown)));
+            assert!(d.pull.contains(&pure(&behind)) && d.pull.contains(&pure(&blob)));
+            assert_eq!(d.remove, vec![pure(&gone)]);
+        }
+    }
+
+    /// The classic stale-cache bug: a write between the probe and the full
+    /// `SYNC` must show in the answer, whatever kind of write it is.
+    #[tokio::test]
+    async fn a_write_between_the_probe_and_the_sync_is_not_missed() {
+        let db = Db::init_temp("walk_cache_stale").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let owner = ForAgent::AgentSubject(alice.subject.clone());
+        let folder = child(&db, &drive, "folder").await;
+        let doc = child(&db, &drive, "doc").await;
+        let other = db.create_drive("Other").await.unwrap();
+        let pure = |s: &str| crate::Subject::from_raw(s, db.get_base_domain().as_deref()).pure_id();
+        let client = server_vvs(&db, &drive).await;
+
+        // Nothing written: the cached walk is used, and says "in sync".
+        probe(&db, &drive, &owner).await.unwrap();
+        let hits = db.probe_cache().hits();
+        let same = reconcile(&db, &drive, &owner, &client).await;
+        assert_eq!(db.probe_cache().hits(), hits + 1);
+        assert!(diff(&same).push.is_empty() && diff(&same).pull.is_empty());
+
+        // An edit of a subject in the drive.
+        probe(&db, &drive, &owner).await.unwrap();
+        edit(&db, &doc, "edited after the probe").await;
+        let hits = db.probe_cache().hits();
+        let frames = reconcile(&db, &drive, &owner, &client).await;
+        assert_eq!(db.probe_cache().hits(), hits, "the entry was dropped");
+        assert_eq!(diff(&frames).push, vec![pure(&doc)]);
+        assert_eq!(frames, cold(&db, &drive, &owner, &client).await);
+
+        // A new child, deep in the tree.
+        probe(&db, &drive, &owner).await.unwrap();
+        let fresh = child(&db, &folder, "fresh").await;
+        let frames = reconcile(&db, &drive, &owner, &client).await;
+        assert!(diff(&frames).push.contains(&pure(&fresh)));
+        assert_eq!(frames, cold(&db, &drive, &owner, &client).await);
+
+        // A destroy of a subject the client still holds.
+        let held = server_vvs(&db, &drive).await;
+        probe(&db, &drive, &owner).await.unwrap();
+        db.remove_resource(&crate::Subject::from_raw(&doc, None))
+            .await
+            .unwrap();
+        let frames = reconcile(&db, &drive, &owner, &held).await;
+        assert_eq!(diff(&frames).remove, vec![pure(&doc)]);
+        assert_eq!(frames, cold(&db, &drive, &owner, &held).await);
+
+        // A move out of the drive.
+        probe(&db, &drive, &owner).await.unwrap();
+        reparent(&db, &folder, &other).await;
+        let frames = reconcile(&db, &drive, &owner, &held).await;
+        assert_eq!(frames, cold(&db, &drive, &owner, &held).await);
+        assert!(
+            diff(&frames).pull.contains(&pure(&folder)),
+            "no longer in the drive"
+        );
+
+        // A write in another drive leaves the walk usable.
+        probe(&db, &drive, &owner).await.unwrap();
+        let theirs = child(&db, &other, "theirs").await;
+        edit(&db, &theirs, "elsewhere").await;
+        let hits = db.probe_cache().hits();
+        let frames = reconcile(&db, &drive, &owner, &held).await;
+        assert_eq!(db.probe_cache().hits(), hits + 1);
+        assert_eq!(frames, cold(&db, &drive, &owner, &held).await);
     }
 }
