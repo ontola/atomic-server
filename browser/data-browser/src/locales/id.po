@@ -11795,15 +11795,6 @@ msgid "An always-on device has an address. One you carry has a code."
 msgstr "Perangkat yang selalu aktif memiliki alamat. Perangkat yang Anda bawa memiliki kode."
 
 #: src/components/ConnectDevice.tsx
-msgid "Scan this from your other device, or copy the code."
-msgstr "Pindai ini dari perangkat Anda yang lain, atau salin kodenya."
-
-#. 0: serverName
-#: src/components/ConnectDevice.tsx
-msgid "Scan from your other device to sync with {0}."
-msgstr "Pindai dari perangkat Anda yang lain untuk menyinkronkan dengan {0}."
-
-#: src/components/ConnectDevice.tsx
 msgid "Show this device"
 msgstr "Tampilkan perangkat ini"
 
@@ -13561,3 +13552,12 @@ msgstr "Kredit terpakai: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Edit profil"
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan with the app"
+msgstr "Pindai dengan aplikasi"
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Syncs with {0}."
+msgstr "Menyinkronkan dengan {0}."

@@ -11792,15 +11792,6 @@ msgid "An always-on device has an address. One you carry has a code."
 msgstr "Un dispositivo siempre encendido tiene una dirección. Uno que llevas contigo tiene un código."
 
 #: src/components/ConnectDevice.tsx
-msgid "Scan this from your other device, or copy the code."
-msgstr "Escanea esto desde tu otro dispositivo o copia el código."
-
-#. 0: serverName
-#: src/components/ConnectDevice.tsx
-msgid "Scan from your other device to sync with {0}."
-msgstr "Escanea desde tu otro dispositivo para sincronizar con {0}."
-
-#: src/components/ConnectDevice.tsx
 msgid "Show this device"
 msgstr "Mostrar este dispositivo"
 
@@ -13566,3 +13557,12 @@ msgstr "Créditos usados: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Editar perfil"
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan with the app"
+msgstr "Escanear con la app"
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Syncs with {0}."
+msgstr "Se sincroniza con {0}."

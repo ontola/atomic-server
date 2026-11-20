@@ -124,10 +124,15 @@ export function ConnectDevice({
           <Side data-testid='connect-device-show'>
             <Label>Show this device</Label>
             <Hint>
-              {canTakeCode
-                ? 'Scan this from your other device, or copy the code.'
-                : `Scan from your other device to sync with ${serverName}.`}
+              <AppLink
+                href='https://atomic.place/app'
+                target='_blank'
+                rel='noopener'
+              >
+                Scan with the app
+              </AppLink>
             </Hint>
+            {!canTakeCode && <Hint>{`Syncs with ${serverName}.`}</Hint>}
             <Centered>
               <PairingCode nodeDid={pairNodeDid} />
             </Centered>
@@ -272,6 +277,11 @@ const Message = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
   font-size: 0.82rem;
+`;
+
+const AppLink = styled.a`
+  color: inherit;
+  text-decoration: underline;
 `;
 
 const DocsLink = styled.a`
