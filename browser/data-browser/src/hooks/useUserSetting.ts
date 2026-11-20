@@ -1,8 +1,7 @@
 // @wc-ignore-file
 import { preferencesSchema } from '@tomic/lib';
 import {
-  useCanWrite,
-  useResource,
+  useResourceSnapshot,
   useStore,
   useValue,
   type Store,
@@ -64,9 +63,9 @@ export type UserSettingStatus = {
 /**
  * A per-user setting stored as a property on the signed-in agent's personal
  * drive, so it follows them to every device. `localKey` is the fallback: used
- * while the drive is loading or not writable, and kept as a cache of the last
+ * while the drive is loading, and kept as a cache of the last
  * value. A local value found while the drive has none is moved onto it once
- * the drive is writable, so existing devices keep their choice.
+ * the drive is readable, so existing devices keep their choice.
  */
 export function useUserSetting<T extends SettingValue>(
   prop: string,
@@ -75,12 +74,12 @@ export function useUserSetting<T extends SettingValue>(
 ): [T, (value: T) => void, UserSettingStatus] {
   const store = useStore();
   const { privateDrive } = usePrivateDrive();
-  const drive = useResource(privateDrive);
-  const canWrite = useCanWrite(drive);
-  const [remote, setRemote] = useValue(drive, prop, { commit: true });
+  // The snapshot's scalars, not `drive.isReady()`: the Resource object is
+  // stable, so a compiled component would never read its loading change.
+  const snapshot = useResourceSnapshot(privateDrive);
+  const [remote] = useValue(snapshot.resource, prop);
   const [local, setLocal] = useLocalStorage<T | undefined>(localKey, undefined);
-  const ready = !!privateDrive && drive.isReady();
-  const writable = ready && canWrite;
+  const ready = !!privateDrive && snapshot.ready;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
 
@@ -92,7 +91,7 @@ export function useUserSetting<T extends SettingValue>(
   useEffect(() => setPending(undefined), [remote]);
 
   // One timed-out read of the drive must not leave it unread until a reload.
-  const driveFailed = !!drive.error;
+  const driveFailed = !!snapshot.error;
 
   useEffect(() => {
     if (!privateDrive || !driveFailed) return;
@@ -104,26 +103,31 @@ export function useUserSetting<T extends SettingValue>(
     (value: T) => {
       setSaving(true);
       setSaveError(undefined);
-      // A failed write leaves the choice applied locally; only saving failed.
-      Promise.resolve(setRemote(value as never))
+      // Awaited, so `saving` lasts until the drive has the value. A failed
+      // write leaves the choice applied locally; only saving failed.
+      (async () => {
+        const resource = await store.getResource(privateDrive!);
+        await resource.set(prop, value as never);
+        await resource.save();
+      })()
         .catch(reason => setSaveError(String(reason)))
         .finally(() => setSaving(false));
     },
-    [setRemote],
+    [store, privateDrive, prop],
   );
 
   useEffect(() => {
-    if (writable && remote === undefined && local !== undefined) write(local);
-  }, [writable, remote, local, write]);
+    if (ready && remote === undefined && local !== undefined) write(local);
+  }, [ready, remote, local, write]);
 
   const set = useCallback(
     (value: T) => {
       setPending({ value });
       setLocal(value);
 
-      if (writable) write(value);
+      if (ready) write(value);
     },
-    [setLocal, write, writable],
+    [setLocal, write, ready],
   );
 
   return [
@@ -132,7 +136,7 @@ export function useUserSetting<T extends SettingValue>(
     {
       ready,
       saving,
-      error: saveError ?? (drive.error ? String(drive.error) : undefined),
+      error: saveError ?? (snapshot.error ? String(snapshot.error) : undefined),
     },
   ];
 }
