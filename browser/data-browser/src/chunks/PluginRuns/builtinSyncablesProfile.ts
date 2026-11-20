@@ -35,6 +35,7 @@ import {
 } from './syncableSource';
 import {
   core,
+  dataBrowser,
   CollectionBuilder,
   isAtomicIdentifier,
   ensureSchema,
@@ -125,10 +126,20 @@ export function assertSyncAppDrive(
   drive: string,
   subject: string,
 ): void {
+  const trash = store.resources
+    .get(store.normalizeSubject(drive))
+    ?.get(dataBrowser.properties.trashFolder);
   const seen = new Set<string>();
   let current = subject;
 
   while (seen.size < 64 && !seen.has(current)) {
+    if (
+      typeof trash === 'string' &&
+      subjectsReferToSameResource(current, trash)
+    )
+      throw new Error(
+        'This integration is in Trash. Restore it before syncing.',
+      );
     if (subjectsReferToSameResource(current, drive)) return;
     seen.add(current);
     const resource = store.resources.get(store.normalizeSubject(current));
@@ -154,10 +165,20 @@ export function assertSyncAppDrive(
 
 /** Load full ancestry once, including stamped rows, for the synchronous guard. */
 async function cacheSyncAppDrive(store: Store, drive: string, subject: string) {
+  const root = await store.getResource(drive);
+  if (root.error) throw root.error;
+  const trash = root.get(dataBrowser.properties.trashFolder);
   const seen = new Set<string>();
   let current = subject;
 
   while (seen.size < 64 && !seen.has(current)) {
+    if (
+      typeof trash === 'string' &&
+      subjectsReferToSameResource(current, trash)
+    )
+      throw new Error(
+        'This integration is in Trash. Restore it before syncing.',
+      );
     if (subjectsReferToSameResource(current, drive)) return;
     seen.add(current);
     const resource = await store.getResource(current);

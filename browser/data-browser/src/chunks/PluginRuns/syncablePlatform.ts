@@ -272,11 +272,34 @@ export function classifySyncableResourceDrive(
 }
 
 // @wc-ignore
+/** A retained identity in Trash must be restored, never silently reinstalled. */
+export async function assertSyncableResourceActive(
+  store: SchemaStore,
+  drive: string,
+  subject: string,
+): Promise<void> {
+  const root = await loadSyncableResource(store, drive, true);
+  if (!root) throw new Error('The selected Drive could not be loaded');
+  const trash = root.get(dataBrowser.properties.trashFolder);
+  if (trash !== undefined) assertSyncableLocalSubject(store, trash);
+  if (
+    !(await resourceDriveMembership(
+      store,
+      drive,
+      subject,
+      true,
+      trash as string | undefined,
+    ))
+  )
+    throw new Error('The integration resource is outside the selected Drive');
+}
+
 async function resourceDriveMembership(
   store: SchemaStore,
   drive: string,
   subject: string,
   strict: boolean,
+  blockedAncestor?: string,
 ): Promise<boolean> {
   const seen = new Set<string>();
   const stamps: string[] = [];
@@ -288,6 +311,14 @@ async function resourceDriveMembership(
   };
 
   while (!seen.has(current) && seen.size < 64) {
+    if (
+      blockedAncestor &&
+      subjectsReferToSameResource(blockedAncestor, current)
+    )
+      throw new Error(
+        'This integration is in Trash. Restore it before connecting or syncing.',
+      );
+
     if (subjectsReferToSameResource(drive, current)) {
       if (strict) verifyStamps(drive);
 
@@ -408,6 +439,7 @@ export async function findSyncablePlatform(
       drive,
       core.properties.localId,
       localId,
+      { includeTrashed: true },
     );
     const matching: string[] = [];
 
@@ -642,6 +674,7 @@ async function provisionPlatform(
   const { drive, proxyOrigin, platform, name } = input;
   const localId = platformLocalId(proxyOrigin, platform);
   const existing = await findSyncablePlatform(store, input);
+  if (existing) await assertSyncableResourceActive(store, drive, existing);
   const schema = await ensureSchema(store, drive, syncablePlatformSchema());
   const app = await ensureSchema(store, drive, pluginSchema());
   let subject = existing;
@@ -669,6 +702,7 @@ async function provisionPlatform(
   }
 
   const root = await store.getResource(subject);
+  await assertSyncableResourceActive(store, drive, subject);
   const data = root.get(app.properties['app-data']);
   const savedLegacy = root.get(schema.properties['syncable-legacy-accounts']);
   const legacyBinding =

@@ -148,6 +148,21 @@ async function fixture() {
     return false;
   };
 
+  const trashed = (subject: string) => {
+    const trash = f.resources.get(drive)?.[dataBrowser.properties.trashFolder];
+    const seen = new Set<string>();
+    let current: unknown = subject;
+
+    while (typeof current === 'string' && !seen.has(current)) {
+      if (current === trash) return true;
+      if (current === drive) return false;
+      seen.add(current);
+      current = f.resources.get(current)?.[core.properties.parent];
+    }
+
+    return false;
+  };
+
   const query = vi.fn(async (url: string) => {
     const u = new URL(url);
     const p = u.searchParams.get('property')!;
@@ -156,6 +171,7 @@ async function fixture() {
       .filter(
         ([s, values]) =>
           persisted.has(s) &&
+          (u.searchParams.get('include_trashed') === 'true' || !trashed(s)) &&
           (beneath(s) || legacyQueryMembers.has(s)) &&
           (value === null
             ? values[p] !== undefined
@@ -601,4 +617,52 @@ it('does not infer principal installation absence from unproven query-member anc
   await expect(listSyncablePrincipalApps(f.store, scope)).rejects.toThrow(
     'ancestry',
   );
+});
+
+it('does not lift a principal from a trashed manager or mutate installation metadata', async () => {
+  const f = await fixture();
+  const row = await f.add();
+  f.resources.get(drive)![dataBrowser.properties.trashFolder] = 'atomic:trash';
+  f.resources.set('atomic:trash', { [core.properties.parent]: drive });
+  f.resources.get(f.setup)![core.properties.parent] = 'atomic:trash';
+  const before = JSON.stringify([...f.resources]);
+  await expect(f.promote(row.subject)).rejects.toThrow(/Restore/i);
+  expect(JSON.stringify([...f.resources])).toBe(before);
+});
+
+it('detects a retained principal identity hidden by normal Trash queries before allocating an App', async () => {
+  const f = await fixture();
+  const row = await f.add();
+  f.resources.get(drive)![dataBrowser.properties.trashFolder] = 'atomic:trash';
+  f.resources.set('atomic:trash', { [core.properties.parent]: drive });
+  const retained = 'atomic:retained-principal';
+  f.resources.set(retained, {
+    ...f.resources.get(row.subject),
+    [core.properties.parent]: 'atomic:trash',
+  });
+  f.persisted.add(retained);
+  const before = JSON.stringify([...f.resources]);
+  await expect(f.promote(row.subject)).rejects.toThrow(/Restore/i);
+  expect(JSON.stringify([...f.resources])).toBe(before);
+  expect(
+    f.query.mock.calls.some(
+      ([url]) => new URL(url).searchParams.get('include_trashed') === 'true',
+    ),
+  ).toBe(true);
+});
+
+it('finds a retained manager without its index hint and refuses replacement allocation', async () => {
+  const f = await fixture();
+  f.resources.get(drive)![dataBrowser.properties.trashFolder] = 'atomic:trash';
+  f.resources.set('atomic:trash', { [core.properties.parent]: drive });
+  f.resources.get(f.setup)![core.properties.parent] = 'atomic:trash';
+  f.resources.get(drive)![f.p['syncable-platform-index']] = {};
+  const before = JSON.stringify([...f.resources]);
+  const create = vi.spyOn(f.store, 'newResource');
+  expect(await findSyncablePlatform(f.store, scope)).toBe(f.setup);
+  await expect(
+    ensureSyncablePlatform(f.store, { ...scope, name: 'Calendar' }),
+  ).rejects.toThrow(/Restore/i);
+  expect(create).not.toHaveBeenCalled();
+  expect(JSON.stringify([...f.resources])).toBe(before);
 });

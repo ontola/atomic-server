@@ -2247,6 +2247,207 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.redeemed).toHaveLength(1);
   });
 
+  test('refuses Sync activation under a trashed integration without replacing its saved data', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    const writes: string[] = [];
+    let observeActivation = false;
+    let attachedFrames = 0;
+    page.on('request', request => {
+      if (
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === '/commit'
+      )
+        writes.push('HTTP commit');
+    });
+    page.on('websocket', socket => {
+      if (new URL(socket.url()).host !== new URL(FRONTEND_URL).host) return;
+      socket.on('framesent', frame => {
+        const bytes = Buffer.isBuffer(frame.payload)
+          ? frame.payload
+          : Buffer.from(frame.payload);
+        // The normal Atomic v2 COMMIT tag, also observed by before()'s watcher.
+        if (bytes[0] === 0x13) writes.push('WebSocket commit');
+      });
+    });
+    page.on('frameattached', frame => {
+      if (observeActivation && frame.parentFrame()) attachedFrames++;
+    });
+    const requests = await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    const drive = await page.evaluate(() => window.store.getDrive()!);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const managerUrl = page.url();
+    const managerSubject = await getCurrentSubject(page);
+    const manager = await sourceState(page, managerSubject);
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    await browse(page);
+    const apps = await principalApps(page);
+    expect(apps).toHaveLength(1);
+    const app = apps[0];
+    await openRow(page, 'Repositories');
+    const tableSubject = await getCurrentSubject(page);
+    await sync(page);
+    const syncUrl = page.url();
+    await browse(page);
+    const storedUrl = page.url();
+    const saved = await sourceState(page, tableSubject);
+    expect(saved.rows).toHaveLength(3);
+    const retained = [
+      { subject: managerSubject, localId: manager.localId },
+      { subject: app.subject, localId: app.localId },
+      { subject: tableSubject, localId: saved.localId },
+      ...saved.rows.map(row => ({
+        subject: row.subject,
+        localId: row.localId,
+      })),
+    ].map(row => {
+      if (typeof row.localId !== 'string')
+        throw new Error(
+          'The retained integration fixture has no native local ID',
+        );
+
+      return { subject: row.subject, localId: row.localId };
+    });
+    const rowSubjects = saved.rows.map(row => row.subject);
+    const readStoredRows = () =>
+      page.evaluate(async subjects => {
+        const store = window.store;
+
+        return Promise.all(
+          subjects.map(async subject => {
+            const row = await store.fetchResourceFromServer(subject, {
+              noWebSocket: true,
+            });
+            if (row.error) throw row.error;
+
+            return { subject: row.subject, values: row.getPropVals() };
+          }),
+        );
+      }, rowSubjects);
+    const originalRows = await readStoredRows();
+    const trashed = await page.evaluate(
+      async ({ principal, setup, ownDrive }) => {
+        const store = window.store;
+        // Reproduce retained legacy ancestry using an ordinary same-drive move.
+        const principalApp = await store.getResource(principal);
+        await principalApp.set(
+          'https://atomicdata.dev/properties/parent',
+          setup,
+        );
+        await principalApp.save();
+        const moved = await store.trash(setup, ownDrive);
+
+        return {
+          moved,
+          inTrash: store.isTrashed(principal, ownDrive, { deep: true }),
+        };
+      },
+      { principal: app.subject, setup: managerSubject, ownDrive: drive },
+    );
+    expect(trashed).toEqual({ moved: true, inTrash: true });
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    expect(writes.length).toBeGreaterThan(0);
+    const existingWrites = writes.length;
+    const providerReads = requests.providerRequests.length;
+    const documents = requests.documentRequests.length;
+    observeActivation = true;
+
+    const restoreNotice = page.getByRole('alert').filter({
+      hasText:
+        /This integration is in Trash\. Restore it before (?:connecting or )?syncing\./,
+    });
+    await page.goto(managerUrl);
+    await expect(restoreNotice).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+    await page.goto(syncUrl);
+    await expect(page.getByRole('main')).toHaveAttribute('about', tableSubject);
+    await expect(restoreNotice).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+    await testInfo.attach('trashed-integration-sync-restoration-guidance', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    // Cached views still render as ordinary Atomic views. Normal collection
+    // queries exclude Trash; a direct stored-row GET retains the original data.
+    await page.goto(storedUrl);
+    await browse(page);
+    await expect(
+      page.getByRole('main').getByText('No stored rows yet.', { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+    expect(await readStoredRows()).toEqual(originalRows);
+    const identities = await page.evaluate(
+      async ({ ownDrive, rows }) => {
+        const store = window.store;
+
+        return Promise.all(
+          rows.map(async row => {
+            const query = new URL('/query', store.getServerUrl());
+            for (const [name, value] of Object.entries({
+              drive: ownDrive,
+              property: 'https://atomicdata.dev/properties/localId',
+              value: row.localId,
+              page_size: '100',
+              current_page: '0',
+              include_nested: 'false',
+              include_trashed: 'true',
+            }))
+              query.searchParams.set(name, value);
+            const result = await store.fetchResourceFromServer(query.href, {
+              noWebSocket: true,
+              forceOverride: true,
+            });
+            if (result.error) throw result.error;
+
+            return {
+              expected: row.subject,
+              count: result.get(
+                'https://atomicdata.dev/properties/collection/totalMembers',
+              ),
+              subjects: result.getSubjects(
+                'https://atomicdata.dev/properties/collection/members',
+              ),
+            };
+          }),
+        );
+      },
+      { ownDrive: drive, rows: retained },
+    );
+
+    for (const identity of identities) {
+      expect(identity.count).toBe(1);
+      expect(identity.subjects).toEqual([identity.expected]);
+    }
+
+    await waitForSynced(page);
+    expect(
+      await page.evaluate(
+        ({ subject, ownDrive }) =>
+          window.store.isTrashed(subject, ownDrive, { deep: true }),
+        { subject: managerSubject, ownDrive: drive },
+      ),
+    ).toBe(true);
+    expect(requests.providerRequests).toHaveLength(providerReads);
+    expect(requests.documentRequests).toHaveLength(documents);
+    expect(attachedFrames).toBe(0);
+    expect(writes).toHaveLength(existingWrites);
+  });
+
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({
     page,
   }, testInfo) => {

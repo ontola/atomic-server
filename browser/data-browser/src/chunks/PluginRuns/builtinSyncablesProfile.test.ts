@@ -130,6 +130,27 @@ describe('running Sync drive authority', () => {
     expect(records.mirror[DRIVE_PROPERTY]).toBe('drive');
   });
 
+  it('revokes an active Sync when its ancestor moves into this Drive Trash while preserving other Drive Trash names', () => {
+    const records: Record<string, Record<string, unknown>> = {
+      drive: { [dataBrowser.properties.trashFolder]: 'this-trash' },
+      mirror: { [DRIVE_PROPERTY]: 'drive', [core.properties.parent]: 'folder' },
+      folder: { [core.properties.parent]: 'drive' },
+      'other-trash': { [core.properties.parent]: 'drive' },
+      'other-drive': { [dataBrowser.properties.trashFolder]: 'other-trash' },
+    };
+    const store = cachedDriveStore(records);
+    assertSyncAppDrive(store, 'drive', 'mirror');
+    records.folder[core.properties.parent] = 'other-trash';
+    assertSyncAppDrive(store, 'drive', 'mirror');
+    records.folder[core.properties.parent] = 'this-trash';
+    expect(() => assertSyncAppDrive(store, 'drive', 'mirror')).toThrow(
+      'This integration is in Trash. Restore it before syncing.',
+    );
+    expect(() => assertSyncAppDrive(store, 'drive', 'this-trash')).toThrow(
+      'This integration is in Trash. Restore it before syncing.',
+    );
+  });
+
   it('rejects unavailable cached membership and parent cycles', () => {
     const records = { mirror: { [core.properties.parent]: 'missing' } };
     const store = cachedDriveStore(records);
@@ -371,6 +392,24 @@ const request = (
 });
 
 describe('generic saved source context', () => {
+  it.each(['manager', 'descendant'])(
+    'rejects a trashed %s before schema bootstrap can allocate anything',
+    async subject => {
+      const { store, resources } = fakeSchemaStore();
+      resources.get('drive')![dataBrowser.properties.trashFolder] = 'trash';
+      resources.set('trash', { [core.properties.parent]: 'drive' });
+      resources.set('manager', { [core.properties.parent]: 'trash' });
+      resources.set('descendant', { [core.properties.parent]: 'manager' });
+      const create = vi.spyOn(store, 'newResource');
+      await expect(
+        syncAppContext(store as unknown as Store, 'drive', subject, true),
+      ).rejects.toThrow(
+        'This integration is in Trash. Restore it before syncing.',
+      );
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
   it('resolves a promoted principal before its provider App metadata', async () => {
     const { store, resources } = fakeSchemaStore();
     resources.set(core.properties.name, {
@@ -1282,5 +1321,34 @@ it('inherits a principal App binding for a moved collection and revokes it when 
   principalConfig.connectionId = 'x'.repeat(43);
   expect(() => assertSyncAppContext(resolved)).toThrow(
     'principal App connection changed',
+  );
+});
+
+it('discards a provider response when the running source ancestor moves into Trash', async () => {
+  const records: Record<string, Record<string, unknown>> = {
+    drive: { [dataBrowser.properties.trashFolder]: 'trash' },
+    collection: { [core.properties.parent]: 'folder' },
+    folder: { [core.properties.parent]: 'drive' },
+  };
+  const store = cachedDriveStore(records);
+  const { proxy, readKeyed } = setupProxy();
+  readKeyed.mockImplementation(async url => {
+    if (url.pathname.endsWith('/tasks'))
+      records.folder[core.properties.parent] = 'trash';
+
+    return {
+      status: 200,
+      body: url.pathname.endsWith('/session') ? { id: 7 } : [],
+      headers: {},
+    };
+  });
+  const transport = syncProxyTransport(
+    proxy,
+    selected(),
+    () => assertSyncAppDrive(store, 'drive', 'collection'),
+    { document: apiDocument() },
+  );
+  await expect(transport.request!(request())).rejects.toThrow(
+    'This integration is in Trash. Restore it before syncing.',
   );
 });

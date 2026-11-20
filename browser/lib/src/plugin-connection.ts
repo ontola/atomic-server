@@ -182,6 +182,7 @@ export async function readConnectionSubjects(
   drive: string,
   property?: string,
   value?: string,
+  options: { includeTrashed?: boolean } = {},
 ): Promise<string[]> {
   const { collections } = await import('./ontologies/collections.js');
   const { enableLoro } = await import('./loro-loader.js');
@@ -198,6 +199,7 @@ export async function readConnectionSubjects(
       page_size: '100',
       current_page: String(page),
       include_nested: 'false',
+      ...(options.includeTrashed ? { include_trashed: 'true' } : {}),
     }))
       url.searchParams.set(key, val);
     const resource = await store.fetchResourceFromServer(url.toString(), {

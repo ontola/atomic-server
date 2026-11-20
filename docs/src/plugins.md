@@ -32,12 +32,16 @@ The browser build bundles that reader with the Atomic app into one
 an opaque iframe. No executable module is downloaded from the integration
 proxy at runtime.
 
-Installing a provider creates an ordinary App resource. Authenticated principals
-and Public are its direct children; their collections follow the API catalog. Its name and icon come from the proxy's public OpenAPI metadata;
+Connecting a provider creates one ordinary App resource per authenticated
+principal in the selected drive; Public has its own App. Item-type collections
+sit directly under that App, and saved filters retain the API discovery path.
+Its name and icon come from the proxy's public OpenAPI metadata;
 the `info.x-logo.url` image is resized and uploaded as an Atomic File beneath
 the App. An existing icon is preserved. Opening an older installation explicitly
 from Apps upgrades its root resource in place, retaining the App subject and
 stable source identities rather than creating another installation.
+Apps or collections beneath Trash cannot run Sync or account setup. Existing
+identities remain reserved and are only reactivated by an explicit restore.
 
 When the user requests a refresh, the host loads the configured proxy's
 composed OpenAPI document and catalog query defaults. Standard OpenAPI

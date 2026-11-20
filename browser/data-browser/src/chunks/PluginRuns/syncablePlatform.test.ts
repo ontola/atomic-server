@@ -19,6 +19,7 @@ import {
   syncablePlatformSchema,
   classifySyncableResourceDrive,
   isSyncableResourceInDrive,
+  assertSyncableResourceActive,
 } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
 
@@ -452,4 +453,46 @@ describe('strict query Drive membership', () => {
     ).rejects.toThrow('another server');
     expect(get).not.toHaveBeenCalledWith(external);
   });
+});
+
+it('does not migrate or recreate a connection manager retained in Trash', async () => {
+  const { store, resources } = fakeSchemaStore();
+  const input = {
+    drive: 'drive',
+    proxyOrigin: 'https://proxy.example',
+    platform: 'calendar-service',
+    name: 'Calendar',
+  };
+  const setup = await ensureSyncablePlatform(store, input);
+  resources.get('drive')![dataBrowser.properties.trashFolder] = 'trash';
+  resources.set('trash', { [core.properties.parent]: 'drive' });
+  resources.get(setup)![core.properties.parent] = 'trash';
+  const before = JSON.stringify([...resources]);
+  const create = vi.spyOn(store, 'newResource');
+
+  expect(await findSyncablePlatform(store, input)).toBe(setup);
+  await expect(ensureSyncablePlatform(store, input)).rejects.toThrow(
+    /Restore/i,
+  );
+  expect(create).not.toHaveBeenCalled();
+  expect(JSON.stringify([...resources])).toBe(before);
+});
+
+it('blocks trashed ancestry but permits the same retained resource after explicit Restore', async () => {
+  const { store, resources } = fakeSchemaStore();
+  resources.get('drive')![dataBrowser.properties.trashFolder] = 'trash';
+  resources.set('trash', { [core.properties.parent]: 'drive' });
+  resources.set('manager', { [core.properties.parent]: 'trash' });
+  resources.set('principal', { [core.properties.parent]: 'manager' });
+  await expect(
+    assertSyncableResourceActive(store, 'drive', 'principal'),
+  ).rejects.toThrow(/Restore/i);
+  expect(await isSyncableResourceInDrive(store, 'drive', 'principal')).toBe(
+    true,
+  );
+  resources.get('manager')![core.properties.parent] = 'drive';
+  await expect(
+    assertSyncableResourceActive(store, 'drive', 'principal'),
+  ).resolves.toBeUndefined();
+  expect(resources.get('principal')![core.properties.parent]).toBe('manager');
 });

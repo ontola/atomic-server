@@ -357,6 +357,50 @@ describe('host-selected view authority', () => {
     });
   });
 
+  it('checks retained identities without granting a frame control over Trash queries', async () => {
+    const ctx = setup();
+    Object.assign(ctx.profile, {
+      authoritativeQueries: true,
+      retainedIdentityProperties: [core.properties.localId],
+      queryMemberInScope: async () => {
+        throw new Error(
+          'This integration is in Trash. Restore it before syncing.',
+        );
+      },
+    });
+    const fetch = vi.fn(async (subject: string) => {
+      const url = new URL(subject);
+      const members =
+        url.searchParams.get('include_trashed') === 'true' ? [CHILD] : [];
+
+      return {
+        getLoroDoc: () => {},
+        get: (property: string) =>
+          property === collections.properties.totalMembers
+            ? members.length
+            : members,
+      };
+    });
+    ctx.store.fetchResourceFromServer = fetch as never;
+    await expect(
+      ctx.request('query', {
+        property: core.properties.localId,
+        value: 'retained-identity',
+      }),
+    ).rejects.toThrow('Restore it');
+    expect(
+      await ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        includeTrashed: true,
+        retainedIdentityProperties: [core.properties.parent],
+      }),
+    ).toEqual([]);
+    expect(
+      new URL(fetch.mock.calls[1][0]).searchParams.has('include_trashed'),
+    ).toBe(false);
+  });
+
   it.each([
     { page: 1, pageSize: 100, start: 100, end: 200 },
     { page: 2, pageSize: 3, start: 6, end: 9 },

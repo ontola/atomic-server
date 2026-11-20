@@ -24,6 +24,8 @@ import type { ApplyHost, JSONValue } from '@tomic/lib';
 export interface HostStoreProfile {
   /** Hosted Sync identity lookup must never infer absence from a partial cache. */
   authoritativeQueries?: true;
+  /** Native identity checks include retained records so Trash cannot imply absence. */
+  retainedIdentityProperties?: readonly string[];
   /** Optional native read boundary; ordinary App reads retain their existing scope. */
   authorizeRead?: (subject: string) => Promise<void>;
   /** False requires proven foreign Drive ancestry; unresolved membership must throw. */
@@ -325,6 +327,9 @@ async function handleOperation(
           drive,
           query.property,
           query.value,
+          profile.retainedIdentityProperties?.includes(query.property)
+            ? { includeTrashed: true }
+            : undefined,
         );
         assertHostProfile(profile);
         const scoped: string[] = [];

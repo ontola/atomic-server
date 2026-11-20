@@ -165,6 +165,12 @@ ancestry. The existing bridge selects these checks natively. Frame arguments
 cannot choose a different drive or relax the checks. Ordinary native Collection
 and Table browsing continues to use stored data.
 
+Sync and account setup do not execute when their App, table or an ancestor is
+in the selected drive's Trash. They show a restore explanation instead. Exact
+identity checks include retained trashed resources, so hiding them cannot cause
+replacement Apps or collections to be allocated. Restoring is explicit; stored
+rows, rules, identities and queued changes are retained.
+
 Built-in Syncables store one entity table per drive, proxy, platform, typed
 principal and exact catalog CRUD resource. Rows use the catalog's typed canonical
 identity, independently of discovery paths or physical location. A saved filter is

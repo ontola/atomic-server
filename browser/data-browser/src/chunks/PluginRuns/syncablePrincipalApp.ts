@@ -28,6 +28,7 @@ import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   isSyncableResourceInDrive,
   classifySyncableResourceDrive,
+  assertSyncableResourceActive,
   assertSyncableLocalSubject,
   platformLocalId,
   queueSyncableProvisioning,
@@ -219,16 +220,25 @@ async function principalSubjectsInDrive(
   property: string,
   value: string,
   assertCurrent: () => void,
+  includeTrashed = true,
 ) {
   assertCurrent();
-  const subjects = await readConnectionSubjects(store, drive, property, value);
+  const subjects = await readConnectionSubjects(store, drive, property, value, {
+    includeTrashed,
+  });
   assertCurrent();
   const scoped: string[] = [];
 
   for (const subject of subjects) {
     const included = await classifySyncableResourceDrive(store, drive, subject);
     assertCurrent();
-    if (included) scoped.push(subject);
+
+    if (included) {
+      if (includeTrashed)
+        await assertSyncableResourceActive(store, drive, subject);
+      assertCurrent();
+      scoped.push(subject);
+    }
   }
 
   return scoped;
@@ -267,6 +277,7 @@ export async function listSyncablePrincipalApps(
     expectedKey ? t.h['syncable-source-key'] : kind,
     expectedKey ?? 'principal',
     check,
+    expectedKey !== undefined,
   );
   check();
   const apps: SyncablePrincipalAppRef[] = [];
@@ -366,6 +377,12 @@ async function promote(
   };
 
   checkSession();
+
+  for (const subject of [input.setup, input.subject]) {
+    await assertSyncableResourceActive(store, drive, subject);
+    checkSession();
+  }
+
   const t = await terms(store, drive, true);
   checkSession();
   const fields = [
@@ -380,6 +397,7 @@ async function promote(
       DRIVE,
       server.properties.defaultOntology,
       dataBrowser.properties.icon,
+      dataBrowser.properties.trashFolder,
       dataBrowser.properties.tableViews,
       dataBrowser.properties.tableDefaultView,
       ...Object.values(t.p),
@@ -438,6 +456,12 @@ async function promote(
   const row = await load(input.subject);
   await within(setup.subject);
   await within(row.subject);
+
+  for (const subject of [setup.subject, row.subject]) {
+    await assertSyncableResourceActive(store, drive, subject);
+    check();
+  }
+
   const principalClass = t.c['syncable-principal'];
   check();
   const candidate = principalOf(row, input, t);

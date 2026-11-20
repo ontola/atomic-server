@@ -722,6 +722,10 @@ export async function appProfile(
 
   const profile: AppFrameProfile = {
     authoritativeQueries: true,
+    retainedIdentityProperties: [
+      core.properties.localId,
+      p['syncable-source-key'],
+    ],
     queryMemberInScope: async subject => {
       assertCurrent();
       const included = await classifySyncableResourceDrive(

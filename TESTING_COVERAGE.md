@@ -1452,6 +1452,17 @@ cross-system exactly-once execution or automatic reconciliation of uncertain wri
 
 ### Live connector query snapshots
 
+Built-in Syncables Trash activation (2026-11-20): native profile tests reject
+trashed setup roots and descendants before bootstrap/provider reads, and reject
+provider-response writes after an ancestor is moved to Trash. Platform/principal
+tests reject reinstall or promotion of retained trashed identities, including a
+missing drive index hint. SDK/host tests distinguish exact retained-identity
+queries from ordinary listings and reject iframe attempts to opt into Trash.
+The reported localhost Dev drive failure was verified against signed live reads:
+the retained manager and its canonical collections were all under Trash, rather
+than missing from the query index. The user chose to leave them there. No live
+resource was restored or deleted, and failed queued drafts remain retained.
+
 Moved to atomic-plugins with `integrations/github-issues` (its live tests
 and fixture suites). `uuid_paths_are_single_canonical_segments` still
 covers constrained UUID authorization and path-escape rejection here.
