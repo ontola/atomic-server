@@ -96,7 +96,7 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   expect(catalogRequests.length).toBeGreaterThan(0);
 
   await page.goto(new URL('/app/settings', page.url()).href);
-  await page.getByPlaceholder('Search settings...').fill('marketplaces');
+  await page.getByPlaceholder('Search settings...').fill('experimental');
   const settingsExperimental = page.getByRole('checkbox', {
     name: 'Show experimental apps',
   });
@@ -115,7 +115,7 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   });
   await expect(visibility.getByRole('alert')).toHaveCount(0);
   await page.reload();
-  await page.getByPlaceholder('Search settings...').fill('marketplaces');
+  await page.getByPlaceholder('Search settings...').fill('experimental');
   await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/apps', page.url()).href);
