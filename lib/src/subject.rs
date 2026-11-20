@@ -1048,7 +1048,7 @@ mod tests {
             crate::urls::AGENT,
             crate::urls::INSERT,
             crate::urls::URL,
-            crate::urls::BOOKMARK,
+            crate::urls::NAME,
             crate::urls::STATUS,
             crate::urls::TEXT_PART,
             crate::urls::PUBLIC_AGENT,

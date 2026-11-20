@@ -241,7 +241,7 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
 
   /**
    * The resource the user is actually looking at, if any. App routes
-   * (/app/settings, /app/sync, …) are pages of the app itself, not of a
+   * (/app/settings, /app/storage, …) are pages of the app itself, not of a
    * resource, so they have no subject.
    */
   const contextResource =

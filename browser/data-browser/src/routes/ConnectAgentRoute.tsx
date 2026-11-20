@@ -135,7 +135,7 @@ function ConnectAgentPage() {
           can go back to it. To stop it, revoke it under Connected apps in your
           account settings.
         </p>
-        <Button subtle onClick={() => navigate(paths.agentSettings)}>
+        <Button subtle onClick={() => navigate(paths.accountSettings)}>
           Account settings
         </Button>
       </ConnectPage>
@@ -206,7 +206,7 @@ function ConnectAgentPage() {
         busy={busy}
         disabled={homeLoading}
         onAllow={handleAllow}
-        onCancel={() => navigate(paths.agentSettings)}
+        onCancel={() => navigate(paths.accountSettings)}
         testId='connect-agent'
       />
     </ConnectPage>

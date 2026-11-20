@@ -2376,12 +2376,44 @@ impl Db {
         Some(Subject::new_local(&format!("/agents/{pubkey}"), None))
     }
 
+    /// Whether `url` is served from this store's own authority (scheme
+    /// ignored), i.e. a miss must not be answered by fetching it.
+    fn is_own_authority(&self, url: &str) -> bool {
+        let strip = |s: &str| {
+            s.trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string()
+        };
+        self.get_base_domain()
+            .as_deref()
+            .map(|base| {
+                let base_authority = strip(base);
+                let resolved = strip(url);
+                resolved == base_authority || resolved.starts_with(&format!("{}/", base_authority))
+            })
+            .unwrap_or(false)
+    }
+
+    /// Resolves a subject for a client request (HTTP handlers). Never makes the
+    /// server fetch another host on a caller's behalf: an external subject is
+    /// answered from the local store or refused.
     pub async fn fetch_resource_with_did_fallback(
         &self,
         subject: &Subject,
         origin: &str,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
+        if !subject.is_local()
+            && !self.is_own_authority(subject.as_str())
+            && !self.has_stored_resource(subject)
+        {
+            return Err(AtomicError::not_found(format!(
+                "{} is not hosted here. This server does not fetch external resources for requests.",
+                subject.as_str()
+            )));
+        }
+
         if subject.is_blob_did() {
             if let Some(hash) = subject.blob_hash_hex() {
                 let target = format!("{}/download/files/{}", origin.trim_end_matches('/'), hash);
@@ -5612,21 +5644,7 @@ impl Storelike for Db {
             // as `https://` must not self-fetch when served over `http://`.
             let base_domain = self.get_base_domain();
             let resolved_subject_obj = Subject::from_raw(&resolved_url, base_domain.as_deref());
-            let is_own_authority = base_domain
-                .as_deref()
-                .map(|base| {
-                    let strip = |s: &str| {
-                        s.trim_start_matches("https://")
-                            .trim_start_matches("http://")
-                            .trim_end_matches('/')
-                            .to_string()
-                    };
-                    let base_authority = strip(base);
-                    let resolved = strip(&resolved_url);
-                    resolved == base_authority
-                        || resolved.starts_with(&format!("{}/", base_authority))
-                })
-                .unwrap_or(false);
+            let is_own_authority = self.is_own_authority(&resolved_url);
 
             if resolved_subject_obj.is_local() || is_own_authority {
                 return self

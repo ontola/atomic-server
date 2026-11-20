@@ -8,7 +8,6 @@ import {
 import type { IconType } from 'react-icons';
 import {
   FaBook,
-  FaBookmark,
   FaBoxesStacked,
   FaBriefcase,
   FaBug,
@@ -706,36 +705,6 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           default: true,
         },
         { name: 'By answer', kind: 'kanban', groupByColumn: 'RSVP' },
-      ],
-    },
-  },
-  {
-    id: 'bookmarks',
-    title: 'Bookmarks',
-    description: 'Links with a kind and notes, newest first.',
-    rowName: 'Bookmark',
-    icon: FaBookmark,
-    spec: {
-      columns: [
-        { name: 'URL', type: 'text' },
-        {
-          name: 'Kind',
-          type: 'select',
-          options: ['Article', 'Tool', 'Video', 'Documentation', 'Inspiration'],
-        },
-        { name: 'Added', type: 'date' },
-        { name: 'Notes', type: 'markdown' },
-      ],
-      views: [
-        {
-          name: 'All bookmarks',
-          kind: 'table',
-          sortByColumn: 'Added',
-          sortDesc: true,
-          breakdownColumn: 'Kind',
-          breakdownGranularity: 'exact',
-          default: true,
-        },
       ],
     },
   },

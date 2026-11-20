@@ -29,7 +29,7 @@ test('explains missing passkey support without offering a broken setup action', 
       },
     }),
   );
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=account`);
   await expect(
     page.getByText('This browser does not expose passkey support.', {
       exact: false,

@@ -114,7 +114,6 @@ export function ConnectDevice({
 
   return (
     <Section id={SECTION_ID} tabIndex={-1} data-testid='connect-device'>
-      <Title>Connect a device</Title>
       <Note>
         {showPairing
           ? 'Codes only route. Your key still decides what syncs.'
@@ -190,11 +189,6 @@ const Section = styled.section`
   &:focus {
     outline: none;
   }
-`;
-
-const Title = styled.h2`
-  font-size: 1.1rem;
-  margin-bottom: 0.8rem;
 `;
 
 const Note = styled.p`

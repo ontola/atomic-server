@@ -272,10 +272,8 @@ test('Sync does not claim an unreadable drive is cached or on another device', a
     { optional: true },
   );
   await page.evaluate(drive => window.store.setDrive(drive), missing);
-  await page.goto(`${FRONTEND_URL}/app/sync`);
-  await expect(
-    page.getByRole('heading', { name: 'Sync', exact: true }),
-  ).toBeVisible();
+  await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
+  await expect(page.getByText('Sync & devices', { exact: true })).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(async drive => {

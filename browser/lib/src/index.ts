@@ -83,6 +83,7 @@ export {
   lockfileFromEnsured,
   lockfileFromInput,
   parseLockfile,
+  schemaFingerprint,
   serializeLockfile,
   type Lockfile,
 } from './schema-lockfile.js';
@@ -373,8 +374,10 @@ export {
   pipelineSchema,
   moneySchema,
   preferencesSchema,
+  websiteSchema,
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
+  sharedVocabularyClasses,
 } from './shared-vocabularies.js';
 
 export { executeServerPlugin } from './plugin-server.js';

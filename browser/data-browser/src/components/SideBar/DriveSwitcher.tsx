@@ -54,7 +54,7 @@ function getTitle(resource: Resource): string {
 
 /**
  * Quick-switch between the user's drives: private drive plus the 10 most recently
- * visited drives. The full lists live on the User Settings page.
+ * visited drives. The full lists live in the Drive section of settings.
  */
 export function DriveSwitcher({
   Trigger = DefaultTrigger,
@@ -175,7 +175,7 @@ export function DriveSwitcher({
       icon: <FaGear />,
       helper: 'View and organize all your drives.',
       onClick: (): void => {
-        void navigate(paths.agentSettings);
+        void navigate(paths.driveSettings);
       },
     },
     {
@@ -185,7 +185,7 @@ export function DriveSwitcher({
       helper:
         'Local stays on your devices. Vault is encrypted backup. Server hosts a readable copy. Remote is another connected server.',
       onClick: () =>
-        navigate(`/app/sync?drive=${encodeURIComponent(drive ?? '')}`),
+        navigate(`${paths.sync}&drive=${encodeURIComponent(drive ?? '')}`),
     },
   ];
 

@@ -35,7 +35,6 @@ import { InboxPage } from './InboxPage';
 import { NotificationPage } from './NotificationPage';
 import { MessagePage } from './MessagePage';
 import { ChatLogPage } from './ChatLogPage';
-import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
@@ -355,8 +354,6 @@ function selectComponent(klass: string | undefined) {
       return MessagePage;
     case dataBrowser.classes.chatLog:
       return ChatLogPage;
-    case dataBrowser.classes.bookmark:
-      return BookmarkPage;
     case dataBrowser.classes.importer:
       return ImporterPage;
     case dataBrowser.classes.folder:

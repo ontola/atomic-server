@@ -116,6 +116,7 @@ msgstr "Agen AI"
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
@@ -125,7 +126,6 @@ msgstr "Agen AI"
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -175,10 +175,10 @@ msgstr "Nama agen"
 #: ../data-browser/src/chunks/AI/MCPConfigTab.tsx
 #: ../data-browser/src/chunks/AI/SkillsConfigTab.tsx
 #: ../data-browser/src/chunks/FormBuilder/PageSettingsPanel.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 msgid "Name"
 msgstr "Nama"
 
@@ -264,18 +264,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Ringkas percakapan secara otomatis saat token input melebihi persentase ini dari jendela konteks model yang dipilih. Perintah /compact manual tetap berfungsi saat opsi ini dinonaktifkan."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Hapus"
 
@@ -488,10 +488,10 @@ msgstr "Header HTTP opsional yang dikirim saat menghubungkan ke server MCP ini"
 
 #: ../data-browser/src/actions/resourceActions.tsx
 #: ../data-browser/src/chunks/AI/AgentConfigItem.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
-#: ../data-browser/src/routes/EditRoute.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../data-browser/src/components/MetaSetter.tsx
+#: ../data-browser/src/routes/EditRoute.tsx
 msgid "Edit"
 msgstr "Sunting"
 
@@ -517,10 +517,10 @@ msgstr "Penyedia tidak diaktifkan"
 msgid "Default model"
 msgstr "Model bawaan"
 
-#: ../data-browser/src/components/ComboBox.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MultiRelationCell.tsx
 #: ../table-page/src/TablePage/EditorCells/SelectCell.tsx
+#: ../data-browser/src/components/ComboBox.tsx
 msgid "No results"
 msgstr "Tidak ada hasil"
 
@@ -534,12 +534,12 @@ msgstr "Belum dikonfigurasi"
 
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/routes/ConnectAgentRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Terhubung"
 
@@ -580,9 +580,9 @@ msgstr "Kolom wajib diisi."
 #. 0: JSON.stringify(error)
 #. 0: searchError.message
 #. 0: resource.error.message
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceRow.tsx
@@ -697,6 +697,10 @@ msgstr "Ontologi"
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "App"
 msgstr "Aplikasi"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
 
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -950,14 +954,6 @@ msgstr "Gunakan proksi"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Mengambil URL dari Atomic-Server Anda saat ini ({0}), bukan langsung dari URL tersebut. Ini berguna jika URL tidak dapat diakses, tetapi sumber dayanya tersimpan dalam cache server Anda."
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "URL markah"
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Tidak ada URL"
-
 #: ../data-browser/src/views/Card/MessageCard.tsx
 #: ../data-browser/src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1054,9 +1050,8 @@ msgstr "Salin tautan ke pesan ini"
 msgid "Copy message text"
 msgstr "Salin teks pesan"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 #: ../table-page/src/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "memuat..."
 
@@ -1286,17 +1281,15 @@ msgstr "Dokumen"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Sinkronisasi"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -1304,8 +1297,8 @@ msgstr "Offline"
 msgid "Changes could not sync"
 msgstr "Perubahan tidak dapat disinkronkan"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Perubahan tertunda"
 
@@ -1345,6 +1338,7 @@ msgstr "Tambahkan keterangan..."
 msgid "Alt text"
 msgstr "Teks alternatif"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/routes/Share/ShareRoute.tsx
@@ -1496,11 +1490,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Buat akun"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Peringatan:"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Anda menggunakan agen lokal yang tidak dapat melakukan autentikasi di domain lain karena URL-nya tidak dapat diakses."
 
@@ -1508,24 +1502,24 @@ msgstr "Anda menggunakan agen lokal yang tidak dapat melakukan autentikasi di do
 msgid "Global"
 msgstr "Global"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "In sync"
 msgstr "Tersinkron"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Kesalahan: Diharapkan atomic:node:<node-id>"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/managed/deviceLink.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 #: ../data-browser/src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Perangkat ini"
 
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "Add"
 msgstr "Tambahkan"
 
@@ -1534,52 +1528,52 @@ msgstr "Tambahkan"
 msgid "Copy"
 msgstr "Salin"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: src/components/forms/SearchBox/SearchBox.tsx
 #: ../data-browser/src/helpers/sentry.ts
 #: ../data-browser/src/routes/LinkOpenRouter.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: src/components/forms/SearchBox/SearchBox.tsx
 msgid "Error"
 msgstr "Kesalahan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Logging to console"
 msgstr "Mencatat ke konsol"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off"
 msgstr "Nonaktif"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "destroy"
 msgstr "hancurkan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No activity recorded in this session yet."
 msgstr "Belum ada aktivitas yang tercatat dalam sesi ini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disabled (server-only)"
 msgstr "Dinonaktifkan (hanya server)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Initializing..."
 msgstr "Menginisialisasi..."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Ready — WASM + OPFS"
 msgstr "Siap — WASM + OPFS"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Enable local WASM DB"
 msgstr "Aktifkan DB WASM lokal"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Masukkan DID atau URL drive"
 
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr "Atur"
 
@@ -1657,9 +1651,9 @@ msgid "Set a title"
 msgstr "Tetapkan judul"
 
 #: ../data-browser/src/chunks/FormBuilder/useFormQuestions.ts
+#: src/components/EditableTitle.tsx
 #: ../data-browser/src/components/NavBar.tsx
 #: ../data-browser/src/helpers/storageMap.ts
-#: src/components/EditableTitle.tsx
 msgid "Untitled"
 msgstr "Tanpa judul"
 
@@ -1696,10 +1690,10 @@ msgstr "Tetap muat ({0})"
 
 #: ../data-browser/src/chunks/RTE/CollaborativeEditor.tsx
 #: ../data-browser/src/components/Share/useClassLabel.ts
+#: src/components/forms/NewForm/NewFormTitle.tsx
 #: ../data-browser/src/routes/History/HistoryDesktopView.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
-#: src/components/forms/NewForm/NewFormTitle.tsx
 msgid "Resource"
 msgstr "Sumber daya"
 
@@ -1708,8 +1702,8 @@ msgid "Failed to save new resource"
 msgstr "Gagal menyimpan sumber daya baru"
 
 #: ../data-browser/src/components/forms/FileDropzone/FileDropzone.tsx
-#: ../data-browser/src/components/forms/UploadForm.tsx
 #: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: ../data-browser/src/components/forms/UploadForm.tsx
 msgid "Uploading..."
 msgstr "Mengunggah..."
 
@@ -1733,12 +1727,12 @@ msgstr "Buat sumber daya baru"
 msgid "New Resource"
 msgstr "Sumber daya baru"
 
-#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/views/FolderPage/ListView.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../table-page/src/TablePage/Issues/IssuesView.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: ../data-browser/src/views/FolderPage/ListView.tsx
 msgid "Title"
 msgstr "Judul"
 
@@ -1760,8 +1754,8 @@ msgstr "Turunan"
 msgid "Classes"
 msgstr "Kelas"
 
-#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 #: src/components/ClassSelectorDialog.tsx
+#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 msgid "No classes"
 msgstr "Tidak ada kelas"
 
@@ -1817,9 +1811,9 @@ msgstr "Tidak ada yang dapat disalin."
 msgid "Copied error to clipboard"
 msgstr "Kesalahan disalin ke papan klip"
 
-#: ../data-browser/src/components/Toaster.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/QuickFilterField.tsx
+#: ../data-browser/src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
 msgstr "Hapus"
@@ -1857,13 +1851,13 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 
 #: ../data-browser/src/actions/resourceActions.tsx
-#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
+#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
 #: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Open"
 msgstr "Buka"
 
@@ -1953,20 +1947,12 @@ msgstr "<0/> Kembali"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> sumber daya merujuk ke{0} {1}"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "tidak ada pratinjau..."
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "Tidak dapat memuat pratinjau 😞"
-
 #: ../data-browser/src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "Tidak ada plugin yang diinstal"
 
-#: ../data-browser/src/views/Card/CollectionCard.tsx
 #: src/components/ResourceUsage/UsageCard.tsx
+#: ../data-browser/src/views/Card/CollectionCard.tsx
 msgid "No resources"
 msgstr "Tidak ada sumber daya"
 
@@ -1985,10 +1971,6 @@ msgstr "dokumen"
 #: ../data-browser/src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "folder"
-
-#: ../data-browser/src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Buka situs"
 
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2042,30 +2024,24 @@ msgstr "Ontologi baru"
 msgid "Shortname"
 msgstr "Nama singkat"
 
+#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
-#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Create"
 msgstr "Buat"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Markah baru"
-
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Oke"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/OntologyPage/Class/NewClassInstanceButton.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 msgid "Table"
 msgstr "Tabel"
 
@@ -2181,8 +2157,8 @@ msgstr "<0/> Catatan"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Baru"
@@ -2416,8 +2392,8 @@ msgstr "tidak ada"
 msgid "Recommends"
 msgstr "Menyarankan"
 
-#: ../data-browser/src/views/Article/ArticleDescription.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: ../data-browser/src/views/Article/ArticleDescription.tsx
 msgid "Could not save resource..."
 msgstr "Tidak dapat menyimpan sumber daya..."
 
@@ -2723,8 +2699,8 @@ msgstr "Alihkan tampilan detail kelas"
 msgid "Remove drive from list"
 msgstr "Hapus drive dari daftar"
 
-#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
+#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Pilih"
 
@@ -2770,10 +2746,10 @@ msgstr "Nama singkat properti"
 msgid "Property description"
 msgstr "Deskripsi properti"
 
-#. 0: resource.title
 #. 0: BLOCK_KIND_LABELS[blockKind].toLowerCase()
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
+#. 0: resource.title
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "Konfigurasi {0}"
 
@@ -2789,9 +2765,9 @@ msgid "Empty"
 msgstr "Kosong"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
+#: src/components/LoroDocValue.tsx
 #: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
-#: src/components/LoroDocValue.tsx
 msgid "Hide"
 msgstr "Sembunyikan"
 
@@ -2881,8 +2857,8 @@ msgstr "Buat {0} baru"
 msgid "No Results"
 msgstr "Tidak ada hasil"
 
-#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 #: ../table-page/src/TablePage/TableTotalsFooter.tsx
+#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "Tidak ada"
 
@@ -3073,9 +3049,9 @@ msgstr "Alihkan kode sebaris"
 msgid "No alt text"
 msgstr "Tidak ada teks alternatif"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Teks"
@@ -3185,11 +3161,13 @@ msgstr "Salah"
 msgid "Value…"
 msgstr "Nilai…"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Remove filter"
 msgstr "Hapus filter"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Filter operator"
@@ -3204,6 +3182,10 @@ msgstr "Tampilan bawaan"
 #: ../table-page/src/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Baris tidak lengkap atau berisi data tidak valid"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Buka sumber daya"
 
 #: ../data-browser/src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3339,22 +3321,27 @@ msgstr "Jenis sumber daya:"
 msgid "<0/> Allow multiple values"
 msgstr "<0/> Izinkan beberapa nilai"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
 msgstr "Format teks:"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Plain text"
 msgstr "Teks biasa"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Rich text"
 msgstr "Teks kaya"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Slug"
 msgstr "Slug"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Length"
@@ -3385,14 +3372,17 @@ msgstr "Buka dialog suntingan"
 msgid "Add resource"
 msgstr "Tambahkan sumber daya"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
 msgstr "Numerik"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Long"
 msgstr "Panjang"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relatif"
@@ -3485,8 +3475,8 @@ msgstr "Mulai dari"
 msgid "Click to add a value"
 msgstr "Klik untuk menambahkan nilai"
 
-#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
+#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Ganti nama"
 
@@ -3518,9 +3508,9 @@ msgstr "Tambahkan item"
 msgid "New item…"
 msgstr "Item baru…"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanView.tsx
 #: ../table-page/src/TablePage/createTableFromSpec.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Row"
 msgstr "Baris"
 
@@ -3729,6 +3719,11 @@ msgstr "Yakin ingin menghapus tampilan <0/>? Ini hanya menghapus tampilannya, bu
 msgid "{0} copy"
 msgstr "Salinan {0}"
 
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
 #: ../data-browser/src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter menyediakan API terpadu yang memberi Anda akses ke ratusan model AI dari semua penyedia utama, sambil menangani peralihan cadangan secara otomatis dan memilih opsi paling hemat biaya."
@@ -3793,6 +3788,11 @@ msgstr "Coba muat ulang halaman. Jika terus terjadi, tab lain dari aplikasi ini 
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/juta token input"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: ../data-browser/src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -3882,8 +3882,8 @@ msgstr "Buka obrolan rapat"
 msgid "Chat and the log of resources visited during the meeting."
 msgstr "Obrolan dan catatan sumber daya yang dikunjungi selama rapat."
 
-#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 #: ../table-page/src/TablePage/Timer/useTimerProps.ts
+#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr "Akhiri"
 
@@ -3965,32 +3965,28 @@ msgstr "Drive pribadi"
 msgid "View and organize all your drives."
 msgstr "Lihat dan atur semua drive Anda."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Drive saya"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Hanya disimpan di perangkat ini. Beri bintang pada drive untuk menyimpannya di Drive saya."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Baru dikunjungi"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources · stored locally"
 msgstr "{0} sumber daya · disimpan secara lokal"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Embedded server · stored locally"
 msgstr "Server tersemat · disimpan secara lokal"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cached locally · works offline"
 msgstr "Di-cache secara lokal · dapat digunakan offline"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Server-only · no local cache"
 msgstr "Hanya server · tidak ada cache lokal"
 
@@ -3999,13 +3995,13 @@ msgstr "Hanya server · tidak ada cache lokal"
 msgid "{0}% used"
 msgstr "{0}% terpakai"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Syncing…"
 msgstr "Menyinkronkan…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync now"
 msgstr "Sinkronkan sekarang"
 
@@ -4013,31 +4009,31 @@ msgstr "Sinkronkan sekarang"
 msgid "Embedded (this device)"
 msgstr "Tersemat (perangkat ini)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID"
 msgstr "ID node"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local database"
 msgstr "Basis data lokal"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "WebSocket debug"
 msgstr "Debug WebSocket"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Developer"
 msgstr "Pengembang"
 
 #: ../data-browser/src/chunks/Conference/ConferenceRoom.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/PeerInvitePage.tsx
 msgid "Connecting…"
 msgstr "Menghubungkan…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Only on this device"
 msgstr "Hanya di perangkat ini"
 
@@ -4071,10 +4067,10 @@ msgstr "Memasangkan perangkat"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 #: ../data-browser/src/components/Vault/VaultRestoreAction.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Coba lagi"
 
@@ -4086,10 +4082,10 @@ msgstr "Buka ruang kerja"
 
 #: ../data-browser/src/chunks/AI/ReportAIChatDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../data-browser/src/components/SideBar/FeedbackButton.tsx
 #: ../data-browser/src/components/Vault/VaultStorage.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 msgid "Close"
 msgstr "Tutup"
 
@@ -4117,10 +4113,10 @@ msgstr "Ruang kerja Anda sudah di sini"
 msgid "Bring your workspace over"
 msgstr "Pindahkan ruang kerja Anda ke sini"
 
-#. 0: device
 #. 0: serverLabel(status.serverUrl ?? '')
+#. 0: device
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Dipasangkan dengan {0}"
 
@@ -4143,8 +4139,8 @@ msgstr "Ruang kerja Anda belum terbuka di sini. Proses mungkin masih berlangsung
 
 #. 0: PRODUCT_NAME
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No {0} portal is configured for this server."
 msgstr "Portal {0} belum dikonfigurasi untuk server ini."
 
@@ -4267,12 +4263,12 @@ msgstr "<0/> Buka"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Pasang drive Atomic Anda sebagai folder di komputer ini. File, folder, dan dokumen Anda muncul di pengelola file, dan perubahan yang Anda buat di sana disinkronkan kembali."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID copied"
 msgstr "ID node disalin"
 
 #. 0: nodeId
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Copy {0}"
 msgstr "Salin {0}"
 
@@ -4280,30 +4276,29 @@ msgstr "Salin {0}"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Data Anda berada di perangkat yang terhubung dengan Anda."
 
-#: ../data-browser/src/components/ConnectDevice.tsx
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Hubungkan perangkat"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect a device below first."
 msgstr "Hubungkan perangkat di bawah terlebih dahulu."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
 msgstr "Pasangkan perangkat lain untuk menyinkronkan secara langsung, atau hubungkan perangkat yang selalu aktif untuk mengakses data dari mana saja."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect an always-on device to back up your data and reach it from anywhere."
 msgstr "Hubungkan perangkat yang selalu aktif untuk mencadangkan data Anda dan mengaksesnya dari mana saja."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on · in use"
 msgstr "Selalu aktif · digunakan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on device"
 msgstr "Perangkat yang selalu aktif"
 
@@ -4311,7 +4306,7 @@ msgstr "Perangkat yang selalu aktif"
 msgid "Scan this from that device"
 msgstr "Pindai ini dari perangkat tersebut"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Kesalahan: tidak dapat memutuskan perangkat tersebut"
 
@@ -4358,9 +4353,9 @@ msgstr "Teks terlokalisasi"
 msgid "No {0} translation. {1}"
 msgstr "Tidak ada terjemahan {0}. {1}"
 
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
 #: ../table-page/src/TablePage/ColumnLanguageChip.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
 msgid "Content language"
 msgstr "Bahasa konten"
 
@@ -4385,12 +4380,12 @@ msgstr "Sunting bahasa…"
 msgid "Languages"
 msgstr "Bahasa"
 
+#. 0: tag
 #. 0: url
 #. 0: email
-#. 0: tag
+#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Share/EmailInviteInput.tsx
-#: src/components/EditLanguagesDialog.tsx
 msgid "Remove {0}"
 msgstr "Hapus {0}"
 
@@ -4403,7 +4398,7 @@ msgstr "Bahasa yang digunakan drive ini untuk menerbitkan konten (tag BCP 47, mi
 msgid "This property is server-managed and cannot be edited."
 msgstr "Properti ini dikelola oleh server dan tidak dapat disunting."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Penyimpanan lokal nonaktif, jadi server ini adalah satu-satunya sumber data. Aktifkan penyimpanan lokal di bawah untuk bekerja tanpa koneksi."
 
@@ -4650,11 +4645,7 @@ msgstr "Gunakan kunci sandi Anda sebagai gantinya"
 msgid "Could not add a recovery code."
 msgstr "Tidak dapat menambahkan kode pemulihan."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Cara masuk kembali di perangkat baru — dan tempat menemukan kunci rahasia agen Anda."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Pemulihan akun"
 
@@ -4737,11 +4728,11 @@ msgstr "Buka {0} dengan sidik jari, wajah, atau kunci layar Anda."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Kami telah mengganti kata sandi pemulihan lama Anda dengan kode yang dibuat lebih kuat. Simpan di tempat aman — Anda memerlukannya, beserta email Anda, untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Kolom profil lainnya"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4776,11 +4767,11 @@ msgstr "Gunakan sidik jari, wajah, atau kunci layar Anda."
 msgid "or sign in another way"
 msgstr "atau masuk dengan cara lain"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Keluar dan hapus salinan cadangan terenkripsi Anda dari perangkat ini"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Keluar & lupakan perangkat ini"
 
@@ -4804,10 +4795,6 @@ msgstr "Tempel kunci rahasia agen Anda"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Itu sepertinya bukan kunci rahasia agen yang valid."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Apakah browser ini tetap masuk sebagai Anda saat siapa pun membukanya."
 
 #: ../data-browser/src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -4897,10 +4884,10 @@ msgstr "Pengatur waktu"
 msgid "Could not start the entry"
 msgstr "Tidak dapat memulai entri"
 
-#. 0: Math.floor(hours / 24)
 #. 0: days
-#: ../data-browser/src/components/Vault/VaultPanel.tsx
+#. 0: Math.floor(hours / 24)
 #: ../table-page/src/TablePage/derivedColumns.ts
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "{0}d ago"
 msgstr "{0} hari lalu"
 
@@ -5035,14 +5022,17 @@ msgstr "Ollama{0}"
 msgid "This column holds an action, not a value, so there is nothing to total."
 msgstr "Kolom ini berisi tindakan, bukan nilai, sehingga tidak ada yang dapat dijumlahkan."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "now"
 msgstr "sekarang"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "a date"
 msgstr "tanggal"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Compare against"
@@ -5094,6 +5084,8 @@ msgstr "Baris"
 msgid "Measure"
 msgstr "Ukuran"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
@@ -5139,6 +5131,7 @@ msgstr "Pilih angka dan dasar pengelompokannya"
 msgid "No data yet"
 msgstr "Belum ada data"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
@@ -5158,30 +5151,37 @@ msgstr "Hapus tombol {0} dari tampilan ini. Semua yang sudah dicatat dengan mene
 msgid "Remove action"
 msgstr "Hapus tindakan"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionHeading.tsx
 msgid "Edit action"
 msgstr "Sunting tindakan"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Add an action"
 msgstr "Tambahkan tindakan"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "Does what"
 msgstr "Melakukan apa"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "Tabel ini belum memiliki kolom dengan tipe yang sesuai untuk itu."
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "To column"
 msgstr "Ke kolom"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
@@ -5190,6 +5190,8 @@ msgstr "Ke kolom"
 msgid "Pick an option…"
 msgstr "Pilih opsi…"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/QuickAddFields.tsx
@@ -5230,10 +5232,13 @@ msgid "A button above the rows that creates one — \"Log a feed\", \"Add item\"
 msgstr "Tombol di atas baris untuk membuat baris baru — \"Catat pemberian makan\", \"Tambahkan item\"."
 
 #. 0: tableClass.title.toLowerCase()
+#. 0: tableClass.title.toLowerCase()
+#: ../data-browser/src/chunks/TablePage/QuickAddBar.tsx
 #: ../table-page/src/TablePage/QuickAddBar.tsx
 msgid "Could not add the {0}"
 msgstr "Tidak dapat menambahkan {0}"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Log a feed"
@@ -5243,21 +5248,25 @@ msgstr "Catat pemberian makan"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "Tombol ini berada di atas baris dan membuat baris baru. Detail lain baris tersebut disunting di tabel."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Minta nilai terlebih dahulu"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "Aktifkan untuk daftar yang itemnya Anda beri nama; nonaktifkan untuk tombol yang cukup ditekan."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Ketik ke"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "What are you adding?"
@@ -5265,16 +5274,19 @@ msgstr "Apa yang Anda tambahkan?"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Teks petunjuk"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Tidak ada"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Also set"
@@ -5292,8 +5304,8 @@ msgstr "Jelaskan fungsi tombol"
 msgid "That table has no row class yet"
 msgstr "Tabel itu belum memiliki kelas baris"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../table-page/src/TablePage/useTableView.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 msgid "Dashboard"
 msgstr "Dasbor"
 
@@ -5331,8 +5343,8 @@ msgstr "Dokumen, tabel, file, obrolan, dan aplikasi kustom di satu tempat. Atomi
 msgid "Bearer {0}"
 msgstr "Bearer {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
@@ -5454,32 +5466,32 @@ msgstr "Aktifkan Cloud Vault"
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault tidak tersedia di sini: {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disconnect"
 msgstr "Putuskan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Reconnect"
 msgstr "Hubungkan kembali"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/browserPeerSync.ts
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Not connected"
 msgstr "Tidak terhubung"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Switch"
 msgstr "Beralih"
 
-#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#. 0: accountAddress(phase.account)
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr "Masuk sebagai {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Email recovery"
 msgstr "Pemulihan melalui email"
 
@@ -5488,7 +5500,7 @@ msgstr "Pemulihan melalui email"
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: ../data-browser/src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 #: ../data-browser/src/components/Cloud/CloudServerDetails.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources"
 msgstr "{0} sumber daya"
 
@@ -5498,7 +5510,7 @@ msgstr "{0} sumber daya"
 #. 0: doneCount; 1: steps.length
 #: ../data-browser/src/components/Cloud/UsageMeter.tsx
 #: ../data-browser/src/components/DatabaseUpgradeNotice.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} dari {1}"
@@ -5506,22 +5518,22 @@ msgstr "{0} dari {1}"
 #. 0: syncedAgo
 #. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced {0}"
 msgstr "Disinkronkan {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced just now"
 msgstr "Baru saja disinkronkan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Server ini"
 
 #. 0: serverHostname ?? 'This server'
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
 msgstr "{0} tidak menawarkan hosting, sehingga tidak dapat diaktifkan dari sini."
 
@@ -5530,25 +5542,25 @@ msgid "Checking this workspace’s backup…"
 msgstr "Memeriksa cadangan ruang kerja ini…"
 
 #. 0: withWhom
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Already up to date{0}"
 msgstr "Sudah terbaru{0}"
 
 #. 0: withWhom; 1: sent; 2: received
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Disinkronkan{0} — {1} dikirim, {2} diterima"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired"
 msgstr "Dipasangkan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Perangkat yang dipasangkan"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not synced yet"
 msgstr "Belum disinkronkan"
 
@@ -5563,11 +5575,11 @@ msgid "Sign in →"
 msgstr "Masuk →"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, sehingga email ini memungkinkan Anda masuk kembali di perangkat baru."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Set up email recovery"
 msgstr "Siapkan pemulihan melalui email"
 
@@ -5613,7 +5625,7 @@ msgstr "Kunci rahasia agen Anda"
 msgid "Set up account recovery"
 msgstr "Siapkan pemulihan akun"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Store it with "
 msgstr "Simpan dengan "
 
@@ -5634,7 +5646,7 @@ msgid "Store it with {0}"
 msgstr "Simpan dengan {0}"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Cadangan Anda tersegel hanya di browser ini, sehingga dapat dibuka di sini tetapi tidak dapat membantu Anda masuk kembali di perangkat baru."
 
@@ -5667,20 +5679,18 @@ msgstr "Membuat drive pribadi Anda…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Tidak dapat memperbarui daftar Anda: drive pribadi belum disiapkan untuk akun ini."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Drive pribadi Anda selalu berada di urutan pertama. Hapus bintang dari drive lain untuk memindahkannya kembali ke daftar baru dikunjungi."
-
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Drives/DrivesCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Drive"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Buka drive berdasarkan URL"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Buka drive berdasarkan URL atau DID"
 
@@ -5693,12 +5703,12 @@ msgid "Only your passkey opens this account. If it isn't on this device, unlock 
 msgstr "Hanya kunci sandi Anda yang dapat membuka akun ini. Jika tidak ada di perangkat ini, buka di perangkat tempat Anda menyiapkannya dan tambahkan kode pemulihan di Pengaturan — kode itu memungkinkan Anda masuk di mana saja."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi hanya kunci sandi Anda yang dapat membukanya. Browser yang belum menerima sinkronisasi kunci sandi tidak dapat membantu Anda masuk kembali — kode pemulihan dapat melakukannya."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Add a recovery code"
 msgstr "Tambahkan kode pemulihan"
 
@@ -5882,23 +5892,23 @@ msgstr "Amplop tersedia, tetapi tanda tangannya tidak lolos verifikasi"
 msgid "No signed envelope covers this change on this node"
 msgstr "Tidak ada amplop bertanda tangan yang mencakup perubahan ini pada node ini"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
 msgstr "Drive ini menggunakan alamat server lama. Cloud Server memerlukan drive DID portabel."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr "Proses masuk belum selesai — penyiapan hosting dibatalkan."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not set up Cloud Server."
 msgstr "Tidak dapat menyiapkan Cloud Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Use Cloud Server"
 msgstr "Gunakan Cloud Server"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "See plans"
 msgstr "Lihat paket"
 
@@ -6011,8 +6021,8 @@ msgstr "Dokumentasi Atomic Data"
 msgid "Are you sure you want to delete"
 msgstr "Yakin ingin menghapus"
 
-#: ../data-browser/src/views/File/DownloadButton.tsx
 #: ../table-page/src/TablePage/TableExportDialog.tsx
+#: ../data-browser/src/views/File/DownloadButton.tsx
 msgid "Download"
 msgstr "Unduh"
 
@@ -6135,7 +6145,7 @@ msgstr "Perbarui"
 msgid "Context compacted"
 msgstr "Konteks diringkas"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Recent activity"
 msgstr "Aktivitas terbaru"
 
@@ -6292,7 +6302,7 @@ msgstr "<0>Simpan kode pemulihan ini.</0> Kode ini memungkinkan Anda masuk kemba
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Tidak dapat membuka dengan kunci sandi. Gunakan kode pemulihan Anda sebagai gantinya."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Kesalahan: Masuk sebelum menyinkronkan dengan perangkat lain"
 
@@ -6454,7 +6464,7 @@ msgstr "Data Anda berada di perangkat ini dan disinkronkan dengan server."
 msgid "Your data lives on this device. Browser sync connects when another browser is available."
 msgstr "Data Anda berada di perangkat ini. Sinkronisasi browser terhubung saat browser lain tersedia."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking local copy…"
 msgstr "Memeriksa salinan lokal…"
 
@@ -6539,6 +6549,10 @@ msgstr "Tidak ada yang cocok. Coba pencarian lain atau minta AI membuatnya."
 #: ../data-browser/src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Tanya AI"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Memuat"
 
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -8114,6 +8128,7 @@ msgstr "Gunakan model bawaan paket"
 msgid "Agent"
 msgstr "Agen"
 
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "Pengaturan AI"
@@ -8335,7 +8350,6 @@ msgid "AI settings…"
 msgstr "Pengaturan AI…"
 
 #: ../data-browser/src/actions/appActions.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Pengguna"
 
@@ -8361,7 +8375,7 @@ msgstr "Tidak ada plugin untuk ditampilkan di sini."
 msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
 msgstr "Beranda Anda siap. Punya data di tempat lain?{0} <0>Hubungkan perangkat lain atau pulihkan cadangan</0>."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local copy unavailable"
 msgstr "Salinan lokal tidak tersedia"
 
@@ -8433,7 +8447,7 @@ msgstr "Tinjau transkrip obrolan sebelum membagikannya kepada tim Atomic"
 msgid "Buy AI credits"
 msgstr "Beli kredit AI"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Starting server sync…"
 msgstr "Memulai sinkronisasi server…"
 
@@ -8788,10 +8802,6 @@ msgstr "Temukan integrasi dari catalog.json ini. Pengaturan ini disimpan di brow
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Masukkan URL HTTPS atau URL HTTP localhost yang mengarah ke file catalog.json."
 
-#: ../data-browser/src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Buka halaman Pengguna"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: ../data-browser/src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -8974,7 +8984,7 @@ msgstr "Pilih templat"
 msgid "Name your drive"
 msgstr "Beri nama drive Anda"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted here"
 msgstr "Tidak dihosting di sini"
 
@@ -9165,10 +9175,6 @@ msgstr "Buka pengaturan"
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Ganti drive"
-
-#: ../data-browser/src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Buka pengaturan pengguna"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -9743,13 +9749,13 @@ msgstr "Hapus tabel"
 msgid "New form"
 msgstr "Formulir baru"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 msgid "Page 1"
 msgstr "Halaman 1"
 
-#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 msgid "Create form from this table"
 msgstr "Buat formulir dari tabel ini"
 
@@ -10073,6 +10079,7 @@ msgstr "{0} lainnya, buka untuk melihat semua"
 msgid "Show older messages ({0})"
 msgstr "Tampilkan pesan sebelumnya ({0})"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -10101,7 +10108,7 @@ msgstr "Pilih gambar"
 msgid "Textual Description"
 msgstr "Deskripsi teks"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Keluar dari perangkat ini."
 
@@ -10791,11 +10798,11 @@ msgstr "Mulai ulang aplikasi"
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Muat ulang seluruh aplikasi, seolah Anda membukanya kembali."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr "Hentikan pengunggahan perubahan ini? Perubahan tetap di perangkat ini tetapi tidak akan sampai ke server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Discard upload"
 msgstr "Buang unggahan"
 
@@ -10857,10 +10864,6 @@ msgstr "Akun dibuat"
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Selamat datang"
-
-#: ../data-browser/src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Akun"
 
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Server settings"
@@ -10959,7 +10962,7 @@ msgstr "Drive"
 msgid "Back to sync settings"
 msgstr "Kembali ke pengaturan sinkronisasi"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "(see where space goes)"
 msgstr "(lihat penggunaan ruang)"
 
@@ -11047,15 +11050,15 @@ msgid "See how much space this resource and what is in it take up."
 msgstr "Lihat berapa banyak ruang yang digunakan sumber daya ini beserta isinya."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to start Cloud Server."
 msgstr "Masuk ke akun {0} Anda untuk memulai Cloud Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan does not include Cloud Server yet."
 msgstr "Paket drive ini belum mencakup Cloud Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not start Cloud Server."
 msgstr "Tidak dapat memulai Cloud Server."
 
@@ -11064,12 +11067,12 @@ msgstr "Tidak dapat memulai Cloud Server."
 msgid "{0} · Email recovery on"
 msgstr "{0} · Pemulihan melalui email aktif"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Mencoba lagi…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Your plan"
 msgstr "Paket Anda"
 
@@ -11077,15 +11080,15 @@ msgstr "Paket Anda"
 msgid "Current"
 msgstr "Saat ini"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Shareable links and API access"
 msgstr "Tautan yang dapat dibagikan dan akses API"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Search across everything"
 msgstr "Cari di semua konten"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No need for another device to be awake"
 msgstr "Tidak perlu perangkat lain tetap aktif"
 
@@ -11104,15 +11107,15 @@ msgstr "Dicadangkan {0}"
 msgid "Backed up to {0}"
 msgstr "Dicadangkan ke {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Kelola paket"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn on Cloud Server"
 msgstr "Aktifkan Cloud Server"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Upgrade to Cloud Server"
 msgstr "Tingkatkan ke Cloud Server"
 
@@ -11228,16 +11231,16 @@ msgstr "Memuat integrasi…"
 msgid "<0/> Show experimental plugins"
 msgstr "<0/> Tampilkan plugin eksperimental"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Belum ada perangkat lain — data Anda aman di perangkat ini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Devices"
 msgstr "Perangkat"
 
 #. 0: status.pendingDirtyCount
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} unsynced"
 msgstr "{0} belum disinkronkan"
 
@@ -11334,11 +11337,6 @@ msgstr "{0} peristiwa dalam antrean. Peristiwa tetap tersimpan sambil menunggu p
 msgid "<0/> or"
 msgstr "<0/> atau"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: ../data-browser/src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Kredit terpakai: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: ../data-browser/src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11365,6 +11363,7 @@ msgstr "{0}: {1} dokumen,{2} {3}{4} baris yang dipilih"
 msgid "Loading document editor…"
 msgstr "Memuat editor dokumen…"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On column"
@@ -11453,11 +11452,6 @@ msgstr "Pencarian mencocokkan nama dan deskripsi sumber daya. Anda juga dapat me
 #: ../data-browser/src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Publik (siapa pun){0}"
-
-#. 0: ' '
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Buka situs{0}"
 
 #: ../data-browser/src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"
@@ -11645,10 +11639,11 @@ msgstr "{0} poin"
 msgid "Showing first {0} answers"
 msgstr "Menampilkan {0} jawaban pertama"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Tambahkan kunci sandi Anda di sini. Kunci sandi yang ditambahkan di aplikasi juga membuka cadangan terenkripsi Anda, yang hanya dapat dilakukan oleh aplikasi."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr "Ini memfilter berdasarkan tanggal masing-masing entri. Entri berulang dicocokkan berdasarkan tanggal pertamanya, bukan hari pengulangannya."
@@ -11666,11 +11661,11 @@ msgid "Confirm with your code"
 msgstr "Konfirmasi dengan kode Anda"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Kami menyimpan kunci Anda dalam keadaan tersegel, tetapi masuk belum membukanya. Konfirmasi sekali dengan kunci sandi atau kode pemulihan untuk mengaktifkannya."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn it on"
 msgstr "Aktifkan"
 
@@ -12045,23 +12040,19 @@ msgstr "Pengaturan akun"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> meminta untuk menggunakan data Atomic Anda. Aplikasi memiliki kunci sendiri, sehingga kunci rahasia tetap pada Anda, dan Anda dapat mencabut aksesnya kapan saja."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Aplikasi yang Anda izinkan menggunakan data, seperti asisten AI. Masing-masing memiliki kunci sendiri; cabut aksesnya untuk memutuskan hubungan."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Aplikasi terhubung"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup: no portal configured"
 msgstr "Penyiapan Cloud Server: portal belum dikonfigurasi"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed after sign-in"
 msgstr "Penyiapan Cloud Server gagal setelah masuk"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed on its own"
 msgstr "Penyiapan Cloud Server gagal dengan sendirinya"
 
@@ -12656,107 +12647,107 @@ msgstr "Obrolan"
 msgid "Show technical details"
 msgstr "Tampilkan detail teknis"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not change drive sync."
 msgstr "Tidak dapat mengubah sinkronisasi drive."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server doesn’t host this drive, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
 msgstr "Server ini tidak menghosting drive ini, sehingga menolak perubahannya. Siapkan Cloud Server untuk menyinkronkannya di sini, atau nonaktifkan sinkronisasi agar drive hanya tersimpan di perangkat ini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive with this server"
 msgstr "Sinkronkan drive ini dengan server ini"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off stops server sync for this drive on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
 msgstr "Menonaktifkan akan menghentikan sinkronisasi server untuk drive ini di browser ini. Salinan server yang ada dan perangkat lain tidak berubah; sinkronisasi browser tetap dapat menghubungkan browser yang terbuka."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Drive sync off"
 msgstr "Sinkronisasi drive nonaktif"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Open a drive to see whether it can be hosted."
 msgstr "Buka drive untuk melihat apakah drive dapat dihosting."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This device doesn’t have this drive yet. Pair the device that does, and you can host it from here."
 msgstr "Perangkat ini belum memiliki drive ini. Pasangkan perangkat yang memilikinya, lalu Anda dapat menghostingnya dari sini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking whether this drive is hosted…"
 msgstr "Memeriksa apakah drive ini dihosting…"
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to {0} to see whether this drive is hosted."
 msgstr "Masuk ke {0} untuk melihat apakah drive ini dihosting."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server received this drive. Your source server is still connected."
 msgstr "Cloud Server menerima drive ini. Server sumber Anda masih terhubung."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connected to Cloud Server. Syncing this drive…"
 msgstr "Terhubung ke Cloud Server. Menyinkronkan drive ini…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive is on Cloud Server. This device still syncs with its old server."
 msgstr "Drive ini berada di Cloud Server. Perangkat ini masih menyinkronkan dengan server lamanya."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Moving this drive to Cloud Server. It switches on by itself; you can keep working."
 msgstr "Memindahkan drive ini ke Cloud Server. Fitur akan aktif sendiri; Anda dapat terus bekerja."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} added Cloud Server to this drive. It waits for your consent."
 msgstr "{0} menambahkan Cloud Server ke drive ini. Persetujuan Anda ditunggu."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan includes Cloud Server. It waits for your consent."
 msgstr "Paket drive ini mencakup Cloud Server. Persetujuan Anda ditunggu."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Masuk ke akun {0} Anda untuk memeriksa pemulihan melalui email. Masuk ke drive ini dengan kunci sandi atau kunci rahasia tidak dengan sendirinya menghubungkan akun cloud Anda."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Cadangan pemulihan tidak tersimpan, sehingga kehilangan semua perangkat berarti kehilangan drive ini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here."
 msgstr "Semua yang ada di Cloud Vault, ditambah drive yang dihosting di atomic.place dan selalu online. Server kami memproses apa yang Anda tempatkan di sini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr "<0>Sebelum Anda mengaktifkannya:</0> berbeda dengan Cloud Vault, Cloud Server menyimpan salinan drive ini yang dapat dibaca dan tidak terenkripsi di server kami, agar kami dapat menjalankan pencarian, tautan berbagi, dan API-nya. Izin berbagi Anda tetap mengontrol siapa lagi yang dapat melihatnya, dan Anda dapat menonaktifkannya kapan saja."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, scan the code below to connect it."
 msgstr "Jika perangkat lain memiliki drive ini, pindai kode di bawah untuk menghubungkannya."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, you can connect it."
 msgstr "Jika perangkat lain memiliki drive ini, Anda dapat menghubungkannya."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive could not be read on this device"
 msgstr "Drive ini tidak dapat dibaca di perangkat ini"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive"
 msgstr "Sinkronkan drive ini"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "Drive ini belum disinkronkan. Drive aman di sini, tetapi belum dicadangkan dan belum ada di perangkat Anda yang lain."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "These sync your other drives — not this drive."
 msgstr "Ini menyinkronkan drive Anda yang lain — bukan drive ini."
 
@@ -12855,6 +12846,10 @@ msgstr "Tambahkan komentar"
 #: ../data-browser/src/actions/resourceActions.tsx
 msgid "Open the comments for this resource"
 msgstr "Buka komentar untuk sumber daya ini"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Menu baris"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "Commented"
@@ -13002,11 +12997,11 @@ msgstr "<0/> Tinggalkan pengalihan di lokasi lama"
 msgid "All drives"
 msgstr "Semua drive"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server isn’t on for this drive. This server only accepts it for a short while; after that it stops syncing. Set up Cloud Server to keep it here, or turn off sync to keep it on this device only."
 msgstr "Cloud Server belum aktif untuk drive ini. Server ini hanya menerimanya untuk waktu singkat; setelah itu sinkronisasi berhenti. Siapkan Cloud Server untuk menyimpannya di sini, atau nonaktifkan sinkronisasi agar drive hanya tersimpan di perangkat ini."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted yet"
 msgstr "Belum dihosting"
 
@@ -13185,10 +13180,6 @@ msgstr "Sumber daya di dalam folder"
 #: ../data-browser/src/embed/mockHost.ts
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Dirender oleh ResourcePage, tanpa elemen di sekitarnya."
-
-#: ../data-browser/src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Tampilkan ikon di bilah samping <0>Tampilkan ikon dan gambar di samping item dalam bilah samping</0>"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
@@ -13427,6 +13418,10 @@ msgstr "Tambahkan filter"
 msgid "Edit column"
 msgstr "Sunting kolom"
 
+#: ../table-page/src/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Tambahkan tampilan"
+
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Tamu"
@@ -13515,18 +13510,6 @@ msgstr "Menekan Kirim laporan membagikan teks obrolan yang telah ditinjau, pesan
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Laporkan bug atau sarankan perbaikan. Pesan dan email opsional Anda dikirim ke tim Atomic melalui Sentry, beserta detail teknis tentang pengaturan Anda (versi aplikasi, alamat dan status server). Jangan sertakan konten ruang kerja pribadi."
 
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Row menu"
-msgstr "Menu baris"
-
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Open resource"
-msgstr "Buka sumber daya"
-
-#: ../table-page/src/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Tambahkan tampilan"
-
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13564,20 +13547,86 @@ msgstr "{0} riwayat lama dapat dihapus. Tidak ada yang terlihat oleh Anda yang h
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Secret ini milik agen lain. Tempel secret yang baru saja kamu simpan untuk akun ini."
 
-#. 0: p; 1: uiTheme(theme).animation.duration
-#: ../ui/src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Pengaturan profil"
 
-#: ../table/src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Memuat"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Nama, avatar, dan keluar."
 
-#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Akun dan keamanan"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Masuk, pemulihan, paket Anda, dan perangkat ini."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Drive Anda dan yang baru dikunjungi."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Sinkronisasi dan perangkat"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Tempat drive ini disinkronkan, dan menghubungkan perangkat."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Pengaturan tampilan"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Tema, warna, bahasa, dan bilah samping."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Pengaturan aksesibilitas"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animasi dan gerakan."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Pengaturan notifikasi"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Hal yang diberitahukan kepada Anda."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Model, penyedia, dan suara."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Pengaturan integrasi"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proksi, katalog, dan plugin eksperimental."
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Tampilkan ikon di bilah samping"
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Tampilkan ikon dan gambar di samping item dalam bilah samping"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: ../data-browser/src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Kredit terpakai: {0} /{1} {2}"
+
+#: ../data-browser/src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Edit profil"

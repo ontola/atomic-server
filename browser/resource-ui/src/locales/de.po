@@ -116,6 +116,7 @@ msgstr "KI-Agenten"
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
@@ -125,7 +126,6 @@ msgstr "KI-Agenten"
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -175,10 +175,10 @@ msgstr "Name des Agenten"
 #: ../data-browser/src/chunks/AI/MCPConfigTab.tsx
 #: ../data-browser/src/chunks/AI/SkillsConfigTab.tsx
 #: ../data-browser/src/chunks/FormBuilder/PageSettingsPanel.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 msgid "Name"
 msgstr "Name"
 
@@ -264,18 +264,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Komprimiere die Unterhaltung automatisch, wenn die Eingabe-Tokens diesen Anteil des Kontextfensters des ausgewählten Modells überschreiten. Der manuelle Befehl /compact funktioniert auch bei deaktivierter Option."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Entfernen"
 
@@ -488,10 +488,10 @@ msgstr "Optionale HTTP-Header, die beim Verbinden mit diesem MCP-Server gesendet
 
 #: ../data-browser/src/actions/resourceActions.tsx
 #: ../data-browser/src/chunks/AI/AgentConfigItem.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
-#: ../data-browser/src/routes/EditRoute.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../data-browser/src/components/MetaSetter.tsx
+#: ../data-browser/src/routes/EditRoute.tsx
 msgid "Edit"
 msgstr "Bearbeiten"
 
@@ -517,10 +517,10 @@ msgstr "Anbieter nicht aktiviert"
 msgid "Default model"
 msgstr "Standardmodell"
 
-#: ../data-browser/src/components/ComboBox.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MultiRelationCell.tsx
 #: ../table-page/src/TablePage/EditorCells/SelectCell.tsx
+#: ../data-browser/src/components/ComboBox.tsx
 msgid "No results"
 msgstr "Keine Ergebnisse"
 
@@ -534,12 +534,12 @@ msgstr "Nicht konfiguriert"
 
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/routes/ConnectAgentRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Verbunden"
 
@@ -580,9 +580,9 @@ msgstr "Pflichtfeld."
 #. 0: JSON.stringify(error)
 #. 0: searchError.message
 #. 0: resource.error.message
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceRow.tsx
@@ -697,6 +697,10 @@ msgstr "Ontologien"
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "App"
 msgstr "App"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
 
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -950,14 +954,6 @@ msgstr "Proxy verwenden"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Ruft die URL über deinen aktuellen Atomic-Server ({0}) statt direkt ab. Das kann helfen, wenn die URL nicht erreichbar ist, die Ressource aber auf deinem Server zwischengespeichert ist."
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "URL als Lesezeichen speichern"
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Keine URL"
-
 #: ../data-browser/src/views/Card/MessageCard.tsx
 #: ../data-browser/src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1054,9 +1050,8 @@ msgstr "Link zu dieser Nachricht kopieren"
 msgid "Copy message text"
 msgstr "Nachrichtentext kopieren"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 #: ../table-page/src/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "wird geladen …"
 
@@ -1286,17 +1281,15 @@ msgstr "Dokument"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Synchronisierung"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -1304,8 +1297,8 @@ msgstr "Offline"
 msgid "Changes could not sync"
 msgstr "Änderungen konnten nicht synchronisiert werden"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Ausstehende Änderungen"
 
@@ -1345,6 +1338,7 @@ msgstr "Bildunterschrift hinzufügen …"
 msgid "Alt text"
 msgstr "Alternativtext"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/routes/Share/ShareRoute.tsx
@@ -1496,11 +1490,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Konto erstellen"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Warnung:"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Du verwendest einen lokalen Agenten, der sich auf anderen Domains nicht authentifizieren kann, weil seine URL nicht auflösbar ist."
 
@@ -1508,24 +1502,24 @@ msgstr "Du verwendest einen lokalen Agenten, der sich auf anderen Domains nicht 
 msgid "Global"
 msgstr "Global"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "In sync"
 msgstr "Synchronisiert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Fehler: atomic:node:<node-id> erwartet"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/managed/deviceLink.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 #: ../data-browser/src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Dieses Gerät"
 
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "Add"
 msgstr "Hinzufügen"
 
@@ -1534,52 +1528,52 @@ msgstr "Hinzufügen"
 msgid "Copy"
 msgstr "Kopieren"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: src/components/forms/SearchBox/SearchBox.tsx
 #: ../data-browser/src/helpers/sentry.ts
 #: ../data-browser/src/routes/LinkOpenRouter.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: src/components/forms/SearchBox/SearchBox.tsx
 msgid "Error"
 msgstr "Fehler"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Logging to console"
 msgstr "Ausgabe in der Konsole"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off"
 msgstr "Aus"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "destroy"
 msgstr "zerstören"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No activity recorded in this session yet."
 msgstr "In dieser Sitzung wurde noch keine Aktivität aufgezeichnet."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disabled (server-only)"
 msgstr "Deaktiviert (nur Server)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Initializing..."
 msgstr "Wird initialisiert …"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Ready — WASM + OPFS"
 msgstr "Bereit – WASM + OPFS"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Enable local WASM DB"
 msgstr "Lokale WASM-Datenbank aktivieren"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Laufwerk-DID oder URL eingeben"
 
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr "Festlegen"
 
@@ -1657,9 +1651,9 @@ msgid "Set a title"
 msgstr "Titel festlegen"
 
 #: ../data-browser/src/chunks/FormBuilder/useFormQuestions.ts
+#: src/components/EditableTitle.tsx
 #: ../data-browser/src/components/NavBar.tsx
 #: ../data-browser/src/helpers/storageMap.ts
-#: src/components/EditableTitle.tsx
 msgid "Untitled"
 msgstr "Unbenannt"
 
@@ -1696,10 +1690,10 @@ msgstr "Trotzdem laden ({0})"
 
 #: ../data-browser/src/chunks/RTE/CollaborativeEditor.tsx
 #: ../data-browser/src/components/Share/useClassLabel.ts
+#: src/components/forms/NewForm/NewFormTitle.tsx
 #: ../data-browser/src/routes/History/HistoryDesktopView.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
-#: src/components/forms/NewForm/NewFormTitle.tsx
 msgid "Resource"
 msgstr "Ressource"
 
@@ -1708,8 +1702,8 @@ msgid "Failed to save new resource"
 msgstr "Neue Ressource konnte nicht gespeichert werden"
 
 #: ../data-browser/src/components/forms/FileDropzone/FileDropzone.tsx
-#: ../data-browser/src/components/forms/UploadForm.tsx
 #: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: ../data-browser/src/components/forms/UploadForm.tsx
 msgid "Uploading..."
 msgstr "Wird hochgeladen …"
 
@@ -1733,12 +1727,12 @@ msgstr "Neue Ressource erstellen"
 msgid "New Resource"
 msgstr "Neue Ressource"
 
-#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/views/FolderPage/ListView.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../table-page/src/TablePage/Issues/IssuesView.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: ../data-browser/src/views/FolderPage/ListView.tsx
 msgid "Title"
 msgstr "Titel"
 
@@ -1760,8 +1754,8 @@ msgstr "Untergeordnete Ressourcen"
 msgid "Classes"
 msgstr "Klassen"
 
-#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 #: src/components/ClassSelectorDialog.tsx
+#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 msgid "No classes"
 msgstr "Keine Klassen"
 
@@ -1817,9 +1811,9 @@ msgstr "Nichts zu kopieren."
 msgid "Copied error to clipboard"
 msgstr "Fehler in die Zwischenablage kopiert"
 
-#: ../data-browser/src/components/Toaster.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/QuickFilterField.tsx
+#: ../data-browser/src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
 msgstr "Leeren"
@@ -1857,13 +1851,13 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Festlegen, ob diese Ressource in deinen Favoriten erscheint."
 
 #: ../data-browser/src/actions/resourceActions.tsx
-#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
+#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
 #: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Open"
 msgstr "Öffnen"
 
@@ -1953,20 +1947,12 @@ msgstr "<0/> Zurück"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> Ressourcen verweisen auf{0} {1}"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "keine Vorschau …"
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "Vorschau konnte nicht geladen werden 😞"
-
 #: ../data-browser/src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "Keine Plugins installiert"
 
-#: ../data-browser/src/views/Card/CollectionCard.tsx
 #: src/components/ResourceUsage/UsageCard.tsx
+#: ../data-browser/src/views/Card/CollectionCard.tsx
 msgid "No resources"
 msgstr "Keine Ressourcen"
 
@@ -1985,10 +1971,6 @@ msgstr "Dokument"
 #: ../data-browser/src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "Ordner"
-
-#: ../data-browser/src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Website öffnen"
 
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2042,30 +2024,24 @@ msgstr "Neue Ontologie"
 msgid "Shortname"
 msgstr "Kurzname"
 
+#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
-#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Create"
 msgstr "Erstellen"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Neues Lesezeichen"
-
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "OK"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/OntologyPage/Class/NewClassInstanceButton.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 msgid "Table"
 msgstr "Tabelle"
 
@@ -2181,8 +2157,8 @@ msgstr "<0/> Hinweis"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Neu"
@@ -2417,8 +2393,8 @@ msgstr "keine"
 msgid "Recommends"
 msgstr "Empfiehlt"
 
-#: ../data-browser/src/views/Article/ArticleDescription.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: ../data-browser/src/views/Article/ArticleDescription.tsx
 msgid "Could not save resource..."
 msgstr "Ressource konnte nicht gespeichert werden …"
 
@@ -2724,8 +2700,8 @@ msgstr "Klassendetails ein-/ausblenden"
 msgid "Remove drive from list"
 msgstr "Laufwerk aus Liste entfernen"
 
-#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
+#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Auswählen"
 
@@ -2771,10 +2747,10 @@ msgstr "Kurzname der Eigenschaft"
 msgid "Property description"
 msgstr "Beschreibung der Eigenschaft"
 
-#. 0: resource.title
 #. 0: BLOCK_KIND_LABELS[blockKind].toLowerCase()
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
+#. 0: resource.title
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "{0} konfigurieren"
 
@@ -2790,9 +2766,9 @@ msgid "Empty"
 msgstr "Leer"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
+#: src/components/LoroDocValue.tsx
 #: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
-#: src/components/LoroDocValue.tsx
 msgid "Hide"
 msgstr "Ausblenden"
 
@@ -2882,8 +2858,8 @@ msgstr "Neue Ressource vom Typ {0} erstellen"
 msgid "No Results"
 msgstr "Keine Ergebnisse"
 
-#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 #: ../table-page/src/TablePage/TableTotalsFooter.tsx
+#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "Keine"
 
@@ -3074,9 +3050,9 @@ msgstr "Inline-Code umschalten"
 msgid "No alt text"
 msgstr "Kein Alternativtext"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Text"
@@ -3186,11 +3162,13 @@ msgstr "Falsch"
 msgid "Value…"
 msgstr "Wert …"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Remove filter"
 msgstr "Filter entfernen"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Filter operator"
@@ -3205,6 +3183,10 @@ msgstr "Standardansicht"
 #: ../table-page/src/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Zeile ist unvollständig oder enthält ungültige Daten"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Ressource öffnen"
 
 #: ../data-browser/src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3341,22 +3323,27 @@ msgstr "Ressourcentyp:"
 msgid "<0/> Allow multiple values"
 msgstr "<0/> Mehrere Werte erlauben"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
 msgstr "Textformat:"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Plain text"
 msgstr "Nur Text"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Rich text"
 msgstr "Rich Text"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Slug"
 msgstr "Slug"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Length"
@@ -3387,14 +3374,17 @@ msgstr "Bearbeitungsdialog öffnen"
 msgid "Add resource"
 msgstr "Ressource hinzufügen"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
 msgstr "Numerisch"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Long"
 msgstr "Lang"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relativ"
@@ -3487,8 +3477,8 @@ msgstr "Beginnen mit"
 msgid "Click to add a value"
 msgstr "Klicken, um einen Wert hinzuzufügen"
 
-#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
+#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Umbenennen"
 
@@ -3520,9 +3510,9 @@ msgstr "Element hinzufügen"
 msgid "New item…"
 msgstr "Neues Element …"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanView.tsx
 #: ../table-page/src/TablePage/createTableFromSpec.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Row"
 msgstr "Zeile"
 
@@ -3728,6 +3718,11 @@ msgstr "Möchtest du die Ansicht <0/> wirklich löschen? Dadurch wird nur die An
 msgid "{0} copy"
 msgstr "{0} Kopie"
 
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
 #: ../data-browser/src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter bietet eine einheitliche API mit Zugriff auf Hunderte KI-Modelle aller großen Anbieter und kümmert sich automatisch um Ausweichmodelle und die kostengünstigsten Optionen."
@@ -3792,6 +3787,11 @@ msgstr "Versuche, die Seite neu zu laden. Falls das Problem bleibt, blockiert m�
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/M Eingabe-Tokens"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: ../data-browser/src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -3881,8 +3881,8 @@ msgstr "Besprechungschat öffnen"
 msgid "Chat and the log of resources visited during the meeting."
 msgstr "Chat und Protokoll der während der Besprechung besuchten Ressourcen."
 
-#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 #: ../table-page/src/TablePage/Timer/useTimerProps.ts
+#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr "Beenden"
 
@@ -3964,32 +3964,28 @@ msgstr "Privates Laufwerk"
 msgid "View and organize all your drives."
 msgstr "Alle deine Laufwerke anzeigen und organisieren."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Meine Laufwerke"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Nur auf diesem Gerät gespeichert. Markiere ein Laufwerk mit einem Stern, um es unter „Meine Laufwerke“ zu behalten."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Kürzlich besucht"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources · stored locally"
 msgstr "{0} Ressourcen · lokal gespeichert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Embedded server · stored locally"
 msgstr "Eingebetteter Server · lokal gespeichert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cached locally · works offline"
 msgstr "Lokal zwischengespeichert · offline nutzbar"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Server-only · no local cache"
 msgstr "Nur auf dem Server · kein lokaler Cache"
 
@@ -3998,13 +3994,13 @@ msgstr "Nur auf dem Server · kein lokaler Cache"
 msgid "{0}% used"
 msgstr "{0}% belegt"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Syncing…"
 msgstr "Wird synchronisiert …"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync now"
 msgstr "Jetzt synchronisieren"
 
@@ -4012,31 +4008,31 @@ msgstr "Jetzt synchronisieren"
 msgid "Embedded (this device)"
 msgstr "Eingebettet (dieses Gerät)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID"
 msgstr "Knoten-ID"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local database"
 msgstr "Lokale Datenbank"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "WebSocket debug"
 msgstr "WebSocket-Debugging"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Developer"
 msgstr "Entwicklung"
 
 #: ../data-browser/src/chunks/Conference/ConferenceRoom.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/PeerInvitePage.tsx
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt …"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Only on this device"
 msgstr "Nur auf diesem Gerät"
 
@@ -4070,10 +4066,10 @@ msgstr "Gerät wird gekoppelt"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 #: ../data-browser/src/components/Vault/VaultRestoreAction.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Erneut versuchen"
 
@@ -4085,10 +4081,10 @@ msgstr "Arbeitsbereich öffnen"
 
 #: ../data-browser/src/chunks/AI/ReportAIChatDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../data-browser/src/components/SideBar/FeedbackButton.tsx
 #: ../data-browser/src/components/Vault/VaultStorage.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 msgid "Close"
 msgstr "Schließen"
 
@@ -4116,10 +4112,10 @@ msgstr "Dein Arbeitsbereich ist da"
 msgid "Bring your workspace over"
 msgstr "Deinen Arbeitsbereich übertragen"
 
-#. 0: device
 #. 0: serverLabel(status.serverUrl ?? '')
+#. 0: device
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Mit {0} gekoppelt"
 
@@ -4142,8 +4138,8 @@ msgstr "Dein Arbeitsbereich wurde hier noch nicht geöffnet. Die Übertragung l�
 
 #. 0: PRODUCT_NAME
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No {0} portal is configured for this server."
 msgstr "Für diesen Server ist kein {0}-Portal konfiguriert."
 
@@ -4266,12 +4262,12 @@ msgstr "<0/> Öffnen"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Binde deine Atomic-Laufwerke als Ordner auf diesem Computer ein. Deine Dateien, Ordner und Dokumente erscheinen im Dateimanager, und Änderungen werden zurücksynchronisiert."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID copied"
 msgstr "Knoten-ID kopiert"
 
 #. 0: nodeId
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Copy {0}"
 msgstr "{0} kopieren"
 
@@ -4279,30 +4275,29 @@ msgstr "{0} kopieren"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Deine Daten liegen auf dem Gerät, mit dem du verbunden bist."
 
-#: ../data-browser/src/components/ConnectDevice.tsx
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Gerät verbinden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect a device below first."
 msgstr "Verbinde zuerst unten ein Gerät."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
 msgstr "Kopple ein weiteres Gerät zur direkten Synchronisierung oder verbinde ein dauerhaft eingeschaltetes Gerät, um deine Daten überall zu erreichen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect an always-on device to back up your data and reach it from anywhere."
 msgstr "Verbinde ein dauerhaft eingeschaltetes Gerät, um deine Daten zu sichern und überall zu erreichen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on · in use"
 msgstr "Dauerhaft eingeschaltet · in Verwendung"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on device"
 msgstr "Dauerhaft eingeschaltetes Gerät"
 
@@ -4310,7 +4305,7 @@ msgstr "Dauerhaft eingeschaltetes Gerät"
 msgid "Scan this from that device"
 msgstr "Mit diesem Gerät scannen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Fehler: Verbindung zu diesem Gerät konnte nicht getrennt werden"
 
@@ -4357,9 +4352,9 @@ msgstr "Mehrsprachiger Text"
 msgid "No {0} translation. {1}"
 msgstr "Keine Übersetzung für {0}. {1}"
 
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
 #: ../table-page/src/TablePage/ColumnLanguageChip.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
 msgid "Content language"
 msgstr "Inhaltssprache"
 
@@ -4384,12 +4379,12 @@ msgstr "Sprachen bearbeiten …"
 msgid "Languages"
 msgstr "Sprachen"
 
+#. 0: tag
 #. 0: url
 #. 0: email
-#. 0: tag
+#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Share/EmailInviteInput.tsx
-#: src/components/EditLanguagesDialog.tsx
 msgid "Remove {0}"
 msgstr "{0} entfernen"
 
@@ -4402,7 +4397,7 @@ msgstr "Die Sprachen, in denen dieses Laufwerk Inhalte veröffentlicht (BCP-47-K
 msgid "This property is server-managed and cannot be edited."
 msgstr "Diese Eigenschaft wird vom Server verwaltet und kann nicht bearbeitet werden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokaler Speicher ist deaktiviert. Dieser Server ist daher die einzige Datenquelle. Aktiviere unten den lokalen Speicher, um ohne Verbindung zu arbeiten."
 
@@ -4649,11 +4644,7 @@ msgstr "Stattdessen deinen Passkey verwenden"
 msgid "Could not add a recovery code."
 msgstr "Wiederherstellungscode konnte nicht hinzugefügt werden."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "So meldest du dich auf einem neuen Gerät wieder an – und findest dein Agentengeheimnis."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Kontowiederherstellung"
 
@@ -4736,11 +4727,11 @@ msgstr "Entsperre {0} mit deinem Fingerabdruck, Gesicht oder der Bildschirmsperr
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Wir haben dein altes Wiederherstellungspasswort durch einen stärkeren generierten Code ersetzt. Bewahre ihn sicher auf. Du brauchst ihn zusammen mit deiner E-Mail, um wieder Zugriff zu erhalten. Wir können ihn nicht erneut anzeigen, aber du kannst jederzeit in den Einstellungen einen neuen generieren."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Weitere Profilfelder"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4775,11 +4766,11 @@ msgstr "Verwende deinen Fingerabdruck, dein Gesicht oder die Bildschirmsperre."
 msgid "or sign in another way"
 msgstr "oder anders anmelden"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Abmelden und die Kopie deiner verschlüsselten Sicherung auf diesem Gerät entfernen"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Abmelden und dieses Gerät vergessen"
 
@@ -4803,10 +4794,6 @@ msgstr "Dein Agentengeheimnis einfügen"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Das sieht nicht wie ein gültiges Agentengeheimnis aus."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Ob dieser Browser als du angemeldet bleibt, wenn ihn jemand öffnet."
 
 #: ../data-browser/src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -4896,10 +4883,10 @@ msgstr "Zeiterfassung"
 msgid "Could not start the entry"
 msgstr "Eintrag konnte nicht gestartet werden"
 
-#. 0: Math.floor(hours / 24)
 #. 0: days
-#: ../data-browser/src/components/Vault/VaultPanel.tsx
+#. 0: Math.floor(hours / 24)
 #: ../table-page/src/TablePage/derivedColumns.ts
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "{0}d ago"
 msgstr "vor {0} Tagen"
 
@@ -5034,14 +5021,17 @@ msgstr "Ollama{0}"
 msgid "This column holds an action, not a value, so there is nothing to total."
 msgstr "Diese Spalte enthält eine Aktion und keinen Wert. Deshalb gibt es nichts zu summieren."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "now"
 msgstr "jetzt"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "a date"
 msgstr "ein Datum"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Compare against"
@@ -5093,6 +5083,8 @@ msgstr "Zeilen"
 msgid "Measure"
 msgstr "Messwert"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
@@ -5138,6 +5130,7 @@ msgstr "Wähle eine Zahl und eine Gruppierung dafür"
 msgid "No data yet"
 msgstr "Noch keine Daten"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
@@ -5157,30 +5150,37 @@ msgstr "Die Schaltfläche {0} aus dieser Ansicht entfernen. Bereits damit erfass
 msgid "Remove action"
 msgstr "Aktion entfernen"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionHeading.tsx
 msgid "Edit action"
 msgstr "Aktion bearbeiten"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Add an action"
 msgstr "Aktion hinzufügen"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "Does what"
 msgstr "Was passiert"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "Diese Tabelle hat noch keine passende Spalte dafür."
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "To column"
 msgstr "In Spalte"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
@@ -5189,6 +5189,8 @@ msgstr "In Spalte"
 msgid "Pick an option…"
 msgstr "Option auswählen …"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/QuickAddFields.tsx
@@ -5229,10 +5231,13 @@ msgid "A button above the rows that creates one — \"Log a feed\", \"Add item\"
 msgstr "Eine Schaltfläche über den Zeilen, die eine neue erstellt – „Fütterung erfassen“, „Element hinzufügen“."
 
 #. 0: tableClass.title.toLowerCase()
+#. 0: tableClass.title.toLowerCase()
+#: ../data-browser/src/chunks/TablePage/QuickAddBar.tsx
 #: ../table-page/src/TablePage/QuickAddBar.tsx
 msgid "Could not add the {0}"
 msgstr "{0} konnte nicht hinzugefügt werden"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Log a feed"
@@ -5242,21 +5247,25 @@ msgstr "Fütterung erfassen"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "Sie steht über den Zeilen und erstellt eine neue. Alle weiteren Angaben der Zeile werden in der Tabelle bearbeitet."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Zuerst nach einem Wert fragen"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "Aktivieren für Listen, in denen du Dinge benennst; deaktivieren für Schaltflächen, die du einfach drückst."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Eingabe in"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "What are you adding?"
@@ -5264,16 +5273,19 @@ msgstr "Was fügst du hinzu?"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Platzhalter"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Nichts"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Also set"
@@ -5291,8 +5303,8 @@ msgstr "Beschreibe, was die Schaltfläche tut"
 msgid "That table has no row class yet"
 msgstr "Diese Tabelle hat noch keine Zeilenklasse"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../table-page/src/TablePage/useTableView.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 msgid "Dashboard"
 msgstr "Dashboard"
 
@@ -5330,8 +5342,8 @@ msgstr "Dokumente, Tabellen, Dateien, Chat und eigene Apps an einem Ort. AtomicS
 msgid "Bearer {0}"
 msgstr "Bearer {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
@@ -5453,32 +5465,32 @@ msgstr "Cloud Vault aktivieren"
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault ist hier nicht verfügbar: {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disconnect"
 msgstr "Trennen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Reconnect"
 msgstr "Erneut verbinden"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/browserPeerSync.ts
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Not connected"
 msgstr "Nicht verbunden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Switch"
 msgstr "Wechseln"
 
-#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#. 0: accountAddress(phase.account)
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr "Angemeldet als {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Email recovery"
 msgstr "Wiederherstellung per E-Mail"
 
@@ -5487,7 +5499,7 @@ msgstr "Wiederherstellung per E-Mail"
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: ../data-browser/src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 #: ../data-browser/src/components/Cloud/CloudServerDetails.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources"
 msgstr "{0} Ressourcen"
 
@@ -5497,7 +5509,7 @@ msgstr "{0} Ressourcen"
 #. 0: doneCount; 1: steps.length
 #: ../data-browser/src/components/Cloud/UsageMeter.tsx
 #: ../data-browser/src/components/DatabaseUpgradeNotice.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} von {1}"
@@ -5505,22 +5517,22 @@ msgstr "{0} von {1}"
 #. 0: syncedAgo
 #. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced {0}"
 msgstr "Synchronisiert {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced just now"
 msgstr "Gerade synchronisiert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Dieser Server"
 
 #. 0: serverHostname ?? 'This server'
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
 msgstr "{0} bietet kein Hosting an, daher kann es hier nicht aktiviert werden."
 
@@ -5529,25 +5541,25 @@ msgid "Checking this workspace’s backup…"
 msgstr "Sicherung dieses Arbeitsbereichs wird geprüft …"
 
 #. 0: withWhom
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Already up to date{0}"
 msgstr "Bereits aktuell{0}"
 
 #. 0: withWhom; 1: sent; 2: received
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Synchronisiert{0} – {1} gesendet, {2} empfangen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired"
 msgstr "Gekoppelt"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Gekoppeltes Gerät"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not synced yet"
 msgstr "Noch nicht synchronisiert"
 
@@ -5562,11 +5574,11 @@ msgid "Sign in →"
 msgstr "Anmelden →"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf. Mit dieser E-Mail erhältst du auf einem neuen Gerät wieder Zugriff."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Set up email recovery"
 msgstr "Wiederherstellung per E-Mail einrichten"
 
@@ -5612,7 +5624,7 @@ msgstr "Dein Agentengeheimnis"
 msgid "Set up account recovery"
 msgstr "Kontowiederherstellung einrichten"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Store it with "
 msgstr "Speichern bei "
 
@@ -5633,7 +5645,7 @@ msgid "Store it with {0}"
 msgstr "Bei {0} speichern"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Deine Sicherung ist nur in diesem Browser verschlüsselt gespeichert. Sie lässt sich hier entsperren, aber ein neues Gerät könnte dir keinen Zugriff verschaffen."
 
@@ -5666,20 +5678,18 @@ msgstr "Dein privates Laufwerk wird erstellt …"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Deine Liste konnte nicht aktualisiert werden: Für dieses Konto ist noch kein privates Laufwerk eingerichtet."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Dein privates Laufwerk steht immer an erster Stelle. Entferne bei anderen Laufwerken den Stern, um sie zurück zu den zuletzt besuchten zu verschieben."
-
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Drives/DrivesCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Laufwerke"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Laufwerk per URL öffnen"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Laufwerk per URL oder DID öffnen"
 
@@ -5692,12 +5702,12 @@ msgid "Only your passkey opens this account. If it isn't on this device, unlock 
 msgstr "Nur dein Passkey öffnet dieses Konto. Ist er nicht auf diesem Gerät, entsperre das Konto auf dem Gerät, auf dem du ihn eingerichtet hast, und füge in den Einstellungen einen Wiederherstellungscode hinzu. Damit erhältst du überall Zugriff."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber nur dein Passkey öffnet ihn. In einem Browser, mit dem dein Passkey nicht synchronisiert wurde, erhältst du keinen Zugriff. Ein Wiederherstellungscode würde das ermöglichen."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Add a recovery code"
 msgstr "Wiederherstellungscode hinzufügen"
 
@@ -5881,23 +5891,23 @@ msgstr "Signierte Hülle vorhanden, aber ihre Signatur konnte nicht verifiziert 
 msgid "No signed envelope covers this change on this node"
 msgstr "Auf diesem Knoten deckt keine signierte Hülle diese Änderung ab"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
 msgstr "Dieses Laufwerk verwendet eine alte Serveradresse. Cloud Server benötigt ein portables DID-Laufwerk."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr "Anmeldung nicht abgeschlossen – Hosting-Einrichtung abgebrochen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not set up Cloud Server."
 msgstr "Cloud Server konnte nicht eingerichtet werden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Use Cloud Server"
 msgstr "Cloud Server verwenden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "See plans"
 msgstr "Tarife ansehen"
 
@@ -6010,8 +6020,8 @@ msgstr "Atomic-Data-Dokumentation"
 msgid "Are you sure you want to delete"
 msgstr "Möchtest du wirklich löschen:"
 
-#: ../data-browser/src/views/File/DownloadButton.tsx
 #: ../table-page/src/TablePage/TableExportDialog.tsx
+#: ../data-browser/src/views/File/DownloadButton.tsx
 msgid "Download"
 msgstr "Herunterladen"
 
@@ -6134,7 +6144,7 @@ msgstr "Aktualisieren"
 msgid "Context compacted"
 msgstr "Kontext komprimiert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Recent activity"
 msgstr "Letzte Aktivitäten"
 
@@ -6291,7 +6301,7 @@ msgstr "<0>Bewahre diesen Wiederherstellungscode auf.</0> Er gibt dir auf einem 
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Entsperren mit einem Passkey fehlgeschlagen. Verwende stattdessen deinen Wiederherstellungscode."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Fehler: Melde dich an, bevor du mit einem anderen Gerät synchronisierst"
 
@@ -6453,7 +6463,7 @@ msgstr "Deine Daten liegen auf diesem Gerät und werden mit einem Server synchro
 msgid "Your data lives on this device. Browser sync connects when another browser is available."
 msgstr "Deine Daten liegen auf diesem Gerät. Browser-Synchronisierung verbindet sich, sobald ein anderer Browser verfügbar ist."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking local copy…"
 msgstr "Lokale Kopie wird geprüft …"
 
@@ -6538,6 +6548,10 @@ msgstr "Keine Treffer. Versuche eine andere Suche oder bitte die KI, es zu erste
 #: ../data-browser/src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "KI fragen"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Wird geladen"
 
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -8113,6 +8127,7 @@ msgstr "Enthaltenes Modell verwenden"
 msgid "Agent"
 msgstr "Agent"
 
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "KI-Einstellungen"
@@ -8334,7 +8349,6 @@ msgid "AI settings…"
 msgstr "KI-Einstellungen …"
 
 #: ../data-browser/src/actions/appActions.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Benutzer"
 
@@ -8360,7 +8374,7 @@ msgstr "Hier gibt es keine Plugins anzuzeigen."
 msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
 msgstr "Dein Startbereich ist bereit. Hast du Daten anderswo?{0} <0>Verbinde ein anderes Gerät oder stelle eine Sicherung wieder her</0>."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local copy unavailable"
 msgstr "Lokale Kopie nicht verfügbar"
 
@@ -8432,7 +8446,7 @@ msgstr "Prüfe das Chat-Transkript, bevor du es mit dem Atomic-Team teilst"
 msgid "Buy AI credits"
 msgstr "KI-Credits kaufen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Starting server sync…"
 msgstr "Serversynchronisierung wird gestartet …"
 
@@ -8787,10 +8801,6 @@ msgstr "Integrationen aus dieser catalog.json entdecken. Diese Einstellung wird 
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Gib eine HTTPS-URL oder localhost-HTTP-URL zu einer catalog.json-Datei ein."
 
-#: ../data-browser/src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Zur Benutzerseite"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: ../data-browser/src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -8974,7 +8984,7 @@ msgstr "Vorlage auswählen"
 msgid "Name your drive"
 msgstr "Dein Laufwerk benennen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted here"
 msgstr "Hier nicht gehostet"
 
@@ -9165,10 +9175,6 @@ msgstr "Einstellungen öffnen"
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Laufwerk wechseln"
-
-#: ../data-browser/src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Benutzereinstellungen öffnen"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -9743,13 +9749,13 @@ msgstr "Tabelle löschen"
 msgid "New form"
 msgstr "Neues Formular"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 msgid "Page 1"
 msgstr "Seite 1"
 
-#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 msgid "Create form from this table"
 msgstr "Formular aus dieser Tabelle erstellen"
 
@@ -10073,6 +10079,7 @@ msgstr "{0} weitere, öffnen um alle zu sehen"
 msgid "Show older messages ({0})"
 msgstr "Ältere Nachrichten anzeigen ({0})"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profil"
@@ -10101,7 +10108,7 @@ msgstr "Bild auswählen"
 msgid "Textual Description"
 msgstr "Textbeschreibung"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Auf diesem Gerät abmelden."
 
@@ -10791,11 +10798,11 @@ msgstr "App neu starten"
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Die gesamte App neu laden, als hättest du sie erneut geöffnet."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr "Hochladen dieser Änderung stoppen? Sie bleibt auf diesem Gerät, erreicht aber nicht den Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Discard upload"
 msgstr "Upload verwerfen"
 
@@ -10857,10 +10864,6 @@ msgstr "Konto erstellt"
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Willkommen"
-
-#: ../data-browser/src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Konto"
 
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Server settings"
@@ -10959,7 +10962,7 @@ msgstr "Laufwerk"
 msgid "Back to sync settings"
 msgstr "Zurück zu den Synchronisierungseinstellungen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "(see where space goes)"
 msgstr "(Speicherbelegung ansehen)"
 
@@ -11047,15 +11050,15 @@ msgid "See how much space this resource and what is in it take up."
 msgstr "Ansehen, wie viel Speicher diese Ressource und ihre Inhalte belegen."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to start Cloud Server."
 msgstr "Melde dich bei deinem {0}-Konto an, um Cloud Server zu starten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan does not include Cloud Server yet."
 msgstr "Der Tarif dieses Laufwerks enthält noch keinen Cloud Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not start Cloud Server."
 msgstr "Cloud Server konnte nicht gestartet werden."
 
@@ -11064,12 +11067,12 @@ msgstr "Cloud Server konnte nicht gestartet werden."
 msgid "{0} · Email recovery on"
 msgstr "{0} · E-Mail-Wiederherstellung aktiviert"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Erneuter Versuch …"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Your plan"
 msgstr "Dein Tarif"
 
@@ -11077,15 +11080,15 @@ msgstr "Dein Tarif"
 msgid "Current"
 msgstr "Aktuell"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Shareable links and API access"
 msgstr "Teilbare Links und API-Zugriff"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Search across everything"
 msgstr "Alles durchsuchen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No need for another device to be awake"
 msgstr "Kein weiteres Gerät muss eingeschaltet sein"
 
@@ -11104,15 +11107,15 @@ msgstr "Gesichert {0}"
 msgid "Backed up to {0}"
 msgstr "Bei {0} gesichert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Tarif verwalten"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn on Cloud Server"
 msgstr "Cloud Server aktivieren"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Upgrade to Cloud Server"
 msgstr "Auf Cloud Server upgraden"
 
@@ -11228,16 +11231,16 @@ msgstr "Integrationen werden geladen …"
 msgid "<0/> Show experimental plugins"
 msgstr "<0/> Experimentelle Plugins anzeigen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Noch keine anderen Geräte – deine Daten sind auf diesem sicher."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Devices"
 msgstr "Geräte"
 
 #. 0: status.pendingDirtyCount
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} unsynced"
 msgstr "{0} nicht synchronisiert"
 
@@ -11334,11 +11337,6 @@ msgstr "{0} Ereignisse in der Warteschlange. Sie bleiben während der Prüfung g
 msgid "<0/> or"
 msgstr "<0/> oder"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: ../data-browser/src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Verbrauchte Credits: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: ../data-browser/src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11365,6 +11363,7 @@ msgstr "{0}: {1} Dokumente,{2} {3}{4} ausgewählte Zeilen"
 msgid "Loading document editor…"
 msgstr "Dokumenteditor wird geladen …"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On column"
@@ -11453,11 +11452,6 @@ msgstr "Die Suche durchsucht Namen und Beschreibungen von Ressourcen. Außerdem 
 #: ../data-browser/src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Öffentlich (jeder){0}"
-
-#. 0: ' '
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Website öffnen{0}"
 
 #: ../data-browser/src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"
@@ -11645,10 +11639,11 @@ msgstr "{0} Punkte"
 msgid "Showing first {0} answers"
 msgstr "Die ersten {0} Antworten werden angezeigt"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Füge deinen Passkey hier hinzu. Ein in der App hinzugefügter Passkey entsperrt auch deine verschlüsselte Sicherung. Das kann nur die App."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr "Dies filtert nach dem eigenen Datum jedes Eintrags. Ein wiederkehrender Eintrag wird anhand seines ersten Datums gefunden, nicht anhand der Wiederholungstage."
@@ -11666,11 +11661,11 @@ msgid "Confirm with your code"
 msgstr "Mit deinem Code bestätigen"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. Wir bewahren deinen Schlüssel verschlüsselt auf, aber eine Anmeldung öffnet ihn noch nicht. Bestätige einmal mit deinem Passkey oder Wiederherstellungscode, um dies zu aktivieren."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn it on"
 msgstr "Aktivieren"
 
@@ -12045,23 +12040,19 @@ msgstr "Kontoeinstellungen"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> möchte deine Atomic-Daten verwenden. Die App hat einen eigenen Schlüssel, dein Geheimnis bleibt bei dir und du kannst den Zugriff jederzeit widerrufen."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Apps, denen du die Verwendung deiner Daten erlaubst, etwa ein KI-Assistent. Jede hat einen eigenen Schlüssel. Widerrufe eine App, um ihren Zugriff zu beenden."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Verbundene Apps"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup: no portal configured"
 msgstr "Cloud-Server-Einrichtung: kein Portal konfiguriert"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed after sign-in"
 msgstr "Cloud-Server-Einrichtung nach Anmeldung fehlgeschlagen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed on its own"
 msgstr "Cloud-Server-Einrichtung ohne Anmeldung fehlgeschlagen"
 
@@ -12656,107 +12647,107 @@ msgstr "Chats"
 msgid "Show technical details"
 msgstr "Technische Details anzeigen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not change drive sync."
 msgstr "Laufwerksynchronisierung konnte nicht geändert werden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server doesn’t host this drive, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
 msgstr "Dieser Server hostet dieses Laufwerk nicht und lehnt deshalb seine Änderungen ab. Richte Cloud Server ein, um es hier zu synchronisieren, oder deaktiviere die Synchronisierung, um es nur auf diesem Gerät zu behalten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive with this server"
 msgstr "Dieses Laufwerk mit diesem Server synchronisieren"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off stops server sync for this drive on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
 msgstr "Deaktivieren stoppt die Serversynchronisierung dieses Laufwerks in diesem Browser. Die vorhandene Serverkopie und andere Geräte bleiben unverändert. Browser-Synchronisierung kann weiterhin geöffnete Browser verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Drive sync off"
 msgstr "Laufwerksynchronisierung aus"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Open a drive to see whether it can be hosted."
 msgstr "Öffne ein Laufwerk, um zu sehen, ob es gehostet werden kann."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This device doesn’t have this drive yet. Pair the device that does, and you can host it from here."
 msgstr "Dieses Gerät hat dieses Laufwerk noch nicht. Kopple das Gerät, auf dem es liegt, dann kannst du es von hier aus hosten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking whether this drive is hosted…"
 msgstr "Es wird geprüft, ob dieses Laufwerk gehostet wird …"
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to {0} to see whether this drive is hosted."
 msgstr "Melde dich bei {0} an, um zu sehen, ob dieses Laufwerk gehostet wird."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server received this drive. Your source server is still connected."
 msgstr "Cloud Server hat dieses Laufwerk empfangen. Dein Quellserver ist weiterhin verbunden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connected to Cloud Server. Syncing this drive…"
 msgstr "Mit Cloud Server verbunden. Dieses Laufwerk wird synchronisiert …"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive is on Cloud Server. This device still syncs with its old server."
 msgstr "Dieses Laufwerk liegt auf Cloud Server. Dieses Gerät synchronisiert noch mit seinem alten Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Moving this drive to Cloud Server. It switches on by itself; you can keep working."
 msgstr "Dieses Laufwerk wird zu Cloud Server übertragen. Es schaltet sich automatisch ein; du kannst weiterarbeiten."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} added Cloud Server to this drive. It waits for your consent."
 msgstr "{0} hat Cloud Server zu diesem Laufwerk hinzugefügt. Es wartet auf deine Zustimmung."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan includes Cloud Server. It waits for your consent."
 msgstr "Der Tarif dieses Laufwerks enthält Cloud Server. Es wartet auf deine Zustimmung."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Melde dich bei deinem {0}-Konto an, um die E-Mail-Wiederherstellung zu prüfen. Die Anmeldung bei diesem Laufwerk mit Passkey oder Geheimnis verbindet dein Cloud-Konto nicht automatisch."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Keine Wiederherstellungssicherung gespeichert. Wenn du alle Geräte verlierst, verlierst du dieses Laufwerk."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here."
 msgstr "Alles aus Cloud Vault, dazu ein gehostetes, jederzeit erreichbares Laufwerk auf atomic.place. Unsere Server verarbeiten die Inhalte, die du hier ablegst."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr "<0>Bevor du es aktivierst:</0> Anders als Cloud Vault speichert Cloud Server eine lesbare, unverschlüsselte Kopie dieses Laufwerks auf unseren Servern, damit wir Suche, teilbare Links und API-Zugriff anbieten können. Deine Freigabeberechtigungen bestimmen weiterhin, wer sonst Zugriff hat, und du kannst es jederzeit deaktivieren."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, scan the code below to connect it."
 msgstr "Wenn dieses Laufwerk auf einem anderen Gerät liegt, scanne den Code unten, um es zu verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, you can connect it."
 msgstr "Wenn dieses Laufwerk auf einem anderen Gerät liegt, kannst du es verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive could not be read on this device"
 msgstr "Dieses Laufwerk konnte auf diesem Gerät nicht gelesen werden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive"
 msgstr "Dieses Laufwerk synchronisieren"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "Dieses Laufwerk wurde noch nicht synchronisiert. Es ist hier sicher, aber nicht gesichert und nicht auf deinen anderen Geräten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "These sync your other drives — not this drive."
 msgstr "Diese synchronisieren deine anderen Laufwerke – nicht dieses."
 
@@ -12855,6 +12846,10 @@ msgstr "Kommentar hinzufügen"
 #: ../data-browser/src/actions/resourceActions.tsx
 msgid "Open the comments for this resource"
 msgstr "Kommentare zu dieser Ressource öffnen"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Zeilenmenü"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "Commented"
@@ -13002,11 +12997,11 @@ msgstr "<0/> Weiterleitung am alten Ort hinterlassen"
 msgid "All drives"
 msgstr "Alle Laufwerke"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server isn’t on for this drive. This server only accepts it for a short while; after that it stops syncing. Set up Cloud Server to keep it here, or turn off sync to keep it on this device only."
 msgstr "Cloud Server ist für dieses Laufwerk nicht aktiviert. Dieser Server akzeptiert es nur kurzzeitig, danach stoppt die Synchronisierung. Richte Cloud Server ein, um es hier zu behalten, oder deaktiviere die Synchronisierung, um es nur auf diesem Gerät zu behalten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted yet"
 msgstr "Noch nicht gehostet"
 
@@ -13185,10 +13180,6 @@ msgstr "Eine Ressource im Ordner"
 #: ../data-browser/src/embed/mockHost.ts
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Von ResourcePage ohne umgebende Elemente gerendert."
-
-#: ../data-browser/src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Symbole in der Seitenleiste anzeigen <0>Symbole und Bilder neben Elementen in der Seitenleiste anzeigen</0>"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
@@ -13432,6 +13423,10 @@ msgstr "Filter hinzufügen"
 msgid "Edit column"
 msgstr "Spalte bearbeiten"
 
+#: ../table-page/src/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Ansicht hinzufügen"
+
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Gast"
@@ -13520,18 +13515,6 @@ msgstr "Mit „Bericht senden“ teilst du den geprüften Chattext, Fehlermeldun
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Melde einen Fehler oder schlage eine Verbesserung vor. Deine Nachricht und optionale E-Mail werden über Sentry an das Atomic-Team gesendet, zusammen mit technischen Angaben zu deiner Einrichtung (App-Version, Serveradresse und -status). Bitte lasse private Inhalte aus deinem Arbeitsbereich weg."
 
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Row menu"
-msgstr "Zeilenmenü"
-
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Open resource"
-msgstr "Ressource öffnen"
-
-#: ../table-page/src/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Ansicht hinzufügen"
-
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13572,20 +13555,86 @@ msgstr "{0} alte Verlaufsdaten können entfernt werden. Sichtbare Inhalte bleibe
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Dieses Secret gehört zu einem anderen Agenten. Füge das Secret ein, das du gerade für dieses Konto gespeichert hast."
 
-#. 0: p; 1: uiTheme(theme).animation.duration
-#: ../ui/src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Profileinstellungen"
 
-#: ../table/src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Wird geladen"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Dein Name, Avatar und Abmelden."
 
-#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Konto und Sicherheit"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Anmelden, Wiederherstellung, dein Tarif und dieses Gerät."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Deine Drives und kürzlich besuchte."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisierung und Geräte"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Wo dieser Drive synchronisiert, und ein Gerät verbinden."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Darstellungseinstellungen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Design, Farben, Sprache und Seitenleiste."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Barrierefreiheit"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animationen und Bewegung."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Benachrichtigungseinstellungen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Worüber du benachrichtigt wirst."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Modelle, Anbieter und Sprache."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Integrationseinstellungen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proxy, Katalog und experimentelle Plugins."
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Symbole in der Seitenleiste anzeigen"
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Symbole und Bilder neben Elementen in der Seitenleiste anzeigen"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: ../data-browser/src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Verbrauchte Credits: {0} /{1} {2}"
+
+#: ../data-browser/src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Profil bearbeiten"

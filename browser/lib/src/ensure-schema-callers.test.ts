@@ -6,7 +6,6 @@ import { expect, it } from 'vitest';
 const remaining = [
   'browser/data-browser/src/chunks/PluginRuns/CreateEventAutomation.tsx',
   'browser/data-browser/src/chunks/PluginRuns/runScript.ts',
-  'browser/data-browser/src/chunks/Website/websiteModel.ts',
   'browser/lib/src/catalog-app.ts',
   'browser/lib/src/plugin-app.ts',
   'browser/lib/src/plugin-destination.ts',

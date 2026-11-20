@@ -110,7 +110,7 @@ Each step ships on its own and has a test that fails without it.
   mobile width.
 - [x] **3. Bundle budget in CI.** `flutter/scripts/check_embed_size.sh` fails when
   the entry plus first-use chunks exceed a gzip budget (start: today's 553 kB +
-  297 kB) or the total exceeds 16 MB; run in the Flutter workflow (`embed-size` job in `atomic-flutter.yml`). Report the sizes
+  297 kB) or the total exceeds 16 MB; run in the Flutter workflow (`embed-size` job in `flutter-embed-size.yml`). Report the sizes
   in the job summary. Measured: 45 first-use chunks, 926 kB gzip (budget 1 MB), 13.6 MB total.
 - [~] **4. One warm web view.** Built, not yet measured on a phone.
   `WarmResourceWebView` (`packages/atomic_chat/lib/src/warm_resource_web_view.dart`)

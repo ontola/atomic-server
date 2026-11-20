@@ -10,7 +10,6 @@ import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
 import { getIconForClass } from '../../../helpers/iconMap';
-import { BookmarkGridItem } from './BookmarkGridItem';
 import { BasicGridItem } from './BasicGridItem';
 import { GridCard, GridItemTitle, GridItemWrapper } from './components';
 import { DefaultGridItem } from './DefaultGridItem';
@@ -31,7 +30,6 @@ export interface ResourceGridItemProps {
 }
 
 const gridItemMap = new Map<string, React.FC<GridItemViewProps>>([
-  [dataBrowser.classes.bookmark, BookmarkGridItem],
   [core.classes.class, BasicGridItem],
   [core.classes.property, BasicGridItem],
   [dataBrowser.classes.chatroom, ChatRoomGridItem],

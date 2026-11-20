@@ -626,7 +626,7 @@ function UpgradePitch({
         onClick={() => {
           onDone();
           void navigate(
-            `${paths.sync}?${new URLSearchParams({ drive: subject })}`,
+            `${paths.sync}&${new URLSearchParams({ drive: subject })}`,
           );
         }}
       >

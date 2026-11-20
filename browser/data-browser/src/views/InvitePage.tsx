@@ -507,7 +507,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
                     disabled={signupTarget === undefined}
                     onClick={() => {
                       if (signupTarget) window.location.assign(signupTarget);
-                      else navigate(paths.agentSettings);
+                      else navigate(paths.accountSettings);
                     }}
                     subtle
                   >

@@ -2576,3 +2576,89 @@ async fn genesis_route_serves_only_the_certificate_of_a_drive() {
         );
     }
 }
+
+/// `/resource`, `/atomic`, `/did` and the catch-all GET must never make the
+/// server request an external URL for a caller.
+#[actix_rt::test]
+async fn test_resource_endpoints_do_not_fetch_external_urls() {
+    use clap::Parser;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    let hits = Arc::new(AtomicUsize::new(0));
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    {
+        let hits = hits.clone();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            for stream in listener.incoming().flatten() {
+                hits.fetch_add(1, Ordering::SeqCst);
+                let mut stream = stream;
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                );
+            }
+        });
+    }
+
+    let unique_string = atomic_lib::utils::random_string(10);
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config)
+        .await
+        .expect("failed init appstate");
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let target = format!("http://127.0.0.1:{port}/x");
+    let encoded = urlencoding::encode(&target).to_string();
+    let mut uris = vec![
+        format!("/resource?subject={encoded}"),
+        format!("/atomic?subject={encoded}"),
+        format!("/did?subject={encoded}"),
+        format!("/{target}"),
+        format!("/{}", target.replacen("http://", "http:/", 1)),
+    ];
+    uris.push(format!("//127.0.0.1:{port}/x"));
+
+    for uri in uris {
+        let req = test::TestRequest::get()
+            .uri(&uri)
+            .insert_header(("Accept", "application/ad+json"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert!(
+            !resp.status().is_success(),
+            "{uri} must not resolve an external URL"
+        );
+    }
+
+    // Host header pointing at the listener, as an attacker could send.
+    let req = test::TestRequest::get()
+        .uri("/x")
+        .insert_header(("Host", format!("127.0.0.1:{port}")))
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        0,
+        "the server made an outbound request to the external URL"
+    );
+}

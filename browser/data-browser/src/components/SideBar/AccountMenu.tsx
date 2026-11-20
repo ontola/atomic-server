@@ -161,7 +161,7 @@ function AccountMenuRow({
   // A warning icon leads to the banner that explains it.
   const goToSync = () => {
     if (hasSyncWarning(syncStatus)) {
-      void navigate({ to: paths.sync, hash: 'sync-problem' });
+      void navigate({ to: `${paths.sync}#sync-problem` });
       onItemClick();
     } else {
       goTo(paths.sync)();
@@ -176,14 +176,14 @@ function AccountMenuRow({
           icon: <FaUser />,
           helper: 'See and edit the current Agent / User',
           shortcut: shortcuts.userSettings,
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.profileSettings),
         }
       : {
           id: 'login',
           label: 'Login / New User',
           icon: <FaUser />,
           helper: 'Sign in, or create a new Agent / User',
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.accountSettings),
         },
     ...(agent
       ? [

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useContext, useMemo } from 'react';
 import {
   useDrivePresence,
   useResource,
@@ -8,6 +8,7 @@ import {
 import {
   FaEnvelope,
   FaLocationArrow,
+  FaPen,
   FaRegStar,
   FaStar,
   FaUser,
@@ -19,6 +20,8 @@ import { FollowingIndicator } from './FollowingIndicator';
 import { useFollow } from './FollowContext';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
+import { paths } from '../../routes/paths';
+import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { findOrStartConversation } from '../../helpers/conversations/useConversations';
 
@@ -47,7 +50,19 @@ export function PresenceAvatarMenu({
   size,
   chip = true,
 }: PresenceAvatarMenuProps): React.JSX.Element {
-  const navigate = useNavigateWithTransition();
+  const navigateInApp = useNavigateWithTransition();
+
+  // Inside an overlay (the share dialog), leaving for a page closes it first.
+  const onLeave = useContext(ResourceLinkNavigationContext);
+
+  const navigate = useCallback(
+    (to: string) => {
+      onLeave?.();
+      navigateInApp(to);
+    },
+    [onLeave, navigateInApp],
+  );
+
   const store = useStore();
   const isMe = store.getAgent()?.subject === agentSubject;
   const { followedAgent, follow, unfollow, isFollowDisabledFor } = useFollow();
@@ -72,6 +87,16 @@ export function PresenceAvatarMenu({
         onClick: () => navigate(constructOpenURL(agentSubject)),
       },
     ];
+
+    // Your own avatar is the quickest way to your name and picture.
+    if (isMe) {
+      result.push({
+        id: 'edit-profile',
+        label: 'Edit profile',
+        icon: <FaPen />,
+        onClick: () => navigate(paths.profileSettings),
+      });
+    }
 
     if (!isMe) {
       result.push({

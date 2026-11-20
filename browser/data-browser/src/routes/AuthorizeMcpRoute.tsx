@@ -208,7 +208,7 @@ function AuthorizeMcpPage() {
         // The client listens on this machine: tell it, and stay in the app
         // rather than navigating the window away from it.
         await fetch(redirect, { mode: 'no-cors' });
-        navigate(paths.agentSettings);
+        navigate(paths.accountSettings);
 
         return;
       }
@@ -252,7 +252,7 @@ function AuthorizeMcpPage() {
         busy={busy}
         disabled={homeLoading}
         onAllow={handleAllow}
-        onCancel={() => navigate(paths.agentSettings)}
+        onCancel={() => navigate(paths.accountSettings)}
         testId='authorize-mcp'
       />
     </ConnectPage>

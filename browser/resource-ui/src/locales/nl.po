@@ -116,6 +116,7 @@ msgstr "AI-agenten"
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
@@ -125,7 +126,6 @@ msgstr "AI-agenten"
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
@@ -175,10 +175,10 @@ msgstr "Naam van agent"
 #: ../data-browser/src/chunks/AI/MCPConfigTab.tsx
 #: ../data-browser/src/chunks/AI/SkillsConfigTab.tsx
 #: ../data-browser/src/chunks/FormBuilder/PageSettingsPanel.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
 msgid "Name"
 msgstr "Naam"
 
@@ -264,18 +264,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Vat het gesprek automatisch samen wanneer het aantal invoertokens dit percentage van het contextvenster van het geselecteerde model overschrijdt. Handmatig /compact gebruiken werkt ook wanneer dit is uitgeschakeld."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Verwijderen"
 
@@ -488,10 +488,10 @@ msgstr "Optionele HTTP-headers om mee te sturen bij het verbinden met deze MCP-s
 
 #: ../data-browser/src/actions/resourceActions.tsx
 #: ../data-browser/src/chunks/AI/AgentConfigItem.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
-#: ../data-browser/src/routes/EditRoute.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../data-browser/src/components/MetaSetter.tsx
+#: ../data-browser/src/routes/EditRoute.tsx
 msgid "Edit"
 msgstr "Bewerken"
 
@@ -517,10 +517,10 @@ msgstr "Provider niet ingeschakeld"
 msgid "Default model"
 msgstr "Standaardmodel"
 
-#: ../data-browser/src/components/ComboBox.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MultiRelationCell.tsx
 #: ../table-page/src/TablePage/EditorCells/SelectCell.tsx
+#: ../data-browser/src/components/ComboBox.tsx
 msgid "No results"
 msgstr "Geen resultaten"
 
@@ -534,12 +534,12 @@ msgstr "Niet ingesteld"
 
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
 #: ../data-browser/src/components/AI/ProviderStatus.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/routes/ConnectAgentRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connected"
 msgstr "Verbonden"
 
@@ -580,9 +580,9 @@ msgstr "Verplicht veld."
 #. 0: JSON.stringify(error)
 #. 0: searchError.message
 #. 0: resource.error.message
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: src/components/forms/Field.tsx
 #: src/components/forms/SearchBox/SearchBoxWindow.tsx
 #: src/views/ResourceRow.tsx
@@ -697,6 +697,10 @@ msgstr "Ontologieën"
 #: ../data-browser/src/chunks/AppPage/AppFrame.tsx
 msgid "App"
 msgstr "App"
+
+#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
+msgid "DefaultTrigger"
+msgstr "DefaultTrigger"
 
 #: src/components/AtomicLink.tsx
 msgid "No `subject`, `path` or `href` passed to this AtomicLink."
@@ -950,14 +954,6 @@ msgstr "Proxy gebruiken"
 msgid "Fetches the URL from your current Atomic-Server ({0}), instead of from the actual URL itself. Can be useful if the URL is down, but the resource is cached in your server."
 msgstr "Haalt de URL op via je huidige Atomic-Server ({0}) in plaats van rechtstreeks via de URL. Dit kan handig zijn als de URL niet beschikbaar is, maar de resource in de cache van je server staat."
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Bookmark URL"
-msgstr "Bladwijzer voor URL maken"
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "No url"
-msgstr "Geen URL"
-
 #: ../data-browser/src/views/Card/MessageCard.tsx
 #: ../data-browser/src/views/MessagePage.tsx
 msgid "Message in <0/>"
@@ -1054,9 +1050,8 @@ msgstr "Link naar dit bericht kopiëren"
 msgid "Copy message text"
 msgstr "Berichttekst kopiëren"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 #: ../table-page/src/TablePage/PropertyForm/NumberPropertyForm.tsx
+#: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "loading..."
 msgstr "laden..."
 
@@ -1286,17 +1281,15 @@ msgstr "Document"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/MetaSetter.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Sync"
 msgstr "Synchroniseren"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Offline"
 msgstr "Offline"
 
@@ -1304,8 +1297,8 @@ msgstr "Offline"
 msgid "Changes could not sync"
 msgstr "Wijzigingen konden niet worden gesynchroniseerd"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Changes pending"
 msgstr "Wijzigingen in wachtrij"
 
@@ -1345,6 +1338,7 @@ msgstr "Voeg een bijschrift toe..."
 msgid "Alt text"
 msgstr "Alternatieve tekst"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/routes/Share/ShareRoute.tsx
@@ -1496,11 +1490,11 @@ msgstr "Turtle / N-triples / N3"
 msgid "Create account"
 msgstr "Account maken"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Warning:"
 msgstr "Waarschuwing:"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "You're using a local Agent, which cannot authenticate on other domains, because its URL does not resolve."
 msgstr "Je gebruikt een lokale agent die zich niet op andere domeinen kan authenticeren, omdat de URL niet bereikbaar is."
 
@@ -1508,24 +1502,24 @@ msgstr "Je gebruikt een lokale agent die zich niet op andere domeinen kan authen
 msgid "Global"
 msgstr "Globaal"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "In sync"
 msgstr "Gesynchroniseerd"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Fout: atomic:node:<node-id> verwacht"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/managed/deviceLink.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 #: ../data-browser/src/views/DriveUnavailable.tsx
 msgid "This device"
 msgstr "Dit apparaat"
 
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/components/EditLanguagesDialog.tsx
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "Add"
 msgstr "Toevoegen"
 
@@ -1534,52 +1528,52 @@ msgstr "Toevoegen"
 msgid "Copy"
 msgstr "Kopiëren"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: src/components/forms/SearchBox/SearchBox.tsx
 #: ../data-browser/src/helpers/sentry.ts
 #: ../data-browser/src/routes/LinkOpenRouter.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: src/components/forms/SearchBox/SearchBox.tsx
 msgid "Error"
 msgstr "Fout"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Logging to console"
 msgstr "Loggen naar console"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off"
 msgstr "Uit"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "destroy"
 msgstr "vernietigen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No activity recorded in this session yet."
 msgstr "Nog geen activiteit vastgelegd in deze sessie."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disabled (server-only)"
 msgstr "Uitgeschakeld (alleen server)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Initializing..."
 msgstr "Initialiseren..."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Ready — WASM + OPFS"
 msgstr "Gereed — WASM + OPFS"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Enable local WASM DB"
 msgstr "Lokale WASM-database inschakelen"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Enter a Drive DID or URL"
 msgstr "Voer een schijf-DID of URL in"
 
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
 msgid "Set"
 msgstr "Instellen"
 
@@ -1657,9 +1651,9 @@ msgid "Set a title"
 msgstr "Stel een titel in"
 
 #: ../data-browser/src/chunks/FormBuilder/useFormQuestions.ts
+#: src/components/EditableTitle.tsx
 #: ../data-browser/src/components/NavBar.tsx
 #: ../data-browser/src/helpers/storageMap.ts
-#: src/components/EditableTitle.tsx
 msgid "Untitled"
 msgstr "Naamloos"
 
@@ -1696,10 +1690,10 @@ msgstr "Toch laden ({0})"
 
 #: ../data-browser/src/chunks/RTE/CollaborativeEditor.tsx
 #: ../data-browser/src/components/Share/useClassLabel.ts
+#: src/components/forms/NewForm/NewFormTitle.tsx
 #: ../data-browser/src/routes/History/HistoryDesktopView.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
-#: src/components/forms/NewForm/NewFormTitle.tsx
 msgid "Resource"
 msgstr "Resource"
 
@@ -1708,8 +1702,8 @@ msgid "Failed to save new resource"
 msgstr "Nieuwe resource opslaan mislukt"
 
 #: ../data-browser/src/components/forms/FileDropzone/FileDropzone.tsx
-#: ../data-browser/src/components/forms/UploadForm.tsx
 #: src/components/forms/FileDropzone/FileDropzoneInput.tsx
+#: ../data-browser/src/components/forms/UploadForm.tsx
 msgid "Uploading..."
 msgstr "Uploaden..."
 
@@ -1733,12 +1727,12 @@ msgstr "Nieuwe resource maken"
 msgid "New Resource"
 msgstr "Nieuwe resource"
 
-#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
-#: ../data-browser/src/views/FolderPage/ListView.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../table-page/src/TablePage/Issues/IssuesView.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
+#: ../data-browser/src/views/FolderPage/ListView.tsx
 msgid "Title"
 msgstr "Titel"
 
@@ -1760,8 +1754,8 @@ msgstr "Onderliggende resources"
 msgid "Classes"
 msgstr "Klassen"
 
-#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 #: src/components/ClassSelectorDialog.tsx
+#: ../data-browser/src/views/OntologyPage/OntologyPage.tsx
 msgid "No classes"
 msgstr "Geen klassen"
 
@@ -1817,9 +1811,9 @@ msgstr "Niets om te kopiëren."
 msgid "Copied error to clipboard"
 msgstr "Fout naar klembord gekopieerd"
 
-#: ../data-browser/src/components/Toaster.tsx
 #: ../table-page/src/TablePage/EditorCells/AtomicURLCell.tsx
 #: ../table-page/src/TablePage/QuickFilterField.tsx
+#: ../data-browser/src/components/Toaster.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Clear"
 msgstr "Wissen"
@@ -1857,13 +1851,13 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Bepaal of deze resource in je favorieten verschijnt."
 
 #: ../data-browser/src/actions/resourceActions.tsx
-#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
+#: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
 #: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Open"
 msgstr "Openen"
 
@@ -1953,20 +1947,12 @@ msgstr "<0/> Terug"
 msgid "<0/> resources reference{0} {1}"
 msgstr "<0/> resources verwijzen naar{0} {1}"
 
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "no preview..."
-msgstr "geen voorbeeld..."
-
-#: ../data-browser/src/views/BookmarkPage/BookmarkPreview.tsx
-msgid "Could not load preview 😞"
-msgstr "Kan voorbeeld niet laden 😞"
-
 #: ../data-browser/src/views/Drive/PluginList.tsx
 msgid "No plugins installed"
 msgstr "Geen plugins geïnstalleerd"
 
-#: ../data-browser/src/views/Card/CollectionCard.tsx
 #: src/components/ResourceUsage/UsageCard.tsx
+#: ../data-browser/src/views/Card/CollectionCard.tsx
 msgid "No resources"
 msgstr "Geen resources"
 
@@ -1985,10 +1971,6 @@ msgstr "document"
 #: ../data-browser/src/views/Card/FolderCard.tsx
 msgid "folder"
 msgstr "map"
-
-#: ../data-browser/src/views/Card/BookmarkCard.tsx
-msgid "Open site"
-msgstr "Site openen"
 
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 msgid "Pick a resource"
@@ -2042,30 +2024,24 @@ msgstr "Nieuwe ontologie"
 msgid "Shortname"
 msgstr "Korte naam"
 
+#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
-#: ../table-page/src/TablePage/PropertyForm/NewPropertyDialog.tsx
 msgid "Create"
 msgstr "Maken"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
-msgid "New Bookmark"
-msgstr "Nieuwe bladwijzer"
-
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewBookmarkDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 msgid "Ok"
 msgstr "Oké"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/OntologyPage/Class/NewClassInstanceButton.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 msgid "Table"
 msgstr "Tabel"
 
@@ -2181,8 +2157,8 @@ msgstr "<0/> Notitie"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nieuw"
@@ -2417,8 +2393,8 @@ msgstr "geen"
 msgid "Recommends"
 msgstr "Aanbevolen"
 
-#: ../data-browser/src/views/Article/ArticleDescription.tsx
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
+#: ../data-browser/src/views/Article/ArticleDescription.tsx
 msgid "Could not save resource..."
 msgstr "Kan resource niet opslaan..."
 
@@ -2724,8 +2700,8 @@ msgstr "Klassedetails tonen of verbergen"
 msgid "Remove drive from list"
 msgstr "Schijf uit lijst verwijderen"
 
-#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
+#: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Selecteren"
 
@@ -2771,10 +2747,10 @@ msgstr "Korte naam van eigenschap"
 msgid "Property description"
 msgstr "Beschrijving van eigenschap"
 
-#. 0: resource.title
 #. 0: BLOCK_KIND_LABELS[blockKind].toLowerCase()
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
+#. 0: resource.title
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Configure {0}"
 msgstr "{0} instellen"
 
@@ -2790,9 +2766,9 @@ msgid "Empty"
 msgstr "Leeg"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
+#: src/components/LoroDocValue.tsx
 #: ../data-browser/src/components/Share/PeopleWithAccess.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
-#: src/components/LoroDocValue.tsx
 msgid "Hide"
 msgstr "Verbergen"
 
@@ -2882,8 +2858,8 @@ msgstr "Nieuwe {0} maken"
 msgid "No Results"
 msgstr "Geen resultaten"
 
-#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 #: ../table-page/src/TablePage/TableTotalsFooter.tsx
+#: ../data-browser/src/views/CodeUsage/PropSelector.tsx
 msgid "None"
 msgstr "Geen"
 
@@ -3074,9 +3050,9 @@ msgstr "Inlinecode aan/uit"
 msgid "No alt text"
 msgstr "Geen alternatieve tekst"
 
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/InfoBoxOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Tekst"
@@ -3186,11 +3162,13 @@ msgstr "Onwaar"
 msgid "Value…"
 msgstr "Waarde…"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Remove filter"
 msgstr "Filter verwijderen"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Filter operator"
@@ -3205,6 +3183,10 @@ msgstr "Standaardweergave"
 #: ../table-page/src/TablePage/TableRow.tsx
 msgid "Row is incomplete or has invalid data"
 msgstr "Rij is onvolledig of bevat ongeldige gegevens"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Open resource"
+msgstr "Resource openen"
 
 #: ../data-browser/src/components/ResourceUsage/UsageRow.tsx
 msgid "Insufficient rights to view resource"
@@ -3341,22 +3323,27 @@ msgstr "Resourcetype:"
 msgid "<0/> Allow multiple values"
 msgstr "<0/> Meerdere waarden toestaan"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Text Format:"
 msgstr "Tekstformaat:"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Plain text"
 msgstr "Platte tekst"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Rich text"
 msgstr "Opgemaakte tekst"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Slug"
 msgstr "Slug"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/TextPropertyForm.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/PropertyForm/TextPropertyForm.tsx
 msgid "Length"
@@ -3387,14 +3374,17 @@ msgstr "Bewerkingsvenster openen"
 msgid "Add resource"
 msgstr "Resource toevoegen"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Numeric"
 msgstr "Numeriek"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Long"
 msgstr "Lang"
 
+#: ../data-browser/src/chunks/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 #: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
 msgid "Relative"
 msgstr "Relatief"
@@ -3487,8 +3477,8 @@ msgstr "Beginnen vanaf"
 msgid "Click to add a value"
 msgstr "Klik om een waarde toe te voegen"
 
-#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
+#: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "Rename"
 msgstr "Hernoemen"
 
@@ -3520,9 +3510,9 @@ msgstr "Item toevoegen"
 msgid "New item…"
 msgstr "Nieuw item…"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../table-page/src/TablePage/Kanban/KanbanView.tsx
 #: ../table-page/src/TablePage/createTableFromSpec.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 msgid "Row"
 msgstr "Rij"
 
@@ -3731,6 +3721,11 @@ msgstr "Weet je zeker dat je de weergave <0/> wilt verwijderen? Hiermee verwijde
 msgid "{0} copy"
 msgstr "{0} kopie"
 
+#. 0: p; 1: uiTheme(theme).animation.duration
+#: ../ui/src/helpers/transition.ts
+msgid "{0} {1} ease-in-out"
+msgstr "{0} {1} ease-in-out"
+
 #: ../data-browser/src/components/AI/AISettings.tsx
 msgid "OpenRouter provides a unified API that gives you access to hundreds of AI models from all major vendors, while automatically handling fallbacks and selecting the most cost-effective options."
 msgstr "OpenRouter biedt één API voor toegang tot honderden AI-modellen van alle grote aanbieders, regelt automatisch terugvalopties en kiest de voordeligste mogelijkheden."
@@ -3795,6 +3790,11 @@ msgstr "Probeer de pagina opnieuw te laden. Als dit blijft gebeuren, blokkeert e
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "{0}/M input tokens"
 msgstr "{0}/M invoertokens"
+
+#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
+#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
+msgid "{0} {1} minmax(50px, 1fr)"
+msgstr "{0} {1} minmax(50px, 1fr)"
 
 #. 0: subject
 #: ../data-browser/src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
@@ -3884,8 +3884,8 @@ msgstr "Vergaderchat openen"
 msgid "Chat and the log of resources visited during the meeting."
 msgstr "Chat en logboek van resources die tijdens de vergadering zijn bezocht."
 
-#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 #: ../table-page/src/TablePage/Timer/useTimerProps.ts
+#: ../data-browser/src/components/Presence/FollowSessionPanelContainer.tsx
 msgid "End"
 msgstr "Beëindigen"
 
@@ -3967,32 +3967,28 @@ msgstr "Privéschijf"
 msgid "View and organize all your drives."
 msgstr "Bekijk en orden al je schijven."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "My drives"
 msgstr "Mijn schijven"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Only stored on this device. Star a drive to keep it in My drives."
-msgstr "Alleen opgeslagen op dit apparaat. Geef een schijf een ster om deze in Mijn schijven te bewaren."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Recently visited"
 msgstr "Onlangs bezocht"
 
 #. 0: status.lastDriveSync.count.toLocaleString()
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources · stored locally"
 msgstr "{0} resources · lokaal opgeslagen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Embedded server · stored locally"
 msgstr "Ingebouwde server · lokaal opgeslagen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cached locally · works offline"
 msgstr "Lokaal in cache · werkt offline"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Server-only · no local cache"
 msgstr "Alleen server · geen lokale cache"
 
@@ -4001,13 +3997,13 @@ msgstr "Alleen server · geen lokale cache"
 msgid "{0}% used"
 msgstr "{0}% gebruikt"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Syncing…"
 msgstr "Synchroniseren…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync now"
 msgstr "Nu synchroniseren"
 
@@ -4015,31 +4011,31 @@ msgstr "Nu synchroniseren"
 msgid "Embedded (this device)"
 msgstr "Ingebouwd (dit apparaat)"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID"
 msgstr "Node-ID"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local database"
 msgstr "Lokale database"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "WebSocket debug"
 msgstr "WebSocket-debugging"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Developer"
 msgstr "Ontwikkelaar"
 
 #: ../data-browser/src/chunks/Conference/ConferenceRoom.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
 #: ../data-browser/src/components/AppSetup/AppSetupForm.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/PeerInvitePage.tsx
 msgid "Connecting…"
 msgstr "Verbinden…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Only on this device"
 msgstr "Alleen op dit apparaat"
 
@@ -4073,10 +4069,10 @@ msgstr "Apparaat koppelen"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 #: ../data-browser/src/components/Vault/VaultRestoreAction.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Try again"
 msgstr "Opnieuw proberen"
 
@@ -4088,10 +4084,10 @@ msgstr "Werkruimte openen"
 
 #: ../data-browser/src/chunks/AI/ReportAIChatDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 #: ../data-browser/src/components/SideBar/FeedbackButton.tsx
 #: ../data-browser/src/components/Vault/VaultStorage.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
 msgid "Close"
 msgstr "Sluiten"
 
@@ -4119,10 +4115,10 @@ msgstr "Je werkruimte is hier"
 msgid "Bring your workspace over"
 msgstr "Je werkruimte overbrengen"
 
-#. 0: device
 #. 0: serverLabel(status.serverUrl ?? '')
+#. 0: device
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Gekoppeld met {0}"
 
@@ -4145,8 +4141,8 @@ msgstr "Je werkruimte is hier nog niet geopend. De verwerking is mogelijk nog be
 
 #. 0: PRODUCT_NAME
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No {0} portal is configured for this server."
 msgstr "Er is geen {0}-portaal ingesteld voor deze server."
 
@@ -4269,12 +4265,12 @@ msgstr "<0/> Openen"
 msgid "Mount your Atomic drives as a folder on this computer. Your files, folders and documents show up in your file manager, and changes you make there sync back."
 msgstr "Koppel je Atomic-schijven als een map op deze computer. Je bestanden, mappen en documenten verschijnen in je bestandsbeheer en wijzigingen die je daar maakt worden terug gesynchroniseerd."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Node ID copied"
 msgstr "Node-ID gekopieerd"
 
 #. 0: nodeId
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Copy {0}"
 msgstr "{0} kopiëren"
 
@@ -4282,30 +4278,29 @@ msgstr "{0} kopiëren"
 msgid "Your data lives on the device you’re connected to."
 msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 
-#: ../data-browser/src/components/ConnectDevice.tsx
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Connect a device"
 msgstr "Een apparaat verbinden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect a device below first."
 msgstr "Verbind hieronder eerst een apparaat."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Pair another device to sync directly, or connect an always-on one to reach your data from anywhere."
 msgstr "Koppel een ander apparaat om rechtstreeks te synchroniseren, of verbind een apparaat dat altijd aanstaat om overal bij je gegevens te kunnen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connect an always-on device to back up your data and reach it from anywhere."
 msgstr "Verbind een apparaat dat altijd aanstaat om een back-up van je gegevens te maken en er overal bij te kunnen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on · in use"
 msgstr "Altijd aan · in gebruik"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Always-on device"
 msgstr "Apparaat dat altijd aanstaat"
 
@@ -4313,7 +4308,7 @@ msgstr "Apparaat dat altijd aanstaat"
 msgid "Scan this from that device"
 msgstr "Scan dit vanaf dat apparaat"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: could not disconnect that device"
 msgstr "Fout: kan de verbinding met dat apparaat niet verbreken"
 
@@ -4360,9 +4355,9 @@ msgstr "Gelokaliseerde tekst"
 msgid "No {0} translation. {1}"
 msgstr "Geen vertaling voor {0}. {1}"
 
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
-#: ../data-browser/src/components/ContentLanguageSelect.tsx
 #: ../table-page/src/TablePage/ColumnLanguageChip.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
+#: ../data-browser/src/components/ContentLanguageSelect.tsx
 msgid "Content language"
 msgstr "Taal van inhoud"
 
@@ -4387,12 +4382,12 @@ msgstr "Talen bewerken…"
 msgid "Languages"
 msgstr "Talen"
 
+#. 0: tag
 #. 0: url
 #. 0: email
-#. 0: tag
+#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 #: ../data-browser/src/components/Share/EmailInviteInput.tsx
-#: src/components/EditLanguagesDialog.tsx
 msgid "Remove {0}"
 msgstr "{0} verwijderen"
 
@@ -4405,7 +4400,7 @@ msgstr "De talen waarin deze schijf inhoud publiceert (BCP 47-tags, bijvoorbeeld
 msgid "This property is server-managed and cannot be edited."
 msgstr "Deze eigenschap wordt door de server beheerd en kan niet worden bewerkt."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local storage is off, so this server is the only data source. Enable local storage below to work disconnected."
 msgstr "Lokale opslag is uitgeschakeld, dus deze server is de enige gegevensbron. Schakel hieronder lokale opslag in om zonder verbinding te werken."
 
@@ -4652,11 +4647,7 @@ msgstr "In plaats daarvan je passkey gebruiken"
 msgid "Could not add a recovery code."
 msgstr "Kan geen herstelcode toevoegen."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "How you get back in on a new device — and where to find your agent secret."
-msgstr "Hoe je op een nieuw apparaat weer toegang krijgt — en waar je je geheime agentsleutel vindt."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Account recovery"
 msgstr "Accountherstel"
 
@@ -4739,11 +4730,11 @@ msgstr "Ontgrendel {0} met je vingerafdruk, gezicht of schermvergrendeling."
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "We hebben je oude herstelwachtwoord vervangen door een sterkere, gegenereerde code. Bewaar deze veilig — je hebt de code en je e-mail nodig om weer toegang te krijgen. We kunnen de code niet opnieuw tonen, maar je kunt op elk moment een nieuwe genereren via Instellingen."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "More profile fields"
 msgstr "Meer profielvelden"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 #: ../data-browser/src/routes/SignOutRoute.tsx
 msgid "Sign out"
@@ -4778,11 +4769,11 @@ msgstr "Gebruik je vingerafdruk, gezicht of schermvergrendeling."
 msgid "or sign in another way"
 msgstr "of log op een andere manier in"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out and remove this device’s copy of your encrypted backup"
 msgstr "Uitloggen en de kopie van je versleutelde back-up op dit apparaat verwijderen"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out & forget this device"
 msgstr "Uitloggen en dit apparaat vergeten"
 
@@ -4806,10 +4797,6 @@ msgstr "Plak je geheime agentsleutel"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
 msgstr "Dat lijkt geen geldige geheime agentsleutel te zijn."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Whether this browser stays signed in as you when anyone opens it."
-msgstr "Of deze browser met jouw account ingelogd blijft wanneer iemand deze opent."
 
 #: ../data-browser/src/components/DeviceLockCard.tsx
 msgid "Lock now"
@@ -4899,10 +4886,10 @@ msgstr "Timer"
 msgid "Could not start the entry"
 msgstr "Kan de registratie niet starten"
 
-#. 0: Math.floor(hours / 24)
 #. 0: days
-#: ../data-browser/src/components/Vault/VaultPanel.tsx
+#. 0: Math.floor(hours / 24)
 #: ../table-page/src/TablePage/derivedColumns.ts
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "{0}d ago"
 msgstr "{0} d geleden"
 
@@ -5037,14 +5024,17 @@ msgstr "Ollama{0}"
 msgid "This column holds an action, not a value, so there is nothing to total."
 msgstr "Deze kolom bevat een actie, geen waarde, dus er is niets om een totaal van te berekenen."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "now"
 msgstr "nu"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "a date"
 msgstr "een datum"
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table/src/filters/FilterChip.tsx
 msgid "Compare against"
@@ -5096,6 +5086,8 @@ msgstr "Rijen"
 msgid "Measure"
 msgstr "Meting"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
@@ -5141,6 +5133,7 @@ msgstr "Kies een getal en iets om op te groeperen"
 msgid "No data yet"
 msgstr "Nog geen gegevens"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../data-browser/src/views/OntologyPage/Class/ClassConstraintSummary.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
 #: ../table-page/src/TablePage/CellSelectionMenu.tsx
@@ -5160,30 +5153,37 @@ msgstr "Verwijder de knop {0} uit deze weergave. Alles wat al met deze knop is v
 msgid "Remove action"
 msgstr "Actie verwijderen"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionHeading.tsx
 msgid "Edit action"
 msgstr "Actie bewerken"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 msgid "Add an action"
 msgstr "Een actie toevoegen"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "Does what"
 msgstr "Doet wat"
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "This table has no column of the right kind for that yet."
 msgstr "Deze tabel heeft nog geen kolom van het juiste type daarvoor."
 
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/RowActionFields.tsx
 msgid "To column"
 msgstr "Naar kolom"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
@@ -5192,6 +5192,8 @@ msgstr "Naar kolom"
 msgid "Pick an option…"
 msgstr "Kies een optie…"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
+#: ../data-browser/src/chunks/TablePage/RowActionDialog.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../table/src/QuickAddFields.tsx
@@ -5232,10 +5234,13 @@ msgid "A button above the rows that creates one — \"Log a feed\", \"Add item\"
 msgstr "Een knop boven de rijen die een rij maakt — \"Voeding registreren\", \"Item toevoegen\"."
 
 #. 0: tableClass.title.toLowerCase()
+#. 0: tableClass.title.toLowerCase()
+#: ../data-browser/src/chunks/TablePage/QuickAddBar.tsx
 #: ../table-page/src/TablePage/QuickAddBar.tsx
 msgid "Could not add the {0}"
 msgstr "Kan de {0} niet toevoegen"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Log a feed"
@@ -5245,21 +5250,25 @@ msgstr "Voeding registreren"
 msgid "It sits above the rows and creates one. Everything else about the row is edited in the table."
 msgstr "Deze staat boven de rijen en maakt een rij aan. Alle andere gegevens van de rij bewerk je in de tabel."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Ask for a value first"
 msgstr "Eerst om een waarde vragen"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On for a list you name things in; off for a button you just press."
 msgstr "Aan voor een lijst waarin je dingen een naam geeft; uit voor een knop waarop je alleen drukt."
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Type into"
 msgstr "Typen in"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "What are you adding?"
@@ -5267,16 +5276,19 @@ msgstr "Wat voeg je toe?"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TextOptions.tsx
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Placeholder"
 msgstr "Voorbeeldtekst"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Nothing"
 msgstr "Niets"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "Also set"
@@ -5294,8 +5306,8 @@ msgstr "Geef aan wat de knop doet"
 msgid "That table has no row class yet"
 msgstr "Die tabel heeft nog geen rijklasse"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../table-page/src/TablePage/useTableView.ts
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 msgid "Dashboard"
 msgstr "Dashboard"
 
@@ -5333,8 +5345,8 @@ msgstr "Documenten, tabellen, bestanden, chat en eigen apps op één plek. Atomi
 msgid "Bearer {0}"
 msgstr "Bearer {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
@@ -5456,32 +5468,32 @@ msgstr "Cloud Vault inschakelen"
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault is hier niet beschikbaar: {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Disconnect"
 msgstr "Verbinding verbreken"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Reconnect"
 msgstr "Opnieuw verbinden"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/browserPeerSync.ts
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Not connected"
 msgstr "Niet verbonden"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Switch"
 msgstr "Wisselen"
 
-#. 0: accountAddress(phase.account)
 #. 0: managedAccount.email
+#. 0: accountAddress(phase.account)
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Signed in as {0}."
 msgstr "Ingelogd als {0}."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Email recovery"
 msgstr "Herstel via e-mail"
 
@@ -5490,7 +5502,7 @@ msgstr "Herstel via e-mail"
 #. 0: nodeUsage.resourceCount.toLocaleString()
 #: ../data-browser/src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 #: ../data-browser/src/components/Cloud/CloudServerDetails.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} resources"
 msgstr "{0} resources"
 
@@ -5500,7 +5512,7 @@ msgstr "{0} resources"
 #. 0: doneCount; 1: steps.length
 #: ../data-browser/src/components/Cloud/UsageMeter.tsx
 #: ../data-browser/src/components/DatabaseUpgradeNotice.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/views/Drive/GettingStartedCard.tsx
 msgid "{0} of {1}"
 msgstr "{0} van {1}"
@@ -5508,22 +5520,22 @@ msgstr "{0} van {1}"
 #. 0: syncedAgo
 #. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced {0}"
 msgstr "Gesynchroniseerd {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced just now"
 msgstr "Zojuist gesynchroniseerd"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Deze server"
 
 #. 0: serverHostname ?? 'This server'
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
 msgstr "{0} biedt geen hosting, dus dit kan hier niet worden ingeschakeld."
 
@@ -5532,25 +5544,25 @@ msgid "Checking this workspace’s backup…"
 msgstr "Back-up van deze werkruimte controleren…"
 
 #. 0: withWhom
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Already up to date{0}"
 msgstr "Al bijgewerkt{0}"
 
 #. 0: withWhom; 1: sent; 2: received
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Synced{0} — sent {1}, received {2}"
 msgstr "Gesynchroniseerd{0} — {1} verzonden, {2} ontvangen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired"
 msgstr "Gekoppeld"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Gekoppeld apparaat"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not synced yet"
 msgstr "Nog niet gesynchroniseerd"
 
@@ -5565,11 +5577,11 @@ msgid "Sign in →"
 msgstr "Inloggen →"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, so this email gets you back in on a new device."
 msgstr "{0}. We bewaren je sleutel versleuteld, zodat je met deze e-mail weer toegang krijgt op een nieuw apparaat."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Set up email recovery"
 msgstr "Herstel via e-mail instellen"
 
@@ -5615,7 +5627,7 @@ msgstr "Je geheime agentsleutel"
 msgid "Set up account recovery"
 msgstr "Accountherstel instellen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Store it with "
 msgstr "Opslaan bij "
 
@@ -5636,7 +5648,7 @@ msgid "Store it with {0}"
 msgstr "Opslaan bij {0}"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in."
 msgstr "{0}. Je back-up is alleen in deze browser versleuteld opgeslagen. Je kunt deze hier ontgrendelen, maar op een nieuw apparaat zou je geen toegang kunnen herstellen."
 
@@ -5669,20 +5681,18 @@ msgstr "Je privéschijf maken…"
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Kan je lijst niet bijwerken: er is nog geen privéschijf ingesteld voor dit account."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Je privéschijf staat altijd bovenaan. Verwijder de ster van een andere schijf om deze terug te zetten bij onlangs bezocht."
-
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Drives/DrivesCard.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Drives"
 msgstr "Schijven"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL"
 msgstr "Een schijf openen via URL"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
+#: ../data-browser/src/components/Settings/DriveSettings.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Een schijf openen via URL of DID"
 
@@ -5695,12 +5705,12 @@ msgid "Only your passkey opens this account. If it isn't on this device, unlock 
 msgstr "Alleen je passkey opent dit account. Als deze niet op dit apparaat staat, ontgrendel je het account op het apparaat waarop je de passkey hebt ingesteld en voeg je via Instellingen een herstelcode toe — daarmee krijg je overal toegang."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar alleen je passkey opent deze. Een browser waarmee je passkey niet is gesynchroniseerd kan je geen toegang geven — een herstelcode wel."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Add a recovery code"
 msgstr "Een herstelcode toevoegen"
 
@@ -5884,23 +5894,23 @@ msgstr "Envelop aanwezig, maar de handtekening kon niet worden geverifieerd"
 msgid "No signed envelope covers this change on this node"
 msgstr "Geen ondertekende envelop dekt deze wijziging op deze node"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive uses a legacy server address. Cloud Server requires a portable DID drive."
 msgstr "Deze schijf gebruikt een verouderd serveradres. Cloud Server vereist een overdraagbare DID-schijf."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign-in wasn’t completed — hosting setup was cancelled."
 msgstr "Het inloggen is niet voltooid — het instellen van hosting is geannuleerd."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not set up Cloud Server."
 msgstr "Kan Cloud Server niet instellen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Use Cloud Server"
 msgstr "Cloud Server gebruiken"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "See plans"
 msgstr "Abonnementen bekijken"
 
@@ -6013,8 +6023,8 @@ msgstr "Atomic Data-documentatie"
 msgid "Are you sure you want to delete"
 msgstr "Weet je zeker dat je wilt verwijderen:"
 
-#: ../data-browser/src/views/File/DownloadButton.tsx
 #: ../table-page/src/TablePage/TableExportDialog.tsx
+#: ../data-browser/src/views/File/DownloadButton.tsx
 msgid "Download"
 msgstr "Downloaden"
 
@@ -6137,7 +6147,7 @@ msgstr "Bijwerken"
 msgid "Context compacted"
 msgstr "Context samengevat"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Recent activity"
 msgstr "Recente activiteit"
 
@@ -6294,7 +6304,7 @@ msgstr "<0>Bewaar deze herstelcode.</0> Hiermee krijg je weer toegang op een nie
 msgid "Could not unlock with a passkey. Use your recovery code instead."
 msgstr "Kan niet ontgrendelen met een passkey. Gebruik in plaats daarvan je herstelcode."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Error: Sign in before syncing with another device"
 msgstr "Fout: log in voordat je synchroniseert met een ander apparaat"
 
@@ -6456,7 +6466,7 @@ msgstr "Je gegevens staan op dit apparaat en synchroniseren met een server."
 msgid "Your data lives on this device. Browser sync connects when another browser is available."
 msgstr "Je gegevens staan op dit apparaat. Browsersynchronisatie maakt verbinding wanneer een andere browser beschikbaar is."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking local copy…"
 msgstr "Lokale kopie controleren…"
 
@@ -6541,6 +6551,10 @@ msgstr "Geen resultaten. Probeer een andere zoekopdracht of vraag AI om het te b
 #: ../data-browser/src/routes/NewResource/NewRoute.tsx
 msgid "Ask AI"
 msgstr "Vraag AI"
+
+#: ../table/src/chunks/TableEditor/TableEditor.tsx
+msgid "<0/> Loading"
+msgstr "<0/> Laden"
 
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 msgid "My drive"
@@ -8116,6 +8130,7 @@ msgstr "Inbegrepen model gebruiken"
 msgid "Agent"
 msgstr "Agent"
 
+#: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr "AI-instellingen"
@@ -8337,7 +8352,6 @@ msgid "AI settings…"
 msgstr "AI-instellingen…"
 
 #: ../data-browser/src/actions/appActions.ts
-#: ../data-browser/src/routes/SettingsAgent.tsx
 msgid "User"
 msgstr "Gebruiker"
 
@@ -8363,7 +8377,7 @@ msgstr "Geen plugins om hier te tonen."
 msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
 msgstr "Je thuisbasis is klaar. Heb je elders gegevens?{0} <0>Verbind een ander apparaat of herstel een back-up</0>."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Local copy unavailable"
 msgstr "Lokale kopie niet beschikbaar"
 
@@ -8435,7 +8449,7 @@ msgstr "Controleer het chattranscript voordat je het deelt met het Atomic-team"
 msgid "Buy AI credits"
 msgstr "AI-credits kopen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Starting server sync…"
 msgstr "Serversynchronisatie starten…"
 
@@ -8790,10 +8804,6 @@ msgstr "Ontdek integraties uit deze catalog.json. Deze instelling wordt opgeslag
 msgid "Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file."
 msgstr "Voer een HTTPS-URL of een localhost-HTTP-URL in die verwijst naar een catalog.json-bestand."
 
-#: ../data-browser/src/components/SignInButton.tsx
-msgid "Go to the User page"
-msgstr "Naar de gebruikerspagina"
-
 #. 0: title || 'Untitled Chat'; 1: messages.length
 #: ../data-browser/src/chunks/AI/formatAIChatReport.ts
 msgid ""
@@ -8977,7 +8987,7 @@ msgstr "Kies een sjabloon"
 msgid "Name your drive"
 msgstr "Geef je schijf een naam"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted here"
 msgstr "Hier niet gehost"
 
@@ -9168,10 +9178,6 @@ msgstr "Instellingen openen"
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Switch drive"
 msgstr "Van schijf wisselen"
-
-#: ../data-browser/src/actions/appMenuItems.tsx
-msgid "Open user settings"
-msgstr "Gebruikersinstellingen openen"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
 msgid "Give feedback"
@@ -9746,13 +9752,13 @@ msgstr "Tabel verwijderen"
 msgid "New form"
 msgstr "Nieuw formulier"
 
-#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 msgid "Page 1"
 msgstr "Pagina 1"
 
-#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 #: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../data-browser/src/components/ResourceContextMenu/index.tsx
 msgid "Create form from this table"
 msgstr "Formulier maken van deze tabel"
 
@@ -10076,6 +10082,7 @@ msgstr "Nog {0}, open om alles te zien"
 msgid "Show older messages ({0})"
 msgstr "Oudere berichten tonen ({0})"
 
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Profile"
 msgstr "Profiel"
@@ -10104,7 +10111,7 @@ msgstr "Kies een afbeelding"
 msgid "Textual Description"
 msgstr "Tekstuele beschrijving"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Sign out of this device."
 msgstr "Uitloggen op dit apparaat."
 
@@ -10794,11 +10801,11 @@ msgstr "App opnieuw starten"
 msgid "Reload the whole app, as if you opened it again."
 msgstr "Laad de hele app opnieuw, alsof je deze opnieuw opent."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Stop uploading this change? It stays on this device but will not reach the server."
 msgstr "Stoppen met het uploaden van deze wijziging? Deze blijft op dit apparaat, maar bereikt de server niet."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Discard upload"
 msgstr "Upload verwerpen"
 
@@ -10860,10 +10867,6 @@ msgstr "Account gemaakt"
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Welcome"
 msgstr "Welkom"
-
-#: ../data-browser/src/components/MetaSetter.tsx
-msgid "Account"
-msgstr "Account"
 
 #: ../data-browser/src/components/MetaSetter.tsx
 msgid "Server settings"
@@ -10962,7 +10965,7 @@ msgstr "Schijf"
 msgid "Back to sync settings"
 msgstr "Terug naar synchronisatie-instellingen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "(see where space goes)"
 msgstr "(bekijk waar ruimte naartoe gaat)"
 
@@ -11050,15 +11053,15 @@ msgid "See how much space this resource and what is in it take up."
 msgstr "Bekijk hoeveel ruimte deze resource en de inhoud ervan innemen."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to start Cloud Server."
 msgstr "Log in op je {0}-account om Cloud Server te starten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan does not include Cloud Server yet."
 msgstr "Het abonnement van deze schijf bevat nog geen Cloud Server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not start Cloud Server."
 msgstr "Kan Cloud Server niet starten."
 
@@ -11067,12 +11070,12 @@ msgstr "Kan Cloud Server niet starten."
 msgid "{0} · Email recovery on"
 msgstr "{0} · Herstel via e-mail aan"
 
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/routes/SyncRoute.tsx
 msgid "Trying again…"
 msgstr "Opnieuw proberen…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Your plan"
 msgstr "Je abonnement"
 
@@ -11080,15 +11083,15 @@ msgstr "Je abonnement"
 msgid "Current"
 msgstr "Huidig"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Shareable links and API access"
 msgstr "Deelbare links en API-toegang"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Search across everything"
 msgstr "Alles doorzoeken"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No need for another device to be awake"
 msgstr "Geen ander apparaat hoeft aan te staan"
 
@@ -11107,15 +11110,15 @@ msgstr "Back-up gemaakt {0}"
 msgid "Backed up to {0}"
 msgstr "Back-up gemaakt naar {0}"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Manage plan"
 msgstr "Abonnement beheren"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn on Cloud Server"
 msgstr "Cloud Server inschakelen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Upgrade to Cloud Server"
 msgstr "Upgraden naar Cloud Server"
 
@@ -11231,16 +11234,16 @@ msgstr "Integraties laden…"
 msgid "<0/> Show experimental plugins"
 msgstr "<0/> Experimentele plugins tonen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "No other devices yet — your data is safe on this one."
 msgstr "Nog geen andere apparaten — je gegevens staan veilig op dit apparaat."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Devices"
 msgstr "Apparaten"
 
 #. 0: status.pendingDirtyCount
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} unsynced"
 msgstr "{0} niet gesynchroniseerd"
 
@@ -11337,11 +11340,6 @@ msgstr "{0} gebeurtenissen in wachtrij. Ze blijven opgeslagen terwijl ze op beoo
 msgid "<0/> or"
 msgstr "<0/> of"
 
-#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
-#: ../data-browser/src/components/AI/AISettings.tsx
-msgid "Credits used: {0}{1} / {2}"
-msgstr "Gebruikte credits: {0}{1} / {2}"
-
 #. 0: index + 1; 1: id === status.state?.active ? ' (live)' \\: ''
 #: ../data-browser/src/chunks/Website/WebsiteHosting.tsx
 msgid "Version {0} {1}"
@@ -11368,6 +11366,7 @@ msgstr "{0}: {1} documenten,{2} {3}{4} geselecteerde rijen"
 msgid "Loading document editor…"
 msgstr "Documenteditor laden…"
 
+#: ../data-browser/src/chunks/TablePage/QuickAddFields.tsx
 #: ../table-page/src/TablePage/QuickAddFields.tsx
 #: ../table/src/QuickAddFields.tsx
 msgid "On column"
@@ -11456,11 +11455,6 @@ msgstr "Zoeken zoekt in namen en beschrijvingen van resources. Je kunt ook zoeke
 #: ../data-browser/src/routes/Share/AgentRights.tsx
 msgid "<0/> Public (anyone){0}"
 msgstr "<0/> Openbaar (iedereen){0}"
-
-#. 0: ' '
-#: ../data-browser/src/views/BookmarkPage/BookmarkPage.tsx
-msgid "Open site{0}"
-msgstr "Site openen{0}"
 
 #: ../data-browser/src/views/Installation/ConfigReference.tsx
 msgid "Config Reference"
@@ -11648,10 +11642,11 @@ msgstr "{0} punten"
 msgid "Showing first {0} answers"
 msgstr "Eerste {0} antwoorden worden getoond"
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Add your passkey here. A passkey added in the app also unlocks your encrypted backup, which only the app can do."
 msgstr "Voeg hier je passkey toe. Een passkey die in de app is toegevoegd ontgrendelt ook je versleutelde back-up, wat alleen de app kan doen."
 
+#: ../data-browser/src/chunks/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "This filters on each entry's own date. A repeating entry is matched on its first date, not on the days it repeats on."
 msgstr "Dit filtert op de eigen datum van elke registratie. Een terugkerende registratie wordt vergeleken op de eerste datum, niet op de dagen waarop deze zich herhaalt."
@@ -11669,11 +11664,11 @@ msgid "Confirm with your code"
 msgstr "Bevestigen met je code"
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on."
 msgstr "{0}. We bewaren je sleutel versleuteld, maar inloggen opent deze nog niet. Bevestig één keer met je passkey of herstelcode om dat in te schakelen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Turn it on"
 msgstr "Inschakelen"
 
@@ -12048,23 +12043,19 @@ msgstr "Accountinstellingen"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> vraagt om je Atomic-gegevens te gebruiken. De app heeft een eigen sleutel, zodat je geheime sleutel bij jou blijft. Je kunt de toegang altijd intrekken."
 
-#: ../data-browser/src/routes/SettingsAgent.tsx
-msgid "Apps you let use your data, such as an AI assistant. Each has its own key; revoke one to cut it off."
-msgstr "Apps die je je gegevens laat gebruiken, zoals een AI-assistent. Elke app heeft een eigen sleutel; trek deze in om de toegang te stoppen."
-
-#: ../data-browser/src/routes/SettingsAgent.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Verbonden apps"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup: no portal configured"
 msgstr "Cloud Server instellen: geen portaal ingesteld"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed after sign-in"
 msgstr "Cloud Server instellen mislukt na inloggen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server setup failed on its own"
 msgstr "Cloud Server instellen zelfstandig mislukt"
 
@@ -12659,107 +12650,107 @@ msgstr "Chats"
 msgid "Show technical details"
 msgstr "Technische details tonen"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Could not change drive sync."
 msgstr "Kan schijfsynchronisatie niet wijzigen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server doesn’t host this drive, so it refuses its changes. Set up Cloud Server to sync it here, or turn off sync to keep it on this device only."
 msgstr "Deze server host deze schijf niet en weigert daarom de wijzigingen. Stel Cloud Server in om deze hier te synchroniseren, of schakel synchronisatie uit om deze alleen op dit apparaat te bewaren."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive with this server"
 msgstr "Deze schijf synchroniseren met deze server"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Off stops server sync for this drive on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
 msgstr "Uit stopt serversynchronisatie voor deze schijf in deze browser. De bestaande serverkopie en andere apparaten blijven ongewijzigd; browsersynchronisatie kan nog steeds geopende browsers verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Drive sync off"
 msgstr "Schijfsynchronisatie uit"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Open a drive to see whether it can be hosted."
 msgstr "Open een schijf om te zien of deze kan worden gehost."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This device doesn’t have this drive yet. Pair the device that does, and you can host it from here."
 msgstr "Dit apparaat heeft deze schijf nog niet. Koppel het apparaat dat deze wel heeft, dan kun je de schijf vanaf hier hosten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Checking whether this drive is hosted…"
 msgstr "Controleren of deze schijf wordt gehost…"
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to {0} to see whether this drive is hosted."
 msgstr "Log in bij {0} om te zien of deze schijf wordt gehost."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server received this drive. Your source server is still connected."
 msgstr "Cloud Server heeft deze schijf ontvangen. Je bronserver is nog verbonden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Connected to Cloud Server. Syncing this drive…"
 msgstr "Verbonden met Cloud Server. Deze schijf synchroniseren…"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive is on Cloud Server. This device still syncs with its old server."
 msgstr "Deze schijf staat op Cloud Server. Dit apparaat synchroniseert nog met de oude server."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Moving this drive to Cloud Server. It switches on by itself; you can keep working."
 msgstr "Deze schijf verplaatsen naar Cloud Server. Dit schakelt vanzelf in; je kunt blijven werken."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0} added Cloud Server to this drive. It waits for your consent."
 msgstr "{0} heeft Cloud Server aan deze schijf toegevoegd. Er wordt op je toestemming gewacht."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive’s plan includes Cloud Server. It waits for your consent."
 msgstr "Het abonnement van deze schijf bevat Cloud Server. Er wordt op je toestemming gewacht."
 
 #. 0: PRODUCT_NAME
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sign in to your {0} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account."
 msgstr "Log in op je {0}-account om herstel via e-mail te controleren. Inloggen op deze schijf met een passkey of geheime sleutel verbindt niet vanzelf je cloudaccount."
 
 #. 0: managedAccount.email
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "{0}. No recovery backup stored, so losing every device loses this drive."
 msgstr "{0}. Geen herstelback-up opgeslagen, dus als je alle apparaten kwijtraakt, verlies je deze schijf."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Everything in Cloud Vault, plus a hosted drive on atomic.place, always online. Our servers process what you put here."
 msgstr "Alles van Cloud Vault, plus een gehoste schijf op atomic.place, altijd online. Onze servers verwerken wat je hier plaatst."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "<0>Before you turn it on:</0> unlike Cloud Vault, Cloud Server stores a readable, unencrypted copy of this drive on our servers, so we can run search, shareable links and the API for it. Your sharing permissions still control who else sees it, and you can turn it off at any time."
 msgstr "<0>Voordat je dit inschakelt:</0> anders dan Cloud Vault bewaart Cloud Server een leesbare, onversleutelde kopie van deze schijf op onze servers, zodat we zoeken, deelbare links en de API kunnen aanbieden. Je deelrechten bepalen nog steeds wie de schijf verder kan zien en je kunt dit altijd uitschakelen."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, scan the code below to connect it."
 msgstr "Als een ander apparaat deze schijf heeft, scan dan de code hieronder om het te verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "If another device has this drive, you can connect it."
 msgstr "Als een ander apparaat deze schijf heeft, kun je het verbinden."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive could not be read on this device"
 msgstr "Deze schijf kon niet worden gelezen op dit apparaat"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Sync this drive"
 msgstr "Deze schijf synchroniseren"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This drive hasn’t been synced. It’s safe here, but not backed up and not on your other devices."
 msgstr "Deze schijf is nog niet gesynchroniseerd. Deze staat hier veilig, maar heeft geen back-up en staat niet op je andere apparaten."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "These sync your other drives — not this drive."
 msgstr "Deze synchroniseren je andere schijven — niet deze schijf."
 
@@ -12858,6 +12849,10 @@ msgstr "Een opmerking toevoegen"
 #: ../data-browser/src/actions/resourceActions.tsx
 msgid "Open the comments for this resource"
 msgstr "De opmerkingen voor deze resource openen"
+
+#: src/chunks/TableEditor/AtomicTable.tsx
+msgid "Row menu"
+msgstr "Rijmenu"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "Commented"
@@ -13005,11 +13000,11 @@ msgstr "<0/> Een doorverwijzing achterlaten op de oude locatie"
 msgid "All drives"
 msgstr "Alle schijven"
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Cloud Server isn’t on for this drive. This server only accepts it for a short while; after that it stops syncing. Set up Cloud Server to keep it here, or turn off sync to keep it on this device only."
 msgstr "Cloud Server staat niet aan voor deze schijf. Deze server accepteert de schijf maar tijdelijk; daarna stopt synchronisatie. Stel Cloud Server in om de schijf hier te bewaren, of schakel synchronisatie uit om deze alleen op dit apparaat te bewaren."
 
-#: ../data-browser/src/routes/SyncRoute.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Not hosted yet"
 msgstr "Nog niet gehost"
 
@@ -13188,10 +13183,6 @@ msgstr "Een resource in de map"
 #: ../data-browser/src/embed/mockHost.ts
 msgid "Rendered by ResourcePage, with nothing around it."
 msgstr "Weergegeven door ResourcePage, zonder iets eromheen."
-
-#: ../data-browser/src/routes/AppSettings.tsx
-msgid "Show icons in the sidebar <0>Show icons and pictures next to items in the sidebar</0>"
-msgstr "Pictogrammen in de zijbalk tonen <0>Toon pictogrammen en afbeeldingen naast items in de zijbalk</0>"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "This link has no code. Start again from your device."
@@ -13435,6 +13426,10 @@ msgstr "Filter toevoegen"
 msgid "Edit column"
 msgstr "Kolom bewerken"
 
+#: ../table-page/src/TablePage/TableViewTabs.tsx
+msgid "Add view"
+msgstr "Weergave toevoegen"
+
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Guest"
 msgstr "Gast"
@@ -13523,18 +13518,6 @@ msgstr "Met Melding verzenden deel je de gecontroleerde chattekst, foutmeldingen
 msgid "Report a bug or suggest an improvement. Your message and optional email go to the Atomic team through Sentry, with technical details about your setup (app version, server address and status). Please leave out private workspace content."
 msgstr "Meld een fout of stel een verbetering voor. Je bericht en optionele e-mailadres gaan via Sentry naar het Atomic-team, samen met technische gegevens over je opstelling (app-versie, serveradres en status). Vermeld geen privé-inhoud uit je werkruimte."
 
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Row menu"
-msgstr "Rijmenu"
-
-#: src/chunks/TableEditor/AtomicTable.tsx
-msgid "Open resource"
-msgstr "Resource openen"
-
-#: ../table-page/src/TablePage/TableViewTabs.tsx
-msgid "Add view"
-msgstr "Weergave toevoegen"
-
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# backup object could not be read"
 msgid_plural "# backup objects could not be read"
@@ -13575,20 +13558,86 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
 
-#. 0: p; 1: uiTheme(theme).animation.duration
-#: ../ui/src/helpers/transition.ts
-msgid "{0} {1} ease-in-out"
-msgstr "{0} {1} ease-in-out"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Profile settings"
+msgstr "Profielinstellingen"
 
-#: ../table/src/chunks/TableEditor/TableEditor.tsx
-msgid "<0/> Loading"
-msgstr "<0/> Laden"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your name, avatar and signing out."
+msgstr "Je naam, avatar en uitloggen."
 
-#: ../ui/src/components/Dropdown/DefaultTrigger.tsx
-msgid "DefaultTrigger"
-msgstr "DefaultTrigger"
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Account & security"
+msgstr "Account en beveiliging"
 
-#. 0: INDEX_CELL_WIDTH; 1: effectiveSizes.join( ' ', )
-#: ../table/src/chunks/TableEditor/hooks/useCellSizes.ts
-msgid "{0} {1} minmax(50px, 1fr)"
-msgstr "{0} {1} minmax(50px, 1fr)"
+#: ../data-browser/src/actions/appActions.ts
+msgid "Sign in, recovery, your plan and this device."
+msgstr "Inloggen, herstel, je abonnement en dit apparaat."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Your drives and recently visited ones."
+msgstr "Je schijven en recent bezochte schijven."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Sync & devices"
+msgstr "Synchronisatie en apparaten"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Where this drive syncs, and connecting a device."
+msgstr "Waar deze schijf mee synchroniseert, en een apparaat verbinden."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Appearance settings"
+msgstr "Weergave-instellingen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Theme, colors, language and sidebar."
+msgstr "Thema, kleuren, taal en zijbalk."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Accessibility settings"
+msgstr "Toegankelijkheidsinstellingen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Animations and motion."
+msgstr "Animaties en beweging."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Notification settings"
+msgstr "Meldingsinstellingen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "What you get notified about."
+msgstr "Waarover je een melding krijgt."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Models, providers and voice."
+msgstr "Modellen, aanbieders en spraak."
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Integration settings"
+msgstr "Integratie-instellingen"
+
+#: ../data-browser/src/actions/appActions.ts
+msgid "Proxy, catalog and experimental plugins."
+msgstr "Proxy, catalogus en experimentele plugins."
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons in the sidebar"
+msgstr "Pictogrammen in de zijbalk tonen"
+
+#: ../data-browser/src/routes/AppSettings.tsx
+msgid "Show icons and pictures next to items in the sidebar"
+msgstr "Toon pictogrammen en afbeeldingen naast items in de zijbalk"
+
+#. 0: intl.format(creditUsage.used); 1: ' '; 2: intl.format(creditUsage.total)
+#: ../data-browser/src/components/AI/AISettings.tsx
+msgid "Credits used: {0} /{1} {2}"
+msgstr "Gebruikte credits: {0} /{1} {2}"
+
+#: ../data-browser/src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Edit profile"
+msgstr "Profiel bewerken"
