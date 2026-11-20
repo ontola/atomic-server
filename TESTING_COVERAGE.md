@@ -236,9 +236,22 @@ on its first render without fetching again; `helpers/integrationVisibility.test.
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
-The data-browser no longer connects or syncs LocalThought platforms: that code
-was removed, and plugins will run in their own iframe and make proxy calls
-through the host (#1624). Nothing in this repo tests a LocalThought connection.
+Drive apps call the integration proxy through the host. `proxyConnections.test.ts`
+covers PKCE, signed redemption and delegation, one-time handoff consumption,
+and frame-bound capabilities. `hostStore.test.ts` checks that the host relays
+requests only to the configured proxy origin and proxy routes.
+
+The generic snapshot mapper and shared integration proxy mock are tested in
+the [Atomic Plugins repository](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+The mapper tests cover import proposals and stable identities. The mock tests
+cover signed requests and frame capabilities with synthetic data.
+Run them from an Atomic Plugins checkout.
+
+```sh
+node integrations/tooling/link-atomic-server.mjs
+node integrations/tooling/run-lane.mjs localthought --tier unit
+node --test integrations/localthought/mock-proxy.test.mjs
+```
 
 Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
 (jsdom) checks the table's column-filter menu names its input "Find a column…"
@@ -273,23 +286,8 @@ The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
 authentication, installation recovery and arbitrary authored setup execution
 are not covered here.
 
-`integrations/localthought/settings.test.ts` verifies that reconnects cannot reuse
-legacy installation identities, while repeated imports on one connection remain
-stable. The LocalThought Vitest config has an explicit root so all six suites
-also execute when invoked from outside the repository (including `/`).
-
-LocalThought browser migration: `integrations/localthought/browser.test.ts`
-covers secret-free selected-platform redirects, S256 PKCE, one-time redemption,
-actor/drive/platform ownership, cancellation, expiry, rotation before dispatch,
-pagination, uncertain-response refusal and cross-origin pagination refusal.
-`browser-smoke.mjs` exercised the complete mock consent/import/review/OPFS/reload
-journey through the WASM engine, which was removed in #1618; it fails until
-the proxy calls move into the plugin iframe. Local installation/schema lookup tests reject missing or
-incomplete local databases rather than inferring permission to create duplicates.
-The proxy redirect work has 60 passing Rust tests including PostgreSQL-backed
-consent/replay, optional credential grants, callback binding and redemption expiry.
-CORS was verified with the earlier live browser flow; the new secret-free flow
-still requires matching proxy/frontend deployments and live verification.
+`runtimeIntegrationConfig.test.ts` covers the integration-proxy setting, the
+deployment default and rejection of invalid proxy origins.
 
 The standalone browser-only Devonian demo (`chunks/DevonianDemo/`, the
 `/app/devonian-demo` route, and `browser/e2e/tests/devonian-issue-sync.spec.mts`)
@@ -2111,13 +2109,6 @@ cancelled on teardown. Old plugin-name grants are deliberately not migrated.
 `store_host::destroy_identity_tests` checks the signer of the persisted destroy
 commit. It failed with the server signer before `Resource::destroy_as` was used;
 installation deletion must use the same selected identity as create/update.
-LocalThought: the browser and fixture tests cover selected-platform consent,
-PKCE redemption, one-time handoff consumption, rotating proxy credentials,
-duplicate-page rejection, typed paginated previews, and Calendar UTC date-range
-validation. The new redirect flow uses a synthetic fixture identity. These
-automated checks do not certify live LocalThought login, consent, redemption or
-provider writes; matching deployment evidence is tracked separately in PR and
-release verification.
 
 Google Calendar one-way projection and its E2E (`google-calendar-import.spec.mts`)
 were removed with the Calendar lens; there is no Calendar import coverage here.
@@ -2138,9 +2129,8 @@ were removed with the Calendar lens; there is no Calendar import coverage here.
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
 `devonian-google-calendar` card) were removed along with the `devonian`
-dependency. LocalThought imports (including Google Calendar) are currently
-broken (see the gap under Plugin discovery), so there is no e2e coverage of a
-recurring-series import.
+dependency. The Calendar drive app and its provider integration tests live in
+[Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/calendar).
 
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
@@ -2163,17 +2153,8 @@ History: this section documented the Rust tests of the vendored Syncables
 crate and its WASM bridge. Both were removed in #1618, together with the
 browser-side OpenAPI-driven import they backed.
 
-`integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
-Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence.
-
 GitHub and Clockify implementations, fixture suites and
 certification live in atomic-plugins.
-
-`integrations/localthought/settings.test.ts` covers runtime proxy selection,
-deployment-default fallback, URL validation without losing the previous setting,
-origin-separated connection keys and migration of legacy connections only for
-the matching proxy and owner.
 
 
 
@@ -2350,13 +2331,6 @@ and no community catalog fetch while disabled. Existing plugin browser tests exp
 through Settings. Cross-device preference sync uses normal private-drive sync;
 a dedicated multi-device preference test is not yet present.
 
-## Local Thought browser refresh
-
-- `integrations/localthought/browser.test.ts`: one provider request for validation,
-  no pagination/retry or import, credential rotation, and denied/throttled/failed
-  access checks.
-- No app-side coverage: the data-browser's LocalThought sync was removed; it
-  returns as plugins running in their own iframe.
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
 JSON fixture through the shared importer, planner and apply engine with in-memory
 storage. It verifies nested placement, native localId, repeat import, conflicting

@@ -77,6 +77,8 @@ if [ -n "$PLUGIN" ]; then
   PLUGINS_DIR="$(cd "$PLUGINS_DIR" && pwd)" || die "No atomic-plugins checkout at $PLUGINS_DIR"
   [ -f "$PLUGINS_DIR/integrations/$PLUGIN/app/build.mjs" ] ||
     die "No drive app at $PLUGINS_DIR/integrations/$PLUGIN/app/build.mjs"
+  [ -f "$PLUGINS_DIR/integrations/localthought/mock-proxy.mjs" ] ||
+    die "No integration mock proxy in the atomic-plugins checkout at $PLUGINS_DIR"
   [ -e "$PLUGINS_DIR/browser/package.json" ] ||
     die "$PLUGINS_DIR has no browser/ linked. Run: (cd $PLUGINS_DIR && node integrations/tooling/link-atomic-server.mjs)"
 fi
