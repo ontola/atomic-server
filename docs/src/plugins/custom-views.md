@@ -158,6 +158,13 @@ A native preparation step on the existing `openResource` bridge validates the
 host's identity proof and provisions the App without expanding iframe writes to
 the drive. Connection-slot changes preserve the App's collection and row IDs.
 
+Built-in Sync reads and writes stay within the selected drive, including when
+another drive is active or cached. Its host queries verify complete server
+results before allocating identities; direct resource reads also validate drive
+ancestry. The existing bridge selects these checks natively. Frame arguments
+cannot choose a different drive or relax the checks. Ordinary native Collection
+and Table browsing continues to use stored data.
+
 Built-in Syncables store one entity table per drive, proxy, platform, typed
 principal and exact catalog CRUD resource. Rows use the catalog's typed canonical
 identity, independently of discovery paths or physical location. A saved filter is

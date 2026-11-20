@@ -1324,6 +1324,15 @@ This does not yet prove restoration of the user's private staging workspace.
   an authenticated principal through a new OAuth slot after rename/move. They
   preserve cached table/row IDs, switch child sync to the new binding, retain the
   binding on later chooser entry and isolate another principal's tables/rows.
+- A two-drive browser journey uses the same agent and populated OPFS database,
+  installs the same principal in both drives and verifies separate Apps, tables
+  and row identities. Syncing either drive preserves the other's accepted rows.
+- Populated two-drive Rust, Collection and real-WASM regressions cover repeated
+  source/local IDs, explicit-drive queries, counts and pagination. Built-in host
+  regressions reject cross-drive direct reads/search, ignore frame-supplied scope,
+  and refuse identity allocation from stale, incomplete or failed cache results.
+- Outbox tests preserve identity-conflicting genesis/edit data for review, stop
+  sustained automatic retries and allow unrelated writes to continue.
 - Save-filter adoption migrates proven legacy rows before navigation remounts the
   Sync profile; runtime tests cover both discovery and direct filter creation.
 - App page and setup-visibility tests verify native principal-App browsing without

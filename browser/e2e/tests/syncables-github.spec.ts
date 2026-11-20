@@ -16,6 +16,8 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getCurrentSubject,
+  newDrive,
+  sideBarDriveSwitcher,
   waitForDriveSettled,
   waitForSynced,
 } from './test-utils';
@@ -82,6 +84,7 @@ interface MockState {
   issueConnections: string[];
   repositoryRequests: number;
   repositoryConnections: string[];
+  repositoryIssueCount: number;
   nextPrincipal: { id: number; login: string; name: string; type: 'User' };
   organizationRequests: number;
   providerRequests: string[];
@@ -187,6 +190,7 @@ async function mockIntegrationProxy(
     issueConnections: [],
     repositoryRequests: 0,
     repositoryConnections: [],
+    repositoryIssueCount: 7,
     nextPrincipal: { id: 321, login: 'michiel', name: 'michiel', type: 'User' },
     organizationRequests: 0,
     providerRequests: [],
@@ -491,16 +495,21 @@ async function mockIntegrationProxy(
     ) {
       state.repositoryRequests++;
       state.repositoryConnections.push(connectionId);
+      const currentRepos = repos.map(repo =>
+        repo.id === 456
+          ? { ...repo, open_issues_count: state.repositoryIssueCount }
+          : repo,
+      );
 
       if (providerPath.startsWith('/orgs/')) {
         // Related reads bind the collection's fixed query and use provider
         // paging defaults; the root rule keeps its explicit page-size hint.
         expect(url.searchParams.get('per_page')).toBeNull();
         expect(url.searchParams.get('type')).toBe('all');
-        await send(repos.filter(repo => repo.owner.id === 123));
+        await send(currentRepos.filter(repo => repo.owner.id === 123));
       } else {
         expect(url.searchParams.get('per_page')).toBe('100');
-        await send(repos);
+        await send(currentRepos);
       }
 
       return;
@@ -565,16 +574,38 @@ async function openConsent(
   ).toBeVisible();
 }
 
-async function sourceState(page: Page, subject: string) {
+async function sourceState(
+  page: Page,
+  subject: string,
+  driveOverride?: string,
+) {
   await waitForSynced(page);
   await waitForDriveSettled(page);
 
-  return page.evaluate(async tableSubject => {
+  const snapshotScope = { tableSubject: subject, drive: driveOverride };
+
+  return page.evaluate(async scope => {
+    const tableSubject = scope.tableSubject;
     const store = window.store;
     const base = 'https://atomicdata.dev/properties/';
+    const drive = scope.drive ?? store.getDrive();
+    if (!drive) throw new Error('Missing fixture drive');
+    const root = await store.getResource(drive);
+    const ontologySubject = root.get(
+      'https://atomicdata.dev/ontology/server/property/default-ontology',
+    );
+    if (typeof ontologySubject !== 'string')
+      throw new Error('The fixture drive has no default ontology');
+    const ontology = await store.getResource(ontologySubject);
+    const definitions = await Promise.all(
+      [
+        ...ontology.getSubjects(base + 'properties'),
+        ...ontology.getSubjects(base + 'classes'),
+      ].map(term => store.getResource(term)),
+    );
 
     const property = (name: string) => {
-      const found = [...store.resources.values()].find(
+      const found = definitions.find(
         resource => resource.get(base + 'shortname') === name,
       );
       if (!found) throw new Error('Missing fixture property ' + name);
@@ -590,8 +621,6 @@ async function sourceState(page: Page, subject: string) {
     // A cold navigation materializes only the selected filter's rows. Verify
     // canonical storage independently of that view and the JS resource cache.
     const subjects = new Set<string>();
-    const drive = store.getDrive();
-    if (!drive) throw new Error('Missing fixture drive');
 
     for (const field of [base + 'parent', property('syncable-entity-table')]) {
       const seen = new Set<string>();
@@ -709,7 +738,7 @@ async function sourceState(page: Page, subject: string) {
         }),
       ),
     };
-  }, subject);
+  }, snapshotScope);
 }
 
 /** Read every installed principal App, not just resources loaded by the route. */
@@ -721,8 +750,23 @@ async function principalApps(page: Page, platform = PLATFORM) {
     async ({ wantedPlatform, proxy }) => {
       const store = window.store;
       const base = 'https://atomicdata.dev/properties/';
+      const drive = store.getDrive();
+      if (!drive) throw new Error('The principal App fixture has no drive');
+      const root = await store.getResource(drive);
+      const ontologySubject = root.get(
+        'https://atomicdata.dev/ontology/server/property/default-ontology',
+      );
+      if (typeof ontologySubject !== 'string')
+        throw new Error('The principal App fixture has no default ontology');
+      const ontology = await store.getResource(ontologySubject);
+      const definitions = await Promise.all(
+        [
+          ...ontology.getSubjects(base + 'properties'),
+          ...ontology.getSubjects(base + 'classes'),
+        ].map(term => store.getResource(term)),
+      );
       const terms = Object.fromEntries(
-        [...store.resources.values()].map(resource => [
+        definitions.map(resource => [
           resource.get(base + 'shortname'),
           resource.subject,
         ]),
@@ -739,8 +783,6 @@ async function principalApps(page: Page, platform = PLATFORM) {
       ];
       if (required.some(name => typeof terms[name] !== 'string'))
         throw new Error('The principal App fixture schema is incomplete');
-      const drive = store.getDrive();
-      if (!drive) throw new Error('The principal App fixture has no drive');
       const query = new URL('/query', store.getServerUrl());
       for (const [name, value] of Object.entries({
         drive,
@@ -1972,6 +2014,237 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     expect(requests.providerRequests).toHaveLength(chooserReads);
     expect(requests.documentRequests).toHaveLength(chooserDocuments);
+  });
+
+  test('keeps the same principal and logical sources separate across two warm drives', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(240_000);
+    const requests = await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    const driveA = await page.evaluate(() => window.store.getDrive()!);
+    const actor = await page.evaluate(() => window.store.getAgent()!.subject);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const managerA = await getCurrentSubject(page);
+    const managerUrl = page.url();
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerA);
+    await browse(page);
+    const appsA = await principalApps(page);
+    expect(appsA).toHaveLength(1);
+    const appA = appsA[0];
+    expect(appA.parent).toBe(driveA);
+    await openRow(page, 'Repositories');
+    const tableA = await getCurrentSubject(page);
+    await sync(page);
+    await browse(page);
+    const firstA = await sourceState(page, tableA, driveA);
+    expect(firstA.parent).toBe(appA.subject);
+    expect(firstA.rows).toHaveLength(3);
+    expect(
+      firstA.rows.find(row => row.raw?.id === 456)?.raw?.open_issues_count,
+    ).toBe(7);
+
+    // The second drive belongs to this same agent and the same per-agent OPFS
+    // database. Reusing the owned OAuth slot must not reuse the first App.
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    const { driveURL: driveB } = await newDrive(page);
+    expect(driveB).not.toBe(driveA);
+    await waitForDriveSettled(page);
+    expect(await page.evaluate(() => window.store.getAgent()!.subject)).toBe(
+      actor,
+    );
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    const managerB = await getCurrentSubject(page);
+    expect(managerB).not.toBe(managerA);
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerB);
+    await browse(page);
+    const appsB = await principalApps(page);
+    expect(appsB).toHaveLength(1);
+    const appB = appsB[0];
+    expect(appB.subject).not.toBe(appA.subject);
+    expect(appB.parent).toBe(driveB);
+    expect(appB.key).toBe(appA.key);
+    expect(appB.localId).toBe(appA.localId);
+    expect(requests.redeemed).toHaveLength(1);
+    await openRow(page, 'Repositories');
+    const tableB = await getCurrentSubject(page);
+    expect(tableB).not.toBe(tableA);
+    requests.repositoryIssueCount = 17;
+    await sync(page);
+    await browse(page);
+    const firstB = await sourceState(page, tableB, driveB);
+    expect(firstB.parent).toBe(appB.subject);
+    expect(firstB.key).toBe(firstA.key);
+    expect(firstB.localId).toBe(firstA.localId);
+    expect(firstB.rows).toHaveLength(3);
+    expect(firstB.rows.map(row => row.key).sort()).toEqual(
+      firstA.rows.map(row => row.key).sort(),
+    );
+    expect(firstB.rows.map(row => row.localId).sort()).toEqual(
+      firstA.rows.map(row => row.localId).sort(),
+    );
+    const rowSubjectsA = firstA.rows.map(row => row.subject);
+    expect(firstB.rows.every(row => !rowSubjectsA.includes(row.subject))).toBe(
+      true,
+    );
+    expect(
+      firstB.rows.find(row => row.raw?.id === 456)?.raw?.open_issues_count,
+    ).toBe(17);
+    expect((await sourceState(page, tableA, driveA)).rows).toEqual(firstA.rows);
+
+    const warm = await page.evaluate(
+      async ({ apps, tables, localIds, drives }) => {
+        const db = window.store.getClientDb();
+        if (!db?.isReady)
+          throw new Error('The two-drive OPFS fixture is not ready');
+        const property = 'https://atomicdata.dev/properties/localId';
+        const appHits = await db.query({
+          property,
+          value: localIds.app,
+          limit: 100,
+        });
+        const tableHits = await db.query({
+          property,
+          value: localIds.table,
+          limit: 100,
+        });
+        const scoped = await Promise.all(
+          drives.map(async (drive, index) => ({
+            app: (
+              await db.query({
+                property,
+                value: localIds.app,
+                drive,
+                limit: 100,
+              })
+            ).subjects,
+            table: (
+              await db.query({
+                property,
+                value: localIds.table,
+                drive,
+                limit: 100,
+              })
+            ).subjects,
+            expectedApp: apps[index],
+            expectedTable: tables[index],
+          })),
+        );
+
+        return {
+          apps: appHits.subjects.sort(),
+          appCount: appHits.count,
+          tables: tableHits.subjects.sort(),
+          tableCount: tableHits.count,
+          scoped,
+        };
+      },
+      {
+        apps: [appA.subject, appB.subject],
+        tables: [tableA, tableB],
+        localIds: {
+          app: appA.localId as string,
+          table: firstA.localId as string,
+        },
+        drives: [driveA, driveB],
+      },
+    );
+    expect(warm.appCount).toBe(2);
+    expect(warm.apps).toEqual([appA.subject, appB.subject].sort());
+    expect(warm.tableCount).toBe(2);
+    expect(warm.tables).toEqual([tableA, tableB].sort());
+
+    for (const scoped of warm.scoped) {
+      expect(scoped.app).toEqual([scoped.expectedApp]);
+      expect(scoped.table).toEqual([scoped.expectedTable]);
+    }
+
+    const switchTo = async (drive: string) => {
+      await waitForSynced(page);
+      await waitForDriveSettled(page);
+      await sideBarDriveSwitcher(page).click();
+      await page.getByTestId('menu-item-' + drive).click();
+      await expect
+        .poll(() => page.evaluate(() => window.store.getDrive()))
+        .toBe(drive);
+      await waitForDriveSettled(page);
+      expect(await page.evaluate(() => window.store.getAgent()!.subject)).toBe(
+        actor,
+      );
+    };
+
+    await switchTo(driveA);
+    const nativeReads = requests.providerRequests.length;
+    const nativeDocuments = requests.documentRequests.length;
+    await clickAccountMenuItem(page, 'Apps');
+    const card = page.locator(`[data-proxy-platform="${PLATFORM}"]`);
+    await expect(
+      card.getByRole('button', { name: 'GitHub · michiel', exact: true }),
+    ).toHaveCount(1);
+    await card
+      .getByRole('button', { name: 'GitHub · michiel', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute('about', appA.subject);
+    await browse(page);
+    expect((await principalApps(page)).map(app => app.subject)).toEqual([
+      appA.subject,
+    ]);
+    await openRow(page, 'Repositories');
+    expect(await getCurrentSubject(page)).toBe(tableA);
+    await browse(page);
+    expect(requests.providerRequests).toHaveLength(nativeReads);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
+    requests.repositoryIssueCount = 27;
+    await sync(page);
+    await browse(page);
+    const updatedA = await sourceState(page, tableA, driveA);
+    expect(updatedA.rows.map(row => row.subject).sort()).toEqual(
+      rowSubjectsA.sort(),
+    );
+    expect(
+      updatedA.rows.find(row => row.raw?.id === 456)?.raw?.open_issues_count,
+    ).toBe(27);
+    expect((await sourceState(page, tableB, driveB)).rows).toEqual(firstB.rows);
+    await testInfo.attach('drive-scoped-principal-app-after-resync', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await switchTo(driveB);
+    await clickAccountMenuItem(page, 'Apps');
+    await expect(
+      card.getByRole('button', { name: 'GitHub · michiel', exact: true }),
+    ).toHaveCount(1);
+    await card
+      .getByRole('button', { name: 'GitHub · michiel', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute('about', appB.subject);
+    await browse(page);
+    expect((await principalApps(page)).map(app => app.subject)).toEqual([
+      appB.subject,
+    ]);
+    await openRow(page, 'Repositories');
+    expect(await getCurrentSubject(page)).toBe(tableB);
+    await browse(page);
+    expect((await sourceState(page, tableB, driveB)).rows).toEqual(firstB.rows);
+    expect(requests.redeemed).toHaveLength(1);
   });
 
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({

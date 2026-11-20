@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  AtomicError,
+  ErrorType,
   core,
+  server,
   dataBrowser,
   Datatype,
   findSchema,
@@ -14,6 +17,8 @@ import {
   findSyncableLegacyAccounts,
   platformLocalId,
   syncablePlatformSchema,
+  classifySyncableResourceDrive,
+  isSyncableResourceInDrive,
 } from './syncablePlatform';
 import { syncableHierarchySchema } from './syncableHierarchy';
 
@@ -335,4 +340,116 @@ describe('ensureSyncablePlatform', () => {
       expect(JSON.stringify([...resources])).toBe(before);
     },
   );
+});
+
+describe('strict query Drive membership', () => {
+  const drive = 'atomic:drive-a';
+  const otherDrive = 'atomic:drive-b';
+  const row = 'atomic:row';
+  const folder = 'atomic:folder';
+  const driveProperty = 'https://atomicdata.dev/properties/drive';
+
+  function fixture() {
+    const result = fakeSchemaStore();
+    for (const subject of [drive, otherDrive])
+      result.resources.set(subject, {
+        [core.properties.isA]: [server.classes.drive],
+      });
+    result.resources.set(row, { [core.properties.parent]: folder });
+    result.resources.set(folder, { [core.properties.parent]: drive });
+
+    return result;
+  }
+
+  it('includes an unstamped legacy row only after walking its selected Drive ancestry', async () => {
+    const { store } = fixture();
+    expect(await classifySyncableResourceDrive(store, drive, row)).toBe(true);
+    expect(await classifySyncableResourceDrive(store, drive, drive)).toBe(true);
+  });
+
+  it('omits an unstamped foreign row only after reaching its other Drive root', async () => {
+    const { store, resources } = fixture();
+    resources.get(folder)![core.properties.parent] = otherDrive;
+    expect(await classifySyncableResourceDrive(store, drive, row)).toBe(false);
+    expect(await classifySyncableResourceDrive(store, drive, otherDrive)).toBe(
+      false,
+    );
+  });
+
+  it('accepts consistent stamps but rejects a stamp contradicted by ancestry', async () => {
+    const { store, resources } = fixture();
+    resources.get(row)![driveProperty] = drive;
+    expect(await classifySyncableResourceDrive(store, drive, row)).toBe(true);
+    resources.get(folder)![core.properties.parent] = otherDrive;
+    await expect(
+      classifySyncableResourceDrive(store, drive, row),
+    ).rejects.toThrow('stamp conflicts');
+    resources.get(row)![driveProperty] = otherDrive;
+    expect(await classifySyncableResourceDrive(store, drive, row)).toBe(false);
+  });
+
+  it('does not mistake an unproven foreign stamp for permission to omit a result', async () => {
+    const { store, resources } = fixture();
+    resources.set(row, { [driveProperty]: otherDrive });
+    await expect(
+      classifySyncableResourceDrive(store, drive, row),
+    ).rejects.toThrow('could not be proven');
+    expect(await isSyncableResourceInDrive(store, drive, row)).toBe(false);
+  });
+
+  it.each([
+    'missing',
+    'malformed-parent',
+    'cycle',
+    'malformed-classes',
+    'malformed-stamp',
+  ])(
+    'fails closed on %s ancestry while retaining the ordinary boolean lookup',
+    async mode => {
+      const { store, resources } = fixture();
+      if (mode === 'missing') resources.delete(folder);
+      if (mode === 'malformed-parent')
+        resources.get(folder)![core.properties.parent] = 7;
+      if (mode === 'cycle')
+        resources.get(folder)![core.properties.parent] = row;
+      if (mode === 'malformed-classes')
+        resources.get(folder)![core.properties.isA] = 'not-an-array';
+      if (mode === 'malformed-stamp') resources.get(folder)![driveProperty] = 7;
+      await expect(
+        classifySyncableResourceDrive(store, drive, row),
+      ).rejects.toThrow();
+    },
+  );
+
+  it.each([ErrorType.NotFound, ErrorType.Unauthorized, ErrorType.Client])(
+    'propagates load failures instead of treating them as foreign Drive results (%s)',
+    async type => {
+      const { store } = fixture();
+      const get = store.getResource.bind(store);
+      const failure = new AtomicError('Cannot establish ancestry', type);
+
+      store.getResource = async subject => {
+        if (subject === folder) throw failure;
+
+        return get(subject);
+      };
+
+      await expect(
+        classifySyncableResourceDrive(store, drive, row),
+      ).rejects.toBe(failure);
+      if (type !== ErrorType.Client)
+        expect(await isSyncableResourceInDrive(store, drive, row)).toBe(false);
+    },
+  );
+
+  it('rejects external ancestry before fetching it', async () => {
+    const { store, resources } = fixture();
+    const external = 'https://other.example/private';
+    resources.get(folder)![core.properties.parent] = external;
+    const get = vi.spyOn(store, 'getResource');
+    await expect(
+      classifySyncableResourceDrive(store, drive, row),
+    ).rejects.toThrow('another server');
+    expect(get).not.toHaveBeenCalledWith(external);
+  });
 });

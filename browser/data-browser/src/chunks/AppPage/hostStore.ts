@@ -2,12 +2,17 @@ import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { NativeAppWrite, Store } from '@tomic/react';
 import { HostError, toHostErrorCode } from '@tomic/plugin';
 import type { ProxyHost } from '@helpers/proxyConnections';
-import { parseViewQuery, runViewQuery } from '@helpers/extensions/viewQuery';
+import {
+  ALL_MEMBERS_CAP,
+  parseViewQuery,
+  runViewQuery,
+} from '@helpers/extensions/viewQuery';
 import { noServerHost } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
   core,
+  readConnectionSubjects,
   destinationTablesFor,
   errorMessageFromResponse,
   signRequest,
@@ -17,6 +22,12 @@ import type { ApplyHost, JSONValue } from '@tomic/lib';
 
 /** Authority selected by the mounting host, never supplied by frame messages. */
 export interface HostStoreProfile {
+  /** Hosted Sync identity lookup must never infer absence from a partial cache. */
+  authoritativeQueries?: true;
+  /** Optional native read boundary; ordinary App reads retain their existing scope. */
+  authorizeRead?: (subject: string) => Promise<void>;
+  /** False requires proven foreign Drive ancestry; unresolved membership must throw. */
+  queryMemberInScope?: (subject: string) => Promise<boolean>;
   context?: Record<string, unknown>;
   access: {
     root: string;
@@ -175,6 +186,7 @@ export async function handleRequest(
   return result;
 }
 
+// @wc-ignore
 async function handleOperation(
   ...args: Parameters<typeof handleRequest>
 ): Promise<unknown> {
@@ -244,7 +256,7 @@ async function handleOperation(
     }
 
     case 'get':
-      return readForApp(store, required(request.subject, 'subject'));
+      return readForApp(store, required(request.subject, 'subject'), profile);
 
     // Many `get`s in one round trip: each subject is read exactly as `get`
     // reads it, through this person's store, so it sees what they see and
@@ -267,7 +279,11 @@ async function handleOperation(
       return Promise.all(
         (subjects as string[]).map(async subject => {
           try {
-            const { propVals, ...rest } = await readForApp(store, subject);
+            const { propVals, ...rest } = await readForApp(
+              store,
+              subject,
+              profile,
+            );
 
             return { ...rest, props: propVals, loading: false };
           } catch (e) {
@@ -277,18 +293,72 @@ async function handleOperation(
       );
     }
 
-    case 'query':
+    case 'query': {
+      const query = parseViewQuery(
+        request as unknown as Record<string, unknown>,
+      );
+
+      if (profile?.authoritativeQueries) {
+        if (store.noServer)
+          throw new Error('A hosted identity query requires the server');
+        if (
+          !query.property ||
+          query.value === undefined ||
+          query.filters.length ||
+          query.sortBy ||
+          query.sortDesc
+        )
+          throw new Error(
+            'This hosted identity query requires an unsorted property and value',
+          );
+        const subjects = await readConnectionSubjects(
+          {
+            getServerUrl: () => store.getServerUrl(),
+            fetchResourceFromServer: async (...fetchArgs) => {
+              assertHostProfile(profile);
+              const result = await store.fetchResourceFromServer(...fetchArgs);
+              assertHostProfile(profile);
+
+              return result;
+            },
+          },
+          drive,
+          query.property,
+          query.value,
+        );
+        assertHostProfile(profile);
+        const scoped: string[] = [];
+
+        for (const subject of subjects) {
+          assertHostProfile(profile);
+          const included = profile.queryMemberInScope
+            ? await profile.queryMemberInScope(subject)
+            : true;
+          assertHostProfile(profile);
+          if (typeof included !== 'boolean')
+            throw new Error('The query member Drive could not be proven');
+          if (included) scoped.push(subject);
+        }
+
+        const start = (query.page ?? 0) * query.pageSize;
+
+        return scoped.slice(
+          start,
+          query.page === undefined ? ALL_MEMBERS_CAP : start + query.pageSize,
+        );
+      }
+
       // A collection, not `search`. Search drops `filters` whenever it falls
       // back to the local index — property-value constraints need the
       // server's — so an app asking for its own children quietly received the
       // whole drive. Wrong, and a far bigger answer than it asked for.
-      return await runViewQuery(
-        store,
-        parseViewQuery(request as unknown as Record<string, unknown>),
-        profile ? drive : undefined,
-      );
+      return await runViewQuery(store, query, profile ? drive : undefined);
+    }
 
     case 'search':
+      if (profile?.authorizeRead)
+        throw new Error('This Drive-scoped view does not support search');
+
       return await runViewSearch(
         store,
         parseViewSearch(request as unknown as Record<string, unknown>),
@@ -443,10 +513,20 @@ async function handleOperation(
 }
 
 /** One resource, as this person's store has it. What `get` answers. */
-async function readForApp(store: Store, subject: string) {
+async function readForApp(
+  store: Store,
+  subject: string,
+  profile?: HostStoreProfile,
+) {
+  assertHostProfile(profile);
+  await profile?.authorizeRead?.(subject);
+  assertHostProfile(profile);
   const resource = await store.getResource(subject);
-
+  assertHostProfile(profile);
   if (resource.error) throw resource.error;
+  // A delayed resource read must not outlive a move outside the selected Drive.
+  await profile?.authorizeRead?.(resource.subject);
+  assertHostProfile(profile);
 
   return {
     subject: resource.subject,

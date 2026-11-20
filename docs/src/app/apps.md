@@ -38,6 +38,13 @@ after you rename or move it within the drive. Its provider icon is saved in the
 drive, and reopening preserves an icon you chose yourself. Apps also lists your
 installed principal Apps so you can open them directly.
 
+Apps and sync are scoped to their drive. Connecting the same account in another
+drive creates a separate App with separate collections, rows and saved filters.
+Having both drives open or cached does not combine their data. Sync checks the
+server for existing resources before creating new ones; cached collections stay
+browsable when the server is unavailable. Conflicting pending writes are retained
+and reported rather than retried indefinitely.
+
 Each App has one table per catalog resource type, such as **Organizations**,
 **Repositories** and **Issues and pull requests**. Navigation stays at
 Drive → principal App → item type. An organization and a repository are rows,

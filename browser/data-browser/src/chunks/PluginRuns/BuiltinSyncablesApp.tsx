@@ -25,7 +25,11 @@ import {
   useIntegrationProxy,
 } from '@helpers/integrationProxy';
 import { AtomicLink } from '@components/AtomicLink';
-import { findSyncablePlatform } from './syncablePlatform';
+import {
+  findSyncablePlatform,
+  isSyncableResourceInDrive,
+  classifySyncableResourceDrive,
+} from './syncablePlatform';
 import {
   ensureSyncablePrincipalApp,
   listSyncablePrincipalApps,
@@ -717,6 +721,27 @@ export async function appProfile(
   };
 
   const profile: AppFrameProfile = {
+    authoritativeQueries: true,
+    queryMemberInScope: async subject => {
+      assertCurrent();
+      const included = await classifySyncableResourceDrive(
+        store,
+        drive,
+        subject,
+      );
+      assertCurrent();
+      if (included) assertSyncAppDrive(store, drive, subject);
+
+      return included;
+    },
+    authorizeRead: async subject => {
+      assertCurrent();
+      const allowed = await isSyncableResourceInDrive(store, drive, subject);
+      assertCurrent();
+      if (!allowed)
+        throw new Error('The resource is outside the selected drive');
+      assertSyncAppDrive(store, drive, subject);
+    },
     source: server + '/builtin-syncables-ui?format=html',
     context: {
       ...context,

@@ -20,6 +20,7 @@ import { readSelectionKey } from 'syncables/browser';
 
 const state = vi.hoisted(() => ({
   principalApps: [] as SyncablePrincipalAppRef[],
+  queryScope: vi.fn(async (..._args: unknown[]): Promise<boolean> => true),
   promote: vi.fn(async (..._args: unknown[]) => 'atomic:principal-app'),
   actor: { subject: 'atomic:agent:person' },
   installation: 'atomic:installation' as string | undefined,
@@ -105,8 +106,11 @@ vi.mock('../../routes/ShowRoute', () => ({
 vi.mock('./syncableDocument', () => ({
   fetchSyncableDocument: vi.fn(async () => ({ document: state.document })),
 }));
-vi.mock('./syncablePlatform', () => ({
+vi.mock('./syncablePlatform', async importActual => ({
+  ...(await importActual<typeof import('./syncablePlatform')>()),
   findSyncablePlatform: vi.fn(async () => state.installation),
+  classifySyncableResourceDrive: (...args: unknown[]) =>
+    state.queryScope(...args),
 }));
 vi.mock('./syncablePrincipalApp', () => ({
   listSyncablePrincipalApps: vi.fn(async () => state.principalApps),
@@ -226,6 +230,7 @@ beforeEach(() => {
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   state.actor = { subject: 'atomic:agent:person' };
   state.principalApps = [];
+  state.queryScope.mockResolvedValue(true);
   state.promote.mockResolvedValue('atomic:principal-app');
   state.proxy.preferredKeyedConnection.mockResolvedValue(undefined);
   state.proxy.activeKeyedConnection.mockResolvedValue('active');
@@ -373,6 +378,7 @@ it('passes validated installation aliases and blocking warnings into the existin
     legacyMigrationBlocked: true,
   });
   expect(spec.profile.access?.root).toBe('atomic:source');
+  expect(spec.profile).toHaveProperty('authoritativeQueries', true);
   expect(syncProxyTransport).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({ subject: 'atomic:source' }),
@@ -499,6 +505,94 @@ it('does not create a replacement when its installation cannot be validated', as
   await expect(open()).rejects.toThrow('installation is unavailable');
   expect(collectSyncableLegacySources).not.toHaveBeenCalled();
   expect(syncableApiSchema).not.toHaveBeenCalled();
+});
+
+it('authorizes only stored resources under its captured Drive and rejects external targets before fetching', async () => {
+  const spec = await open();
+  const original = vi.mocked(store.getResource).getMockImplementation()!;
+
+  try {
+    vi.mocked(store.getResource).mockImplementation(
+      async subject =>
+        ({
+          subject,
+          get: (property: string) =>
+            property === core.properties.parent
+              ? subject === 'atomic:own-row'
+                ? 'drive'
+                : 'atomic:another-drive'
+              : undefined,
+        }) as never,
+    );
+    await expect(
+      spec.profile.authorizeRead!('atomic:own-row'),
+    ).resolves.toBeUndefined();
+    await expect(
+      spec.profile.authorizeRead!('atomic:foreign-row'),
+    ).rejects.toThrow('selected drive');
+    vi.mocked(store.getResource).mockClear();
+    for (const subject of [
+      'https://foreign.example/row',
+      'https://person@node.example/row',
+      'https://node.example/row#fragment',
+      'malformed',
+    ])
+      await expect(spec.profile.authorizeRead!(subject)).rejects.toThrow();
+    expect(store.getResource).not.toHaveBeenCalled();
+  } finally {
+    vi.mocked(store.getResource).mockImplementation(original);
+  }
+});
+
+it('classifies complete query members under the captured Drive and fails closed on unknown ancestry or revoked session', async () => {
+  const spec = await open();
+  await expect(
+    spec.profile.queryMemberInScope!('atomic:own-row'),
+  ).resolves.toBe(true);
+  expect(state.queryScope).toHaveBeenCalledWith(
+    store,
+    'drive',
+    'atomic:own-row',
+  );
+  state.queryScope.mockResolvedValueOnce(false);
+  await expect(
+    spec.profile.queryMemberInScope!('atomic:foreign-row'),
+  ).resolves.toBe(false);
+  state.queryScope.mockRejectedValueOnce(new Error('Ancestry unknown'));
+  await expect(
+    spec.profile.queryMemberInScope!('atomic:unknown'),
+  ).rejects.toThrow('Ancestry unknown');
+  state.queryScope.mockImplementationOnce(async () => {
+    state.actor = { subject: 'atomic:agent:other' };
+
+    return true;
+  });
+  await expect(
+    spec.profile.queryMemberInScope!('atomic:own-row'),
+  ).rejects.toThrow('changed');
+});
+
+it('rechecks the native read session after awaited Drive ancestry validation', async () => {
+  const controller = new AbortController();
+  const spec = await open(false, undefined, controller.signal);
+  const original = vi.mocked(store.getResource).getMockImplementation()!;
+
+  try {
+    vi.mocked(store.getResource).mockImplementation(async subject => {
+      controller.abort();
+
+      return {
+        subject,
+        get: (property: string) =>
+          property === core.properties.parent ? 'drive' : undefined,
+      } as never;
+    });
+    await expect(
+      spec.profile.authorizeRead!('atomic:own-row'),
+    ).rejects.toThrow();
+  } finally {
+    vi.mocked(store.getResource).mockImplementation(original);
+  }
 });
 
 it('mounts a paused interactive profile while rejecting provider reads and worker starts until resumed', async () => {

@@ -15,6 +15,7 @@ const fixture = vi.hoisted(() => {
     getAgent: () => actor,
     getServerUrl: () => 'https://node.test',
     noServer: false,
+    subscribe: vi.fn((_subject: string, _changed: () => void) => vi.fn()),
   };
 
   return {
@@ -233,3 +234,111 @@ it('does not navigate after preparation loses its selected authority', async () 
     '*',
   );
 });
+
+async function subscription(
+  page: Awaited<ReturnType<typeof mount>>,
+  op: 'subscribe' | 'unsubscribe',
+  subject: string,
+) {
+  await act(async () => {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: page.iframe.contentWindow,
+        data: {
+          type: 'atomic.view.request',
+          version: 1,
+          id: op,
+          op,
+          args: { subject },
+        },
+      }),
+    );
+  });
+}
+
+it('rejects a foreign-Drive subscription before installing any Store listener', async () => {
+  const page = await mount(
+    profile({
+      authorizeRead: async () => {
+        throw new Error('Outside selected Drive');
+      },
+    }),
+  );
+  await subscription(page, 'subscribe', 'https://node.test/foreign-row');
+  expect(fixture.store.subscribe).not.toHaveBeenCalled();
+  expect(page.post).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'subscribe',
+      error: 'Outside selected Drive',
+    }),
+    '*',
+  );
+});
+
+it('revalidates each native subscription event and stops notifying after the row moves out of Drive', async () => {
+  let allowed = true;
+  const remove = vi.fn();
+  fixture.store.subscribe.mockReturnValueOnce(remove);
+  const page = await mount(
+    profile({
+      authorizeRead: async () => {
+        if (!allowed) throw new Error('Row moved');
+      },
+    }),
+  );
+  const subject = 'https://node.test/own-row';
+  await subscription(page, 'subscribe', subject);
+  expect(fixture.store.subscribe).toHaveBeenCalledOnce();
+  const changed = fixture.store.subscribe.mock.calls[0][1];
+  await act(async () => changed());
+  expect(page.post).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'atomic.view.change', subject }),
+    '*',
+  );
+  page.post.mockClear();
+  allowed = false;
+  await act(async () => changed());
+  expect(page.post).not.toHaveBeenCalled();
+  expect(remove).toHaveBeenCalledOnce();
+});
+
+it.each(['unsubscribe', 'cancel', 'frame reload'] as const)(
+  'does not install a subscription after pending authorization is revoked by %s',
+  async revoke => {
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const controller = new AbortController();
+    const page = await mount(
+      profile({
+        authorizeRead: async () => waiting,
+        access: {
+          root: 'https://node.test/table',
+          signal: controller.signal,
+          assertCurrent: () => {},
+        },
+      }),
+    );
+    const subject = 'https://node.test/own-row';
+    await subscription(page, 'subscribe', subject);
+    if (revoke === 'unsubscribe')
+      await subscription(page, 'unsubscribe', subject);
+    else if (revoke === 'cancel') controller.abort();
+    else
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            source: page.iframe.contentWindow,
+            data: { type: '__atomic_plugin_ready' },
+          }),
+        );
+      });
+    page.post.mockClear();
+    await act(async () => {
+      release();
+    });
+    expect(fixture.store.subscribe).not.toHaveBeenCalled();
+    expect(page.post).not.toHaveBeenCalled();
+  },
+);

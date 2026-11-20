@@ -16,6 +16,7 @@ import {
   subjectsReferToSameResource,
   isAtomicIdentifier,
   readConnectionSubjects,
+  server,
   type Store,
   type PropertySpec,
   type SchemaSpec,
@@ -226,6 +227,7 @@ export function assertSyncableLocalSubject(
 export async function loadSyncableResource(
   store: SchemaStore,
   subject: string,
+  required = false,
 ): Promise<SchemaResource | undefined> {
   try {
     assertSyncableLocalSubject(store, subject);
@@ -236,6 +238,7 @@ export async function loadSyncableResource(
     return resource;
   } catch (error) {
     if (
+      !required &&
       error instanceof AtomicError &&
       (error.type === ErrorType.NotFound ||
         error.type === ErrorType.Unauthorized)
@@ -248,30 +251,95 @@ export async function loadSyncableResource(
 }
 
 /** Verify ancestry too: moving an ancestor may leave an old drive stamp. */
-export async function isSyncableResourceInDrive(
+export function isSyncableResourceInDrive(
   store: SchemaStore,
   drive: string,
   subject: string,
 ): Promise<boolean> {
+  return resourceDriveMembership(store, drive, subject, false);
+}
+
+/** Strict query filtering may omit only a resource proven to belong to another
+ * Drive. Missing or inconsistent ancestry is an error, never an empty result. */
+export function classifySyncableResourceDrive(
+  store: SchemaStore,
+  drive: string,
+  subject: string,
+): Promise<boolean> {
+  assertSyncableLocalSubject(store, drive);
+
+  return resourceDriveMembership(store, drive, subject, true);
+}
+
+// @wc-ignore
+async function resourceDriveMembership(
+  store: SchemaStore,
+  drive: string,
+  subject: string,
+  strict: boolean,
+): Promise<boolean> {
   const seen = new Set<string>();
+  const stamps: string[] = [];
   let current = subject;
 
+  const verifyStamps = (root: string) => {
+    if (stamps.some(stamp => !subjectsReferToSameResource(stamp, root)))
+      throw new Error('The resource Drive stamp conflicts with its ancestry');
+  };
+
   while (!seen.has(current) && seen.size < 64) {
-    if (subjectsReferToSameResource(drive, current)) return true;
+    if (subjectsReferToSameResource(drive, current)) {
+      if (strict) verifyStamps(drive);
+
+      return true;
+    }
+
     seen.add(current);
-    const resource = await loadSyncableResource(store, current);
+    const resource = await loadSyncableResource(store, current, strict);
     if (!resource) return false;
     const assignedDrive = resource.get(DRIVE_PROPERTY);
-    if (
+
+    if (strict) {
+      if (assignedDrive !== undefined) {
+        assertSyncableLocalSubject(store, assignedDrive);
+        stamps.push(assignedDrive);
+      }
+
+      const classes = resource.get(core.properties.isA);
+      if (
+        classes !== undefined &&
+        (!Array.isArray(classes) ||
+          classes.some(type => typeof type !== 'string'))
+      )
+        throw new Error('The resource has malformed Drive ancestry');
+
+      if (Array.isArray(classes) && classes.includes(server.classes.drive)) {
+        verifyStamps(resource.subject);
+
+        return false;
+      }
+    } else if (
       assignedDrive !== undefined &&
       (typeof assignedDrive !== 'string' ||
         !subjectsReferToSameResource(drive, assignedDrive))
-    )
+    ) {
       return false;
+    }
+
     const parent = resource.get(core.properties.parent);
-    if (typeof parent !== 'string' || !parent) return false;
+
+    if (typeof parent !== 'string' || !parent) {
+      if (strict)
+        throw new Error('The resource Drive ancestry could not be proven');
+
+      return false;
+    }
+
     current = parent;
   }
+
+  if (strict)
+    throw new Error('The resource Drive ancestry is cyclic or too deep');
 
   return false;
 }

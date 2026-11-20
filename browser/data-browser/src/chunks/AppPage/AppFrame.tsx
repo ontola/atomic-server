@@ -312,6 +312,7 @@ function AppFrameSession({
       ? bindHostProfile(store, authority, controller.signal)
       : undefined;
     const changes = appChanges(store, drive, app, selected);
+    const readSubscriptions = new Map<string, { active: boolean }>();
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -448,6 +449,55 @@ function AppFrameSession({
 
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
+        const authorizeRead = selected?.authorizeRead;
+
+        if (authorizeRead) {
+          const token = readSubscriptions.get(subject) ?? { active: true };
+          readSubscriptions.set(subject, token);
+          void (async () => {
+            assertHostProfile(selected);
+            await authorizeRead(subject);
+            assertHostProfile(selected);
+            if (!token.active || !session.isActive()) return;
+            session.watch(subject, () => {
+              const remove = store.subscribe(subject, () => {
+                void (async () => {
+                  assertHostProfile(selected);
+                  await authorizeRead(subject);
+                  assertHostProfile(selected);
+                  if (token.active) session.post({ __atomicChanged: subject });
+                })().catch(() => {
+                  if (token.active && readSubscriptions.get(subject) === token)
+                    session.unwatch(subject);
+                });
+              });
+
+              return () => {
+                token.active = false;
+                readSubscriptions.delete(subject);
+                remove();
+              };
+            });
+            session.post({ id: data.id, result: true });
+          })().catch(reason => {
+            if (
+              !session.isActive() ||
+              !token.active ||
+              readSubscriptions.get(subject) !== token
+            )
+              return;
+            token.active = false;
+            readSubscriptions.delete(subject);
+            session.unwatch(subject);
+            session.post({
+              id: data.id,
+              error: String(reason?.message ?? reason),
+            });
+          });
+
+          return;
+        }
+
         session.watch(subject, () =>
           store.subscribe(subject, () => {
             try {
@@ -464,6 +514,9 @@ function AppFrameSession({
       }
 
       if (data.op === 'unsubscribe' && typeof data.subject === 'string') {
+        const token = readSubscriptions.get(data.subject);
+        if (token) token.active = false;
+        readSubscriptions.delete(data.subject);
         session.unwatch(data.subject);
         session.post({ id: data.id, result: true });
 
