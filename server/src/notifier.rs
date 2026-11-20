@@ -6,8 +6,9 @@
 //!
 //! - **Push**: every `pushEndpoint` the person registered, as a JSON POST.
 //!   That is what a UnifiedPush distributor (for example ntfy) expects, so a
-//!   self-hosted server needs no account anywhere. The body is small and holds
-//!   no more than the Notification already says.
+//!   self-hosted server needs no account anywhere. The body says only what
+//!   kind of notification it is, unless `--notify-push-content` (for a push
+//!   service the operator runs) adds the title and text.
 //! - **A sink** for e-mail and other channels. An embedder (a managed node)
 //!   installs one with [`set_sink`] and sends the mail through its own account
 //!   service. Without one, `--notify-webhook` POSTs each delivery as JSON to a
@@ -33,16 +34,21 @@ pub fn set_sink(sink: Arc<dyn NotifySink>) {
     let _ = SINK.set(sink);
 }
 
-/// What a push endpoint receives.
-fn push_body(d: &Delivery) -> serde_json::Value {
-    serde_json::json!({
-        "title": d.title,
-        "body": d.body,
-        "about": d.about,
+/// What a push endpoint receives. Without `with_content` only the kind and
+/// the Notification's subject: the push service in between (a public ntfy,
+/// say) never sees titles. The app reads the rest from the synced Inbox.
+fn push_body(d: &Delivery, with_content: bool) -> serde_json::Value {
+    let mut body = serde_json::json!({
         "kind": d.kind,
         "notification": d.notification,
         "actionRequired": d.action_required,
-    })
+    });
+    if with_content {
+        body["title"] = serde_json::json!(d.title);
+        body["body"] = serde_json::json!(d.body);
+        body["about"] = serde_json::json!(d.about);
+    }
+    body
 }
 
 /// `--notify-link`, with `{subject}` replaced by the (URL-encoded) subject.
@@ -60,7 +66,7 @@ async fn send(client: &reqwest::Client, appstate: &AppState, d: &Delivery) {
         let res = client
             .post(endpoint)
             .header("content-type", "application/json")
-            .body(push_body(d).to_string())
+            .body(push_body(d, appstate.config.opts.notify_push_content).to_string())
             .send()
             .await;
         if let Err(e) = res {
@@ -112,6 +118,25 @@ pub fn spawn(appstate: AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn push_bodies_leave_out_titles_unless_asked() {
+        let d = Delivery {
+            agent: "a".into(),
+            notification: "n".into(),
+            kind: "changed".into(),
+            title: "Besloten stuk".into(),
+            body: "x".into(),
+            about: "s".into(),
+            action_required: false,
+            count: 1,
+            push_endpoints: vec![],
+            email: None,
+            language: "nl".into(),
+        };
+        assert!(push_body(&d, false).get("title").is_none());
+        assert_eq!(push_body(&d, true)["title"], "Besloten stuk");
+    }
 
     #[test]
     fn links_fill_in_the_subject() {

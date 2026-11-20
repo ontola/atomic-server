@@ -191,6 +191,12 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_NOTIFY_WEBHOOK")]
     pub notify_webhook: Option<String>,
 
+    /// Put titles and text in push messages. Off by default, because the push
+    /// service between this server and the device (for example a public ntfy)
+    /// would read them; turn it on when you run that service yourself.
+    #[clap(long, env = "ATOMIC_NOTIFY_PUSH_CONTENT")]
+    pub notify_push_content: bool,
+
     /// Link template for notifications outside the app (mail), with
     /// `{subject}` for what to open, e.g. `https://example.org/app/show?subject={subject}`.
     #[clap(long, env = "ATOMIC_NOTIFY_LINK")]
