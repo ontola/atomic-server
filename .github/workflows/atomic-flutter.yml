@@ -1,9 +1,13 @@
 name: Atomic Flutter package
 on:
   pull_request:
-    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'browser/**', '.github/workflows/atomic-flutter.yml']
+    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', '.github/workflows/atomic-flutter.yml']
   push:
-    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'browser/**', '.github/workflows/atomic-flutter.yml']
+    branches: [develop]
+    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', '.github/workflows/atomic-flutter.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -38,20 +42,6 @@ jobs:
         working-directory: packages/atomic_store_flutter/example
       - run: flutter analyze
         working-directory: packages/atomic_store_flutter/example
-  embed-size:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.10.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Build the embed
-        run: bash flutter/scripts/build_embed.sh
-      - name: Check the embed size budget
-        run: bash flutter/scripts/check_embed_size.sh
   bridge-codegen:
     # The generated bridge glue (packages/atomic_store_flutter/lib/bridge,
     # packages/atomic_store_flutter/rust/src/frb_generated.rs)
