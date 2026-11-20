@@ -16,9 +16,19 @@ export function mockLocalPersistence(
       NonNullable<ReturnType<Store['getClientDb']>>['putResourceWithSnapshot']
     >()
     .mockResolvedValue(undefined);
+  // Loro rows go through putLoroSnapshot; route them into the same spy with
+  // the putResourceWithSnapshot argument layout (subject, jsonAd, snapshot,
+  // outbox) so assertions read one call list either way.
+  const putLoroSnapshot = (
+    subject: string,
+    snapshot: Uint8Array,
+    _lastCommit?: string,
+    outbox?: Parameters<typeof putResourceWithSnapshot>[3],
+  ) => putResourceWithSnapshot(subject, undefined as never, snapshot, outbox);
   vi.spyOn(store, 'getClientDb').mockReturnValue({
     unsupportedEnvironment,
     putResourceWithSnapshot,
+    putLoroSnapshot,
   } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);
 
   return putResourceWithSnapshot;
