@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import React from 'react';
-import {
-  act,
-  cleanup,
-  render,
-  screen,
-  fireEvent,
-} from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../styling';
@@ -66,45 +60,38 @@ vi.mock('../../hooks/useConnectDeviceProps', () => ({
   }),
 }));
 
-it('without a portal shows the pairing form in place, never the sign-in', () => {
+it('without a service shows only the pairing form', () => {
   const onDone = renderContent(null);
 
   expect(screen.queryByText('panel')).toBeNull();
   expect(screen.getByTestId('connect-device-add')).toBeTruthy();
-  // The dialog heading already says it.
-  expect(
-    screen.queryByRole('heading', { name: 'Connect a device' }),
-  ).toBeNull();
-  expect(screen.queryByText('atomic.place')).toBeNull();
   expect(onDone).not.toHaveBeenCalled();
 });
 
-function Switcher() {
-  const [portal, setPortal] = React.useState<string | null>(null);
+it('with a service shows the sign-in with pairing below it', () => {
+  renderContent('https://portal.example');
 
-  return (
-    <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
-      <SaveWorkContent
-        portalUrl={portal}
-        onDone={vi.fn()}
-        onChoosePortal={() => setPortal('https://atomic.place')}
-        onBack={portal ? () => setPortal(null) : undefined}
-      />
-    </ThemeProvider>
+  const panel = screen.getByText('panel');
+  const pairing = screen.getByTestId('connect-device-add');
+
+  expect(
+    panel.compareDocumentPosition(pairing) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
+it('names where the email goes when the service is not this site', () => {
+  state.cookie = false;
+  renderContent('https://portal.example');
+
+  expect(screen.getByTestId('save-work-disclosure').textContent).toBe(
+    'Your email and an encrypted backup of your identity go to portal.example.',
   );
-}
+});
 
-it('offers signing in with atomic.place, and Back returns to pairing', () => {
-  render(<Switcher />);
+it('says nothing about it on the service’s own site', () => {
+  renderContent('https://portal.example');
 
-  expect(screen.queryByText('panel')).toBeNull();
-  fireEvent.click(screen.getByTestId('save-work-choose-portal'));
-  expect(screen.getByText('panel')).toBeTruthy();
-  expect(screen.queryByTestId('connect-device-add')).toBeNull();
-
-  fireEvent.click(screen.getByTestId('save-work-back'));
-  expect(screen.getByTestId('connect-device-add')).toBeTruthy();
-  expect(screen.queryByText('panel')).toBeNull();
+  expect(screen.queryByTestId('save-work-disclosure')).toBeNull();
 });
 
 it('without a portal closes once a device link makes the identity linked', () => {
@@ -112,13 +99,6 @@ it('without a portal closes once a device link makes the identity linked', () =>
 
   act(() => writeManagedAccountBinding('ann@example.com', 'did:ad:agent:abc'));
   expect(onDone).toHaveBeenCalled();
-});
-
-it('with a portal shows the same sign-in panel everywhere else uses', () => {
-  renderContent('https://portal.example');
-
-  expect(screen.getByText('panel')).toBeTruthy();
-  expect(screen.queryByTestId('connect-device')).toBeNull();
 });
 
 it('uses the browser sign-in where the app cannot hold the cookie', () => {

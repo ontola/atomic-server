@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { toast } from 'react-hot-toast';
 import {
@@ -9,7 +9,7 @@ import {
   useDialog,
 } from '../Dialog';
 import { Button } from '../Button';
-import { Column, Row } from '../Row';
+import { Column } from '../Row';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
@@ -21,49 +21,34 @@ import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
 import { useKnownPortalUrl } from '../../hooks/useKnownPortalUrl';
 import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
 import { ConnectDevice } from '../ConnectDevice';
-import { ATOMIC_PLACE_WEBSITE } from '../Logo';
-import {
-  forgetManagedPortalUrl,
-  rememberManagedPortalUrl,
-  safePortalUrl,
-} from '../../helpers/managed/api';
 import { subscribeSaveWorkDialog } from './saveWorkDialogState';
 
 /**
- * What the dialog offers, by where this install can save to:
- * - with a portal, the same sign-in options as every other screen. Signing up
- *   and signing in are the same buttons; the identity gate then adopts this
- *   device's key as the account's, or hands over when the account has one.
- * - without one (self-hosted), nothing here depends on an account: the way to
- *   keep and reach the work elsewhere is another device.
+ * What the dialog offers, the same in every build: the shared sign-in options
+ * when an account service exists (signing up and signing in are the same
+ * buttons; the identity gate then adopts this device's key as the account's,
+ * or hands over when the account has one), and below them, always, the route
+ * that needs no account: another device.
  */
 /** How long to wait for the account to adopt this identity after sign-in. */
 export const SAVE_ADOPT_TIMEOUT_MS = 20_000;
 
-/**
- * The account portal offered to an install that knows none. Build-time
- * overridable so local testing can point at a local portal.
- */
-export function defaultAccountPortal(): string | null {
-  const fromEnv = import.meta.env?.VITE_DEFAULT_ACCOUNT_PORTAL as
-    | string
-    | undefined;
+function Disclosure({ portalUrl }: { portalUrl: string }): JSX.Element {
+  const host = new URL(portalUrl).host;
 
-  return safePortalUrl(fromEnv || ATOMIC_PLACE_WEBSITE) ?? null;
+  return (
+    <small data-testid='save-work-disclosure'>
+      Your email and an encrypted backup of your identity go to {host}.
+    </small>
+  );
 }
 
 export function SaveWorkContent({
   portalUrl,
   onDone,
-  onChoosePortal,
-  onBack,
 }: {
   portalUrl: string | null;
   onDone: () => void;
-  /** Offer signing in with the default account portal (no portal known). */
-  onChoosePortal?: () => void;
-  /** Set when the portal was chosen here: returns to device pairing. */
-  onBack?: () => void;
 }): JSX.Element {
   const connectDeviceProps = useConnectDeviceProps();
   const linked = useIsLinkedToAccount();
@@ -72,15 +57,15 @@ export function SaveWorkContent({
   const [attempt, setAttempt] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
 
-  // Without a portal, pairing a device is what links this identity, so close
-  // once that happens while the dialog is open (not if it already was).
+  // Pairing a device links this identity too, so close once that happens
+  // while the dialog is open (not if it already was).
   const linkedOnOpen = useRef(linked);
 
   useEffect(() => {
-    if (portalUrl || linked === linkedOnOpen.current) return;
+    if (signedIn || linked === linkedOnOpen.current) return;
 
     if (linked) onDone();
-  }, [portalUrl, linked, onDone]);
+  }, [signedIn, linked, onDone]);
 
   useEffect(() => {
     if (!signedIn || !linked) return;
@@ -105,86 +90,62 @@ export function SaveWorkContent({
     return () => window.clearTimeout(timer);
   }, [signedIn, linked, attempt]);
 
-  if (!portalUrl) {
-    return (
-      <Column gap='1rem'>
-        <p>
-          Only this browser can open your work. Connect another device or sign
-          in, so you can open it elsewhere and don&apos;t lose access.
-        </p>
-        <ConnectDevice {...connectDeviceProps} compact />
-        {onChoosePortal && (
-          <Row gap='0.25rem' center wrapItems>
-            <span>No second device?</span>
-            <Button
-              subtle
-              data-testid='save-work-choose-portal'
-              onClick={onChoosePortal}
-            >
-              Sign in with atomic.place
-            </Button>
-          </Row>
-        )}
-      </Column>
-    );
-  }
-
   return (
     <Column gap='1rem'>
       <p>
         Only this browser can open your work. Sign in or register with your
-        email, so you can open it elsewhere and don&apos;t lose access.
+        email, or connect another device, so you can open it elsewhere and
+        don&apos;t lose access.
       </p>
-      {signedIn && timedOut ? (
-        <Column gap='0.75rem'>
-          <p role='alert' data-testid='save-work-failed'>
-            You are signed in, but saving your work to your account did not
-            finish. Check your connection and try again.
+      {portalUrl &&
+        (signedIn && timedOut ? (
+          <Column gap='0.75rem'>
+            <p role='alert' data-testid='save-work-failed'>
+              You are signed in, but saving your work to your account did not
+              finish. Check your connection and try again.
+            </p>
+            <Button
+              data-testid='save-work-retry'
+              onClick={() => {
+                setTimedOut(false);
+                setAttempt(n => n + 1);
+                // Runs the identity check again.
+                noteManagedSessionChanged();
+              }}
+            >
+              Try again
+            </Button>
+          </Column>
+        ) : signedIn ? (
+          <p role='status' data-testid='save-work-linking'>
+            Saving your work to your account…
           </p>
-          <Button
-            data-testid='save-work-retry'
-            onClick={() => {
-              setTimedOut(false);
-              setAttempt(n => n + 1);
-              // Runs the identity check again.
-              noteManagedSessionChanged();
-            }}
-          >
-            Try again
-          </Button>
-        </Column>
-      ) : signedIn ? (
-        <p role='status' data-testid='save-work-linking'>
-          Saving your work to your account…
-        </p>
-      ) : canHoldProviderCookie(portalUrl) ? (
-        <AccountSignInPanel
-          portalUrl={portalUrl}
-          onSignedIn={() => setSignedIn(true)}
-        />
-      ) : (
-        <AccountSignInViaBrowser
-          portalUrl={portalUrl}
-          onSignedIn={() => setSignedIn(true)}
-        />
-      )}
-      {onBack && !signedIn && (
-        <div>
-          <Button subtle data-testid='save-work-back' onClick={onBack}>
-            Back
-          </Button>
-        </div>
-      )}
+        ) : (
+          <>
+            {canHoldProviderCookie(portalUrl) ? (
+              <AccountSignInPanel
+                portalUrl={portalUrl}
+                onSignedIn={() => setSignedIn(true)}
+              />
+            ) : (
+              <>
+                <AccountSignInViaBrowser
+                  portalUrl={portalUrl}
+                  onSignedIn={() => setSignedIn(true)}
+                />
+                <Disclosure portalUrl={portalUrl} />
+              </>
+            )}
+          </>
+        ))}
+      {!signedIn && <ConnectDevice {...connectDeviceProps} compact />}
     </Column>
   );
 }
 
 /** Shows the Save dialog when something calls `openSaveWorkDialog()`. */
 export function SaveWorkDialogHost(): JSX.Element {
-  const knownPortal = useKnownPortalUrl();
-  // The portal the user picked here, for an install that knows none.
-  const [chosenPortal, setChosenPortal] = useState<string | null>(null);
-  const portalUrl = knownPortal ?? chosenPortal;
+  const portalUrl = useKnownPortalUrl();
   const { pathname } = useLocation();
   const [dialogProps, show, close, visible] = useDialog();
   const [openedOn, setOpenedOn] = useState<string>();
@@ -198,28 +159,6 @@ export function SaveWorkDialogHost(): JSX.Element {
     [show, pathname],
   );
 
-  // Choosing is explicit, so it is remembered for the identity gate and the
-  // managed API; walking away without an account forgets it again, so the
-  // install is not left in portal mode.
-  const choosePortal = () => {
-    const portal = defaultAccountPortal();
-
-    if (!portal) return;
-
-    rememberManagedPortalUrl(portal);
-    setChosenPortal(portal);
-  };
-
-  const back = useCallback(() => {
-    if (!readManagedAccountBinding()) forgetManagedPortalUrl();
-
-    setChosenPortal(null);
-  }, []);
-
-  useEffect(() => {
-    if (!visible && chosenPortal) back();
-  }, [visible, chosenPortal, back]);
-
   // Signing in can send the page elsewhere (the identity gate's hand-over).
   useEffect(() => {
     if (openedOn !== undefined && pathname !== openedOn) {
@@ -231,18 +170,13 @@ export function SaveWorkDialogHost(): JSX.Element {
   return (
     <Dialog {...dialogProps}>
       <DialogTitle>
-        <h1>{portalUrl ? 'Register with email' : 'Connect a device'}</h1>
+        <h1>Save your work</h1>
       </DialogTitle>
       <DialogContent>
         {/* Only while open: the closed dialog stays in the DOM, and a hidden
             second Connect a device form would share the Sync page's ids. */}
         {visible && (
-          <SaveWorkContent
-            portalUrl={portalUrl}
-            onDone={() => close(true)}
-            onChoosePortal={choosePortal}
-            onBack={chosenPortal && !knownPortal ? back : undefined}
-          />
+          <SaveWorkContent portalUrl={portalUrl} onDone={() => close(true)} />
         )}
       </DialogContent>
       <DialogActions>
