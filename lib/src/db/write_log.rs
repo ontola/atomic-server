@@ -142,7 +142,7 @@ impl ProbeCache {
         log: &WriteLog,
         key: &ProbeKey,
         parent_of: impl Fn(&str) -> Option<String>,
-    ) -> Option<String> {
+    ) -> Option<(String, usize)> {
         let mut entries = self.entries.lock().ok()?;
         let entry = entries.map.get_mut(key)?;
         let (now, written) = log.since(entry.generation)?;
@@ -156,7 +156,7 @@ impl ProbeCache {
         }
         entry.generation = now;
         self.hits.fetch_add(1, Ordering::Relaxed);
-        Some(entry.hash.clone())
+        Some((entry.hash.clone(), entry.subjects.len()))
     }
 
     /// Remember `hash`, computed from reads made after `generation` was read.

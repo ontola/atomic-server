@@ -497,33 +497,50 @@ pub async fn handle_frame_full_for_caps(
                 // resource is created by this probe.
                 let drive =
                     crate::Subject::from_raw(&sync.drive, store.get_base_domain().as_deref());
+                let started = web_time::Instant::now();
+                let probe_stats = |outcome: &str, subjects: usize, cached: bool| {
+                    tracing::info!(
+                        target: "sync_stats",
+                        kind = "probe",
+                        drive = %sync.drive,
+                        outcome,
+                        cached,
+                        subjects,
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                    );
+                };
                 if store.get_resource(&drive).await.is_err_and(|error| {
                     error.error_type == crate::errors::AtomicErrorType::NotFoundError
                 }) && admit_unknown_drive(store, &sync.drive, agent)
                 {
+                    probe_stats("unknown_drive", 0, false);
                     return HandleOutput {
                         frames: vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
                         ..Default::default()
                     };
                 }
-                match drive_sync_hash_for_wire_version(
-                    store,
-                    &sync.drive,
-                    agent,
-                    wire,
-                    sync.hash_version,
-                )
-                .await
-                {
-                    Ok(server_hash) if server_hash == sync.drive_hash => {
+                match probe_drive_hash(store, &sync.drive, agent, wire, sync.hash_version).await {
+                    Ok(answer) if answer.hash == sync.drive_hash => {
+                        let outcome = if answer.cached {
+                            "cache_hit"
+                        } else {
+                            "computed_match"
+                        };
+                        probe_stats(outcome, answer.subjects, answer.cached);
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
-                    Ok(_) => vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
-                    Err(reason) => vec![protocol::encode_error(
-                        0,
-                        protocol::error_code::UNAUTHORIZED_READ,
-                        &format!("SYNC refused for {}: {reason}", sync.drive),
-                    )],
+                    Ok(answer) => {
+                        probe_stats("mismatch", answer.subjects, answer.cached);
+                        vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))]
+                    }
+                    Err(reason) => {
+                        probe_stats("refused", 0, false);
+                        vec![protocol::encode_error(
+                            0,
+                            protocol::error_code::UNAUTHORIZED_READ,
+                            &format!("SYNC refused for {}: {reason}", sync.drive),
+                        )]
+                    }
                 }
             }
             Some(sync) => {
@@ -1493,6 +1510,27 @@ pub async fn drive_sync_hash_for_wire_version(
     wire: WireScheme,
     hash_version: u8,
 ) -> Result<String, String> {
+    Ok(probe_drive_hash(store, drive, agent, wire, hash_version)
+        .await?
+        .hash)
+}
+
+/// A probe answer and what it cost to get, for the `sync_stats` log line.
+struct ProbeAnswer {
+    hash: String,
+    /// Served from [`ProbeCache`] without walking the drive.
+    cached: bool,
+    /// Subjects found under the drive.
+    subjects: usize,
+}
+
+async fn probe_drive_hash(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Result<ProbeAnswer, String> {
     // A probe over a drive that did not change is answered from the cache,
     // validated against the writes since (see `db::write_log`). Only DID
     // drives: the HTTP-URL walk is a prefix scan the parent test can't mirror.
@@ -1515,8 +1553,12 @@ pub async fn drive_sync_hash_for_wire_version(
                 let parent = propvals.get(crate::urls::PARENT)?;
                 Some(crate::Subject::from(parent.to_string()).pure_id())
             });
-        if let Some(hash) = cached {
-            return Ok(hash);
+        if let Some((hash, subjects)) = cached {
+            return Ok(ProbeAnswer {
+                hash,
+                cached: true,
+                subjects,
+            });
         }
     }
 
@@ -1533,12 +1575,17 @@ pub async fn drive_sync_hash_for_wire_version(
     } else {
         compute_drive_hash(&vvs)
     };
+    let subjects = walk.subjects.len();
     if let Some(key) = key {
         store
             .probe_cache()
             .store(key, generation, hash.clone(), walk.subjects, walk.externals);
     }
-    Ok(hash)
+    Ok(ProbeAnswer {
+        hash,
+        cached: false,
+        subjects,
+    })
 }
 
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH
@@ -1653,6 +1700,7 @@ pub async fn handle_sync_vv_reconcile(
     wire: WireScheme,
     trust_owned: bool,
 ) -> Vec<Vec<u8>> {
+    let started = web_time::Instant::now();
     let canonical_subjects = subjects.map(|set| {
         set.iter()
             .map(|s| crate::Subject::from_raw(s, None).pure_id())
@@ -1693,7 +1741,19 @@ pub async fn handle_sync_vv_reconcile(
         };
 
         if server_hash == drive_hash {
-            tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
+            // The hashes agree, so the client holds as many entries as we do.
+            tracing::info!(
+                target: "sync_stats",
+                kind = "reconcile",
+                drive = %drive,
+                outcome = "computed_match",
+                subjects = server_vvs.len(),
+                client_entries = server_vvs.len(),
+                push = 0,
+                pull = 0,
+                remove = 0,
+                elapsed_ms = started.elapsed().as_millis() as u64,
+            );
 
             return vec![protocol::encode_sync_ok(&wire.subject(drive))];
         }
@@ -1834,11 +1894,16 @@ pub async fn handle_sync_vv_reconcile(
     let push_subjects: Vec<String> = push_entries.iter().map(|(s, _)| s.clone()).collect();
 
     tracing::info!(
-        "SYNC: drive {} — {} to push, {} to pull, {} to remove",
-        drive,
-        push_subjects.len(),
-        pull.len(),
-        remove.len(),
+        target: "sync_stats",
+        kind = "reconcile",
+        drive = %drive,
+        outcome = "mismatch",
+        subjects = server_vvs.len(),
+        client_entries = client_vvs.len(),
+        push = push_subjects.len(),
+        pull = pull.len(),
+        remove = remove.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
     );
 
     // Every subject on the wire follows the peer's scheme; the map keys must
