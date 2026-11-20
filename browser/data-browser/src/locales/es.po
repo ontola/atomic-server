@@ -8180,9 +8180,6 @@ msgstr "<0/> Copiar enlace"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/SendIdentityRoute.tsx
-
-
-#: src/views/Drive/GettingStartedCard.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Hecho"
@@ -13702,7 +13699,6 @@ msgstr "Debe ser como máximo {0}."
 #: src/views/Installation/configFormLogic.ts
 msgid "Must be at least {0} characters."
 msgstr "Debe tener al menos {0} caracteres."
-
 
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all reads done by this app"
