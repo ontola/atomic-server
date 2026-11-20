@@ -1736,10 +1736,15 @@ export class Store {
           report();
         },
         onBlocked: (entry, e) => {
-          this.notifyBlockedSync(
+          const announced = this.notifyBlockedSync(
             entry.subject,
             e instanceof Error ? e.message : String(e),
+            entry.blockedNotified === true,
           );
+
+          // Remembered across reloads (persisted with the entry), so a write
+          // that stays blocked is announced once, not on every page load.
+          if (announced) entry.blockedNotified = true;
         },
       });
 
@@ -5720,7 +5725,11 @@ export class Store {
    * resources they never see. Say it once per drive, in terms of the drive,
    * and say what happens to their edits.
    */
-  private notifyBlockedSync(subject: string, message: string): void {
+  private notifyBlockedSync(
+    subject: string,
+    message: string,
+    alreadyAnnounced = false,
+  ): boolean {
     if (isNotEnrolledMessage(message)) {
       const named = this.refusedDriveOf(message);
       const drive =
@@ -5735,7 +5744,7 @@ export class Store {
           );
         }
 
-        return;
+        return false;
       }
 
       this._notifiedRefusedDrives.add(drive);
@@ -5759,12 +5768,12 @@ export class Store {
           })
           .catch(e => console.warn('[Store] could not report refusal:', e));
 
-        return;
+        return false;
       }
 
       toast();
 
-      return;
+      return false;
     }
 
     if (isMissingParentMessage(message)) {
@@ -5773,7 +5782,7 @@ export class Store {
       // per workspace, in terms of the workspace, and say what to do.
       const drive = this.driveOf(this.normalizeSubject(subject)) ?? subject;
 
-      if (this._notifiedMissingParentDrives.has(drive)) return;
+      if (this._notifiedMissingParentDrives.has(drive)) return false;
 
       this._notifiedMissingParentDrives.add(drive);
       this.notifyError(
@@ -5786,7 +5795,7 @@ export class Store {
         ),
       );
 
-      return;
+      return false;
     }
 
     const missingRight = /\/properties\/(\w+) right has been found/.exec(
@@ -5796,7 +5805,9 @@ export class Store {
     if (missingRight) {
       // Say what happened in the person's terms: which item, what they may
       // not do, that their work is safe, and what resolves it.
-      if (this._notifiedNoRightSubjects.has(subject)) return;
+      if (alreadyAnnounced || this._notifiedNoRightSubjects.has(subject)) {
+        return false;
+      }
 
       this._notifiedNoRightSubjects.add(subject);
 
@@ -5815,12 +5826,15 @@ export class Store {
         new Error(
           `You are not allowed to ${action}, so ${what} was not synced. ` +
             `It is kept on this device. Ask the owner of the drive for ` +
-            `access, or move it somewhere you can edit.`,
+            `access, or move it somewhere you can edit. Review it on the ` +
+            `Sync page, where you can discard it.`,
         ),
       );
 
-      return;
+      return true;
     }
+
+    if (alreadyAnnounced) return false;
 
     this.notifyError(
       new Error(
@@ -5828,6 +5842,8 @@ export class Store {
           `Not retrying; edit again once you have access.`,
       ),
     );
+
+    return true;
   }
 
   /**

@@ -13572,3 +13572,7 @@ msgstr "Credits used: {0} /{1} {2}"
 #: src/components/Presence/PresenceAvatarMenu.tsx
 msgid "Edit profile"
 msgstr "Edit profile"
+
+#: src/components/Toaster.tsx
+msgid "<0/> Report"
+msgstr "<0/> Report"
