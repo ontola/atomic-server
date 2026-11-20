@@ -99,8 +99,8 @@ test.describe('onboarding', () => {
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
 
-    // The signed-out SettingsAgent route opens the canonical sign-in form.
-    await page2.goto(`${FRONTEND_URL}/app/agent`);
+    // The signed-out account settings opens the canonical sign-in form.
+    await page2.goto(`${FRONTEND_URL}/app/settings?section=account`);
     // Cold boot in a fresh context; 7018 to 7806ms at four workers, against
     // the 10s the bare `fill` would have allowed.
     await expect(page2.getByLabel('Agent secret')).toBeVisible({
@@ -108,13 +108,17 @@ test.describe('onboarding', () => {
     });
     await page2.getByLabel('Agent secret').fill(secret!);
 
-    // The agent route passes return_to=agent through the unified sign-in flow.
-    await expect(page2).toHaveURL(/\/app\/agent$/, {
+    // The agent route passes return_to=agent through the unified sign-in flow,
+    // which lands on the account settings.
+    await expect(page2).toHaveURL(/\/app\/settings\?section=account$/, {
       timeout: 10000,
     });
-    await expect(
-      page2.getByRole('heading', { name: 'User', exact: true }),
-    ).toBeVisible({ timeout: 10000 });
+    // Signed in: Sign out lives in the Profile section, which `?section=`
+    // opens on its own.
+    await page2.goto(`${FRONTEND_URL}/app/settings?section=profile`);
+    await expect(page2.locator('[data-test="sign-out"]')).toBeVisible({
+      timeout: 10000,
+    });
 
     // Navigate to the agent's profile edit page to verify the name was saved
     await page2.goto(

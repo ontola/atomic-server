@@ -3,6 +3,14 @@ on:
     branches: [develop]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      e2e:
+        description: >-
+          Playwright suite. auto = full on develop, v* tags and
+          trekmeester/combined-* branches, light (@smoke) on any other branch.
+        type: choice
+        options: [auto, light, full]
+        default: auto
 
 # Feature-branch pushes do not trigger CI. Dispatch full validation explicitly
 # on a temporary branch containing the exact PR heads to test together.
@@ -44,7 +52,33 @@ jobs:
       contents: read
     outputs:
       host: ${{ steps.pick.outputs.host }}
+      e2e_mode: ${{ steps.e2e.outputs.mode }}
     steps:
+      # Light PR gate: unit tests, lint, builds and the @smoke Playwright subset.
+      # The full suite (~2h) runs where a regression must not slip through:
+      # develop, v* tags and the TrekMeester batch branches. A dispatch input
+      # other than `auto` overrides the choice by ref. Anything unexpected falls
+      # back to full, so a typo cannot shrink a release gate.
+      - id: e2e
+        env:
+          REQUESTED: ${{ inputs.e2e || 'auto' }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED" in
+            light|full) mode="$REQUESTED"; why="requested via workflow_dispatch input" ;;
+            auto)
+              case "$REF" in
+                refs/heads/develop|refs/tags/v*|refs/heads/trekmeester/combined-*)
+                  mode=full; why="$REF runs the full suite" ;;
+                *) mode=light; why="$REF is an ordinary branch" ;;
+              esac ;;
+            *) mode=full; why="unknown e2e input '$REQUESTED'" ;;
+          esac
+          echo "Playwright mode: $mode ($why)"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Playwright mode: **$mode** ($why)" >> "$GITHUB_STEP_SUMMARY"
+
       - id: pick
         env:
           FORCE_RUNNER: ${{ vars.CI_RUNNER_OVERRIDE }}
@@ -82,7 +116,7 @@ jobs:
     with:
       runner: ${{ vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]' }}
       host-profile: mancave
-      e2e-mode: full
+      e2e-mode: ${{ needs.pick.outputs.e2e_mode }}
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -254,7 +288,7 @@ jobs:
     with:
       runner: '["ubuntu-latest"]'
       host-profile: hosted
-      e2e-mode: full
+      e2e-mode: ${{ needs.pick.outputs.e2e_mode }}
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

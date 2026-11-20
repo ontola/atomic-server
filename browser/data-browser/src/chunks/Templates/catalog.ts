@@ -95,7 +95,6 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
     parts: [
       table('project-tasks'),
       table('reading-list'),
-      table('bookmarks'),
       {
         key: 'notes',
         kind: 'document',
@@ -105,7 +104,6 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
           '# Try these',
           '- [ ] Add a task to {{project-tasks/table}}',
           '- [ ] Save a book or article in {{reading-list/table}}',
-          '- [ ] Save a link in {{bookmarks/table}}',
         ].join('\n'),
       },
     ],

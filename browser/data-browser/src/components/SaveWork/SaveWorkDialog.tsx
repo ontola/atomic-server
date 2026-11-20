@@ -112,7 +112,7 @@ export function SaveWorkContent({
           Only this browser can open your work. Connect another device or sign
           in, so you can open it elsewhere and don&apos;t lose access.
         </p>
-        <ConnectDevice {...connectDeviceProps} hideTitle />
+        <ConnectDevice {...connectDeviceProps} compact />
         {onChoosePortal && (
           <Row gap='0.25rem' center wrapItems>
             <span>No second device?</span>

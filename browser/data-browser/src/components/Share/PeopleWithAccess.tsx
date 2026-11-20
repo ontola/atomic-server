@@ -2,7 +2,7 @@ import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { urls, useResource, useTitle } from '@tomic/react';
-import { AgentAvatar } from '../Presence/AgentAvatar';
+import { PresenceAvatarMenu } from '../Presence/PresenceAvatarMenu';
 import { RoleSelect, roleLabel, type ShareRole } from './RoleSelect';
 import type { DirectRight } from './useShareRights';
 import type { MergedRight } from '../../routes/Share/useRights';
@@ -172,7 +172,11 @@ function PersonRow({
 
   return (
     <Row data-test='share-person'>
-      <AgentAvatar agentSubject={agentSubject} size='2.6rem' />
+      <PresenceAvatarMenu
+        agentSubject={agentSubject}
+        size='2.6rem'
+        chip={false}
+      />
       <Who>
         <Name>
           <ProfileLink subject={agentSubject} clean>

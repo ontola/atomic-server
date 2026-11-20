@@ -284,5 +284,100 @@
     "https://atomicdata.dev/properties/read": [
       "https://atomicdata.dev/agents/publicAgent"
     ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1/website-design",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Website design",
+    "https://atomicdata.dev/properties/shortname": "website-design",
+    "https://atomicdata.dev/properties/description": "Draft routes, appearance and explicitly selected content. JSON text.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1/website-release",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Website release",
+    "https://atomicdata.dev/properties/shortname": "website-release",
+    "https://atomicdata.dev/properties/description": "A private frozen static export. This does not make the website public.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1/website-artifact",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Website artifact",
+    "https://atomicdata.dev/properties/shortname": "website-artifact",
+    "https://atomicdata.dev/properties/description": "Versioned static release manifest as JSON text.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1/website-project",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/name": "Website",
+    "https://atomicdata.dev/properties/shortname": "website-project",
+    "https://atomicdata.dev/properties/description": "A website authored in Atomic Assistant, using existing documents and tables.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/website/v1/website-design"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1/website-export",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/name": "Website export",
+    "https://atomicdata.dev/properties/shortname": "website-export",
+    "https://atomicdata.dev/properties/description": "A frozen website ready for static hosting.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/website/v1/website-artifact"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/website/v1",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/name": "Website vocabulary v1",
+    "https://atomicdata.dev/properties/shortname": "website-v1",
+    "https://atomicdata.dev/properties/description": "Experimental shared terms for websites authored in Atomic Assistant and their frozen static exports.",
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/website/v1/website-design",
+      "https://atomicdata.dev/website/v1/website-release",
+      "https://atomicdata.dev/website/v1/website-artifact"
+    ],
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/website/v1/website-project",
+      "https://atomicdata.dev/website/v1/website-export"
+    ],
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
   }
 ]

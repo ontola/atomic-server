@@ -17,6 +17,7 @@ const contact = 'https://atomicdata.dev/contact/v1/';
 const pipeline = 'https://atomicdata.dev/pipeline/v1/';
 const money = 'https://atomicdata.dev/money/v1/';
 const preferences = 'https://atomicdata.dev/preferences/v1/';
+const website = 'https://atomicdata.dev/website/v1/';
 
 export const workSchema = {
   properties: {
@@ -60,6 +61,22 @@ export const preferencesSchema = {
   },
 } as const;
 
+/**
+ * Websites authored in Atomic Assistant and their frozen exports. Websites
+ * created before this vocabulary used per-drive terms; see `websiteModel.ts`.
+ */
+export const websiteSchema = {
+  properties: {
+    design: `${website}website-design`,
+    release: `${website}website-release`,
+    artifact: `${website}website-artifact`,
+  },
+  classes: {
+    project: `${website}website-project`,
+    export: `${website}website-export`,
+  },
+} as const;
+
 /** Ontology subjects of the shared vocabularies. */
 export const sharedVocabularyOntologies = [
   'https://atomicdata.dev/work/v1',
@@ -67,6 +84,7 @@ export const sharedVocabularyOntologies = [
   'https://atomicdata.dev/pipeline/v1',
   'https://atomicdata.dev/money/v1',
   'https://atomicdata.dev/preferences/v1',
+  'https://atomicdata.dev/website/v1',
 ] as const;
 
 /** Every property of the shared vocabularies. */
@@ -76,4 +94,10 @@ export const sharedVocabularyProperties: readonly string[] = [
   ...Object.values(pipelineSchema.properties),
   ...Object.values(moneySchema.properties),
   ...Object.values(preferencesSchema.properties),
+  ...Object.values(websiteSchema.properties),
+];
+
+/** Every class of the shared vocabularies. */
+export const sharedVocabularyClasses: readonly string[] = [
+  ...Object.values(websiteSchema.classes),
 ];

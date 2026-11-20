@@ -70,7 +70,13 @@ function StoragePage() {
       onOpen={subject => navigate(constructOpenURL(subject))}
       backTo={
         <p>
-          <Link to={paths.sync}>Back to sync settings</Link>
+          <Link
+            to={paths.appSettings}
+            // The router's loose typing does not know this route's search params.
+            search={{ section: 'sync' } as never}
+          >
+            Back to sync settings
+          </Link>
         </p>
       }
     />

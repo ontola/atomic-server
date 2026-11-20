@@ -198,7 +198,7 @@ test('the conflict dialog brings the workspace along after a failed try', async 
   // Client-side navigation, so the patched store stays.
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.evaluate(() => {
-    window.history.pushState({}, '', '/app/agent');
+    window.history.pushState({}, '', '/app/settings');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
   const dialog = page.getByTestId('identity-conflict');

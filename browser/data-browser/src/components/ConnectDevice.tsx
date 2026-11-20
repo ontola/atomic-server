@@ -37,8 +37,8 @@ interface ConnectDeviceProps {
   /** The address a browser tab reads from, named when showing its code. */
   serverName: string;
   onAddServer: (url: string) => void;
-  /** Leave out the heading when the surrounding screen already says it. */
-  hideTitle?: boolean;
+  /** Smaller and quieter for a dialog: no explanatory note, a smaller QR. */
+  compact?: boolean;
 }
 
 /**
@@ -59,7 +59,7 @@ export function ConnectDevice({
   canTakeCode,
   serverName,
   onAddServer,
-  hideTitle,
+  compact,
 }: ConnectDeviceProps): JSX.Element {
   const [input, setInput] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -120,10 +120,9 @@ export function ConnectDevice({
       id={SECTION_ID}
       tabIndex={-1}
       data-testid='connect-device'
-      $embedded={hideTitle}
+      $embedded={compact}
     >
-      {!hideTitle && <Title>Connect a device</Title>}
-      {!hideTitle && (
+      {!compact && (
         <Note>
           {showPairing
             ? 'Codes only route. Your key still decides what syncs.'
@@ -140,7 +139,7 @@ export function ConnectDevice({
                 : `Scan from your other device to sync with ${serverName}.`}
             </Hint>
             <Centered>
-              <PairingCode nodeDid={pairNodeDid} compact={hideTitle} />
+              <PairingCode nodeDid={pairNodeDid} compact={compact} />
             </Centered>
           </Side>
         )}
@@ -200,11 +199,6 @@ const Section = styled.section<{ $embedded?: boolean }>`
   &:focus {
     outline: none;
   }
-`;
-
-const Title = styled.h2`
-  font-size: 1.1rem;
-  margin-bottom: 0.8rem;
 `;
 
 const Note = styled.p`
