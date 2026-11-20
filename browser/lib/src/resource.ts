@@ -294,6 +294,9 @@ export class Resource<C extends OptionalClass = any> {
    *  creates on mount — is never POSTed: it's just GC'd when discarded.
    *  `save()` moves it into the outbox to drain. See sign-at-drain. */
   private _pendingGenesis?: Commit;
+  /** Signed local-only commits awaiting a successful snapshot write. Retain
+   * them across storage failures so retry persists and publishes the same work. */
+  private _pendingLocalCommits: Commit[] = [];
 
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
@@ -2166,9 +2169,11 @@ export class Resource<C extends OptionalClass = any> {
    *    relies on that difference (see `hydrateResourceFromJson`).
    * Whether `save()` has work to do is the wider question answered in
    * `saveOnce`: this flag, a pending genesis, or an outbox entry.
+   * Signed local-only commits whose snapshot write failed also count: signing
+   * advances the cursor, but those edits still need persistence on retry.
    */
   public hasUnsavedChanges(): boolean {
-    return this._dirty;
+    return this._dirty || this._pendingLocalCommits.length > 0;
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
@@ -3831,6 +3836,13 @@ export class Resource<C extends OptionalClass = any> {
 
     try {
       return await this._saveInner(hasChanges);
+    } catch (error) {
+      // Local-only saves and failed offline fallbacks also need an observable
+      // error: neither may appear idle or safely queued after a failed write.
+      this.commitError =
+        error instanceof Error ? error : new Error(String(error));
+      this.applyToStore('local-pre-push');
+      throw error;
     } finally {
       closeSave();
       this._saveDepth--;
@@ -4002,8 +4014,6 @@ export class Resource<C extends OptionalClass = any> {
         return 'offline';
       }
 
-      this.commitError = e;
-      this.applyToStore('local-pre-push');
       throw e;
     }
   }
@@ -4021,7 +4031,7 @@ export class Resource<C extends OptionalClass = any> {
     agent: Agent,
     hasChanges: boolean,
   ): Promise<SaveResult> {
-    const settled: Commit[] = [];
+    const settled = this._pendingLocalCommits;
     const genesis = this._pendingGenesis;
     this._pendingGenesis = undefined;
 
@@ -4052,11 +4062,18 @@ export class Resource<C extends OptionalClass = any> {
 
     for (const commit of settled) {
       this.setLastCommitValue(commitSubject(commit.signature));
-      this.store.logLocalOnlyCommitSettled(commit);
     }
 
-    await this.persistToClientDb();
-    for (const commit of settled) this.store.publishPeerCommit(commit);
+    await this.persistToClientDb(undefined, { required: true });
+
+    while (settled.length > 0) {
+      const commit = settled[0];
+      this.store.logLocalOnlyCommitSettled(commit);
+      this.store.publishPeerCommit(commit);
+      // A listener can throw. Keep this and later envelopes retryable until
+      // both notifications finish; duplicate signatures are safe to replay.
+      settled.shift();
+    }
 
     this.commitError = undefined;
     this.loading = false;
@@ -4114,7 +4131,7 @@ export class Resource<C extends OptionalClass = any> {
     await this.store.outbox.recordOfflineSave(
       this.subject,
       { baseVersion, dirty: markDirty },
-      outbox => this.persistToClientDb(outbox),
+      outbox => this.persistToClientDb(outbox, { required: true }),
     );
 
     this.commitError = undefined;
@@ -4137,11 +4154,13 @@ export class Resource<C extends OptionalClass = any> {
    *
    * `outbox` rows are written in the same worker message and flush, when
    * the outbox lives in this database. Resolves `true` when they were.
+   * With `required`, unavailable storage rejects instead of skipping the write.
    *
    * @internal store-level / offline-persistence only.
    */
   public async persistToClientDb(
     outbox?: ClientDbOutboxWrite,
+    options: { required?: boolean } = {},
   ): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
@@ -4166,7 +4185,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const clientDb = this.store.getClientDb();
-    if (!clientDb || clientDb.unsupportedEnvironment) return false;
+
+    if (!clientDb || clientDb.unsupportedEnvironment) {
+      if (options.required) {
+        throw new Error(
+          'Changes could not be saved on this device. Keep this window open and retry when storage or the server is available.',
+        );
+      }
+
+      // An online save can succeed on server acceptance without a local cache.
+      return false;
+    }
 
     // Rows for the queue's own database only; otherwise the outbox writes
     // them itself once this resolves.

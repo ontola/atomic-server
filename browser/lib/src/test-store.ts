@@ -4,6 +4,26 @@ import { Agent } from './agent.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import type { Commit } from './commit.js';
 
+/** Opt-in worker-boundary stub for tests that need successful local writes.
+ * This is an in-memory acknowledgement, not evidence of durable storage.
+ * The default testStore intentionally has no client database. */
+export function mockLocalPersistence(
+  store: Store,
+  unsupportedEnvironment = false,
+) {
+  const putResourceWithSnapshot = vi
+    .fn<
+      NonNullable<ReturnType<Store['getClientDb']>>['putResourceWithSnapshot']
+    >()
+    .mockResolvedValue(undefined);
+  vi.spyOn(store, 'getClientDb').mockReturnValue({
+    unsupportedEnvironment,
+    putResourceWithSnapshot,
+  } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);
+
+  return putResourceWithSnapshot;
+}
+
 export interface TestStore {
   store: Store;
   agentDID: string;

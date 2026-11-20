@@ -11,7 +11,7 @@ import {
 import { core } from './ontologies/core.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { server } from './ontologies/server.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 
 async function createWorkspace(
   store: Awaited<ReturnType<typeof testStore>>['store'],
@@ -311,6 +311,7 @@ describe('an issued agent queued while offline', () => {
     const drive = await createWorkspace(store, agentDID, 'Apps');
 
     store.setServerConnected(false);
+    mockLocalPersistence(store);
 
     const folder = await store.newResource({
       parent: drive.subject,
