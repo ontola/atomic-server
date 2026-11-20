@@ -458,13 +458,10 @@ pub trait Storelike: Sized + Send + Sync {
 
     /// Retrieves a Class from the store by subject URL and converts it into a Class useful for forms
     async fn get_class(&self, subject: &str) -> AtomicResult<Class> {
-        let resource = self
-            .get_resource(&subject.into())
-            .await
-            .map_err(|e| {
-                AtomicError::from(format!("Failed getting class {}. {}", subject, e))
-                    .with_code(crate::sync::protocol::error_code::MISSING_CLASS)
-            })?;
+        let resource = self.get_resource(&subject.into()).await.map_err(|e| {
+            AtomicError::from(format!("Failed getting class {}. {}", subject, e))
+                .with_code(crate::sync::protocol::error_code::MISSING_CLASS)
+        })?;
         Class::from_resource(resource)
     }
 

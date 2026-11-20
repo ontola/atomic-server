@@ -968,9 +968,7 @@ impl CommitAck {
                     None => protocol::encode_commit_ok(request_id, commit_json),
                 }
             }
-            Err(e) => {
-                protocol::encode_error(request_id, e.refusal_code(), &e.to_string())
-            }
+            Err(e) => protocol::encode_error(request_id, e.refusal_code(), &e.to_string()),
         }
     }
 }

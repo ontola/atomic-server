@@ -901,12 +901,20 @@ mod tests {
         for line in block.lines() {
             if let Some(rest) = line.trim().strip_prefix("pub const ") {
                 let (name, value) = rest.split_once(": u16 = ").unwrap();
-                declared.push((name.to_string(), value.trim_end_matches(';').parse::<u64>().unwrap()));
+                declared.push((
+                    name.to_string(),
+                    value.trim_end_matches(';').parse::<u64>().unwrap(),
+                ));
             }
         }
         let rows: Vec<(String, u64)> = fixture()
             .iter()
-            .map(|r| (r["name"].as_str().unwrap().to_string(), r["code"].as_u64().unwrap()))
+            .map(|r| {
+                (
+                    r["name"].as_str().unwrap().to_string(),
+                    r["code"].as_u64().unwrap(),
+                )
+            })
             .collect();
         assert_eq!(declared, rows);
     }
@@ -918,7 +926,12 @@ mod tests {
         let (subject, edit) = create_and_edit(&device, &drive).await;
         let outbox = Outbox::new(device.clone());
         outbox.mark_dirty(&edit).await.unwrap();
-        assert!(outbox.get(&subject).unwrap().unwrap().base_version.is_some());
+        assert!(outbox
+            .get(&subject)
+            .unwrap()
+            .unwrap()
+            .base_version
+            .is_some());
 
         let mut transport = Refusing(CommitRefused {
             code: error_code::PENDING_DEPS,

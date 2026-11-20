@@ -537,8 +537,10 @@ fn check_rights_impl<'a, S: Storelike>(
                             .await?;
                     check_rights_cached(store, &target, for_agent_enum, right, cache).await
                 }
-                Right::Write => Err(crate::errors::AtomicError::from("Commits cannot be edited.")
-                    .with_code(crate::sync::protocol::error_code::IMMUTABLE_COMMIT)),
+                Right::Write => Err(
+                    crate::errors::AtomicError::from("Commits cannot be edited.")
+                        .with_code(crate::sync::protocol::error_code::IMMUTABLE_COMMIT),
+                ),
                 Right::Append => {
                     Err("Commits cannot have children, you cannot Append to them.".into())
                 }
