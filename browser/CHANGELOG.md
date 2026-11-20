@@ -35,6 +35,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - `@tomic/lib`: removed the deprecated `timeTrackingSchema` export (unused); use `workSchema` instead.
 
 - Fixed: the person's profile name and picture went missing on other devices and for collaborators once their drive was hosted on a node ("Signed in" in the sidebar, raw agent ids in activity). A full snapshot from a node can no longer replace a local resource that has history of its own (the node's bare agent document was overwriting the real profile), and the agent profile that onboarding kept local-only is now merged with the node's copy and pushed when the personal drive is hosted, including on the next session for accounts already in that state.
+
+- Fix: a guest's work (started with Get started, no account) comes along when they sign up for an account afterwards. The account's new identity replaced the guest without handing its drives over, so the Welcome drive and everything in it disappeared after sign-up.
 - Internal: one `isPlainObject` in @tomic/lib replaces 5 local type guards.
 - Internal: one `isLoopbackHost` in @tomic/lib replaces 12 inline localhost checks.
 - Removed the dead mobile-Tauri frontend code: Android back-button handling, the native QR scanner ("Scan a QR code" button) and the `@tauri-apps/plugin-barcode-scanner` dependency. The mobile app is the Flutter app; Tauri is desktop only. Pairing codes are still pasted or typed.
