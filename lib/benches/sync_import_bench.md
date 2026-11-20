@@ -76,7 +76,7 @@ carrying 24,449,650 bytes. All runs passed state, projection, version vector,
 history metadata, envelope, complete search and reopen checks. Fixture
 preparation and validation beyond the search checks are outside the timer.
 
-[Per-run JSON](sync_import_search_state_2026_10_30.json) includes every sample,
+The per-run JSON (not checked in) includes every sample,
 summary arithmetic, binary and fixture-manifest hashes, harness hash, build
 profile, base revision and host load observations. Fixture databases contain
 signing credentials and are intentionally not checked in; only invented data
