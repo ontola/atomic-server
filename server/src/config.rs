@@ -181,6 +181,21 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_EMAIL")]
     pub email: Option<String>,
 
+    /// How often (seconds) the notifier looks for things to tell people
+    /// (`atomic_lib::notify`). 0 turns it off.
+    #[clap(long, default_value = "30", env = "ATOMIC_NOTIFY_INTERVAL")]
+    pub notify_interval: u64,
+
+    /// A URL that receives each notification to be mailed, as a JSON POST, when
+    /// no embedder sends mail itself. Without it, nothing is mailed.
+    #[clap(long, env = "ATOMIC_NOTIFY_WEBHOOK")]
+    pub notify_webhook: Option<String>,
+
+    /// Link template for notifications outside the app (mail), with
+    /// `{subject}` for what to open, e.g. `https://example.org/app/show?subject={subject}`.
+    #[clap(long, env = "ATOMIC_NOTIFY_LINK")]
+    pub notify_link: Option<String>,
+
     /// Custom JS script to include in the body of the HTML template
     #[clap(long, default_value = "", env = "ATOMIC_SCRIPT")]
     pub script: String,

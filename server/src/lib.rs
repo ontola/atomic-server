@@ -24,6 +24,7 @@ mod jsonerrors;
 pub mod mcp;
 mod metrics;
 pub mod node_key;
+pub mod notifier;
 pub mod plugins;
 pub mod rate_limit;
 pub mod routes;

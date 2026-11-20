@@ -491,6 +491,9 @@ where
     // Deletes file blobs nothing references any more, in the background.
     crate::blob_storage::spawn_gc(appstate.clone())?;
 
+    // Tells people about what they follow (`atomic_lib::notify`).
+    crate::notifier::spawn(appstate.clone());
+
     // Runs plugins nobody is watching. Sleeps on a server with no schedules.
     #[cfg(feature = "wasm-plugins")]
     crate::plugins::scheduler::spawn(appstate.clone());

@@ -6,10 +6,13 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
     "https://atomicdata.dev/properties/shortname": "notifications",
-    "https://atomicdata.dev/properties/description": "Telling someone that something happened that concerns them: a new message in a chat they're in, a comment on something they made, a reply to them. Each event becomes a Notification in the Inbox of the recipient's private drive, so what they have read is the same on every device.\n\nToday the recipient's own apps write the Notifications, from data they can already read. The Inbox is also where others will be able to deliver to later (a first message from a stranger, a service, a bridge to another network), through a narrow right to append new items that only the recipient can read. See `planning/authorization-sync.md`.",
+    "https://atomicdata.dev/properties/description": "Telling someone that something happened that concerns them: a new message in a chat they're in, a comment on something they made, a reply to them. Each event becomes a Notification in the Inbox of the recipient's private drive, so what they have read is the same on every device.\n\nToday the recipient's own apps write the Notifications, from data they can already read. The Inbox is also where others will be able to deliver to later (a first message from a stranger, a service, a bridge to another network), through a narrow right to append new items that only the recipient can read. See `planning/authorization-sync.md`.\n\nThe server notifier (`lib/src/notify.rs`) also writes into the Inbox, for what its owner follows (`Follow`) and for `Announcement`s addressed to them, and hands each new Notification to push (`PushRegistration`) and e-mail. Preferences live on the Inbox. See `planning/notifications.md`.",
     "https://atomicdata.dev/properties/classes": [
       "https://atomicdata.dev/classes/Inbox",
-      "https://atomicdata.dev/classes/Notification"
+      "https://atomicdata.dev/classes/Notification",
+      "https://atomicdata.dev/classes/Follow",
+      "https://atomicdata.dev/classes/PushRegistration",
+      "https://atomicdata.dev/classes/Announcement"
     ],
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/properties/inbox",
@@ -17,7 +20,19 @@
       "https://atomicdata.dev/properties/notificationKind",
       "https://atomicdata.dev/properties/actor",
       "https://atomicdata.dev/properties/occurredAt",
-      "https://atomicdata.dev/properties/readAt"
+      "https://atomicdata.dev/properties/readAt",
+      "https://atomicdata.dev/properties/followLevel",
+      "https://atomicdata.dev/properties/followClasses",
+      "https://atomicdata.dev/properties/followProperties",
+      "https://atomicdata.dev/properties/recipients",
+      "https://atomicdata.dev/properties/actionRequired",
+      "https://atomicdata.dev/properties/notificationCount",
+      "https://atomicdata.dev/properties/changedProperties",
+      "https://atomicdata.dev/properties/notifyEmail",
+      "https://atomicdata.dev/properties/emailFrequency",
+      "https://atomicdata.dev/properties/mutedNotificationKinds",
+      "https://atomicdata.dev/properties/notifyLanguage",
+      "https://atomicdata.dev/properties/pushEndpoint"
     ]
   },
   {
@@ -114,5 +129,179 @@
     "https://atomicdata.dev/properties/shortname": "read-at",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
     "https://atomicdata.dev/properties/description": "When the recipient read this Notification. Absent while it is unread."
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Follow",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "follow",
+    "https://atomicdata.dev/properties/description": "Something the owner of the Inbox it is in wants to hear about: `about` (a resource, folder or drive, and everything below it), at a `followLevel`. `followClasses` and `followProperties` narrow it. The nearest Follow above a change decides, so a muted folder inside a followed drive stays quiet.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/about"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/followLevel",
+      "https://atomicdata.dev/properties/followClasses",
+      "https://atomicdata.dev/properties/followProperties"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/PushRegistration",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "push-registration",
+    "https://atomicdata.dev/properties/description": "One device of the Inbox's owner that wants push messages while its app is closed. `pushEndpoint` is the URL its push distributor (for example a UnifiedPush app) gave it; the server POSTs a small JSON message there.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/pushEndpoint"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Announcement",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "announcement",
+    "https://atomicdata.dev/properties/description": "Someone telling chosen `recipients` about `about`, for example a new version of a document, whether or not they follow it. `actionRequired` marks that the recipient has to do something. Each recipient who can read it gets one Notification. Only someone who may write where the Announcement is can send one.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/recipients"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/about",
+      "https://atomicdata.dev/properties/actionRequired"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/followLevel",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "follow-level",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "`everything` (new items and changes), `newItems` (only new resources below `about`) or `muted` (nothing, also not what a Follow higher up would send)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/followClasses",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "follow-classes",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "Only resources of one of these classes notify. Empty: any class.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Class"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/followProperties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "follow-properties",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "Only changes to one of these properties notify (new items always do). Empty: any change.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/recipients",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "recipients",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The agents an Announcement is for.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/actionRequired",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "action-required",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "The recipient is expected to do something about it."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notificationCount",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "notification-count",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "How many events one Notification stands for (edits are batched, and an unread Notification grows instead of getting a sibling)."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/changedProperties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "changed-properties",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "For a `changed` Notification: which properties changed.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notifyEmail",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "notify-email",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "On the Inbox: where to mail Notifications, for servers that do not know the owner's address from an account. Only read from an Inbox in a drive that nobody but its owner reads or writes."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/emailFrequency",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "email-frequency",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "On the Inbox: `instant` (a mail per Notification), `daily` (one mail a day with what is still unread) or `off`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/mutedNotificationKinds",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "muted-notification-kinds",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "On the Inbox: Notification kinds the owner does not want, such as `[\"changed\"]`. Kinds: `created`, `changed`, `announcement`, `chat`, `comment`, `reply`, `mention`."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/notifyLanguage",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "notify-language",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "On the Inbox: the language (BCP 47, such as `nl`) of the texts the server writes for its owner."
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/pushEndpoint",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "push-endpoint",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/uri",
+    "https://atomicdata.dev/properties/description": "The URL a push distributor gave one device. The server POSTs each new Notification there as JSON: `title`, `body`, `about`, `kind`, `notification`, `actionRequired`."
   }
 ]
