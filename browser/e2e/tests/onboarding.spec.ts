@@ -113,6 +113,9 @@ test.describe('onboarding', () => {
     await expect(page2).toHaveURL(/\/app\/settings\?section=account$/, {
       timeout: 10000,
     });
+    // Signed in: Sign out lives in the Profile section, which `?section=`
+    // opens on its own.
+    await page2.goto(`${FRONTEND_URL}/app/settings?section=profile`);
     await expect(page2.locator('[data-test="sign-out"]')).toBeVisible({
       timeout: 10000,
     });
