@@ -110,5 +110,6 @@ The transport only decides how two devices find each other: the commits and the 
 | Keep a Drive available while your devices are off | [Remote peers](remote-peers.md) |
 | Build an app on the engine | [Building on the sync engine](building-on-the-sync-engine.md) |
 | Implement a client or peer | [Wire protocol](../websockets.md) |
+| Compare with a hosted backend | [Atomic vs Supabase and Firebase](vs-supabase-firebase.md) |
 
 The product-level pitch, and what you do not have to build yourself, is on [Local-first Sync Engine](../sync-engine.md).
