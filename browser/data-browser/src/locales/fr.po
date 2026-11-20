@@ -11779,15 +11779,6 @@ msgid "An always-on device has an address. One you carry has a code."
 msgstr "Un appareil toujours allumé a une adresse. Un appareil que vous emportez a un code."
 
 #: src/components/ConnectDevice.tsx
-msgid "Scan this from your other device, or copy the code."
-msgstr "Scannez ceci depuis votre autre appareil, ou copiez le code."
-
-#. 0: serverName
-#: src/components/ConnectDevice.tsx
-msgid "Scan from your other device to sync with {0}."
-msgstr "Scannez depuis votre autre appareil pour synchroniser avec {0}."
-
-#: src/components/ConnectDevice.tsx
 msgid "Show this device"
 msgstr "Afficher cet appareil"
 
@@ -13645,3 +13636,12 @@ msgstr "Enregistre ton travail ici"
 #: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Your email and an encrypted backup of your identity go to {0}."
 msgstr "Ton e-mail et une sauvegarde chiffrée de ton identité sont envoyés à {0}."
+
+#: src/components/ConnectDevice.tsx
+msgid "Scan with the app"
+msgstr "Scanner avec l'app"
+
+#. 0: serverName
+#: src/components/ConnectDevice.tsx
+msgid "Syncs with {0}."
+msgstr "Se synchronise avec {0}."
