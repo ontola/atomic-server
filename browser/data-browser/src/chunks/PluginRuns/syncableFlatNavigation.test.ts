@@ -81,6 +81,7 @@ function fixture(queryGate?: () => Promise<void>) {
   const session = {
     actor: 'atomic:agent:current',
     server: 'https://node.example',
+    writable: true,
   };
   const values = new Map<string, Record<string, unknown>>();
   const source = {
@@ -156,6 +157,7 @@ function fixture(queryGate?: () => Promise<void>) {
           (values.get(subject)?.[core.properties.isA] as string[]) ?? []
         ).includes(klass),
       save: saved,
+      canWrite: async () => [session.writable, undefined],
       set: async (
         key: string,
         value: unknown,
@@ -263,6 +265,29 @@ it('opens a declared relationship as an idempotent sibling filter without provid
     target,
   );
   expect(values.size).toBe(before + 1);
+});
+
+it('requires native target write rights before allocating a saved filter', async () => {
+  const { store, table, row, session, values } = fixture();
+  session.writable = false;
+  const before = JSON.stringify([...values]);
+  await expect(
+    openFlatSyncableRow(store, 'atomic:drive', table, row),
+  ).rejects.toThrow('Write access');
+  expect(store.newResource).not.toHaveBeenCalled();
+  expect(JSON.stringify([...values])).toBe(before);
+});
+
+it('opens an embedded summary as stored data without claiming collection-read provenance', async () => {
+  const { store, table, row, values } = fixture();
+  const config = values.get('atomic:row')![
+    p['syncable-source-config']
+  ] as Record<string, unknown>;
+  delete config.read;
+  expect(await openFlatSyncableRow(store, 'atomic:drive', table, row)).toEqual({
+    subject: row.subject,
+  });
+  expect(store.newResource).not.toHaveBeenCalled();
 });
 
 it('retains the selected scope when opening one entity and refuses removed memberships', async () => {

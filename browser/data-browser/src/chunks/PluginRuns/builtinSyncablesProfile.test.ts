@@ -618,6 +618,59 @@ it('resolves moved child provenance by source identity and revokes it when its s
 });
 
 describe('catalog-derived host relay', () => {
+  it('passes only real journal observations to native reference storage and rechecks cancellation', async () => {
+    const doc = apiDocument();
+    const definition: ReadSelection = {
+      version: 1,
+      resource: 'task',
+      source: { kind: 'bound', bound: selected(doc).collection! },
+    };
+    const flat: SyncAppContext = {
+      ...context,
+      resource: 'task',
+      rule: {
+        subject: 'atomic:rule',
+        resource: 'task',
+        key: readSelectionKey(definition),
+        definition,
+      },
+    };
+    const { proxy, readKeyed } = setupProxy();
+    const actual = { id: 'task-real', name: 'Actual supplied record' };
+    readKeyed.mockImplementation(async url => ({
+      status: 200,
+      headers: {},
+      body: url.pathname.endsWith('/session') ? { id: 7 } : [actual],
+    }));
+    const observed = vi.fn(async () => undefined);
+    let active = true;
+    const transport = syncProxyTransport(
+      proxy,
+      flat,
+      () => {
+        if (!active) throw new Error('Stopped');
+      },
+      { document: doc },
+      undefined,
+      undefined,
+      undefined,
+      observed,
+    );
+    await expect(
+      transport.request!(request('v2/workspaces/14/tasks')),
+    ).rejects.toThrow('filter');
+    expect(observed).not.toHaveBeenCalled();
+    await transport.request!(request());
+    expect(observed).toHaveBeenCalledTimes(1);
+    expect(observed.mock.calls[0]).toMatchObject([
+      [{ raw: actual, entity: { resource: 'task' } }],
+    ]);
+    await transport.request!(request());
+    expect(observed).toHaveBeenCalledTimes(1);
+    active = false;
+    await expect(transport.request!(request())).rejects.toThrow('Stopped');
+    expect(observed).toHaveBeenCalledTimes(1);
+  });
   it('scopes a flat shared table to its exact saved filter and keeps unselected tables read-free', async () => {
     const doc = apiDocument();
     const definition: ReadSelection = {

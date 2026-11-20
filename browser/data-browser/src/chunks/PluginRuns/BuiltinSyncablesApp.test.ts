@@ -387,6 +387,7 @@ it('passes validated installation aliases and blocking warnings into the existin
     expect.any(Function),
     expect.any(Function),
     expect.any(Function),
+    expect.any(Function),
   );
 });
 

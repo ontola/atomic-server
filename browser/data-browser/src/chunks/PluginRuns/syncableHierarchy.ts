@@ -7,6 +7,20 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
   properties: [
     syncableNameProperty,
     {
+      shortname: 'syncable-reference-diagnostics',
+      name: 'Linked record diagnostics',
+      description:
+        'Unresolved catalog-declared linked fields retained alongside raw provider evidence.',
+      datatype: Datatype.JSON,
+    },
+    {
+      shortname: 'syncable-reference-evidence',
+      name: 'Linked record evidence',
+      description:
+        'Declared source field and supplied record that establish an identity-only reference.',
+      datatype: Datatype.JSON,
+    },
+    {
       shortname: 'syncable-entity-table',
       name: 'Canonical entity collection',
       description:
@@ -143,6 +157,13 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
     },
   ],
   classes: [
+    {
+      shortname: 'syncable-reference',
+      name: 'Linked record summary',
+      description:
+        'A catalog-declared linked record whose supplied data may be incomplete.',
+      recommends: ['name', 'syncable-source-config'],
+    },
     {
       shortname: 'syncable-observation',
       name: 'Syncable observation',

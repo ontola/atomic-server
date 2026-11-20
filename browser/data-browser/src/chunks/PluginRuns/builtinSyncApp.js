@@ -12,6 +12,9 @@ import {
   readSelection,
   resolveAuthenticatedPrincipal,
   ontologyShortname,
+  describeResourceFields,
+  resolveResourceField,
+  resolveEntityIdentity,
 } from 'syncables/browser';
 import {
   canonicalValue,
@@ -23,10 +26,14 @@ import {
   ruleSourceKey,
 } from './builtinSyncIdentity.js';
 import { reduceFlatState } from './builtinSyncFlatState.js';
+import { validateSyncableReferenceEvidence } from './builtinSyncReferenceIdentity.js';
 
 const P = 'https://atomicdata.dev/properties/';
 const core = Object.fromEntries(
-  ['name', 'localId', 'parent', 'isA', 'classtype'].map(key => [key, P + key]),
+  ['name', 'localId', 'parent', 'isA', 'classtype', 'requires'].map(key => [
+    key,
+    P + key,
+  ]),
 );
 const tableClass = 'https://atomicdata.dev/classes/Table';
 const viewClass = 'https://atomicdata.dev/classes/View';
@@ -245,8 +252,45 @@ export function createSyncApp(store, context) {
         throw new Error('The source identity is ambiguous');
       if (!matches.length) continue;
       const row = matches[0];
+      const savedConfig = row.get(property('syncable-source-config'));
+      let referenceIdentityProven = false;
+
+      if (!row.hasClasses(expectedClass) && savedConfig?.entityIdentity) {
+        try {
+          referenceIdentityProven = same(
+            resolveEntityIdentity(readDocument(), {
+              resource: savedConfig.resource,
+              record: savedConfig.record,
+              context: savedConfig.context,
+            }),
+            savedConfig.entityIdentity,
+          );
+        } catch {
+          /* Scalar references retain their declaring source evidence. */
+        }
+
+        if (
+          !referenceIdentityProven &&
+          context.schema?.properties['syncable-reference-evidence']
+        )
+          referenceIdentityProven = validateSyncableReferenceEvidence(
+            readDocument(),
+            row.get(property('syncable-reference-evidence')),
+            savedConfig.entityIdentity,
+          );
+      }
+
+      const partialReference =
+        kind === 'record' &&
+        context.schema?.classes['syncable-reference'] &&
+        row.hasClasses(context.schema?.classes['syncable-reference']) &&
+        savedConfig?.version === 3 &&
+        savedConfig.kind === 'record' &&
+        savedConfig.entityIdentity &&
+        referenceIdentityProven &&
+        entitySourceKey(savedConfig) === key;
       if (
-        !row.hasClasses(expectedClass) ||
+        (!row.hasClasses(expectedClass) && !partialReference) ||
         (!aliases.includes(candidate) &&
           row.get(property('syncable-node-kind')) !== kind)
       )
@@ -305,6 +349,9 @@ export function createSyncApp(store, context) {
     return patch(
       row,
       {
+        ...(!isA.every(subject => row.hasClasses(subject))
+          ? { [core.isA]: [...new Set([...(row.get(core.isA) ?? []), ...isA])] }
+          : {}),
         ...(migrated
           ? {
               [property('syncable-source-key')]: key,
@@ -491,10 +538,22 @@ export function createSyncApp(store, context) {
     return subject;
   };
 
+  const apiBindings = new Map();
+
+  const apiProperties = resource => {
+    if (!apiBindings.has(resource))
+      apiBindings.set(resource, {
+        ...context.apiSchema?.properties,
+        ...context.apiSchema?.resourceProperties?.[resource],
+      });
+
+    return apiBindings.get(resource);
+  };
+
   function collectionView(collection) {
     const columns = (collection.presentation?.columns ?? [])
       .flatMap(column => {
-        const subject = context.apiSchema?.properties[column.property];
+        const subject = apiProperties(collection.resource)[column.property];
 
         return subject
           ? [
@@ -524,7 +583,19 @@ export function createSyncApp(store, context) {
     };
   }
 
-  const entityTypes = () => describeEntityTypes(readDocument());
+  let types;
+  const entityTypes = () => (types ??= describeEntityTypes(readDocument()));
+  const resourceFields = new Map();
+
+  const fieldsFor = resource => {
+    if (!resourceFields.has(resource))
+      resourceFields.set(
+        resource,
+        describeResourceFields(readDocument(), resource),
+      );
+
+    return resourceFields.get(resource);
+  };
 
   const entityType = resource => {
     const found = entityTypes().find(item => item.resource === resource);
@@ -1057,6 +1128,9 @@ export function createSyncApp(store, context) {
     }
 
     const counts = { added: 0, changed: 0, unchanged: 0 };
+    const fullClass = rowClass(entityType(context.resource));
+    const required =
+      (await store.getResource(fullClass)).get(core.requires) ?? [];
 
     for (const [key, reduced] of Object.entries(state)) {
       await assertRun();
@@ -1067,18 +1141,124 @@ export function createSyncApp(store, context) {
         rowClass(entityType(context.resource)),
         'record',
       );
+      const descriptors = fieldsFor(context.resource);
+      const linkedFields = new Set(descriptors.map(field => field.property));
+      const bindings = apiProperties(context.resource);
       const values = Object.fromEntries(
-        Object.entries(reduced.values).map(([name, value]) => {
-          const subject = context.apiSchema?.properties[name];
-          if (!subject)
-            throw new Error('The catalog property schema is unavailable');
+        Object.entries(reduced.values)
+          .filter(([name]) => !linkedFields.has(name))
+          .map(([name, value]) => {
+            const subject = bindings[name];
+            if (!subject)
+              throw new Error('The catalog property schema is unavailable');
 
-          return [subject, value];
-        }),
+            return [subject, value];
+          }),
       );
       const removed = reduced.cleared
-        .map(name => context.apiSchema?.properties[name])
+        .map(name => bindings[name])
         .filter(Boolean);
+      const diagnostics = [];
+      const referenceRecord = structuredClone(reduced.raw ?? item.raw);
+
+      for (const descriptor of descriptors) {
+        const name = descriptor.property;
+        if (
+          !Object.hasOwn(reduced.values, name) &&
+          !reduced.cleared.includes(name)
+        )
+          continue;
+        const path = descriptor.field.split('.');
+        let parent = referenceRecord;
+
+        for (const part of path.slice(0, -1)) {
+          if (
+            !Object.hasOwn(parent, part) ||
+            !parent[part] ||
+            typeof parent[part] !== 'object' ||
+            Array.isArray(parent[part])
+          )
+            Object.defineProperty(parent, part, {
+              value: {},
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            });
+          parent = parent[part];
+        }
+
+        // The winning explicit field is authoritative. A changed owner must
+        // never inherit a previous discriminator or ID from a merged snapshot.
+        Object.defineProperty(parent, path.at(-1), {
+          value: reduced.cleared.includes(name)
+            ? null
+            : structuredClone(reduced.values[name]),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      // Targets are prepared natively from the real response journal. Reading
+      // their exact canonical identities never grants this frame sibling writes.
+      for (const descriptor of descriptors) {
+        const resolution = resolveResourceField(
+          readDocument(),
+          descriptor,
+          referenceRecord,
+          item.context,
+        );
+        if (!resolution.present) continue;
+        const subject = bindings[descriptor.property];
+        if (!subject) throw new Error('The catalog link schema is unavailable');
+
+        if (resolution.status !== 'resolved') {
+          removed.push(subject);
+          diagnostics.push(
+            ...resolution.diagnostics.map(diagnostic => ({
+              field: descriptor.field,
+              ...diagnostic,
+            })),
+          );
+          continue;
+        }
+
+        if (resolution.original === null) {
+          removed.push(subject);
+          continue;
+        }
+
+        const targets = [];
+
+        for (const target of resolution.objects) {
+          const targetKey = entitySourceKey({
+            ...context,
+            entityIdentity: target.entity,
+          });
+          const row = await findNode(
+            targetKey,
+            rowClass({ resource: target.resource }),
+            'record',
+          );
+          if (!row) break;
+          targets.push(row.subject);
+        }
+
+        if (
+          targets.length === resolution.objects.length &&
+          (descriptor.cardinality === 'many' || targets.length === 1)
+        )
+          values[subject] =
+            descriptor.cardinality === 'many' ? targets : targets[0];
+        else {
+          removed.push(subject);
+          diagnostics.push({
+            field: descriptor.field,
+            message: 'The linked record is not available in this drive.',
+          });
+        }
+      }
+
       const recordConfig = {
         version: 3,
         kind: 'record',
@@ -1087,14 +1267,14 @@ export function createSyncApp(store, context) {
         principal: context.principal,
         resource: context.resource,
         entityIdentity: item.entity,
-        record: reduced.raw ?? item.raw,
+        record: referenceRecord,
         context: item.context,
         read: item.provenance.read,
         managedProperties: Object.keys(values),
       };
       const intents = relatedCollectionReads(readDocument(), {
         resource: context.resource,
-        record: reduced.raw ?? item.raw,
+        record: referenceRecord,
         context: item.provenance.read.pathParams,
       }).map(navigation => ({
         version: 1,
@@ -1108,7 +1288,7 @@ export function createSyncApp(store, context) {
             kind: 'related',
             origin: {
               entity: item.entity,
-              record: reduced.raw ?? item.raw,
+              record: referenceRecord,
               context: item.context,
               read: item.provenance.read,
             },
@@ -1144,7 +1324,30 @@ export function createSyncApp(store, context) {
         [property('syncable-rule-memberships')]: reduced.memberships,
         [property('syncable-source-config')]: recordConfig,
         [property('syncable-navigation-intents')]: intents,
+        ...(context.schema?.properties['syncable-reference-diagnostics']
+          ? {
+              [property('syncable-reference-diagnostics')]: diagnostics.slice(
+                0,
+                100,
+              ),
+            }
+          : {}),
       };
+      const complete = required.every(subject => {
+        const value = Object.hasOwn(rowValues, subject)
+          ? rowValues[subject]
+          : old?.get(subject);
+
+        return (
+          !removed.includes(subject) && value !== undefined && value !== null
+        );
+      });
+      const rowClasses = [
+        ...(complete || old?.hasClasses(fullClass)
+          ? [fullClass]
+          : [klass('syncable-reference')]),
+        klass('syncable-record'),
+      ];
 
       if (old) {
         if (!(await withinRoot(old.subject))) {
@@ -1158,10 +1361,7 @@ export function createSyncApp(store, context) {
             {
               key,
               kind: 'record',
-              isA: [
-                rowClass(entityType(context.resource)),
-                klass('syncable-record'),
-              ],
+              isA: rowClasses,
               values: rowValues,
             },
             removed,
@@ -1175,10 +1375,7 @@ export function createSyncApp(store, context) {
           kind: 'record',
           parent: root,
           name,
-          isA: [
-            rowClass(entityType(context.resource)),
-            klass('syncable-record'),
-          ],
+          isA: rowClasses,
           values: rowValues,
         });
         counts.added++;

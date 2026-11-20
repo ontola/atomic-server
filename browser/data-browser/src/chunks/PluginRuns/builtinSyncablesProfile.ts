@@ -13,6 +13,7 @@ import {
   compileReadSelection,
   describeEntityTypes,
   type CompiledReadSelection,
+  type EntityObservation,
   type OpenApiDocument,
   type BoundCollection,
   type CollectionNavigation,
@@ -66,6 +67,7 @@ import {
   type ResolvedSyncableRule,
   type SyncableRuleContext,
 } from './syncableRules';
+import type { SyncableApiSchema } from './syncableApiSchema';
 
 export interface TrustedSyncableCatalog {
   document: OpenApiDocument;
@@ -96,10 +98,7 @@ export interface SyncAppContext {
   legacySource?: LegacySyncableSourceKey;
   document?: unknown;
   querySelection?: QuerySelection;
-  apiSchema?: {
-    classes: Record<string, string>;
-    properties: Record<string, string>;
-  };
+  apiSchema?: SyncableApiSchema;
   selection?: string;
   clientContext?: string;
   worker?: boolean;
@@ -725,6 +724,7 @@ export function syncProxyTransport(
   onPrincipalVerified?: (
     proof: VerifiedSyncablePrincipal,
   ) => void | Promise<void>,
+  onObserved?: (observations: readonly EntityObservation[]) => Promise<void>,
 ): ProxyHost {
   const assertCurrent = () => {
     assertSessionCurrent();
@@ -1123,7 +1123,12 @@ export function syncProxyTransport(
         const response = await relay(request, slot, signal, verifiedActive);
         assertReadCurrent();
         signal?.throwIfAborted();
-        await plan.observe(request, response);
+        const observations = await plan.observe(request, response);
+        assertReadCurrent();
+        signal?.throwIfAborted();
+        // Native storage consumes the host-held response journal. The frame
+        // cannot submit evidence or extend its selected-table write root.
+        if (observations.length) await onObserved?.(observations);
         assertReadCurrent();
         signal?.throwIfAborted();
 

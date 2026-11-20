@@ -1314,6 +1314,20 @@ This does not yet prove restoration of the user's private staging workspace.
   stored-data rendering with unrelated schema subjects, typed/enum values,
   cache isolation and navigation checks. The view never creates child collections
   or refreshes a provider; Open revalidates the saved row/target and drive.
+- `syncableReferenceRecords.test.ts` covers native projection of catalog-declared
+  supplied/identity references from host observations, canonical reuse, partial
+  records, raw/custom field preservation and guarded same-drive target writes.
+  `builtinSyncApp.test.ts` covers source links, whole-field invalidation, omitted
+  versus null fields and later partial-record enrichment without new identities.
+  Native response-journal callbacks are covered by `builtinSyncablesProfile.test.ts`.
+- `syncableApiSchema.test.ts` and `syncableApiSchemaViews.test.ts` cover resource-
+  specific link datatypes, retained immutable JSON properties, optional unresolved
+  links, custom class requirements, and positional column/order migration without
+  rewriting filters, sorting or widths. `useSyncableTableNavigation.test.tsx`
+  covers ordinary Table Open, read-only/partial/cold rows, stored-data navigation,
+  stable cell identity and stale async navigation. The native GitHub journey
+  verifies reused owner/author IDs and ordinary Table navigation without another
+  provider request for supplied linked data.
 - `syncablesNavigation.test.ts` and `useSyncablesNavigation.test.tsx` verify that
   canonical collection metadata takes precedence over retained legacy local IDs.
   Adopted collections remain leaves in the sidebar and AI tree; metadata updates

@@ -1,4 +1,5 @@
 import { SyncableFilterBar } from '../PluginRuns/SyncableFilterBar';
+import { useSyncableTableNavigation } from '../PluginRuns/useSyncableTableNavigation';
 import {
   core,
   dataBrowser,
@@ -458,6 +459,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // Configured row-action buttons. Hidden entirely from a viewer who cannot
   // write: a button that is going to be rejected is worse than no button.
   const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
+  const navigationColumns = useSyncableTableNavigation(
+    resource,
+    syncableFilters,
+    viewKind === 'table',
+  );
 
   const addRowAction = useCallback(
     (spec: RowActionSpec) => {
@@ -505,9 +511,14 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const virtualColumns = useMemo(
     () =>
       isTimer
-        ? [...derivedColumns, ...actionColumns, ...timer.columns]
-        : [...derivedColumns, ...actionColumns],
-    [isTimer, derivedColumns, actionColumns, timer.columns],
+        ? [
+            ...derivedColumns,
+            ...actionColumns,
+            ...navigationColumns,
+            ...timer.columns,
+          ]
+        : [...derivedColumns, ...actionColumns, ...navigationColumns],
+    [isTimer, derivedColumns, actionColumns, navigationColumns, timer.columns],
   );
 
   // The default order: stored columns, then the ones the view adds — except in a

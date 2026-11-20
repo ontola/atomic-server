@@ -152,6 +152,7 @@ function issue(
     updated_at:
       state === 'closed' ? '2026-11-14T10:00:00Z' : '2026-11-13T10:00:00Z',
     html_url: `https://github.com/ontola/atomic-server/issues/${number}`,
+    user: { id: 321, login: 'michiel', type: 'User' },
   };
 }
 
@@ -1432,6 +1433,38 @@ test.describe('catalog-driven built-in Syncables', () => {
     const rootState = await sourceState(page, repositoriesSubject);
     expect(rootState.rows).toHaveLength(3);
     const firstRepo = rootState.rows.find(row => row.name === 'atomic-server')!;
+    const organization = (
+      await sourceState(page, organizationsSubject)
+    ).rows.find(row => row.raw?.id === 123)!;
+    expect(firstRepo.managed).toContainEqual(
+      expect.objectContaining({
+        datatype: 'https://atomicdata.dev/datatypes/atomicURL',
+        value: organization.subject,
+      }),
+    );
+    const personalOwner = rootState.rows
+      .find(row => row.name === 'notes')!
+      .managed.find(
+        field =>
+          field.datatype === 'https://atomicdata.dev/datatypes/atomicURL',
+      )!.value as string;
+    const suppliedOwner = await page.evaluate(async subject => {
+      const row = await window.store.getResource(subject);
+
+      return {
+        name: row.get('https://atomicdata.dev/properties/name'),
+        subject: row.subject,
+      };
+    }, personalOwner);
+    expect(suppliedOwner).toEqual({ name: 'michiel', subject: personalOwner });
+    expect(
+      requests.providerRequests.some(
+        path =>
+          path.startsWith('/user/') &&
+          path !== '/user/orgs' &&
+          path !== '/user/repos',
+      ),
+    ).toBe(false);
     expect(firstRepo.managed).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1494,8 +1527,31 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.issueConnections).toHaveLength(0);
 
     const beforeIssueOpen = requests.providerRequests.length;
-    await openRow(page, 'atomic-server');
+    // Ordinary schema-driven Table now provides the same stored relationship
+    // navigation; no custom Collection iframe or provider refresh is needed.
+    await selectView(page, 'Table');
+    const repositoryGrid = page.getByRole('grid');
+    await expect(repositoryGrid).toBeVisible();
+    await testInfo.attach('github-table-record-links-desktop', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await testInfo.attach('github-table-record-links-mobile', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await repositoryGrid
+      .getByRole('row')
+      .filter({ hasText: 'atomic-server' })
+      .getByRole('button', { name: 'Open', exact: true })
+      .click();
+    await expect
+      .poll(() => getCurrentSubject(page))
+      .not.toBe(repositoriesSubject);
     const mirrorSubject = await getCurrentSubject(page);
+    await expect(page.getByRole('grid')).toBeVisible();
     const issuesRule = await selectFilter(page);
     await browse(page);
     expect(requests.providerRequests).toHaveLength(beforeIssueOpen);
@@ -1592,6 +1648,12 @@ test.describe('catalog-driven built-in Syncables', () => {
       ]),
     );
     const imported = initial.rows.find(row => row.raw?.number === 15)!;
+    expect(imported.managed).toContainEqual(
+      expect.objectContaining({
+        datatype: 'https://atomicdata.dev/datatypes/atomicURL',
+        value: personalOwner,
+      }),
+    );
     expect(imported.name).toBe(FIRST_ISSUE_TITLE);
     expect(imported.managed).toEqual(
       expect.arrayContaining([

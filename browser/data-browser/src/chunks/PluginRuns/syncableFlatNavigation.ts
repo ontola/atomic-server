@@ -152,7 +152,6 @@ export async function openFlatSyncableRow(
     source.resource !== record.resource ||
     !record.entityIdentity ||
     !record.record ||
-    !record.read ||
     source.proxyOrigin !== record.proxyOrigin ||
     source.platform !== record.platform ||
     JSON.stringify(canonicalValue(source.principal)) !==
@@ -166,7 +165,12 @@ export async function openFlatSyncableRow(
     throw new Error('This row no longer belongs to this entity collection');
   assertOpen();
   const intents = row.get(p['syncable-navigation-intents']);
-  if (!Array.isArray(intents) || !intents.length)
+  if (
+    !Array.isArray(intents) ||
+    !intents.length ||
+    !record.read ||
+    record.read.resource !== record.resource
+  )
     return { subject: row.subject };
   const intent = intents[0];
   if (
@@ -386,6 +390,18 @@ export async function saveFlatSyncableSelection(
     }
   };
 
+  const assertWritable = async () => {
+    await assertCurrent();
+    const actor = store.getAgent()?.subject;
+    if (!actor) throw new Error('Sign in before saving this filter');
+    const [allowed] = await target.canWrite(actor);
+    await assertCurrent();
+    if (!allowed)
+      throw new Error(
+        'Write access to the target collection is required to save a filter',
+      );
+  };
+
   const ruleKey = readSelectionKey(definition);
   const stableKey = ruleSourceKey(targetKey, ruleKey);
   const ruleQuery = new CollectionBuilder(store)
@@ -416,8 +432,10 @@ export async function saveFlatSyncableSelection(
     )
       throw new Error('The saved filter identity has changed');
   } else {
+    await assertWritable();
     rule = await store.newResource({
       parent: subject,
+      deferGenesis: true,
       isA: dataBrowser.classes.view,
       propVals: {
         [core.properties.name]: name.slice(0, 200),
@@ -435,7 +453,7 @@ export async function saveFlatSyncableSelection(
         } as unknown as JSONValue,
       },
     });
-    await assertCurrent();
+    await assertWritable();
     await rule.save();
     await assertCurrent();
   }
@@ -445,7 +463,7 @@ export async function saveFlatSyncableSelection(
       .getSubjects(dataBrowser.properties.tableViews)
       .includes(rule.subject)
   ) {
-    await assertCurrent();
+    await assertWritable();
     await target.set(
       dataBrowser.properties.tableViews,
       [...target.getSubjects(dataBrowser.properties.tableViews), rule.subject],
@@ -453,7 +471,7 @@ export async function saveFlatSyncableSelection(
       Datatype.RESOURCEARRAY,
       assertMutation,
     );
-    await assertCurrent();
+    await assertWritable();
     await target.save();
     await assertCurrent();
   }

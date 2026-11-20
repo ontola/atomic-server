@@ -1867,6 +1867,9 @@ msgstr "Elige si este recurso aparece en tus favoritos."
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncableCollectionView.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx

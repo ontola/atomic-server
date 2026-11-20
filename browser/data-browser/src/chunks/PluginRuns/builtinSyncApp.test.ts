@@ -7,6 +7,7 @@ import {
   deriveOntology,
   readSelectionKey,
   prepareDocument,
+  resolveEntityIdentity,
   type OpenApiDocument,
 } from 'syncables/browser';
 import {
@@ -16,6 +17,7 @@ import {
 } from './builtinSyncApp.js';
 import {
   entityTableKey,
+  entitySourceKey,
   sourceKey,
   sourceConfigFingerprint,
 } from './builtinSyncIdentity.js';
@@ -42,11 +44,13 @@ const properties = Object.fromEntries(
     'observation',
     'sync-run',
     'entity-table',
+    'reference-diagnostics',
   ].map(name => ['syncable-' + name, 'atomic:' + name]),
 );
 const classes = {
   'syncable-principal': 'atomic:principal',
   'syncable-record': 'atomic:record',
+  'syncable-reference': 'atomic:reference',
   'syncable-observation': 'atomic:observation-class',
   'syncable-sync-run': 'atomic:run-class',
 };
@@ -557,6 +561,177 @@ async function ready() {
 }
 
 describe('catalog-driven Sync through the shared app bridge', () => {
+  it('stores declared links to host-prepared summaries without writing or fetching their targets', async () => {
+    const document = apiDocument();
+    const definitions = document.components!.crudResources as Record<
+      string,
+      Record<string, unknown>
+    >;
+    (
+      definitions.team.schema as { properties: Record<string, unknown> }
+    ).properties.owner = { type: 'object' };
+    (
+      definitions.team.schema as { properties: Record<string, unknown> }
+    ).properties.reviewers = { type: 'array', items: { type: 'object' } };
+    definitions.team['x-embeddedResources'] = {
+      owner: {
+        discriminator: { field: 'type', mapping: { User: 'person' } },
+        cardinality: 'one',
+      },
+      reviewers: { resource: 'person', cardinality: 'many' },
+    };
+    definitions.person = {
+      schema: {
+        type: 'object',
+        properties: { id: { type: 'integer' }, name: { type: 'string' } },
+      },
+      identity: {
+        urlTemplate: '/people/{id}',
+        bindings: { id: { field: 'id' } },
+      },
+    };
+    const set = setup('collection', { document });
+    Object.assign(set.context.apiSchema, {
+      resourceProperties: {
+        team: {
+          ...set.context.apiSchema.properties,
+          owner: 'atomic:owner-link',
+          reviewers: 'atomic:reviewer-links',
+        },
+      },
+    });
+    const owner = { id: 17, name: 'A supplied owner', type: 'User' };
+    const entityIdentity = resolveEntityIdentity(document, {
+      resource: 'person',
+      record: owner,
+    });
+    const key = entitySourceKey({ ...set.context, entityIdentity });
+    set.data.set('atomic:host-prepared-person', {
+      [P + 'isA']: [classes['syncable-reference']],
+      [P + 'parent']: 'atomic:people-table',
+      [prop('source-key')]: key,
+      [prop('node-kind')]: 'record',
+      [prop('source-config')]: {
+        version: 3,
+        kind: 'record',
+        proxyOrigin: origin,
+        platform: set.context.platform,
+        principal,
+        resource: 'person',
+        entityIdentity,
+        record: owner,
+      },
+      [P + 'name']: owner.name,
+      'atomic:custom-notes': 'Keep this',
+    });
+    const snapshot = structuredClone(
+      set.data.get('atomic:host-prepared-person'),
+    );
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ ...team, owner, reviewers: [owner, owner] }],
+    });
+    await set.app.refresh();
+    const rootRow = nodes(set.data, 'record').find(
+      ([, row]) => config(row).resource === 'team',
+    )![1];
+    expect(rootRow['atomic:owner-link']).toBe('atomic:host-prepared-person');
+    expect(rootRow['atomic:reviewer-links']).toEqual([
+      'atomic:host-prepared-person',
+      'atomic:host-prepared-person',
+    ]);
+    expect(rootRow[set.context.apiSchema.properties.owner]).toBeUndefined();
+    expect((config(rootRow).record as Record<string, unknown>).owner).toEqual(
+      owner,
+    );
+    expect(set.data.get('atomic:host-prepared-person')).toEqual(snapshot);
+    expect(
+      set.saves.some(save => save.subject === 'atomic:host-prepared-person'),
+    ).toBe(false);
+    expect(set.request.mock.calls.map(([call]) => call.path)).toEqual([
+      'v2/me/teams',
+    ]);
+
+    for (const unresolved of [{ id: 18, type: 'Robot' }, { id: 18 }]) {
+      set.request.mockResolvedValue({
+        status: 200,
+        headers: {},
+        body: [
+          {
+            ...team,
+            owner: unresolved,
+            reviewers: [owner, { id: '../unsafe' }],
+          },
+        ],
+      });
+      await worker(set, root, 'atomic:initial-rule').refresh();
+      const changed = nodes(set.data, 'record').find(
+        ([, row]) => config(row).resource === 'team',
+      )![1];
+      expect(changed['atomic:owner-link']).toBeUndefined();
+      expect(changed['atomic:reviewer-links']).toBeUndefined();
+      expect((config(changed).record as Record<string, unknown>).owner).toEqual(
+        unresolved,
+      );
+      expect(changed[prop('reference-diagnostics')]).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'owner' })]),
+      );
+    }
+  });
+
+  it('enriches a canonical partial source row without changing its identity or custom fields', async () => {
+    const set = setup();
+    const entityIdentity = resolveEntityIdentity(set.context.document, {
+      resource: 'team',
+      record: team,
+    });
+    const key = entitySourceKey({ ...set.context, entityIdentity });
+    set.data.set('atomic:partial-team', {
+      [P + 'isA']: [classes['syncable-reference'], 'atomic:custom-class'],
+      [P + 'parent']: root,
+      [prop('source-key')]: key,
+      [prop('node-kind')]: 'record',
+      [prop('source-config')]: {
+        version: 3,
+        kind: 'record',
+        proxyOrigin: origin,
+        platform: set.context.platform,
+        principal,
+        resource: 'team',
+        entityIdentity,
+        record: { id: team.id },
+      },
+      'atomic:custom-notes': 'Keep this',
+    });
+    await set.app.refresh();
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+    const row = set.data.get('atomic:partial-team')!;
+    expect(row[P + 'isA']).toContain(set.context.apiSchema.classes.team);
+    expect(row[P + 'isA']).toContain('atomic:custom-class');
+    expect(row[prop('source-key')]).toBe(key);
+    expect(row['atomic:custom-notes']).toBe('Keep this');
+  });
+
+  it('keeps supplied rows partial until custom Atomic class requirements can be satisfied', async () => {
+    const set = setup();
+    set.data.set(set.context.apiSchema.classes.team, {
+      [P + 'requires']: ['atomic:required-note'],
+    });
+    await set.app.refresh();
+    const [subject, row] = nodes(set.data, 'record')[0];
+    expect(row[P + 'isA']).toContain(classes['syncable-reference']);
+    expect(row[P + 'isA']).not.toContain(set.context.apiSchema.classes.team);
+    row['atomic:required-note'] = 'A user supplied note';
+    await worker(set, root, 'atomic:initial-rule').refresh();
+    expect(nodes(set.data, 'record')).toHaveLength(1);
+    expect(set.data.get(subject)?.[P + 'isA']).toContain(
+      set.context.apiSchema.classes.team,
+    );
+    expect(set.data.get(subject)?.['atomic:required-note']).toBe(
+      'A user supplied note',
+    );
+  });
   it.each(['principal', 'collection'])(
     'opens %s using saved state without provider reads',
     async kind => {

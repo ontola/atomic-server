@@ -1867,6 +1867,9 @@ msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 #: src/chunks/PluginRuns/GitHubDirectoryView.tsx
 #: src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: src/chunks/PluginRuns/SyncableCollectionView.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
+#: src/chunks/PluginRuns/useSyncableTableNavigation.tsx
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/IntegrationStore.tsx

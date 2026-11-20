@@ -70,7 +70,7 @@
           "html_url": {
             "type": "string",
             "format": "uri",
-            "description": "The issue's page on github.com \u2014 its source URL."
+            "description": "The issue's page on github.com — its source URL."
           },
           "user": {
             "$ref": "#/components/schemas/user"
@@ -326,6 +326,37 @@
             "title": "Description"
           }
         }
+      },
+      "catalogGithubUser": {
+        "type": "object",
+        "title": "Users",
+        "description": "Fields supplied in GitHub user summaries. An embedded summary may be partial; omitted fields are not invented or deleted.",
+        "required": ["id", "login"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "title": "ID"
+          },
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "type": {
+            "type": "string",
+            "title": "Account type"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Avatar"
+          },
+          "html_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Profile"
+          }
+        }
       }
     },
     "paginationSchemes": {
@@ -426,6 +457,19 @@
               "itemsField": ""
             }
           }
+        },
+        "x-embeddedResources": {
+          "owner": {
+            "representation": "object",
+            "cardinality": "one",
+            "discriminator": {
+              "field": "type",
+              "mapping": {
+                "User": "githubUser",
+                "Organization": "githubOrganization"
+              }
+            }
+          }
         }
       },
       "issue": {
@@ -452,7 +496,14 @@
             }
           }
         },
-        "description": "A repository issue or pull request from the REST Issues API, identified by its per-repository number. This collection includes both issues and pull requests; pull_request marks the latter."
+        "description": "A repository issue or pull request from the REST Issues API, identified by its per-repository number. This collection includes both issues and pull requests; pull_request marks the latter.",
+        "x-embeddedResources": {
+          "user": {
+            "representation": "object",
+            "resource": "githubUser",
+            "cardinality": "one"
+          }
+        }
       },
       "githubOrganizationAddress": {
         "description": "A mutable transport address for an existing organization. Not an enumerable entity or a separate stored parent. The canonical organization identity remains its numeric id.",
@@ -496,6 +547,27 @@
             "urlTemplate": "/repositories/{repository_id}/issues/{issue_number}/comments",
             "envelope": {
               "itemsField": ""
+            }
+          }
+        },
+        "x-embeddedResources": {
+          "user": {
+            "representation": "object",
+            "resource": "githubUser",
+            "cardinality": "one"
+          }
+        }
+      },
+      "githubUser": {
+        "description": "A supplied GitHub user representation identified by its durable numeric account id. Login is mutable. This declaration establishes no enumerable collection, target fetch, or completeness of embedded data.",
+        "schema": {
+          "$ref": "#/components/schemas/catalogGithubUser"
+        },
+        "identity": {
+          "urlTemplate": "/user/{account_id}",
+          "bindings": {
+            "account_id": {
+              "field": "id"
             }
           }
         }

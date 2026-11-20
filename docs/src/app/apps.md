@@ -71,15 +71,30 @@ owner/name, give the filter a name and choose **Save filter**. The source resolv
 to the repository's canonical identity. This branch uses GitHub's public API
 without a GitHub account. GitHub's Issues endpoint includes pull requests.
 
-**Table** follows the schema derived from the API description. **Collection** is
-a native view of stored fields and navigation actions; use **+** to add it when
-needed. Opening, filtering or returning to these views makes no provider request.
+**Table** follows the schema derived from the API description and provides
+**Open** for catalog-declared collection navigation. **Collection** remains
+available as a compatible view of selected stored fields and navigation actions.
+Opening, filtering or returning to these views makes no provider request.
 They remain available during a sync or a provider outage. Overlapping saved
 filters share one canonical row. Complete reads replace membership only for their
 own filter; partial or interrupted reads retain prior membership and accepted
 rows. Missing fields do not erase richer stored values. User fields are retained.
 Moving a row within the same drive retains its identity; rows moved outside the
 worker's collection are protected from refresh rather than duplicated.
+
+Catalog-declared foreign keys appear as links to Atomic resources. When an API
+supplies an embedded record, its known fields seed the linked resource in the
+same import without another provider request. For example, repository owners
+and issue authors link to stored organizations or users. Undeclared objects stay
+JSON. Raw API values and read evidence are retained. Omitted fields preserve
+stored data; an explicitly unresolved relationship clears its previous managed
+link and keeps a diagnostic rather than displaying a stale destination.
+
+Identity-only and incomplete linked records remain summaries until enough
+required data is supplied. Later imports enrich that same resource, retaining
+its identity and user fields. These references stay within the selected drive,
+provider and principal. A retained identity in Trash blocks replacement; restore
+it explicitly to resume syncing. Opening a view does not restore trashed data.
 
 The canonical catalog identifier is now `github`. Installations and other clients
 using the historical `github-issues` identifier need reinstalling or reconnecting.
@@ -95,7 +110,7 @@ remain available.
 
 Your integration proxy must support client-held connection keys and have
 GitHub OAuth configured. The
-[IAP catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-19-github.json)
+[IAP catalog](https://github.com/ontola/atomic-plugins/blob/main/overlays/catalog/2026-11-20-reference-links.json)
 provides authenticated identity, collection schemas, public access and relationship
 navigation through CRUD references and standard OpenAPI response Links. Other
 providers can use the same runtime when their catalog supplies those definitions.

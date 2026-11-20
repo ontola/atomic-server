@@ -35,6 +35,7 @@ import {
   type SyncableSourceKey,
 } from './syncableSource';
 import { parseSyncableRuleConfig } from './syncableRules';
+import { validateSyncableReferenceEvidence } from './syncableReferenceRecords';
 
 export interface FlatMigrationBlock {
   principal: SyncablePrincipal;
@@ -94,6 +95,7 @@ export interface SyncableFlatAdoptionOptions {
   document: OpenApiDocument;
   querySelection?: QuerySelection;
   properties: Record<string, string>;
+  referenceClass?: string;
   maxResources?: number;
   assertCurrent: () => void;
 }
@@ -307,22 +309,43 @@ export async function collectSyncableFlatAdoption(
           row.get(p['syncable-node-kind']) !== key.kind
         )
           throw new Error('The stored source binding changed');
-        if (
-          config.version === 3 &&
-          config.kind === 'record' &&
-          (!config.record ||
-            !config.entityIdentity ||
-            sourceConfigFingerprint(
-              resolveEntityIdentity(options.document, {
-                resource: config.resource,
-                record: config.record,
-                context: config.context,
-              }),
-            ) !== sourceConfigFingerprint(config.entityIdentity))
-        )
-          throw new Error(
-            'The saved entity identity does not match its typed record',
-          );
+
+        if (config.version === 3 && config.kind === 'record') {
+          let proven = false;
+
+          try {
+            proven =
+              !!config.entityIdentity &&
+              sourceConfigFingerprint(
+                resolveEntityIdentity(options.document, {
+                  resource: config.resource,
+                  record: config.record!,
+                  context: config.context,
+                }),
+              ) === sourceConfigFingerprint(config.entityIdentity);
+          } catch {
+            /* Identity-only summaries retain their declaring source evidence. */
+          }
+
+          if (
+            !proven &&
+            options.referenceClass &&
+            config.entityIdentity &&
+            row
+              .getSubjects(core.properties.isA)
+              .includes(options.referenceClass)
+          )
+            proven = validateSyncableReferenceEvidence(
+              options.document,
+              row.get(p['syncable-reference-evidence']),
+              config.entityIdentity,
+            );
+          if (!proven)
+            throw new Error(
+              'The saved entity identity does not match its typed record',
+            );
+        }
+
         saved.push({
           subject,
           parent: row.get(core.properties.parent),

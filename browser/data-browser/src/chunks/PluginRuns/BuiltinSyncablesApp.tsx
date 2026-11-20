@@ -55,6 +55,8 @@ import {
 import { ShowRoute } from '../../routes/ShowRoute';
 import { fetchSyncableDocument } from './syncableDocument';
 import { syncableApiSchema } from './syncableApiSchema';
+import { materializeSyncableReferences } from './syncableReferenceRecords';
+import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import {
   ruleSourceKey,
   sourceConfigFingerprint,
@@ -549,6 +551,7 @@ export async function appProfile(
     document,
     querySelection: trusted.querySelection,
     properties: p,
+    referenceClass: context.schema.classes['syncable-reference'],
     assertCurrent,
   });
   assertCurrent();
@@ -638,6 +641,11 @@ export async function appProfile(
     assertCurrent,
   );
   assertCurrent();
+
+  if (!worker) {
+    await migrateSyncableApiViews(store, drive, apiSchema, assertCurrent);
+    assertCurrent();
+  }
 
   if (worker && context.resource) {
     if (!context.rule) throw new Error('Select a saved filter to sync');
@@ -778,6 +786,25 @@ export async function appProfile(
       proof => {
         assertCurrent();
         verifiedPrincipals.set(proof.connectionId, proof);
+      },
+      async observations => {
+        if (!worker) return;
+        assertQueuedAuthority();
+        if (!context.principal || !context.principalApp)
+          throw new Error('The linked record principal App is unavailable');
+        await materializeSyncableReferences(
+          store,
+          {
+            ...context,
+            principal: context.principal,
+            principalApp: context.principalApp,
+            document: trusted.document,
+            apiSchema,
+          },
+          observations,
+          assertQueuedAuthority,
+        );
+        assertQueuedAuthority();
       },
     ),
     ...(!worker && context.kind === 'platform'
