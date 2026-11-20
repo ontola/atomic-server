@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { lazyDriveSubjects } from '../../helpers/lazyDriveSubjects';
 import { driveDisplayName } from '../../helpers/driveDisplayName';
 import { canonicalizeScheme } from '@tomic/lib';
 import styled from 'styled-components';
 import { useAccountDriveCatalog } from '../../hooks/useAccountDriveCatalog';
 import { useDriveHostingStates } from '../../hooks/useDriveHostingStates';
-import { Resource, core, server, useResources } from '@tomic/react';
+import { Resource, core, server, useResources, useStore } from '@tomic/react';
 import {
   FaCaretDown,
   FaGear,
@@ -110,7 +111,24 @@ export function DriveSwitcher({
     .sort((a, b) => visitTime(b) - visitTime(a))
     .slice(0, MAX_SHOWN_DRIVES);
 
-  const shownDrivesMap = useResources(shownDrives);
+  // The switcher is always mounted, so fetching here would hit every legacy
+  // drive on every render. Only fetch once the menu has been opened; labels
+  // fall back to the account catalog until then. Memoized: `useResources`
+  // needs a stable array.
+  const store = useStore();
+  const [opened, setOpened] = useState(false);
+  const shownKey = shownDrives.join('\n');
+  const fetchable = useMemo(
+    () =>
+      lazyDriveSubjects(shownDrives, {
+        opened,
+        isLocal: s => store.isLocalOnlyDrive(s),
+        isLoaded: s => store.resources.has(store.normalizeSubject(s)),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shownKey, opened, store],
+  );
+  const shownDrivesMap = useResources(fetchable);
 
   const switchTo = (subject: string) => {
     setDrive(subject);
@@ -139,6 +157,7 @@ export function DriveSwitcher({
       : []),
     ...shownDrives.map(subject => {
       const resource = shownDrivesMap.get(subject);
+      // Not fetched while closed: an unloaded entry is not an error.
       const label =
         resource && !resource.error
           ? getTitle(resource)
@@ -190,7 +209,10 @@ export function DriveSwitcher({
       Trigger={Trigger}
       items={items}
       bindActive={active => {
-        if (active) void hosting.refresh();
+        if (active) {
+          setOpened(true);
+          void hosting.refresh();
+        }
       }}
     />
   );

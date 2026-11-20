@@ -550,6 +550,10 @@ pub(crate) async fn follow_listed_drives(home: String) {
     seen.insert(key(&home));
     let wanted: Vec<String> = drives
         .into_iter()
+        // A legacy `https://` drive lives on its own server, which neither
+        // the connected node nor a peer serves: asking each of them for every
+        // such drive was hundreds of dials at start-up, all refused.
+        .filter(|d| !d.subject.starts_with("http://") && !d.subject.starts_with("https://"))
         .filter(|d| seen.insert(key(&d.subject)) && !store.has_resource_locally(&d.subject))
         .map(|d| d.subject)
         .collect();
