@@ -1353,13 +1353,8 @@ pub fn build_drive_vvs(
     let mut vvs = std::collections::HashMap::new();
 
     for subject_str in drive_subjects {
-        if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
-        {
-            // Read the version vector from the snapshot header instead of
-            // rebuilding the whole CRDT doc (see `vv_map_from_snapshot`).
-            if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
-                vvs.insert(subject_str.clone(), vv);
-            }
+        if let Some(vv) = crate::db::version_vectors::read(&*store.kv, subject_str.as_bytes()) {
+            vvs.insert(subject_str.clone(), vv);
         }
     }
 
@@ -1713,10 +1708,8 @@ pub async fn handle_sync_vv_reconcile(
         Some(set) => {
             let mut vvs = std::collections::HashMap::new();
             for subject in set {
-                if let Ok(Some(bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                    if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&bytes) {
-                        vvs.insert(subject.clone(), vv);
-                    }
+                if let Some(vv) = crate::db::version_vectors::read(&*store.kv, subject.as_bytes()) {
+                    vvs.insert(subject.clone(), vv);
                 }
             }
             vvs

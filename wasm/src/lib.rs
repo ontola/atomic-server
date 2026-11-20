@@ -79,37 +79,18 @@ impl ClientDb {
     }
 
     fn version_vectors_of(&self, subjects: Vec<String>) -> Result<JsValue, JsError> {
-        use atomic_lib::db::trees::Tree;
-        use atomic_lib::loro::AtomicLoroDoc;
         use std::collections::HashMap;
 
         let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
 
         for subject in subjects {
             // `collect_drive_subjects` yields `pure_id()` strings, which are
-            // exactly the `LoroSnapshots` keys.
-            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                Ok(Some(snapshot_bytes)) => {
-                    match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
-                        Ok(vv) => {
-                            result.insert(subject, vv);
-                        }
-                        Err(e) => {
-                            web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
-                                    .into(),
-                            );
-                        }
-                    }
-                }
-                // No snapshot for this subject yet (metadata-only / not
-                // materialized) — nothing to diff, skip it.
-                Ok(None) => {}
-                Err(e) => {
-                    web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
-                    );
-                }
+            // exactly the snapshot keys. A subject with no snapshot yet
+            // (metadata-only) has nothing to diff and is skipped.
+            if let Some(vv) =
+                atomic_lib::db::version_vectors::read(&*self.db().kv, subject.as_bytes())
+            {
+                result.insert(subject, vv);
             }
         }
 

@@ -33,6 +33,7 @@ pub struct SledStore {
     search_trigrams: sled::Tree,
     envelopes: sled::Tree,
     outbox: sled::Tree,
+    version_vectors: sled::Tree,
 }
 
 impl SledStore {
@@ -65,6 +66,7 @@ impl SledStore {
         let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
         let envelopes = db.open_tree(Tree::Envelopes)?;
         let outbox = db.open_tree(Tree::Outbox)?;
+        let version_vectors = db.open_tree(Tree::VersionVectors)?;
 
         Ok(SledStore {
             db,
@@ -87,6 +89,7 @@ impl SledStore {
             search_trigrams,
             envelopes,
             outbox,
+            version_vectors,
         })
     }
 
@@ -116,6 +119,7 @@ impl SledStore {
             Tree::SearchTrigrams => &self.search_trigrams,
             Tree::Envelopes => &self.envelopes,
             Tree::Outbox => &self.outbox,
+            Tree::VersionVectors => &self.version_vectors,
         }
     }
 }
@@ -204,6 +208,7 @@ impl KvStore for SledStore {
         let mut batch_search_trigrams = sled::Batch::default();
         let mut batch_envelopes = sled::Batch::default();
         let mut batch_outbox = sled::Batch::default();
+        let mut batch_version_vectors = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -226,6 +231,7 @@ impl KvStore for SledStore {
                 Tree::SearchTrigrams => &mut batch_search_trigrams,
                 Tree::Envelopes => &mut batch_envelopes,
                 Tree::Outbox => &mut batch_outbox,
+                Tree::VersionVectors => &mut batch_version_vectors,
             };
             match op.method {
                 Method::Insert => {
@@ -309,6 +315,9 @@ impl KvStore for SledStore {
         self.outbox
             .apply_batch(batch_outbox)
             .map_err(|e| format!("Failed to apply outbox batch: {}", e))?;
+        self.version_vectors
+            .apply_batch(batch_version_vectors)
+            .map_err(|e| format!("Failed to apply version_vectors batch: {}", e))?;
 
         Ok(())
     }

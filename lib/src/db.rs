@@ -54,6 +54,7 @@ mod v1_types;
 #[cfg(feature = "db-sled")]
 mod v2_types;
 mod val_prop_sub_index;
+pub mod version_vectors;
 
 use std::{
     collections::{HashMap, HashSet},
