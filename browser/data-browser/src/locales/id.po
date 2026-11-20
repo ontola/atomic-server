@@ -13142,7 +13142,6 @@ msgid "Could not send your identity"
 msgstr "Tidak dapat mengirim identitas Anda"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Ganti drive"

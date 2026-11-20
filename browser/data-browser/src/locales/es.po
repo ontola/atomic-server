@@ -13139,7 +13139,6 @@ msgid "Could not send your identity"
 msgstr "No se ha podido enviar tu identidad"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Cambiar de unidad"
