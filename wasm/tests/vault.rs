@@ -354,7 +354,12 @@ async fn the_drive_owners_profile_is_restored_with_the_drive() {
 
     let fresh = ClientDb::new_in_memory(None).await.expect("in-memory db");
     let object = js_sys::Object::new();
-    js_sys::Reflect::set(&object, &JsValue::from_str("objectKey"), &JsValue::from_str(&object_key)).unwrap();
+    js_sys::Reflect::set(
+        &object,
+        &JsValue::from_str("objectKey"),
+        &JsValue::from_str(&object_key),
+    )
+    .unwrap();
     js_sys::Reflect::set(&object, &JsValue::from_str("sealed"), &sealed).unwrap();
     let objects = js_sys::Array::of1(&object).into();
     fresh
