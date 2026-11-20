@@ -10,6 +10,8 @@ import {
   type SignInProvider,
 } from '../../helpers/managed/accountProviders';
 import { engageAccountService } from '../../helpers/managed/api';
+import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
+import { Agent } from '@tomic/lib';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import {
   getManagedAccount,
@@ -136,6 +138,34 @@ export function AccountSignInPanel({
     else if (outcome) onSignedIn();
   }
 
+  async function handleSecret(secret: string) {
+    setBusy(true);
+    setError(null);
+
+    let ok = false;
+
+    try {
+      const agent = await Agent.fromSecret(secret.trim());
+
+      ok = await signInAccountWithAgent(agent, { proven: true, retry: true });
+    } catch {
+      setBusy(false);
+      setError(
+        'That is not an Atomic secret. Copy the whole secret and try again.',
+      );
+
+      return;
+    }
+
+    setBusy(false);
+
+    if (ok) onSignedIn();
+    else
+      setError(
+        'This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in.',
+      );
+  }
+
   async function handleEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSending(true);
@@ -178,6 +208,7 @@ export function AccountSignInPanel({
         appleHref={href('apple')}
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
+        onSecret={secret => void handleSecret(secret)}
         passkeySupported={passkeys === true}
         email={email}
         onEmailChange={setEmail}

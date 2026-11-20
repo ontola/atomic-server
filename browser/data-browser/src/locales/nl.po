@@ -13709,3 +13709,11 @@ msgstr "Alle leesacties van deze app toestaan"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
 msgstr "Alle schrijfacties van deze app toestaan"
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "That is not an Atomic secret. Copy the whole secret and try again."
+msgstr "Dit is geen Atomic-secret. Kopieer het hele secret en probeer het opnieuw."
+
+#: src/views/getting-started/AccountSignInPanel.tsx
+msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
+msgstr "Dit secret hoort niet bij een atomic.place-account, of kon niet worden gecontroleerd. Probeer een andere manier om in te loggen."
