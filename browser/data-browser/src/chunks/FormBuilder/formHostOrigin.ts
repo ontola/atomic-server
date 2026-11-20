@@ -3,7 +3,7 @@ import type { Store } from '@tomic/react';
 import { useEffect, useState } from 'react';
 import { getManagedEnrollments } from '@helpers/managed/enrollmentApi';
 import type { ManagedEnrollmentSummary } from '@helpers/managed/enrollmentApi';
-import { getManagedPortalUrl } from '@helpers/managed/cloudSync';
+import { hasManagedApi } from '@helpers/managed/api';
 import { driveHasServer } from '@helpers/driveData';
 import { isOriginWithoutNode } from '@helpers/originNode';
 
@@ -79,7 +79,7 @@ export function useFormHostOrigin(): {
   const store = useStore();
   const drive = store.getDrive();
   const serverUrl = formServerUrl(store, drive);
-  const hasPortal = getManagedPortalUrl() !== null;
+  const hasPortal = hasManagedApi();
   const [enrollments, setEnrollments] = useState<
     ManagedEnrollmentSummary[] | undefined
   >();

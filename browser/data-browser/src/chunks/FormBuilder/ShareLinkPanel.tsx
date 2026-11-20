@@ -14,7 +14,7 @@ import { CodeBlock } from '@components/CodeBlock';
 import { Tabs } from '@components/Tabs';
 import { Button } from '@components/Button';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { getManagedPortalUrl } from '@helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
 import { paths } from '../../routes/paths';
 
 interface ShareLinkPanelProps {
@@ -238,12 +238,12 @@ const InviteOnlyNote = styled.p`
 /**
  * Shown in place of Share and Publish when no node hosts the drive: a guest
  * opens a form on the node, so without one there is nothing to link to. Only
- * a build with a portal (the hosted app) offers Cloud Server; a source build
- * just points at connecting or self-hosting a server.
+ * a build with an account service offers Cloud Server; one with the service
+ * turned off just points at connecting or self-hosting a server.
  */
 export function NoHostNudge(): JSX.Element {
   const navigate = useNavigateWithTransition();
-  const hasCloud = getManagedPortalUrl() !== null;
+  const hasCloud = getAccountServiceUrl() !== null;
 
   return (
     <Row gap='0.5rem' center wrapItems>

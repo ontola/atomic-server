@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import { useEffect, useState } from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { resolvePortalUrl } from '../helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
 import { fetchManagedInfo } from '../helpers/managedServer';
 
 /**
@@ -11,14 +11,14 @@ import { fetchManagedInfo } from '../helpers/managedServer';
  */
 export function useKnownPortalUrl(): string | null {
   const { baseURL } = useSettings();
-  const [url, setUrl] = useState<string | null>(() => resolvePortalUrl());
+  const [url, setUrl] = useState<string | null>(() => getAccountServiceUrl());
 
   useEffect(() => {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
       if (cancelled) return;
 
-      setUrl(resolvePortalUrl(info));
+      setUrl(getAccountServiceUrl(info));
     });
 
     return () => {

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   getManagedPortalUrl,
-  isCloudSyncAvailable,
+  getAccountServiceUrl,
   enableCloudSyncForDrive,
 } from './cloudSync';
 import * as session from './session';
 import * as enrollment from './enrollment';
 
-// The portal URL is node-driven (or an explicit build-time override) — never
-// hardcoded — so a pure self-hosted node resolves to null and the CTA hides.
+// The configured portal is node-driven (or an explicit build-time override);
+// the account service falls back to a default that is only an offer.
 
 /**
  * Neutralise the build-time override for the node-driven cases.
@@ -21,6 +21,7 @@ import * as enrollment from './enrollment';
 function withoutBuildTimeOverride() {
   beforeEach(() => {
     vi.stubEnv('VITE_MANAGED_PORTAL_URL', '');
+    vi.stubEnv('VITE_DEFAULT_ACCOUNT_PORTAL', '');
   });
 
   afterEach(() => {
@@ -81,19 +82,29 @@ describe('getManagedPortalUrl with a build-time override', () => {
   });
 });
 
-describe('isCloudSyncAvailable', () => {
+describe('getAccountServiceUrl', () => {
   withoutBuildTimeOverride();
 
-  it('true when a portal resolves, false otherwise', () => {
+  it('prefers the portal a node names', () => {
     expect(
-      isCloudSyncAvailable({
+      getAccountServiceUrl({
         managed: true,
         portalUrl: 'https://portal.example',
       }),
-    ).toBe(true);
-    expect(isCloudSyncAvailable({ managed: false, portalUrl: null })).toBe(
-      false,
+    ).toBe('https://portal.example');
+  });
+
+  it('falls back to atomic.place for a node that names none', () => {
+    expect(getAccountServiceUrl({ managed: false, portalUrl: null })).toBe(
+      'https://atomic.place',
     );
+  });
+
+  it('takes the build default, and none turns the service off', () => {
+    vi.stubEnv('VITE_DEFAULT_ACCOUNT_PORTAL', 'https://accounts.example/');
+    expect(getAccountServiceUrl(null)).toBe('https://accounts.example');
+    vi.stubEnv('VITE_DEFAULT_ACCOUNT_PORTAL', 'none');
+    expect(getAccountServiceUrl(null)).toBeNull();
   });
 });
 
@@ -196,6 +207,6 @@ describe('runtime provider configuration', () => {
       __ATOMIC_MANAGED__: { portalUrl: 'https://staging.portal.example/' },
     });
     expect(getManagedPortalUrl(null)).toBe('https://staging.portal.example');
-    expect(isCloudSyncAvailable(null)).toBe(true);
+    expect(getAccountServiceUrl(null)).toBe('https://staging.portal.example');
   });
 });

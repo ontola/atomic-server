@@ -229,6 +229,17 @@ billing and signaling are implemented in the internal sibling `atomic-saas`
 repository. Keep that repository's implementation details out of public FOSS
 copy unless they explain an integration boundary.
 
+**Account service and hosting hints.** Every build has one account service,
+`atomic.place` by default (`VITE_DEFAULT_ACCOUNT_PORTAL` overrides it, or turns
+it off). The app asks the service what it offers instead of asking "is this the
+SaaS build": no new `isSaas`-style branches. The app contacts the service only
+when someone opens a flow that needs it (save your work, sync, share), never at
+page load. Registering is always optional and the no-account route (download
+the secret, pair a device) sits next to it. Mentioning atomic.place hosting is
+fine where it closes a real gap, through the shared `HostingHint` component: one
+muted line and a plain link. A price only appears when the service returns one;
+never hardcode prices. No toasts, banners, pop-ups or blocking upsells.
+
 ### Crates
 
 - **`docs`** (`docs`) — Public-facing Atomic Data spec and product documentation. Describes how the protocol works, very important.

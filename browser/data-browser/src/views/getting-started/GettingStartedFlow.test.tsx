@@ -86,7 +86,7 @@ vi.mock('../../helpers/managed', () => ({
   logoutManagedSession: vi.fn(),
 }));
 vi.mock('../../helpers/managed/cloudSync', () => ({
-  resolvePortalUrl: () => state.portal,
+  getAccountServiceUrl: () => state.portal,
 }));
 vi.mock('../../helpers/managed/deviceLink', () => ({
   canHoldProviderCookie: () => true,

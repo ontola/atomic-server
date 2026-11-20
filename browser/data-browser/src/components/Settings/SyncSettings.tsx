@@ -24,6 +24,7 @@ import {
   type NodeStatus,
 } from '../../helpers/driveSyncStatus';
 import { BrowserPeerPanel } from '../../components/BrowserPeerPanel';
+import { HostingHint } from '../../components/HostingHint';
 import { HostingPaymentRequiredError } from '../../helpers/managed/enrollment';
 import { DiscoverWorkspace } from '../../views/getting-started/DiscoverWorkspace';
 import {
@@ -93,7 +94,7 @@ import {
   getManagedAccount,
   type ManagedAccount,
 } from '../../helpers/managed/session';
-import { managedFetch } from '../../helpers/managed/api';
+import { hasManagedApi, managedFetch } from '../../helpers/managed/api';
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
@@ -139,8 +140,8 @@ import {
   enableCloudSyncForDrive,
   ensureManagedSession,
   driveHasCloudEnrollment,
-  isCloudSyncAvailable,
-  resolvePortalUrl,
+  getManagedPortalUrl,
+  getAccountServiceUrl,
 } from '../../helpers/managed/cloudSync';
 import { paths } from '../../routes/paths';
 import { useSettings } from '../../helpers/AppSettings';
@@ -289,8 +290,7 @@ function ServerCard({
     isSelectedServer &&
     !isRunningInTauri() &&
     !isOriginWithoutNode(server) &&
-    (refusedByServer ||
-      (isCloudSyncAvailable(managedInfo) && cloudEnrolled === false));
+    (refusedByServer || cloudEnrolled === false);
   const isCloud = isActive && cloudHosted;
   // Any drive on the provider's node is the provider's, paid or not: an account
   // always has its personal drive hosted there. It reads blue like the rest of
@@ -1161,7 +1161,8 @@ export function SyncSettings({
   useEffect(() => {
     const drive = status.drive;
 
-    if (!drive || !isCloudSyncAvailable(managedInfo)) {
+    // Only with a session to ask: the default service is not contacted here.
+    if (!drive || !hasManagedApi()) {
       setCloudEnrollment(null);
 
       return;
@@ -1244,9 +1245,7 @@ export function SyncSettings({
   const connectDeviceProps = useConnectDeviceProps({
     serverNodeId,
     serverUrl: status.serverUrl ?? '',
-    serverPairingAllowed:
-      showServerConn &&
-      (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true),
+    serverPairingAllowed: showServerConn && cloudEnrolled !== false,
   });
   const pairedPeers = isNode ? knownPeers : [];
   // A browser is not a node, so it cannot pair with a device itself. But the
@@ -1277,11 +1276,13 @@ export function SyncSettings({
     }
   });
 
+  const accountPortalUrl = getAccountServiceUrl(managedInfo);
+  // A hosted build (a portal is configured), as opposed to one that only knows
+  // the default service.
+  const hostedBuild = getManagedPortalUrl(managedInfo) !== null;
+
   // The source server copies remote drives in full; enrollment alone is not sync.
-  const showCloudBackup =
-    isCloudSyncAvailable(managedInfo) &&
-    cloudEnrolled !== null &&
-    !driveMissing;
+  const showCloudBackup = cloudEnrolled !== null && !driveMissing;
 
   /**
    * Why Cloud Server can't be switched on from here, or null when it can.
@@ -1305,7 +1306,7 @@ export function SyncSettings({
       return 'This device doesn’t have this drive yet. Pair the device that does, and you can host it from here.';
     }
 
-    if (!isCloudSyncAvailable(managedInfo)) {
+    if (!accountPortalUrl) {
       return `${serverHostname ?? 'This server'} doesn’t offer hosting, so it can’t be switched on from here.`;
     }
 
@@ -1333,7 +1334,7 @@ export function SyncSettings({
       local: hasWorkingLocalStore,
       serverSync: showServerConn,
       hosting: cloudEnrolled,
-      managed: isCloudSyncAvailable(managedInfo),
+      managed: hostedBuild,
       vaultOn: vault.status.state === 'on' || vault.status.state === 'other',
     });
   }
@@ -1391,7 +1392,6 @@ export function SyncSettings({
    */
   // Never the opaque `acct_` id: the address, else a generic label.
   const accountAddressLabel = useAccountAddress();
-  const accountPortalUrl = resolvePortalUrl(managedInfo);
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;
@@ -2285,6 +2285,10 @@ export function SyncSettings({
                   ? 'Pair another device to sync directly, or connect an always-on one to reach your data from anywhere.'
                   : 'Connect an always-on device to back up your data and reach it from anywhere.'}
               </p>
+              <HostingHint
+                reason='no-always-on-device'
+                drive={status.drive ?? undefined}
+              />
             </EmptyConnections>
           )}
 
@@ -2297,7 +2301,7 @@ export function SyncSettings({
             server =>
               isManagedServer(server) ||
               showSavedServer({
-                managed: isCloudSyncAvailable(managedInfo),
+                managed: hostedBuild,
                 activeForDrive:
                   (showServerConn ||
                     (localOnlyDrive && cloudEnrolled === false)) &&

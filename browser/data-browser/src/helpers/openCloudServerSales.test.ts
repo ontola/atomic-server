@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock('./openExternal', () => ({ openExternal: state.openExternal }));
 vi.mock('./managed/cloudSync', () => ({
-  resolvePortalUrl: () => state.portal,
+  getAccountServiceUrl: () => state.portal,
 }));
 
 const { openCloudServerSales } = await import('./openCloudServerSales');

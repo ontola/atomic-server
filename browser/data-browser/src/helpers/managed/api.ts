@@ -217,6 +217,18 @@ export function getRememberedManagedPortalUrl(): string | null {
   return rememberedPortalUrl;
 }
 
+let engagedService: string | null = null;
+
+/**
+ * Start talking to the account service at `url` for this page only. The
+ * default service is only an offer: nothing contacts it until someone opens a
+ * flow that needs it (sign-in, hosting). Not persisted, so a reload does not
+ * contact it again; a sign-in that succeeds records its own portal.
+ */
+export function engageAccountService(url: string | null | undefined): void {
+  engagedService = safePortalUrl(url) ?? engagedService;
+}
+
 /**
  * The portal a build was compiled against, if any. Read here rather than via
  * `managedServer.ts`'s `managedPortalOverride()` because that module imports
@@ -243,6 +255,7 @@ export function hasManagedApi(): boolean {
     (typeof import.meta !== 'undefined' &&
       import.meta.env?.VITE_MANAGED_API_BASE) ||
     getRememberedManagedPortalUrl() ||
+    engagedService ||
     portalFromEnv(),
   );
 }
@@ -270,7 +283,8 @@ export function getManagedApiBase(): string {
   // Localhost alone does not imply a SaaS backend. Browser and desktop
   // clients use the discovered or configured portal; local SaaS development
   // can explicitly set VITE_MANAGED_API_BASE=http://localhost:3030/api.
-  const portalUrl = getRememberedManagedPortalUrl() ?? portalFromEnv();
+  const portalUrl =
+    getRememberedManagedPortalUrl() ?? engagedService ?? portalFromEnv();
 
   return portalUrl ? `${portalUrl}/api` : '/api';
 }
