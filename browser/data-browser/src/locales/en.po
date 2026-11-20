@@ -13190,7 +13190,6 @@ msgid "Could not send your identity"
 msgstr "Could not send your identity"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/components/SideBar/DriveSwitcher.tsx
 #: src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
 msgstr "Switch Drive"
