@@ -24,13 +24,13 @@ export async function enableIntegrationDiscovery(page: Page) {
   const previousUrl = page.url();
   await unlockPluginPreview(page);
   await page.goto(new URL('/app/settings', previousUrl).href);
-  await page.getByPlaceholder('Search settings...').fill('plugins');
+  await page.getByPlaceholder('Search settings...').fill('marketplaces');
   const visibility = page.getByTestId('integration-visibility');
   await expect(visibility).toHaveAttribute('data-ready', 'true', {
     timeout: 30_000,
   });
   const experimental = page.getByRole('checkbox', {
-    name: 'Show experimental plugins',
+    name: 'Show experimental apps',
   });
   await experimental.check();
   await expect(visibility).toHaveAttribute('aria-busy', 'false', {

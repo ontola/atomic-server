@@ -37,7 +37,9 @@ Object.assign(globalThis, {
   window: new EventTarget(),
 });
 
-const CATALOG_KEY = 'plugin-catalog-url';
+const CATALOG_KEY = 'marketplaces';
+const seed = (...urls: string[]) =>
+  localStorage.setItem(CATALOG_KEY, JSON.stringify(urls));
 const PROXY_KEY = 'integration-proxy-url';
 
 const PUBLIC_CATALOG =
@@ -71,37 +73,34 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('plugin catalog URL', () => {
+describe('marketplaces', () => {
   it('prefers a seeded value over the build-time default', async () => {
-    localStorage.setItem(
-      CATALOG_KEY,
-      'http://127.0.0.1:9880/integrations/catalog.json',
-    );
-    const { getPluginCatalogUrl, defaultPluginCatalogUrl } = await catalog(
+    seed('http://127.0.0.1:9880/integrations/catalog.json');
+    const { getMarketplaceUrls, defaultPluginCatalogUrl } = await catalog(
       'http://localhost:9999/integrations/catalog.json',
     );
 
     expect(defaultPluginCatalogUrl).toBe(
       'http://localhost:9999/integrations/catalog.json',
     );
-    expect(getPluginCatalogUrl()).toBe(
+    expect(getMarketplaceUrls()).toEqual([
       'http://127.0.0.1:9880/integrations/catalog.json',
-    );
+    ]);
   });
 
-  it('falls back to the default when the seeded value is invalid', async () => {
-    localStorage.setItem(CATALOG_KEY, 'http://evil.example.com/catalog.json');
-    const { getPluginCatalogUrl, defaultPluginCatalogUrl } = await catalog();
+  it('drops an invalid seeded value', async () => {
+    seed('http://evil.example.com/catalog.json');
+    const { getMarketplaceUrls, defaultPluginCatalogUrl } = await catalog();
 
-    expect(getPluginCatalogUrl()).toBe(defaultPluginCatalogUrl);
+    expect(getMarketplaceUrls()).toEqual([]);
     expect(defaultPluginCatalogUrl).toBe(PUBLIC_CATALOG);
   });
 
-  it('survives a seeded value that is not a URL at all', async () => {
+  it('survives a seeded value that is not a list of URLs at all', async () => {
     localStorage.setItem(CATALOG_KEY, 'not a url');
-    const { getPluginCatalogUrl } = await catalog();
+    const { getMarketplaceUrls } = await catalog();
 
-    expect(getPluginCatalogUrl()).toBe(PUBLIC_CATALOG);
+    expect(getMarketplaceUrls()).toEqual([]);
   });
 
   it('ignores a build-time default that would never validate', async () => {
@@ -115,33 +114,36 @@ describe('plugin catalog URL', () => {
   // The dagger pipeline serves the browser from `*.localhost` names, which
   // RFC 6761 gives to loopback; the bare-name check rejected them.
   it('accepts a loopback subdomain over http', async () => {
-    localStorage.setItem(
-      CATALOG_KEY,
-      'http://atomic.localhost:9883/integrations/catalog.json',
-    );
-    const { getPluginCatalogUrl } = await catalog();
+    seed('http://atomic.localhost:9883/integrations/catalog.json');
+    const { getMarketplaceUrls } = await catalog();
 
-    expect(getPluginCatalogUrl()).toBe(
+    expect(getMarketplaceUrls()).toEqual([
       'http://atomic.localhost:9883/integrations/catalog.json',
-    );
+    ]);
   });
 
-  it('round-trips through the settings-screen setter', async () => {
+  it('round-trips through the settings-screen helpers', async () => {
     const {
-      setPluginCatalogUrl,
-      getPluginCatalogUrl,
+      addMarketplace,
+      removeMarketplace,
+      resetMarketplaces,
+      getMarketplaceUrls,
       defaultPluginCatalogUrl,
     } = await catalog();
 
-    setPluginCatalogUrl('https://example.com/catalog.json');
-    expect(getPluginCatalogUrl()).toBe('https://example.com/catalog.json');
+    addMarketplace('https://example.com/catalog.json');
+    expect(getMarketplaceUrls()).toEqual([
+      defaultPluginCatalogUrl,
+      'https://example.com/catalog.json',
+    ]);
 
-    setPluginCatalogUrl('');
-    expect(getPluginCatalogUrl()).toBe(defaultPluginCatalogUrl);
+    removeMarketplace(defaultPluginCatalogUrl);
+    expect(getMarketplaceUrls()).toEqual(['https://example.com/catalog.json']);
 
-    expect(() =>
-      setPluginCatalogUrl('http://evil.example.com/c.json'),
-    ).toThrow();
+    resetMarketplaces();
+    expect(getMarketplaceUrls()).toEqual([defaultPluginCatalogUrl]);
+
+    expect(() => addMarketplace('http://evil.example.com/c.json')).toThrow();
   });
 });
 

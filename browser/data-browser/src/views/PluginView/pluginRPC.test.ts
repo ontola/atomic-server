@@ -102,7 +102,7 @@ it('retains permitted edits, refuses outside writes and refuses editing plugin c
     expect(f.target.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         error: 'unauthorized',
-        message: 'Plugin cannot edit plugin resources',
+        message: 'App cannot edit app resources',
       }),
       '*',
     ),

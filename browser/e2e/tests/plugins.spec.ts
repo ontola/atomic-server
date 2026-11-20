@@ -39,12 +39,12 @@ export function run() { return { intents: [] }; }
       page.getByRole('heading', { name: 'Apps', exact: true }),
     ).toBeVisible();
     await page
-      .getByRole('checkbox', { name: 'Show experimental plugins' })
+      .getByRole('checkbox', { name: 'Show experimental apps' })
       .check();
     const card = page
       .locator('[data-release]')
       .filter({
-        has: page.getByRole('heading', { name: 'New plugin', exact: true }),
+        has: page.getByRole('heading', { name: 'New app', exact: true }),
       })
       .filter({ hasText: id });
     await expect(card.getByText('Unverified', { exact: true })).toBeVisible();
@@ -59,7 +59,7 @@ export function run() { return { intents: [] }; }
     await expect(
       page
         .getByRole('main')
-        .getByRole('heading', { name: 'New plugin', level: 1 }),
+        .getByRole('heading', { name: 'New app', level: 1 }),
     ).toBeVisible();
     expect(page.url()).not.toBe(original);
     await page.goto(original);
@@ -116,13 +116,13 @@ export function run() { return { intents: [] }; }
     // The op is rendered lowercase and uppercased in CSS; `exact` keeps it
     // from also matching "created without a class…".
     await expect(dialog.getByText('create', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('Made by a plugin')).toBeVisible();
+    await expect(dialog.getByText('Made by an app')).toBeVisible();
 
     const apply = dialog.getByRole('button', { name: /Apply 1 change/ });
     await expect(apply).toBeEnabled();
 
     // Running wrote nothing: the log behind the dialog still has no runs.
-    await expect(main.getByText('This plugin has not run yet.')).toBeVisible();
+    await expect(main.getByText('This app has not run yet.')).toBeVisible();
 
     await apply.click();
     await expect(dialog).toBeHidden();
@@ -295,7 +295,7 @@ async function newPlugin(page: import('@playwright/test').Page) {
   await createFromCatalog(page, 'Plugin');
   await expect(
     page.getByRole('main').getByRole('heading', {
-      name: 'New plugin',
+      name: 'New app',
       level: 1,
     }),
   ).toBeVisible({ timeout: 45000 });

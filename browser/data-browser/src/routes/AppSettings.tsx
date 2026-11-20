@@ -296,6 +296,12 @@ const AppSettings: React.FunctionComponent = () => {
                             Show Shared with me panel
                           </SettingCheckbox>
                           <SettingCheckbox
+                            checked={enabledPanels.has(Panel.Apps)}
+                            onChange={changePanelPref(Panel.Apps)}
+                          >
+                            Show Apps panel
+                          </SettingCheckbox>
+                          <SettingCheckbox
                             checked={enabledPanels.has(Panel.Ontologies)}
                             onChange={changePanelPref(Panel.Ontologies)}
                           >
