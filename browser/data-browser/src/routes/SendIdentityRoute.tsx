@@ -8,7 +8,7 @@ import {
   getManagedAccount,
   type ManagedAccount,
 } from '../helpers/managed/session';
-import { resolvePortalUrl } from '../helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
 import { canHoldProviderCookie } from '../helpers/managed/deviceLink';
 import { getUnlockableRecoverySecret } from '../helpers/managed/recovery';
 import type { RecoverySecret } from '../helpers/managed/recovery';
@@ -75,7 +75,7 @@ function SendIdentityPage() {
   const [phase, setPhase] = useState<Phase>({ name: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [portalUrl, setPortalUrl] = useState<string | null>(() =>
-    resolvePortalUrl(),
+    getAccountServiceUrl(),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -85,7 +85,7 @@ function SendIdentityPage() {
     let cancelled = false;
     void fetchManagedInfo(baseURL).then(info => {
       if (!cancelled) {
-        setPortalUrl(resolvePortalUrl(info));
+        setPortalUrl(getAccountServiceUrl(info));
       }
     });
 

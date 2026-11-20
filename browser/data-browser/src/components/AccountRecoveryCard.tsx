@@ -19,7 +19,7 @@ import {
 } from '../helpers/managed';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
-import { resolvePortalUrl } from '../helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
 import {
   addRecoveryCodeWrapper,
   addPasskeyWrapper,
@@ -138,7 +138,7 @@ export function AccountRecoveryCard({
       // node, or a desktop app on its own embedded one. Worse, the hint below
       // still told the reader to sign in, because it keys off `hasSession`
       // alone: instructions to do something with no way to do it.
-      setPortalUrl(resolvePortalUrl(info));
+      setPortalUrl(getAccountServiceUrl(info));
     })();
 
     return () => {

@@ -15,7 +15,6 @@ import { useAISidebar } from '@components/AI/AISidebarContext';
 import { openShareDialog } from '@components/Share/shareDialogState';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { useKnownPortalUrl } from '@hooks/useKnownPortalUrl';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import {
   useOnboardingProgress,
@@ -84,7 +83,6 @@ function Steps({
     true,
   );
   const { openChat } = useAISidebar();
-  const portalUrl = useKnownPortalUrl();
   const navigate = useNavigateWithTransition();
   const navigateToNewRoute = useNewRoute(drive.subject);
   const { setSideBarLocked } = useSettings();
@@ -178,11 +176,9 @@ function Steps({
       },
     },
     save: {
-      title: portalUrl ? 'Register with email' : 'Connect a device',
-      hint: portalUrl
-        ? 'Register your email to keep it safe on every device'
-        : 'Connect a device to open your work on it',
-      pointer: portalUrl ? 'Add your email here' : 'Connect a device here',
+      title: 'Save your work',
+      hint: 'Register your email or connect a device to open it elsewhere',
+      pointer: 'Save your work here',
       target: 'save-row',
       run: openSaveWorkDialog,
     },

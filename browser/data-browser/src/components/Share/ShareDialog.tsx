@@ -37,7 +37,8 @@ import {
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
 import { openCloudServerSales } from '../../helpers/openCloudServerSales';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '../../helpers/managed/cloudSync';
+import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
 import {
   accountAddress,
   getManagedAccount,
@@ -200,7 +201,7 @@ function ShareOverview({
   classLabel: string;
   onDone: () => void;
 }): JSX.Element {
-  const isSaas = !!getManagedPortalUrl();
+  const hasAccount = useHasManagedAccount() === true;
   const accountLinked = useIsLinkedToAccount();
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const store = useStore();
@@ -215,7 +216,7 @@ function ShareOverview({
   const createInviteLink = useCreateInviteLink(resource);
   const editorSeats = useEditorSeats(resource);
   const pending = usePendingInvites(resource.subject);
-  const agentDetail = useCurrentAgentDetail(agent?.subject, isSaas);
+  const agentDetail = useCurrentAgentDetail(agent?.subject, hasAccount);
   const agentResource = useResource(agent?.subject);
   const [agentName] = useTitle(agentResource);
 
@@ -227,7 +228,7 @@ function ShareOverview({
   const [err, setErr] = useState<Error>();
 
   const composing =
-    isSaas && canWrite && (emails.length > 0 || draft.trim() !== '');
+    hasAccount && canWrite && (emails.length > 0 || draft.trim() !== '');
 
   const publicRight = rights.find(
     r => r.agentSubject === urls.instances.publicAgent,
@@ -298,11 +299,11 @@ function ShareOverview({
           {isUnhostedDrive && (
             <UnhostedDriveNotice
               subject={resource.subject}
-              isSaas={isSaas}
+              offerHosting={!!getAccountServiceUrl()}
               onDone={onDone}
             />
           )}
-          {canWrite && isSaas && (
+          {canWrite && hasAccount && (
             <EmailInviteInput
               emails={emails}
               onEmailsChange={setEmails}
@@ -313,10 +314,10 @@ function ShareOverview({
               disabled={sending}
             />
           )}
-          {canWrite && isSaas && editorSeats && (
+          {canWrite && hasAccount && editorSeats && (
             <SeatsNote>{describeEditorSeats(editorSeats)}</SeatsNote>
           )}
-          {canWrite && !isSaas && (
+          {canWrite && !hasAccount && (
             <InviteLinkField
               createInviteLink={createInviteLink}
               onCopied={pending.recordLink}
@@ -379,17 +380,20 @@ function ShareOverview({
             </>
           )}
           {err && <ErrorLook>{err.message}</ErrorLook>}
-          {err && isSaas && !accountLinked && (
-            <Button
-              subtle
-              onClick={() => {
-                onDone();
-                openSaveWorkDialog();
-              }}
-            >
-              Register with email
-            </Button>
-          )}
+          {canWrite &&
+            !hasAccount &&
+            !accountLinked &&
+            getAccountServiceUrl() && (
+              <Button
+                subtle
+                onClick={() => {
+                  onDone();
+                  openSaveWorkDialog();
+                }}
+              >
+                Register with email
+              </Button>
+            )}
         </Stack>
       </Dialog.Content>
       <Actions>
@@ -408,7 +412,7 @@ function ShareOverview({
           </>
         ) : (
           <>
-            {canWrite && isSaas && (
+            {canWrite && hasAccount && (
               <CopyInviteLinkSplit
                 createInviteLink={createInviteLink}
                 onCopied={pending.recordLink}
@@ -545,7 +549,7 @@ function InviteLinkField({
  */
 function useCurrentAgentDetail(
   agent: string | undefined,
-  isSaas: boolean,
+  hasAccount: boolean,
 ): string | undefined {
   const store = useStore();
   const drive = useResource(store.getDrive());
@@ -553,7 +557,7 @@ function useCurrentAgentDetail(
   const [email, setEmail] = useState<string>();
 
   useEffect(() => {
-    if (!isSaas) return;
+    if (!hasAccount) return;
     let cancelled = false;
     getManagedAccount()
       .then(
@@ -567,7 +571,7 @@ function useCurrentAgentDetail(
     return () => {
       cancelled = true;
     };
-  }, [isSaas]);
+  }, [hasAccount]);
 
   if (email) return email;
   if (agent && driveWriters.includes(agent)) return 'Owner';
@@ -590,11 +594,11 @@ function PrivateDriveWarning(): JSX.Element {
 
 function UnhostedDriveNotice({
   subject,
-  isSaas,
+  offerHosting,
   onDone,
 }: {
   subject: string;
-  isSaas: boolean;
+  offerHosting: boolean;
   onDone: () => void;
 }): JSX.Element {
   return (
@@ -605,7 +609,7 @@ function UnhostedDriveNotice({
           This drive is not on a server. People you invite can open it only
           while one of your devices has it open in a browser.
         </span>
-        {isSaas && <UpgradePitch subject={subject} onDone={onDone} />}
+        {offerHosting && <UpgradePitch subject={subject} onDone={onDone} />}
       </UnhostedBody>
     </PrivateDriveWarningBox>
   );

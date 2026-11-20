@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { server, useStore, type Resource } from '@tomic/react';
 import { managedFetch } from '../../helpers/managed/api';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
 
 export interface EditorSeats {
   drive: string;
@@ -16,7 +16,7 @@ export interface EditorSeats {
  */
 export function useEditorSeats(target: Resource): EditorSeats | undefined {
   const store = useStore();
-  const isSaas = !!getManagedPortalUrl();
+  const hasAccount = useHasManagedAccount() === true;
   const [seats, setSeats] = useState<EditorSeats>();
   const drive = target.hasClasses(server.classes.drive)
     ? target.subject
@@ -24,7 +24,7 @@ export function useEditorSeats(target: Resource): EditorSeats | undefined {
 
   useEffect(() => {
     setSeats(undefined);
-    if (!isSaas || !drive) return;
+    if (!hasAccount || !drive) return;
     const controller = new AbortController();
     void managedFetch(
       `/billing/subscription?${new URLSearchParams({ drive })}`,
@@ -50,7 +50,7 @@ export function useEditorSeats(target: Resource): EditorSeats | undefined {
       });
 
     return () => controller.abort();
-  }, [isSaas, drive]);
+  }, [hasAccount, drive]);
 
   return seats?.drive === drive ? seats : undefined;
 }

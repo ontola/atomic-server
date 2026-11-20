@@ -282,7 +282,6 @@ msgid "Choose a default model"
 msgstr "Choose a default model"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -4267,8 +4266,6 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
 
 #: src/components/ConnectServerDialog.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
@@ -8499,7 +8496,9 @@ msgid "Pinned to <0/>"
 msgstr "Pinned to <0/>"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "from {0}"
 
@@ -11449,11 +11448,6 @@ msgstr "Fetch workspace"
 msgid "Search again"
 msgstr "Search again"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11612,14 +11606,6 @@ msgstr "Signing in to your {0} account does not open this identity yet: this bac
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "See Cloud Server plans"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -12390,10 +12376,6 @@ msgstr "Delete this resource permanently. This cannot be undone."
 #: src/chunks/RTE/useFormattingToolbarVisible.tsx
 msgid "Hide formatting toolbar"
 msgstr "Hide formatting toolbar"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
 
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
@@ -13331,10 +13313,6 @@ msgstr "Saved as {0}"
 msgid "Saving your work to your account…"
 msgstr "Saving your work to your account…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device to open your work on it"
-msgstr "Connect a device to open your work on it"
-
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
 msgstr "Switch back to your previous drive here"
@@ -13346,14 +13324,6 @@ msgstr "Click to name your drive"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Talk to the AI here"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email here"
-msgstr "Add your email here"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device here"
-msgstr "Connect a device here"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make something"
@@ -13404,15 +13374,9 @@ msgstr "Only saved on this device"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Register with email"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Register your email to keep it safe on every device"
-msgstr "Register your email to keep it safe on every device"
 
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Invite link"
@@ -13547,22 +13511,6 @@ msgstr "{0} of old history can be removed. Nothing you can see is lost."
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "This secret belongs to a different agent. Paste the secret you just saved for this account."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "No second device?"
-msgstr "No second device?"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Sign in with atomic.place"
-msgstr "Sign in with atomic.place"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
-msgstr "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
-msgstr "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
-
 #: src/actions/appActions.ts
 msgid "Profile settings"
 msgstr "Profile settings"
@@ -13650,3 +13598,57 @@ msgstr "Edit profile"
 #: src/components/Toaster.tsx
 msgid "<0/> Report"
 msgstr "<0/> Report"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Nothing keeps this drive online while your devices are off."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Get an always-on server"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Browser sync has reached its limit of peer connections."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Keep everyone in sync with a Cloud Server"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Want a server of your own?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Get one hosted"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Free browser sync is meant for small groups of up to 4 people."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "For more people, use a Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Save your work"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Register your email or connect a device to open it elsewhere"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Save your work here"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Your email and an encrypted backup of your identity go to {0}."

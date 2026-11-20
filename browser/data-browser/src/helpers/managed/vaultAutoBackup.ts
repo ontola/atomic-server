@@ -33,6 +33,9 @@ import {
 import { evaluateIdentityReconciliation } from './reconcile';
 import { nodeVault } from './nodeVault';
 import { isRunningInTauri } from '../tauri';
+import { isHostedDistribution } from '../managedServer';
+import { getManagedApiBase } from './api';
+import { canHoldProviderCookie } from './providerCookie';
 import { keepUnhostedRestoreLocal, reopenRestoredDrive } from '../driveData';
 import { asError } from '@tomic/react';
 
@@ -121,11 +124,15 @@ function readOptOuts(): Set<string> {
   }
 }
 
+/**
+ * Also records the other half: an `in:<drive>` entry is a click on "turn on
+ * backup", which off the service's own site is what switches backup on.
+ */
 export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
   const drives = readOptOuts();
 
-  if (optedOut) drives.add(driveSubject);
-  else drives.delete(driveSubject);
+  drives[optedOut ? 'add' : 'delete'](driveSubject);
+  drives[optedOut ? 'delete' : 'add'](`in:${driveSubject}`);
 
   try {
     localStorage.setItem(OPT_OUT_KEY, JSON.stringify([...drives]));
@@ -134,8 +141,21 @@ export function setVaultOptOut(driveSubject: string, optedOut: boolean): void {
   }
 }
 
+/**
+ * Whether automatic backup stays away from `driveSubject`: switched off on
+ * purpose, or not yet switched on by hand. Only the service's own site (the
+ * cookie origin) and the hosted app start it after sign-in; a self-hosted
+ * node sends data to the service only after that click.
+ */
 export function isVaultOptedOut(driveSubject: string): boolean {
-  return readOptOuts().has(driveSubject);
+  const drives = readOptOuts();
+  const automatic =
+    canHoldProviderCookie(getManagedApiBase()) || isHostedDistribution();
+
+  return (
+    drives.has(driveSubject) ||
+    (!automatic && !drives.has(`in:${driveSubject}`))
+  );
 }
 
 const defaultDeps: VaultAutoBackupDeps = {

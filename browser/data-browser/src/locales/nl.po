@@ -282,7 +282,6 @@ msgid "Choose a default model"
 msgstr "Kies een standaardmodel"
 
 #: src/chunks/AI/AISetupPanel.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Back"
 msgstr "Terug"
 
@@ -4267,8 +4266,6 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 
 #: src/components/ConnectServerDialog.tsx
-#: src/components/SaveWork/SaveWorkDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 #: src/components/Settings/SyncSettings.tsx
 #: src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
@@ -8499,7 +8496,9 @@ msgid "Pinned to <0/>"
 msgstr "Vastgemaakt aan <0/>"
 
 #. 0: pending.release.url
+#. 0: price
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/components/HostingHint.tsx
 msgid "from {0}"
 msgstr "van {0}"
 
@@ -11449,11 +11448,6 @@ msgstr "Werkruimte ophalen"
 msgid "Search again"
 msgstr "Opnieuw zoeken"
 
-#. 0: ' '; 1: ' '; 2: ' '
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?{0} <0>Get one hosted</0>{1} or{2} <1>run it yourself</1> ."
-msgstr "Wil je een eigen server?{0} <0>Laat er een hosten</0>{1} of{2} <1>draai deze zelf</1> ."
-
 #. 0: restore.email
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
@@ -11612,14 +11606,6 @@ msgstr "Inloggen op je {0}-account opent deze identiteit nog niet: deze back-up 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Signing in to your {0} account does not open this identity yet: this backup was made before that was possible. Confirm once with your recovery code to turn it on."
 msgstr "Inloggen op je {0}-account opent deze identiteit nog niet: deze back-up is gemaakt voordat dat mogelijk was. Bevestig één keer met je herstelcode om het in te schakelen."
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "See Cloud Server plans"
-msgstr "Cloud Server-abonnementen bekijken"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Browser sync has reached its limit of peer connections. A Cloud Server on atomic.place keeps this workspace in sync for everyone, without peers."
-msgstr "Browsersynchronisatie heeft de limiet voor peerverbindingen bereikt. Een Cloud Server op atomic.place houdt deze werkruimte voor iedereen gesynchroniseerd, zonder peers."
 
 #: src/hooks/useAddToOntology.ts
 msgid "A property can't be moved to another ontology."
@@ -12390,10 +12376,6 @@ msgstr "Verwijder deze resource definitief. Dit kan niet ongedaan worden gemaakt
 #: src/chunks/RTE/useFormattingToolbarVisible.tsx
 msgid "Hide formatting toolbar"
 msgstr "Opmaakwerkbalk verbergen"
-
-#: src/components/BrowserPeerPanel.tsx
-msgid "Free browser sync is meant for small groups of up to 4 people. For more people, use a Cloud Server on atomic.place."
-msgstr "Gratis browsersynchronisatie is bedoeld voor kleine groepen van maximaal 4 personen. Gebruik voor meer mensen een Cloud Server op atomic.place."
 
 #: src/views/NotificationPage.tsx
 msgid "Open conversation"
@@ -13331,10 +13313,6 @@ msgstr "Opgeslagen als {0}"
 msgid "Saving your work to your account…"
 msgstr "Je werk wordt opgeslagen in je account…"
 
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device to open your work on it"
-msgstr "Verbind een apparaat om je werk daarop te openen"
-
 #: src/hooks/useCreateDrive.ts
 msgid "Switch back to your previous drive here"
 msgstr "Wissel hier terug naar je vorige schijf"
@@ -13346,14 +13324,6 @@ msgstr "Klik hier om je schijf een naam te geven"
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Talk to the AI here"
 msgstr "Praat hier met de AI"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Add your email here"
-msgstr "Voeg hier je e-mailadres toe"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Connect a device here"
-msgstr "Verbind hier een apparaat"
 
 #: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make something"
@@ -13404,15 +13374,9 @@ msgstr "Alleen op dit apparaat opgeslagen"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "Je bent ingelogd, maar het opslaan van je werk in je account is niet gelukt. Controleer je verbinding en probeer het opnieuw."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
 #: src/components/Share/ShareDialog.tsx
-#: src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Registreren met e-mail"
-
-#: src/components/SideBar/GettingStartedPanel.tsx
-msgid "Register your email to keep it safe on every device"
-msgstr "Registreer je e-mail om het veilig te houden op elk apparaat"
 
 #: src/components/Share/PeopleWithAccess.tsx
 msgid "Invite link"
@@ -13547,22 +13511,6 @@ msgstr "{0} aan oude geschiedenis kan worden verwijderd. Niets wat je kunt zien 
 msgid "This secret belongs to a different agent. Paste the secret you just saved for this account."
 msgstr "Deze geheime sleutel hoort bij een andere agent. Plak de sleutel die je net voor dit account hebt bewaard."
 
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "No second device?"
-msgstr "Geen tweede apparaat?"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Sign in with atomic.place"
-msgstr "Inloggen met atomic.place"
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Connect another device or sign in, so you can open it elsewhere and don't lose access."
-msgstr "Alleen deze browser kan je werk openen. Koppel een ander apparaat of log in, zodat je het elders kunt openen en geen toegang verliest."
-
-#: src/components/SaveWork/SaveWorkDialog.tsx
-msgid "Only this browser can open your work. Sign in or register with your email, so you can open it elsewhere and don't lose access."
-msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mail, zodat je het elders kunt openen en geen toegang verliest."
-
 #: src/actions/appActions.ts
 msgid "Profile settings"
 msgstr "Profielinstellingen"
@@ -13650,3 +13598,57 @@ msgstr "Profiel bewerken"
 #: src/components/Toaster.tsx
 msgid "<0/> Report"
 msgstr "<0/> Melden"
+
+#: src/components/HostingHint.tsx
+msgid "Nothing keeps this drive online while your devices are off."
+msgstr "Niets houdt deze drive online als je apparaten uit staan."
+
+#: src/components/HostingHint.tsx
+msgid "Get an always-on server"
+msgstr "Neem een server die altijd aan staat"
+
+#: src/components/HostingHint.tsx
+msgid "Browser sync has reached its limit of peer connections."
+msgstr "Browsersynchronisatie heeft de limiet van peerverbindingen bereikt."
+
+#: src/components/HostingHint.tsx
+msgid "Keep everyone in sync with a Cloud Server"
+msgstr "Houd iedereen gesynchroniseerd met een Cloud Server"
+
+#: src/components/HostingHint.tsx
+msgid "Want a server of your own?"
+msgstr "Wil je een eigen server?"
+
+#: src/components/HostingHint.tsx
+msgid "Get one hosted"
+msgstr "Laat er een hosten"
+
+#: src/components/HostingHint.tsx
+msgid "Free browser sync is meant for small groups of up to 4 people."
+msgstr "Gratis browsersynchronisatie is bedoeld voor kleine groepen tot 4 mensen."
+
+#: src/components/HostingHint.tsx
+msgid "For more people, use a Cloud Server"
+msgstr "Gebruik voor meer mensen een Cloud Server"
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mailadres, of koppel een ander apparaat, zodat je het elders kunt openen en de toegang niet kwijtraakt."
+
+#: src/components/SaveWork/SaveWorkDialog.tsx
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work"
+msgstr "Bewaar je werk"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register your email or connect a device to open it elsewhere"
+msgstr "Registreer je e-mailadres of koppel een apparaat om het elders te openen"
+
+#: src/components/SideBar/GettingStartedPanel.tsx
+msgid "Save your work here"
+msgstr "Bewaar je werk hier"
+
+#. 0: host
+#: src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Your email and an encrypted backup of your identity go to {0}."
+msgstr "Je e-mailadres en een versleutelde back-up van je identiteit gaan naar {0}."

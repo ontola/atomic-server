@@ -86,3 +86,29 @@ export async function sendAccountEmailLink(
 
   return typeof body?.magic_link === 'string' ? body.magic_link : null;
 }
+
+const prices = new Map<string, Promise<string | undefined>>();
+
+/** What the service says Cloud Server costs ("€30/month"), if it says. Never a price of our own. */
+export function getCloudServerPrice(service: string) {
+  const known = prices.get(service);
+
+  if (known) return known;
+
+  const price = fetch(new URL('/api/auth/providers', service), {
+    credentials: 'omit',
+  })
+    .then(res => res.json())
+    .then(body => {
+      const value = body?.cloud_server_price_from;
+
+      return typeof value === 'string' && value.length <= 40
+        ? value
+        : undefined;
+    })
+    .catch(() => undefined);
+
+  prices.set(service, price);
+
+  return price;
+}

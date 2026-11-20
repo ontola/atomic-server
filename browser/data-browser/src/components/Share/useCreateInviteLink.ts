@@ -8,7 +8,7 @@ import {
   savePeerLink,
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { getManagedAccount } from '../../helpers/managed/session';
 import { isOriginWithoutNode } from '../../helpers/originNode';
 
 export interface InviteLinkOptions {
@@ -29,7 +29,6 @@ export function useCreateInviteLink(
 ): (options: InviteLinkOptions) => Promise<string> {
   const store = useStore();
   const [agent] = useCurrentAgent();
-  const isSaas = !!getManagedPortalUrl();
 
   return async ({ write, expiresAt, maxUsages }) => {
     if (!agent) {
@@ -39,7 +38,11 @@ export function useCreateInviteLink(
     const isDrive = target.hasClasses(server.classes.drive);
     let browserPeer = isDrive && store.isLocalOnlyDrive(target.subject);
 
-    if (isDrive && isSaas && !browserPeer) {
+    if (
+      isDrive &&
+      !browserPeer &&
+      (await getManagedAccount().catch(() => null))
+    ) {
       const response = await managedFetch('/sync-enrollments', {});
 
       if (!response.ok || response.status === 204)

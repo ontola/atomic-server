@@ -45,9 +45,6 @@ vi.mock('@hooks/useNavigateWithTransition', () => ({
 vi.mock('@components/AI/AISidebarContext', () => ({
   useAISidebar: () => ({ openChat: () => {} }),
 }));
-vi.mock('@hooks/useKnownPortalUrl', () => ({
-  useKnownPortalUrl: () => 'https://portal.example',
-}));
 vi.mock('@components/SaveWork/saveWorkDialogState', () => ({
   openSaveWorkDialog: vi.fn(),
 }));
@@ -112,7 +109,7 @@ describe('GettingStartedPanel', () => {
       'Make something',
       'Talk to the AI',
       'Invite someone',
-      'Register with email',
+      'Save your work',
     ])
       expect(html).toContain(title);
   });
@@ -138,7 +135,7 @@ describe('GettingStartedPanel', () => {
     expect(html).toContain('Getting started');
     expect(html).toMatch(/0\s*(<!-- -->)?\s*of/);
     expect(html).toContain('Name your drive');
-    expect(html).toContain('Register with email');
+    expect(html).toContain('Save your work');
     steps = steps.map(s => ({ ...s, done: true }));
     expect(render('page')).toBe('');
   });
