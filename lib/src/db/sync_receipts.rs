@@ -22,6 +22,57 @@ pub struct SerializedServerReceipt {
     pub subject: String,
     pub version: BTreeMap<String, u64>,
     pub confirmed_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stored: Option<StoredServerReceipt>,
+}
+
+/// One actual persistent barrier, never a union of unrelated observations.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoredServerReceipt {
+    pub drive: String,
+    pub version: BTreeMap<String, u64>,
+    pub confirmed_at: u64,
+    pub barrier: String,
+    pub storage_id: String,
+    pub generation: String,
+}
+
+impl StoredServerReceipt {
+    fn identity(&self) -> String {
+        format!("{}:{}", self.storage_id, self.generation)
+    }
+    fn valid(&self) -> bool {
+        let hex = |s: &str| {
+            s.len() == 64
+                && s.bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        };
+        !self.drive.is_empty()
+            && !self.drive.contains('\0')
+            && hex(&self.storage_id)
+            && hex(&self.generation)
+            && !self.barrier.is_empty()
+            && self.confirmed_at <= MAX_SAFE_INTEGER
+            && !self.version.is_empty()
+            && self.version.iter().all(|(peer, count)| {
+                peer.parse::<u64>().is_ok_and(|id| id.to_string() == *peer)
+                    && *count <= i32::MAX as u64
+            })
+    }
+}
+
+fn version_covers(stored: &BTreeMap<String, u64>, target: &BTreeMap<String, u64>) -> bool {
+    !target.is_empty()
+        && target
+            .iter()
+            .all(|(peer, count)| stored.get(peer).copied().unwrap_or(0) >= *count)
+}
+
+fn server_identity_key(scope: &ResourceSyncScope, drive: &str) -> Vec<u8> {
+    let mut key = b"\0server-storage-generation-v1\0".to_vec();
+    key.extend_from_slice(&serde_json::to_vec(&(scope, drive)).expect("string scope serializes"));
+    key
 }
 
 pub struct ResourceSyncEvidence {
@@ -83,7 +134,7 @@ impl VaultSyncScope {
 fn vault_key(subject: &str, scope: &VaultSyncScope) -> Vec<u8> {
     let mut key = subject_prefix(subject);
     // A leading NUL cannot collide with the nonempty server-scope agent.
-    key.extend_from_slice(b"\0vault-v1\0");
+    key.extend_from_slice(b"\0vault-v2\0");
     // Struct field order is fixed; the scope is canonical before serialization.
     key.extend_from_slice(&serde_json::to_vec(scope).expect("string scope serializes"));
     key
@@ -132,6 +183,7 @@ impl SerializedServerReceipt {
         !self.subject.is_empty()
             && !self.subject.contains('\0')
             && self.confirmed_at <= MAX_SAFE_INTEGER
+            && self.stored.as_ref().is_none_or(StoredServerReceipt::valid)
             && self.version.iter().all(|(peer, counter)| {
                 peer.parse::<u64>().is_ok_and(|id| id.to_string() == *peer)
                     && *counter <= i32::MAX as u64
@@ -385,6 +437,20 @@ impl Db {
             // Return the requested spelling for correlation, only after checking
             // the receipt against its canonical storage key above.
             let server_receipt = server_receipt.map(|mut row| {
+                if row.stored.as_ref().is_some_and(|stored| {
+                    let known = scope.as_ref().and_then(|scope| {
+                        self.kv
+                            .get(
+                                Tree::SyncReceipts,
+                                &server_identity_key(scope, &stored.drive),
+                            )
+                            .ok()
+                            .flatten()
+                    });
+                    Some(stored.identity().as_bytes()) != known.as_deref()
+                }) {
+                    row.stored = None;
+                }
                 row.subject = subject.clone();
                 row
             });
@@ -414,6 +480,7 @@ impl Db {
             .sync_receipts_gate
             .lock()
             .map_err(|_| "sync receipt lock poisoned")?;
+        let mut identities = BTreeMap::<Vec<u8>, Vec<u8>>::new();
         let mut merged = BTreeMap::<Vec<u8>, SerializedServerReceipt>::new();
         for receipt in receipts {
             let subject = self
@@ -433,12 +500,41 @@ impl Db {
             let key = key(&subject, &scope);
             let mut incoming = receipt.clone();
             incoming.subject = subject.clone();
+            if let Some(stored) = &mut incoming.stored {
+                stored.drive = self
+                    .normalize_subject(&Subject::from(stored.drive.as_str()))
+                    .pure_id();
+            }
             let previous = merged.remove(&key).or(self
                 .kv
                 .get(Tree::SyncReceipts, &key)?
                 .and_then(|bytes| serde_json::from_slice::<SerializedServerReceipt>(&bytes).ok())
                 .filter(|row| row.valid() && row.subject == subject));
+            if let Some(stored) = &incoming.stored {
+                identities.insert(
+                    server_identity_key(&scope, &stored.drive),
+                    stored.identity().into_bytes(),
+                );
+            }
             if let Some(previous) = previous {
+                let old_stored = previous.stored.filter(|stored| {
+                    let key = server_identity_key(&scope, &stored.drive);
+                    let known = identities
+                        .get(&key)
+                        .cloned()
+                        .or_else(|| self.kv.get(Tree::SyncReceipts, &key).ok().flatten());
+                    Some(stored.identity().as_bytes()) == known.as_deref()
+                });
+                match (&incoming.stored, old_stored) {
+                    (None, old) => incoming.stored = old,
+                    (Some(new), Some(old))
+                        if new.identity() == old.identity()
+                            && version_covers(&old.version, &new.version) =>
+                    {
+                        incoming.stored = Some(old)
+                    }
+                    _ => {}
+                }
                 incoming.confirmed_at = incoming.confirmed_at.max(previous.confirmed_at);
                 for (peer, counter) in previous.version {
                     let current = incoming.version.entry(peer).or_default();
@@ -447,7 +543,7 @@ impl Db {
             }
             merged.insert(key, incoming);
         }
-        let ops = merged
+        let mut ops = merged
             .into_iter()
             .map(|(key, receipt)| {
                 Ok(Operation {
@@ -458,6 +554,14 @@ impl Db {
                 })
             })
             .collect::<AtomicResult<Vec<_>>>()?;
+        for (key, identity) in identities {
+            ops.push(Operation {
+                tree: Tree::SyncReceipts,
+                method: Method::Insert,
+                key,
+                val: Some(identity),
+            });
+        }
         self.kv.apply_batch(&ops)?;
         self.flush()
     }
@@ -559,10 +663,11 @@ impl Db {
                 .and_then(|bytes| serde_json::from_slice::<SerializedVaultReceipt>(&bytes).ok())
                 .filter(|row| row.valid() && row.subject == subject));
             if let Some(previous) = previous {
-                incoming.confirmed_at = incoming.confirmed_at.max(previous.confirmed_at);
-                for (peer, counter) in previous.version {
-                    let current = incoming.version.entry(peer).or_default();
-                    *current = (*current).max(counter);
+                if version_covers(&previous.version, &incoming.version)
+                    || (!version_covers(&incoming.version, &previous.version)
+                        && previous.confirmed_at > incoming.confirmed_at)
+                {
+                    incoming = previous;
                 }
             }
             merged.insert(key, incoming);
@@ -673,6 +778,7 @@ mod tests {
             subject: "did:ad:resource".into(),
             version: BTreeMap::from([(peer.into(), counter)]),
             confirmed_at: time,
+            stored: None,
         }
     }
 
@@ -700,7 +806,7 @@ mod tests {
         let evidence = db.get_resource_vault_evidence(&subjects, &scope).unwrap();
         assert_eq!(
             evidence[0].vault_receipt.as_ref().unwrap().version,
-            BTreeMap::from([("1".into(), 7), ("2".into(), 4)])
+            BTreeMap::from([("2".into(), 4)])
         );
         let mut normalized = scope.clone();
         normalized.portal_url.pop();
@@ -752,6 +858,7 @@ mod tests {
                 subject: subject.into(),
                 version: BTreeMap::from([("1".into(), 7)]),
                 confirmed_at: 10,
+                stored: None,
             };
             db.put_resource_vault_receipts(&vault_scope(), std::slice::from_ref(&row), 0)
                 .unwrap();
@@ -776,6 +883,7 @@ mod tests {
                     subject: subject.into(),
                     version: BTreeMap::from([("1".into(), 9)]),
                     confirmed_at: 12,
+                    stored: None,
                 }],
                 0,
             )
@@ -934,6 +1042,7 @@ mod tests {
             subject: subject.into(),
             version: BTreeMap::from([("1".into(), 7)]),
             confirmed_at: 10,
+            stored: None,
         };
         db.put_resource_sync_receipts(&scope(), &[receipt]).unwrap();
         let rows = db
@@ -983,6 +1092,46 @@ mod tests {
             assert_eq!(db.kv.len(Tree::SyncReceipts).unwrap(), 0);
         }
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn persistent_barriers_recover_and_invalidate_only_their_drive_generation() {
+        let db = store();
+        seed(&db, "atomic:resource");
+        seed(&db, "atomic:other");
+        let mut first = receipt("1", 7, 10);
+        first.stored = Some(StoredServerReceipt {
+            drive: "did:ad:drive".into(),
+            version: first.version.clone(),
+            confirmed_at: 10,
+            barrier: "atomic-redb-flush-v1".into(),
+            storage_id: "a".repeat(64),
+            generation: "b".repeat(64),
+        });
+        db.put_resource_sync_receipts(&scope(), &[first.clone()])
+            .unwrap();
+        // Storage canonicalizes legacy drive identifiers, including in the
+        // generation fence; both spellings must refer to the same drive.
+        first.stored.as_mut().unwrap().drive = "atomic:drive".into();
+        let read = || {
+            db.get_resource_sync_evidence(&["atomic:resource".into()], Some(&scope()))
+                .unwrap()[0]
+                .server_receipt
+                .clone()
+                .unwrap()
+        };
+        assert_eq!(read().stored, first.stored);
+        let mut other = first.clone();
+        other.subject = "atomic:other".into();
+        other.stored.as_mut().unwrap().drive = "did:ad:other-drive".into();
+        other.stored.as_mut().unwrap().generation = "c".repeat(64);
+        db.put_resource_sync_receipts(&scope(), &[other.clone()])
+            .unwrap();
+        assert_eq!(read().stored, first.stored);
+        other.stored.as_mut().unwrap().drive = "did:ad:drive".into();
+        db.put_resource_sync_receipts(&scope(), &[other]).unwrap();
+        assert!(read().stored.is_none());
+        assert_eq!(read().version, first.version);
     }
 
     #[test]

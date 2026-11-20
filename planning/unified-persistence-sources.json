@@ -1,0 +1,150 @@
+{
+  "base": "d067d02209a480962e8928d885e473a8846c7212",
+  "strategy": "Forward refactor of candidate27, preserving all source PR branches",
+  "sources": [
+    {
+      "number": 2567,
+      "title": "fix(lib): require local persistence before offline save success",
+      "head": "codex/atomic-local-durability-2538",
+      "head_sha": "2341c40a37d8e4ef9677815a3c753d541b0676ed",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2567"
+    },
+    {
+      "number": 2568,
+      "title": "fix(lib): distinguish unsaved-parent queues from offline saves",
+      "head": "codex/atomic-queued-save-2538",
+      "head_sha": "0454dbd522400c1bac782f3fbe25c3adcc9e3159",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2568"
+    },
+    {
+      "number": 2584,
+      "title": "feat(lib): expose version-specific local and server save receipts",
+      "head": "codex/atomic-save-receipts-2538",
+      "head_sha": "c4a4acfaa8505bafa1e93ca22f2fac9456466181",
+      "base": "codex/atomic-local-durability-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2584"
+    },
+    {
+      "number": 2586,
+      "title": "Add policy-based independent-replica evidence signals",
+      "head": "codex/atomic-replica-signals-2538",
+      "head_sha": "ddfb7ce0f0b9cd3e4067fe3f1eb3e7d021d05a5b",
+      "base": "codex/atomic-save-receipts-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2586"
+    },
+    {
+      "number": 2589,
+      "title": "Produce version-specific storage receipts from browser peers",
+      "head": "codex/atomic-peer-receipts-2538",
+      "head_sha": "1f5ffa58407ba8bd0edb27957c5423a931c2690f",
+      "base": "codex/atomic-replica-signals-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2589"
+    },
+    {
+      "number": 2592,
+      "title": "Produce automatic version-specific storage receipts over native Iroh",
+      "head": "codex/atomic-iroh-receipts-2538",
+      "head_sha": "0cd97292a6c93f60797df4b6ffa27370d65726e0",
+      "base": "codex/atomic-peer-receipts-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2592"
+    },
+    {
+      "number": 2594,
+      "title": "Produce automatic HTTP/WebSocket storage receipts",
+      "head": "codex/atomic-server-receipts-2538",
+      "head_sha": "e5bdb2cb3a8995f78b0c1fb338b280e63fba3617",
+      "base": "codex/atomic-iroh-receipts-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2594"
+    },
+    {
+      "number": 2596,
+      "title": "Automatically collect native WebSocket and Flutter storage receipts",
+      "head": "codex/atomic-native-ws-receipts-2538",
+      "head_sha": "f68945fd97520b76e8d731dd9af9eaa7d527b402",
+      "base": "codex/atomic-server-receipts-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2596"
+    },
+    {
+      "number": 2598,
+      "title": "Automatically collect browser receipts after background delivery",
+      "head": "codex/atomic-browser-receipts-2538",
+      "head_sha": "6ea17197bf801581ae3923a013fa4b0db029edbf",
+      "base": "codex/atomic-native-ws-receipts-2538",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2598"
+    },
+    {
+      "number": 2413,
+      "title": "Keep sync warning until the current drive and attachments are confirmed",
+      "head": "codex/drive-sync-indicator-2409",
+      "head_sha": "f13efacccddfc4f254ff342c4135b10b920f413f",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2413"
+    },
+    {
+      "number": 2559,
+      "title": "Show verified server sync and Cloud Vault backup status",
+      "head": "codex/vault-first-backup-status",
+      "head_sha": "64f5c0cefdc14497c6090fdc8b3a83bdd4c5bc38",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2559"
+    },
+    {
+      "number": 2564,
+      "title": "Record confirmed full syncs with Iroh peers",
+      "head": "codex/peer-full-sync-confirmation",
+      "head_sha": "1021eba25ebf9b371768084762f3e020013cd656",
+      "base": "codex/vault-first-backup-status",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2564"
+    },
+    {
+      "number": 2576,
+      "title": "Show per-resource and attachment confirmations across sync destinations",
+      "head": "codex/atomic-resource-sync",
+      "head_sha": "6f1715c3bea033f6c7e38a8d22ac2d26955f3165",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2576"
+    },
+    {
+      "number": 2561,
+      "title": "Fix Cloud Vault backup download failing in the save picker",
+      "head": "codex/mac-backup-download-2560",
+      "head_sha": "dae567446b15fe95774db1a064dc9c4fdf215358",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2561"
+    },
+    {
+      "number": 2571,
+      "title": "Retry missing Iroh file contents",
+      "head": "codex/iroh-file-sync-recovery",
+      "head_sha": "d8c03f320eea5e930b000ea0041cac340f2803e1",
+      "base": "codex/peer-full-sync-confirmation",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2571"
+    },
+    {
+      "number": 2587,
+      "title": "Automatically recover missing file contents from Cloud Vault",
+      "head": "codex/vault-missing-file-recovery",
+      "head_sha": "8f6921bf763c3747b168a8945aa8e7f8e97bcba4",
+      "base": "develop",
+      "state": "open",
+      "url": "https://github.com/ontola/atomic-server/pull/2587"
+    }
+  ]
+}

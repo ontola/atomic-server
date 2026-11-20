@@ -246,7 +246,10 @@ it('automatically confirms current persisted inventory after a paired handshake'
   expect(h.left.getResourcePeerSyncStatus(h.resource).confirmedCount).toBe(1);
   expect(Object.isFrozen(h.events[0])).toBe(true);
   links[0].close();
-  expect(h.left.getResourcePeerSyncStatus(h.resource).confirmedCount).toBe(0);
+  expect(h.left.getResourcePeerSyncStatus(h.resource)).toMatchObject({
+    confirmedCount: 1,
+    connectedCount: 0,
+  });
 });
 
 it.each([

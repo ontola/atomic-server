@@ -133,16 +133,19 @@ describe('live resource peer copies', () => {
     expect(h.get().peers[0].connectionId).toBe('duplicate');
   });
 
-  it('removes live proof on departure and ignores a late response from the closed session', () => {
+  it('retains historical proof on departure and ignores a late response from the closed session', () => {
     const h = setup();
     const close = h.open();
     h.store.acknowledgeResourcePeerReceipt(h.receipt());
     close();
+    const prior = h.get();
     h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    expect(h.get()).toEqual(prior);
+    expect(h.get().peers[0].connected).toBe(false);
     expect(h.get()).toMatchObject({
-      state: 'unknown',
+      state: 'confirmed',
       connectedCount: 0,
-      confirmedCount: 0,
+      confirmedCount: 1,
     });
   });
 

@@ -1,3 +1,4 @@
+import { encodeB64 } from './base64.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from './store.js';
 import { Resource } from './resource.js';
@@ -97,6 +98,7 @@ function memoryDb() {
   );
   const db = {
     isReady: true,
+    supportsDurablePersistence: true,
     isInitialized: true,
     waitForInit: async () => true,
     putResourceWithSnapshot,
@@ -132,6 +134,67 @@ async function persist(store: Store, db: ClientDbWorker, resource: Resource) {
 }
 
 describe('resource sync proof recovery', () => {
+  it('restores a stored server boundary offline without upgrading legacy acceptance', async () => {
+    const store = await scopedStore();
+    const memory = memoryDb();
+    store.setClientDb(memory.db);
+    const resource = loadedResource(store);
+    await persist(store, memory.db, resource);
+    const emit = (client: Store, target: Resource) =>
+      client.notifyServerReplicaReceipt({
+        drive: 'https://example.com/drive',
+        endpoint: 'https://example.com/storage-receipt',
+        serverOrigin: 'https://example.com',
+        transport: 'http',
+        clientAgent: client.getAgent()!.subject!,
+        connectionId: 'test',
+        identityGeneration: client.getIdentityGeneration(),
+        databaseGeneration: client.getClientDbGeneration(),
+        observation: {
+          provider: 'server',
+          capability: 'supported',
+          replica: { storageId: 'a'.repeat(64), generation: 'b'.repeat(64) },
+          barrier: {
+            subject: target.subject,
+            version: encodeB64(target.getLoroDoc()!.oplogVersion().encode()),
+            name: 'atomic-redb-flush-v1',
+            storage: 'persistent',
+            state: 'completed',
+          },
+        },
+      });
+    emit(store, resource);
+    await vi.waitFor(() =>
+      expect(memory.putResourceSyncReceipts).toHaveBeenCalled(),
+    );
+    const cold = await scopedStore();
+    cold.setAgent(store.getAgent());
+    cold.setClientDb(memory.db);
+    const restored = loadedResource(cold, resource.subject, snapshot(resource));
+    const stop = cold.subscribeResourceSyncStatus(restored, () => {});
+    await vi.waitFor(() =>
+      expect(cold.getResourceSyncStatus(restored).server.stored).toBe(
+        'confirmed',
+      ),
+    );
+    // A later receipt in the same incarnation must replace the recovered
+    // version when it is persisted again, not reuse fields from the old row.
+    const remote = new LoroLoader.Loro.LoroDoc();
+    remote.import(snapshot(restored));
+    remote.getMap('properties').set(core.properties.name, 'Second version');
+    remote.commit();
+    restored.importLoroUpdate(remote.export({ mode: 'snapshot' }), true);
+    await persist(cold, memory.db, restored);
+    emit(cold, restored);
+    const expected = Object.fromEntries(remote.oplogVersion().toJSON());
+    await vi.waitFor(() =>
+      expect([...memory.receipts.values()][0].stored?.version).toEqual(
+        expected,
+      ),
+    );
+    stop();
+  });
+
   it('keeps the getter pure and batches durable local proof reads without inventing server proof or save time', async () => {
     const store = await scopedStore();
     const memory = memoryDb();
@@ -426,7 +489,9 @@ describe('resource sync proof recovery', () => {
     store.setClientDb({ isReady: true } as ClientDbWorker);
     const oldStop = store.subscribeResourceSyncStatus(resource, vi.fn());
     await Promise.resolve();
-    expect(store.getResourceSyncStatus(resource).local.state).toBe('unknown');
+    expect(store.getResourceSyncStatus(resource).local.state).toBe(
+      'unavailable',
+    );
     oldStop();
     const memory = memoryDb();
     store.setClientDb(memory.db);

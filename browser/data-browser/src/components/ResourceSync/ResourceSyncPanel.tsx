@@ -1,3 +1,4 @@
+import { persistenceCopyComplete } from '@tomic/lib';
 import type { JSX, ReactNode } from 'react';
 import {
   useTitle,
@@ -74,13 +75,20 @@ export function ResourceSyncPanel({
       ? null
       : new Date(vault.confirmedAt).toLocaleString();
   const destination = destinationLabel(status.server.url);
-  const localConfirmed =
-    status.local.state === 'confirmed' &&
-    (!contents.required || contents.local.state === 'confirmed');
+  const localConfirmed = persistenceCopyComplete(
+    status.local.state,
+    contents.required,
+    contents.local.state,
+  );
   const serverConfirmed =
-    status.server.state === 'confirmed' &&
     save.kind === 'idle' &&
-    (!contents.required || contents.server.state === 'confirmed');
+    persistenceCopyComplete(
+      status.server.stored ?? 'unknown',
+      contents.required,
+      contents.server.state,
+      status.server,
+      contents.server,
+    );
   const completePeers = completePeerCopyCount(peers, contents);
 
   return (

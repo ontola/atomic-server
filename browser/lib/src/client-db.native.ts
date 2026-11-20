@@ -68,6 +68,8 @@ const bytes = (b64: unknown): Uint8Array | null =>
   typeof b64 === 'string' && b64 !== '' ? decodeB64(b64) : null;
 
 export class NativeClientDb {
+  /** The embedded renderer snapshot RPC is a cache no-op, not a flush. */
+  readonly supportsDurablePersistence = false;
   /** Set when the host answered `init` with an error. */
   initError: Error | undefined;
   private ready = false;

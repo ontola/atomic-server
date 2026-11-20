@@ -1,6 +1,8 @@
 // @wc-ignore-file
 import {
   StoreEvents,
+  resourcePersistenceVersion,
+  type PersistenceEvidenceScope,
   attachmentManifestKey,
   parseAttachmentManifest,
   resourceAttachmentDescriptor,
@@ -68,8 +70,7 @@ type Context = {
   scope: VaultSyncScope;
   db: VaultReceiptDb;
   storeDb: ReturnType<Store['getClientDb']>;
-  receipts: Map<string, SerializedVaultReceipt>;
-  attachmentReceipts: Map<string, SerializedVaultAttachmentReceipt>;
+  receipts: PersistenceEvidenceScope;
   attachmentReads: Map<string, object>;
   attachmentQueued: Map<string, object>;
   reads: Map<string, object>;
@@ -101,6 +102,7 @@ export function clearResourceVaultScopes(store: Store): void {
   const ledger = ledgers.get(store);
   if (!ledger) return;
   ledger.epoch++;
+  for (const context of ledger.contexts.values()) context.receipts.close();
   ledger.contexts.clear();
   notify(ledger);
 }
@@ -116,7 +118,11 @@ export async function invalidateResourceVaultProof(
     context => context.scope.drivePseudonym === drivePseudonym,
   );
   ledger.epoch++;
-  for (const context of removed) ledger.contexts.delete(context.scope.drive);
+
+  for (const context of removed) {
+    context.receipts.close();
+    ledger.contexts.delete(context.scope.drive);
+  }
 
   for (const context of ledger.contexts.values()) {
     context.reads.clear();
@@ -192,19 +198,19 @@ function ledgerFor(store: Store): Ledger {
     const normalized = store.normalizeSubject(subject);
 
     for (const ctx of current.contexts.values()) {
-      ctx.receipts.delete(normalized);
+      ctx.receipts.remove(normalized);
 
-      for (const [root, receipt] of ctx.attachmentReceipts)
+      for (const [root, receipt] of ctx.receipts.contentEntries())
         if (
           root === normalized ||
           receipt.manifest.files.some(file => file.subject === normalized)
         ) {
-          ctx.attachmentReceipts.delete(root);
+          ctx.receipts.removeContents(root);
           ctx.attachmentReads.delete(root);
           ctx.attachmentQueued.delete(root);
         }
 
-      ctx.attachmentReceipts.delete(normalized);
+      ctx.receipts.removeContents(normalized);
       ctx.attachmentReads.delete(normalized);
       ctx.attachmentQueued.delete(normalized);
       ctx.reads.delete(normalized);
@@ -282,14 +288,10 @@ function mergeReceipt(
   context: Context,
   incoming: SerializedVaultReceipt,
 ): void {
-  const previous = context.receipts.get(incoming.subject);
-  const version = { ...previous?.version };
-  for (const [peer, count] of Object.entries(incoming.version))
-    version[peer] = Math.max(version[peer] ?? 0, count);
-  context.receipts.set(incoming.subject, {
-    subject: incoming.subject,
-    version,
-    confirmedAt: Math.max(previous?.confirmedAt ?? 0, incoming.confirmedAt),
+  context.receipts.record(incoming.subject, 'stored', {
+    version: incoming.version,
+    confirmedAt: incoming.confirmedAt,
+    barrier: 'encrypted-vault-checkpoint',
   });
 }
 
@@ -388,23 +390,17 @@ export function getResourceVaultSyncStatus(
   const context = contextFor(store, ledger, resource);
   if (!context || !contextCurrent(store, ledger, context, ledger.epoch))
     return UNKNOWN;
-  const receipt = context.receipts.get(
-    store.normalizeSubject(resource.subject),
-  );
-  let state: ResourceVaultSyncStatus['state'] = 'unknown';
-
-  if (receipt) {
-    const doc = resource.hasLoroDoc() ? resource.getLoroDoc() : undefined;
-    const current = doc?.oplogVersion().toJSON();
-    state =
-      current?.size &&
-      doc!.getPendingTxnLength() === 0 &&
-      [...current].every(
-        ([peer, count]) => (receipt.version[peer] ?? 0) >= count,
-      )
-        ? 'confirmed'
-        : 'pending';
-  }
+  const subject = store.normalizeSubject(resource.subject);
+  const receipt = context.receipts.latest(subject, 'stored');
+  const state: ResourceVaultSyncStatus['state'] = context.receipts.covering(
+    subject,
+    'stored',
+    resourcePersistenceVersion(resource),
+  )
+    ? 'confirmed'
+    : receipt
+      ? 'pending'
+      : 'unknown';
 
   const next = {
     state,
@@ -507,12 +503,11 @@ function ensureAttachmentEvidence(
             store.hasPendingDestroy(subject)
           )
             continue;
-          const old = context.attachmentReceipts.get(subject);
+          const old = context.receipts.content(subject);
           if (!old || old.confirmedAt < receipt.confirmedAt)
-            context.attachmentReceipts.set(subject, {
-              ...receipt,
-              subject,
+            context.receipts.recordContents(subject, {
               manifest,
+              confirmedAt: receipt.confirmedAt,
             });
         }
 
@@ -539,7 +534,7 @@ export function getResourceVaultAttachmentSyncStatus(
     store.hasPendingDestroy(resource.subject)
   )
     return UNKNOWN;
-  const receipt = context.attachmentReceipts.get(
+  const receipt = context.receipts.content(
     store.normalizeSubject(resource.subject),
   );
   const manifest = resourceAttachmentDescriptor(store, resource).manifest;
@@ -611,12 +606,12 @@ export function bindResourceVaultScope(
     scopeKey(old.scope) === scopeKey(scope)
   )
     return;
+  old?.receipts.close();
   const context: Context = {
     scope: Object.freeze(scope),
     db,
     storeDb: store.getClientDb(),
-    receipts: new Map(),
-    attachmentReceipts: new Map(),
+    receipts: store.persistenceEvidence.open(`vault:${scopeKey(scope)}`),
     attachmentReads: new Map(),
     attachmentQueued: new Map(),
     reads: new Map(),
@@ -803,7 +798,7 @@ export function captureResourceVaultBackup(
             !store.isDestroyed(receipt.subject) &&
             !store.hasPendingDestroy(receipt.subject)
           )
-            context.attachmentReceipts.set(receipt.subject, receipt);
+            context.receipts.recordContents(receipt.subject, receipt);
         notify(ledger);
       } catch {
         /* Diagnostic failure cannot fail successful encrypted storage. */

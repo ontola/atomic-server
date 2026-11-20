@@ -194,7 +194,7 @@ describe('exact resource attachment evidence', () => {
       h.resource.getLoroDoc()!.export({ mode: 'snapshot' }),
     );
     expect(h.store.getResourceSyncStatus(h.resource).local.state).toBe(
-      'confirmed',
+      'unavailable',
     );
     await h.poll();
     expect(h.get().required).toBe(true);
@@ -398,7 +398,7 @@ describe('exact resource attachment evidence', () => {
   });
 
   for (const failure of ['unsupported', 'error', 'malformed'] as const) {
-    it(`clears old local evidence on ${failure} verification`, async () => {
+    it(`retains historical evidence on ${failure} verification`, async () => {
       const h = await fixture();
       await h.poll();
       expect(h.get().local.state).toBe('confirmed');
@@ -420,11 +420,14 @@ describe('exact resource attachment evidence', () => {
               ],
         );
       await h.poll();
-      expect(h.get().local.state).not.toBe('confirmed');
+      expect(h.get().local).toMatchObject({
+        state: 'confirmed',
+        confirmedAt: 100,
+      });
     });
   }
 
-  it('binds peer byte proof to the metadata peer storage identity and removes it on departure', async () => {
+  it('binds peer byte proof to the storage identity and retains history on departure', async () => {
     const h = await fixture();
     const source = { storageId: '1'.repeat(64), generation: '2'.repeat(64) };
     const replica = { storageId: '3'.repeat(64), generation: '4'.repeat(64) };
@@ -472,7 +475,10 @@ describe('exact resource attachment evidence', () => {
       ...contentProof,
       confirmedAt: Date.now(),
     });
-    expect(h.get().peers).toEqual([]);
+    expect(h.get().peers[0].state).toBe('confirmed');
+    expect(h.store.getResourcePeerSyncStatus(h.resource).connectedCount).toBe(
+      0,
+    );
   });
   it('does not revive parent contents from a delayed query after child eviction and identical recreation', async () => {
     const h = await fixture();
@@ -512,7 +518,7 @@ describe('exact resource attachment evidence', () => {
     expect(h.get(folder).required).toBe(false);
     expect(h.get(folder).manifest).toEqual({ files: [] });
   });
-  it('expires byte proof without a fresh response while the peer and its metadata remain live', async () => {
+  it('does not turn elapsed time into evidence of byte loss', async () => {
     const h = await fixture();
     h.watch();
     const source = { storageId: '1'.repeat(64), generation: '2'.repeat(64) };
@@ -545,17 +551,18 @@ describe('exact resource attachment evidence', () => {
     };
     h.store.acknowledgeResourceAttachmentReceipt(content);
     expect(h.get().peers[0].state).toBe('confirmed');
-    // A peer whose bytes disappeared cannot issue a fresh positive response.
-    // Keep the authenticated connection open and allow normal refresh timers.
+    // A silent peer supplies no new evidence about retention. Keep its
+    // original observation time while normal refresh timers run.
     await vi.advanceTimersByTimeAsync(31_000);
     expect(h.store.getResourcePeerSyncStatus(h.resource)).toMatchObject({
       state: 'confirmed',
       confirmedCount: 1,
     });
-    expect(h.get().peers[0].state).not.toBe('confirmed');
-    // A delayed replay carries the original time and cannot renew the proof.
+    expect(h.get().peers[0].state).toBe('confirmed');
+    // A delayed replay cannot renew the observation time.
+    const confirmedAt = h.get().peers[0].confirmedAt;
     h.store.acknowledgeResourceAttachmentReceipt(content);
-    expect(h.get().peers[0].state).not.toBe('confirmed');
+    expect(h.get().peers[0].confirmedAt).toBe(confirmedAt);
     h.store.acknowledgeResourceAttachmentReceipt({
       ...content,
       confirmedAt: Date.now(),

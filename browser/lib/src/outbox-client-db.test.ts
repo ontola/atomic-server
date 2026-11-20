@@ -6,6 +6,7 @@ import { JSCryptoProvider } from './CryptoProvider.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { Store } from './store.js';
+import { LoroLoader } from './loro-loader.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -20,6 +21,7 @@ afterEach(() => {
  */
 class FakeClientDb {
   isReady = true;
+  supportsDurablePersistence = true;
   /** False while the database is still opening: writes reject until
    *  {@link finishOpening}, as the real one does once it is parked. */
   isOpen = true;
@@ -143,6 +145,144 @@ async function newAgent(): Promise<Agent> {
 }
 
 describe('the outbox in the client database', () => {
+  it.each([false, true])(
+    'keeps private drafts across reload (local-only: %s)',
+    async localOnly => {
+      const agent = await newAgent();
+      const db = new FakeClientDb();
+      const first = await tab(agent, db, true);
+      const parent = await first.store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        deferGenesis: true,
+        propVals: { [core.properties.name]: 'Unsaved parent' },
+      });
+      if (localOnly) first.store.registerLocalOnlyDrive(parent.subject);
+      const child = await first.store.newResource({
+        parent: parent.subject,
+        deferGenesis: true,
+        propVals: { [core.properties.name]: 'Saved child' },
+      });
+      const receipt = await child.saveWithReceipt();
+      expect(receipt.status).toBe('queued');
+      expect(receipt.local?.version).toBeTruthy();
+      const privateRow = db
+        .queued(agent.subject!)
+        .find(
+          row =>
+            (row.privateDraftV1 as { subject?: string } | undefined)
+              ?.subject === child.subject,
+        );
+      expect(privateRow?.subject).toBeUndefined();
+      expect(
+        (privateRow?.privateDraftV1 as { draft?: unknown })?.draft,
+      ).toBeDefined();
+      expect(db.rows.has(child.subject)).toBe(false);
+      await first.store.syncDirtyResources();
+      expect(first.posted).toHaveLength(0);
+      first.store.setServerConnected(false);
+      const second = await tab(agent, db, false);
+      if (localOnly) second.store.registerLocalOnlyDrive(parent.subject);
+      const restored = await second.store.getResource(parent.subject);
+      expect(restored.get(core.properties.name)).toBe('Unsaved parent');
+      second.store.setServerConnected(true);
+      await second.store.syncDirtyResources();
+      expect(second.posted).toHaveLength(0);
+      await restored.save();
+      if (localOnly) {
+        expect(second.posted).toHaveLength(0);
+        expect(db.rows.has(child.subject)).toBe(true);
+      } else
+        expect(
+          second.posted.some(commit => commit.subject === child.subject),
+        ).toBe(true);
+      expect(second.store.outbox.hasPending(child.subject)).toBe(false);
+      second.store.setServerConnected(false);
+    },
+  );
+
+  it('stores the snapshot and replay cursor before the first online POST', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store, postCommitSpy } = await tab(agent, db, true);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Online edit' },
+    });
+    postCommitSpy.mockImplementation(async commit => {
+      expect(db.rows.get(resource.subject)?.snapshot).toBeDefined();
+      expect(
+        db.queued(agent.subject!).find(row => row.subject === resource.subject)
+          ?.baseVersion,
+      ).toBeDefined();
+
+      return commit;
+    });
+    await resource.save();
+    expect(postCommitSpy).toHaveBeenCalled();
+    store.setServerConnected(false);
+  });
+
+  it('automatically keeps an existing offline edit without publishing it', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store, posted } = await tab(agent, db, false);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+    });
+    await resource.save();
+    await resource.set(core.properties.name, 'Automatic local edit', false);
+    resource.sealPendingEdits();
+    await vi.waitFor(() => {
+      const bytes = db.rows.get(resource.subject)?.snapshot;
+      const doc = new LoroLoader.Loro.LoroDoc();
+      if (bytes) doc.import(bytes);
+      expect(doc.getMap('properties').get(core.properties.name)).toBe(
+        'Automatic local edit',
+      );
+      doc.free();
+    });
+    expect(posted).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    'replays edits after an offline genesis on a cold reload (legacy queue: %s)',
+    async legacy => {
+      const agent = await newAgent();
+      const db = new FakeClientDb();
+      const first = await tab(agent, db, false);
+      const doc = await first.store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        propVals: { [core.properties.name]: 'Genesis' },
+      });
+      await doc.save();
+      await doc.set(core.properties.name, 'Later offline edit');
+      await doc.save();
+
+      if (legacy) {
+        const rows = db.outbox.get(agent.subject!)!;
+        const row = JSON.parse(rows.get(doc.subject)!);
+        delete row.baseVersion;
+        rows.set(doc.subject, JSON.stringify(row));
+      }
+
+      const second = await tab(agent, db, false);
+      expect(second.store.resources.has(doc.subject)).toBe(false);
+      second.store.setServerConnected(true);
+      await second.store.syncDirtyResources();
+      second.store.setServerConnected(false);
+      const remote = new LoroLoader.Loro.LoroDoc();
+      for (const commit of second.posted) remote.import(commit.loroUpdate!);
+      expect(remote.getMap('properties').get(core.properties.name)).toBe(
+        'Later offline edit',
+      );
+      expect(second.store.outbox.hasPending(doc.subject)).toBe(false);
+    },
+  );
+
   it('an offline edit survives a reload and drains on reconnect', async () => {
     const agent = await newAgent();
     const db = new FakeClientDb();
