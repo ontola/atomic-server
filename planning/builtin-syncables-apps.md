@@ -2,9 +2,10 @@
 
 Local implementation and acceptance are complete. Remaining gate:
 
-- [ ] Trekmeester runs full shared server CI on the final PR #2522 head, reviews
-  and merges. Workers must not dispatch or rerun shared CI. Remove this handoff
-  after that acceptance.
+- [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
+  server CI on the final integration candidate, reviews and merges. Integration
+  and shared CI remain with trekmeester; workers must not rebase, dispatch or
+  rerun shared CI. Remove this handoff after that acceptance.
 
 ## Contract
 
