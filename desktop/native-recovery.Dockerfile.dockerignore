@@ -1,0 +1,5 @@
+# This image installs tools; sources are mounted at runtime, never sent to build.
+**
+!desktop/
+!desktop/native-recovery.Dockerfile
+!desktop/native-recovery.Dockerfile.dockerignore

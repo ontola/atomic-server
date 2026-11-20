@@ -260,6 +260,10 @@ import { startAppKeyRecovery } from './chunks/AppPage/appKeyHandover';
 const stopAppKeyRecovery = startAppKeyRecovery(store);
 if (import.meta.hot) import.meta.hot.dispose(stopAppKeyRecovery);
 
+import { startAutomaticFileRecovery } from './helpers/managed/automaticFileRecovery';
+const stopAutomaticFileRecovery = startAutomaticFileRecovery(store);
+if (import.meta.hot) import.meta.hot.dispose(stopAutomaticFileRecovery);
+
 // Make the Store available globally for debugging
 window.store = store;
 

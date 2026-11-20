@@ -10,18 +10,19 @@ const BINDING = 'binding';
 const CHALLENGE = `${BINDING}:${'c'.repeat(64)}`;
 
 const sent = vi.hoisted(() => [] as Uint8Array[]);
+const incoming = vi.hoisted(() => [] as Uint8Array[]);
 
 vi.mock('./webrtc-peer.js', () => ({
   WebRtcPeer: class {
     close = vi.fn();
-    // The remote's CHALLENGE is the only frame; then the channel ends.
+    // Deliver the remote's CHALLENGE before any queued test frames.
     transport = Promise.resolve({
       send: async (frame: Uint8Array) => void sent.push(frame),
       recv: (() => {
         let served = false;
 
         return async () => {
-          if (served) return undefined;
+          if (served) return incoming.shift();
           served = true;
 
           return new Uint8Array([
@@ -64,6 +65,7 @@ let link: BrowserPeerSync | undefined;
 
 beforeEach(() => {
   sent.length = 0;
+  incoming.length = 0;
   SignalSocket.instances = [];
   vi.stubGlobal('WebSocket', SignalSocket);
   vi.stubGlobal('crypto', webcrypto);
@@ -109,4 +111,78 @@ it('authenticates to a browser peer with the canonical agent subject', async () 
   const frame = sent.find(candidate => candidate[0] === Tag.AUTH)!;
   const auth = JSON.parse(new TextDecoder().decode(frame.subarray(1)));
   expect(auth[AUTH_AGENT]).toBe(agent.subject);
+});
+
+async function receivedFile(
+  handling: Promise<{ frames: number[][]; changed: string[] }>,
+) {
+  const agent = await Agent.generateNonExtractable();
+  const db = {
+    getResourceWithSnapshot: async () => ({ snapshot: undefined }),
+    createPeerSession: async () => 1,
+    closePeerSession: async () => {},
+    handlePeerFrame: vi.fn(() => handling),
+  };
+  let currentDb: object = db;
+  const retry = vi.fn();
+  const store = {
+    getAgent: () => agent,
+    getClientDb: () => currentDb,
+    retryFileContentRecovery: retry,
+  } as unknown as Store;
+  incoming.push(new Uint8Array([Tag.BLOB_RESPONSE]));
+  link = new BrowserPeerSync(store, {
+    drive: 'atomic:drive',
+    room: 'a'.repeat(64),
+    signalingUrl: 'ws://localhost/webrtc-signal',
+  });
+  (link as unknown as { peerId: string }).peerId = '0'.repeat(64);
+  SignalSocket.instances[0].message({
+    type: 'joined',
+    peers: ['f'.repeat(64)],
+  });
+  await vi.waitFor(() => expect(db.handlePeerFrame).toHaveBeenCalledOnce());
+
+  return {
+    retry,
+    replaceDb: () => {
+      currentDb = {};
+    },
+  };
+}
+
+it('refreshes file readers only after the peer database validates and stores a late response', async () => {
+  const processed = Promise.withResolvers<{
+    frames: number[][];
+    changed: string[];
+  }>();
+  const f = await receivedFile(processed.promise);
+  expect(f.retry).not.toHaveBeenCalled();
+  processed.resolve({ frames: [], changed: [] });
+  await vi.waitFor(() => expect(f.retry).toHaveBeenCalledOnce());
+});
+
+it('does not refresh file readers when the peer database rejects a response', async () => {
+  const processed = Promise.withResolvers<{
+    frames: number[][];
+    changed: string[];
+  }>();
+  const f = await receivedFile(processed.promise);
+  processed.reject(new Error('Blob hash mismatch'));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(f.retry).not.toHaveBeenCalled();
+});
+
+it('does not refresh file readers for a previous peer database', async () => {
+  const processed = Promise.withResolvers<{
+    frames: number[][];
+    changed: string[];
+  }>();
+  const f = await receivedFile(processed.promise);
+  f.replaceDb();
+  processed.resolve({ frames: [], changed: [] });
+  await processed.promise;
+  await Promise.resolve();
+  expect(f.retry).not.toHaveBeenCalled();
 });

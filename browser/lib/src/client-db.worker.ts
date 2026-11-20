@@ -218,6 +218,8 @@ export interface ClientDbRpc {
   // File bytes (`planning/vault-file-blobs.md`): hashing, chunking, sealing
   // and opening are Rust; the main thread only moves sealed chunks.
   vaultFileHashes: [{ driveSubject: string }, string[]];
+  requestDriveBlobs: [{ driveSubject: string; hashes: string[] }, number[][]];
+  requestPeerBlobs: [{ session: number; hashes: string[] }, number[][]];
   vaultBlobPresent: [{ hash: string }, boolean];
   vaultBlobOpen: [
     { hash: string; key: Uint8Array; keyEpoch: number },
@@ -235,6 +237,7 @@ export interface ClientDbRpc {
       blobId: string;
       chunks: Uint8Array[];
       wanted: string[];
+      driveSubject?: string;
     },
     VaultBlobRestoreResult,
   ];
@@ -518,6 +521,8 @@ const handlers: Handlers = {
     flushNow();
   },
   vaultFileHashes: m => db!.vaultFileHashes(m.driveSubject),
+  requestDriveBlobs: m => db!.requestDriveBlobs(m.driveSubject, m.hashes),
+  requestPeerBlobs: m => db!.requestPeerBlobs(m.session, m.hashes),
   vaultBlobPresent: m => db!.vaultBlobPresent(m.hash),
   vaultBlobOpen: m => db!.vaultBlobOpen(m.hash, m.key, m.keyEpoch),
   vaultBlobChunk: m => db!.vaultBlobChunk(m.hash, m.key, m.keyEpoch, m.index),
@@ -529,6 +534,7 @@ const handlers: Handlers = {
       m.blobId,
       m.chunks,
       m.wanted,
+      m.driveSubject,
     );
 
     // Same reasoning as `vaultImport`: a restore may be followed by a reload.

@@ -1390,6 +1390,17 @@ export class ClientDbWorker {
     return this.call('vaultFileHashes', { driveSubject });
   }
 
+  requestDriveBlobs(
+    driveSubject: string,
+    hashes: string[],
+  ): Promise<number[][]> {
+    return this.call('requestDriveBlobs', { driveSubject, hashes });
+  }
+
+  requestPeerBlobs(session: number, hashes: string[]): Promise<number[][]> {
+    return this.call('requestPeerBlobs', { session, hashes });
+  }
+
   /** Whether this device holds the bytes for a file hash. */
   vaultBlobPresent(hash: string): Promise<boolean> {
     return this.call('vaultBlobPresent', { hash });
@@ -1432,6 +1443,7 @@ export class ClientDbWorker {
     blobId: string,
     chunks: Uint8Array[],
     wanted: string[],
+    driveSubject?: string,
   ): Promise<VaultBlobRestoreResult> {
     return this.call('vaultBlobRestore', {
       key,
@@ -1439,6 +1451,7 @@ export class ClientDbWorker {
       blobId,
       chunks,
       wanted,
+      driveSubject,
     });
   }
 

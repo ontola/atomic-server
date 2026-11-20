@@ -297,9 +297,22 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
 
+  # The private Cloud Vault checkout is available only to trusted refs. Keep
+  # this on a disposable hosted Linux runner, independently of Main's host.
+  native-recovery:
+    name: Native recovery
+    if: >-
+      github.repository == 'ontola/atomic-server' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/native-recovery.yml
+    permissions:
+      contents: read
+    secrets:
+      ATOMIC_SAAS_DISPATCH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
+
   Main:
     name: Main
-    needs: [pick, mancave, github, downstream-saas]
+    needs: [pick, mancave, github, downstream-saas, native-recovery]
     if: always() && needs.pick.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -309,7 +322,15 @@ jobs:
           m="${{ needs.mancave.result }}"
           g="${{ needs.github.result }}"
           d="${{ needs.downstream-saas.result }}"
-          echo "host=$host mancave=$m github=$g downstream-saas=$d"
+          n="${{ needs.native-recovery.result }}"
+          echo "host=$host mancave=$m github=$g downstream-saas=$d native-recovery=$n"
+          # A skipped native job cannot make a trusted validation green.
+          if [ "${{ github.repository }}" = ontola/atomic-server ] && \
+             { [ "${{ github.event_name }}" = push ] || [ "${{ github.event_name }}" = workflow_dispatch ]; } && \
+             [ "$n" != success ]; then
+            echo 'The actual native peer and Cloud Vault recovery tests did not pass.'
+            exit 1
+          fi
           # The downstream build is skipped on PR events and on hosted runs;
           # when it ran, it has to have passed.
           if [ "$d" = "failure" ] || [ "$d" = "cancelled" ]; then

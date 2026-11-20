@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$ROOT"
+test "$(uname -s)" = Linux
+test -f ../atomic-saas/Cargo.toml
+mkdir -p target/native-recovery-ci /artifacts
+export CARGO_BUILD_BUILD_DIR="$ROOT/target/build"
+export CARGO_TARGET_DIR="$ROOT/target"
+export PATH="$ROOT/browser/node_modules/.bin:$PATH"
+export VITE_E2E=true VITE_ATOMIC_SERVER_URL=http://localhost:9883
+export VITE_MANAGED_PORTAL_URL=http://localhost:3031
+export VITE_MANAGED_API_BASE=http://localhost:3031/api
+export VITE_SENTRY_DSN=''
+
+pnpm -C browser install --frozen-lockfile
+# Build all runtime dependencies in workspace order, then the matching WASM.
+pnpm -C browser --filter @tomic/lib --filter @tomic/react \
+  --filter @tomic/plugin --filter @tomic/service-ui --filter @tomic/form-renderer \
+  --filter @tomic/form-app --filter @tomic/edit-mode run build
+pnpm -C browser/data-browser build:wasm
+# The embedded HTTP server and the real WebView each need their own bundle.
+pnpm -C browser/data-browser exec vite build
+TAURI=1 pnpm -C browser/data-browser exec vite build --outDir dist-tauri
+test -s browser/data-browser/dist-tauri/index.html
+grep -q '<script' browser/data-browser/dist-tauri/index.html
+export TAURI_CONFIG='{"productName":"Atomic Native Recovery CI","identifier":"io.ontola.atomicserver.native-recovery-ci","build":{"devUrl":null,"beforeBuildCommand":""},"app":{"withGlobalTauri":true,"windows":[{"title":"Atomic Native Recovery CI","width":1100,"height":760,"incognito":true}]},"bundle":{"active":false}}'
+cargo build --locked -p atomic-server-tauri -p atomic_lib \
+  --features atomic-server-tauri/native-recovery-tests \
+  --bin atomic-server-tauri --example native_late_file_peer --example native_vault_remove_blob
+cargo clippy --locked -p atomic-server-tauri --features native-recovery-tests \
+  --all-targets -- -D warnings
+# This is the actual Cloud Vault API. Its static portal is not used by these
+# native tests, but RustEmbed still needs a valid portal build at compile time.
+(cd ../atomic-saas/portal && npm ci && npm run build)
+(cd ../atomic-saas && cargo build --locked --bin atomic-saas)
+export NATIVE_RECOVERY_BIN_DIR="$ROOT/target/debug"
+export NATIVE_RECOVERY_SAAS_BINARY="$ROOT/target/debug/atomic-saas"
+export NATIVE_RECOVERY_ARTIFACT_DIR=/artifacts
+# Run the actual Tauri WebView; this is not Playwright's separate browser.
+dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
+  node desktop/scripts/native-recovery/run.mjs

@@ -15,7 +15,14 @@
 // agent's key already is. See `desktop/src/lib.rs`.
 import { decodeB64, encodeB64 } from '@tomic/lib';
 import { invoke } from '@tauri-apps/api/core';
-import type { RestoreOutcome, SegmentKind, VaultCapableDb } from './vault';
+import { isRunningInTauri } from '../tauri';
+import type {
+  RestoreOutcome,
+  SegmentKind,
+  VaultBlobRestoreResult,
+  VaultBlobPlan,
+  VaultCapableDb,
+} from './vault';
 
 /**
  * Bytes cross the IPC boundary base64-encoded rather than as arrays.
@@ -28,7 +35,98 @@ import type { RestoreOutcome, SegmentKind, VaultCapableDb } from './vault';
  */
 type SealedObject = { objectKey: string; sealed: string };
 
+/** Native persistence is a hint to recheck current drive references and bytes. */
+export function onNodeFileContents(
+  callback: (hash: string | null) => void,
+): () => void {
+  if (!isRunningInTauri()) return () => {};
+
+  let disposed = false;
+  let unlisten: (() => void) | undefined;
+  void import('@tauri-apps/api/event')
+    .then(({ listen }) =>
+      listen<unknown>('atomic-file-content-stored', event => {
+        if (disposed || !event.payload || typeof event.payload !== 'object')
+          return;
+        const hash = (event.payload as { hash?: unknown }).hash;
+        if (
+          hash === null ||
+          (typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash))
+        )
+          callback(hash);
+      }),
+    )
+    .then(stop => {
+      if (disposed) stop();
+      else {
+        unlisten = stop;
+        // Cover bytes stored before async listener registration completed.
+        callback(null);
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    disposed = true;
+    unlisten?.();
+    unlisten = undefined;
+  };
+}
+
+/** Ask existing native peer links for the drive's missing file contents. */
+export async function requestNodeFileContents(
+  drive: string,
+  hashes: string[],
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted();
+  await invoke('vault_request_missing_files', { drive, hashes });
+  signal?.throwIfAborted();
+}
+
 export const nodeVault: VaultCapableDb = {
+  vaultFileHashes(driveSubject) {
+    return invoke<string[]>('vault_file_hashes', { driveSubject });
+  },
+
+  vaultBlobPresent(hash) {
+    return invoke<boolean>('vault_blob_present', { hash });
+  },
+
+  vaultBlobOpen(hash, key, keyEpoch) {
+    return invoke<VaultBlobPlan>('vault_blob_open', {
+      hash,
+      key: encodeB64(key),
+      keyEpoch,
+    });
+  },
+
+  async vaultBlobChunk(hash, key, keyEpoch, index) {
+    const sealed = await invoke<string>('vault_blob_chunk', {
+      hash,
+      key: encodeB64(key),
+      keyEpoch,
+      index,
+    });
+
+    return decodeB64(sealed);
+  },
+
+  async vaultBlobClose() {
+    await invoke('vault_blob_close');
+  },
+
+  vaultBlobRestore(key, keyEpoch, blobId, chunks, wanted, driveSubject) {
+    return invoke<VaultBlobRestoreResult>('vault_blob_restore', {
+      key: encodeB64(key),
+      keyEpoch,
+      blobId,
+      chunks: chunks.map(chunk => encodeB64(chunk)),
+      wanted,
+      driveSubject,
+    });
+  },
+
   async vaultExport(
     driveSubject,
     key,

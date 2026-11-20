@@ -13709,3 +13709,58 @@ msgstr "Alle Lesezugriffe dieser App erlauben"
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow all writes done by this app"
 msgstr "Alle Schreibzugriffe dieser App erlauben"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Retry file recovery"
+msgstr "Dateiwiederherstellung erneut versuchen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Recover missing files"
+msgstr "Fehlende Dateien wiederherstellen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Cancel file recovery"
+msgstr "Dateiwiederherstellung abbrechen"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Scanning for missing files…"
+msgstr "Suche nach fehlenden Dateien…"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Looking for file contents on connected devices…"
+msgstr "Suche nach Dateiinhalten auf verbundenen Geräten…"
+
+#. 0: progress.done; 1: progress.total
+#: src/components/Vault/VaultPanel.tsx
+msgid "Recovering files from Cloud Vault… {0} of {1}"
+msgstr "Dateien aus Cloud Vault werden wiederhergestellt… {0} von {1}"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "Checking recovered files…"
+msgstr "Wiederhergestellte Dateien werden überprüft…"
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "All referenced file contents are available on this device."
+msgstr "Der Inhalt aller referenzierten Dateien ist auf diesem Gerät verfügbar."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file recovered."
+msgid_plural "# files recovered."
+msgstr[0] "# Datei wiederhergestellt."
+msgstr[1] "# Dateien wiederhergestellt."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# file is still unavailable."
+msgid_plural "# files are still unavailable."
+msgstr[0] "# Datei ist weiterhin nicht verfügbar."
+msgstr[1] "# Dateien sind weiterhin nicht verfügbar."
+
+#: src/components/Vault/VaultPanel.tsx
+msgid "# backup file could not be read."
+msgid_plural "# backup files could not be read."
+msgstr[0] "# Datei aus der Sicherung konnte nicht gelesen werden."
+msgstr[1] "# Dateien aus der Sicherung konnten nicht gelesen werden."
+
+#: src/helpers/managed/useVaultBackup.ts
+msgid "File recovery cancelled."
+msgstr "Dateiwiederherstellung abgebrochen."

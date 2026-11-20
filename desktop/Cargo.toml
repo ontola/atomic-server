@@ -91,3 +91,6 @@ devtools = ["tauri/devtools"]
 # Enables the loopback-only WebView diagnostic bridge in the local acceptance
 # package. Shipping release builds do not enable this feature.
 account-acceptance = []
+# Destructive, guarded fixtures for the Linux native recovery CI suite only.
+# Never enabled by default or by shipping/release builds.
+native-recovery-tests = []
