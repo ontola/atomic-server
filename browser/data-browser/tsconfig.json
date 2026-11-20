@@ -9,6 +9,8 @@
     // dist/*.d.ts while tsup watch rebuilds @tomic/lib and @tomic/react.
 
     "paths": {
+      "@tomic/ui": ["../ui/src/index.ts"],
+      "@tomic/ui/*": ["../ui/src/*"],
       "@tomic/react": ["../react/src/index.ts"],
       "@tomic/lib": ["../lib/src/index.ts"],
       "@tomic/lib/calendar-recurrence.js": ["../lib/src/calendar-recurrence.ts"],
