@@ -714,6 +714,10 @@ export class AtomicServer {
         //    Naming the project by its /browser path puts both ends on one
         //    prefix. A workdir cannot do this: the kernel resolves the
         //    symlink, so `process.cwd()` would be /app again.
+        // The app's complete dependency graph exceeds Node's default 2 GiB
+        // heap on some CI hosts. Raise only this final, serial typecheck;
+        // the preceding parallel workspace checks keep their existing budget.
+        .withEnvVariable('NODE_OPTIONS', '--max-old-space-size=4096')
         .withExec([
           'pnpm',
           '--filter',
