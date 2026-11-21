@@ -187,6 +187,7 @@ pub fn extender_id(drive_subject: &str, installation: &str) -> String {
 pub fn validate_plugin_zip(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
 ) -> AtomicResult<PluginManifest> {
+    super::package_archive::check_sizes(zip)?;
     // Check for plugin.wasm
     if zip.by_name("plugin.wasm").is_err() {
         return Err(AtomicError::from("Missing plugin.wasm"));
@@ -197,7 +198,9 @@ pub fn validate_plugin_zip(
         .by_name("plugin.json")
         .map_err(|_| AtomicError::from("Missing plugin.json"))?;
 
-    let manifest = PluginManifest::from_reader(file)?;
+    let size = file.size();
+    let bytes = super::package_archive::read_file(file, size)?;
+    let manifest = PluginManifest::from_reader(bytes.as_slice())?;
 
     let mut has_ui_js = false;
 
@@ -240,13 +243,12 @@ pub fn validate_plugin_zip(
 pub fn wasm_bytes_from_zip(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
 ) -> AtomicResult<Vec<u8>> {
-    let mut file = zip
+    super::package_archive::check_sizes(zip)?;
+    let file = zip
         .by_name("plugin.wasm")
         .map_err(|_| AtomicError::from("Missing plugin.wasm"))?;
-    let mut bytes = Vec::with_capacity(file.size() as usize);
-    std::io::Read::read_to_end(&mut file, &mut bytes)
-        .map_err(|e| AtomicError::from(format!("Could not read plugin.wasm: {e}")))?;
-    Ok(bytes)
+    let size = file.size();
+    super::package_archive::read_file(file, size)
 }
 
 /// Asks a component which classes it extends, by loading it once as a global
@@ -328,8 +330,7 @@ pub async fn activate_module(
         .as_deref()
         .ok_or("a wasip2 release without a package")?;
     let bytes = release::package_bytes(db, package).await?;
-    let mut zip = ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| AtomicError::from(format!("package is not a zip archive: {e}")))?;
+    let mut zip = super::package_archive::open(bytes)?;
     validate_plugin_zip(&mut zip)?;
     let wasm_bytes = wasm_bytes_from_zip(&mut zip)?;
     // A release published before manifests were unified carries its
@@ -414,8 +415,9 @@ fn scoped_data_dir(
 
 /// Writes the package's `assets/` into the module's folder, where it reads them.
 fn extract_assets(zip: &mut ZipArchive<Cursor<Vec<u8>>>, data_dir: &Path) -> AtomicResult<()> {
+    super::package_archive::check_sizes(zip)?;
     for i in 0..zip.len() {
-        let mut file = zip
+        let file = zip
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
         let name = file.name().to_string();
@@ -431,11 +433,12 @@ fn extract_assets(zip: &mut ZipArchive<Cursor<Vec<u8>>>, data_dir: &Path) -> Ato
         let written = if file.is_dir() {
             std::fs::create_dir_all(&target)
         } else {
+            let size = file.size();
+            let content = super::package_archive::read_file(file, size)?;
             target
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
-                .and_then(|()| std::fs::File::create(&target))
-                .and_then(|mut out| std::io::copy(&mut file, &mut out).map(drop))
+                .and_then(|()| std::fs::write(&target, content))
         };
         written
             .map_err(|e| AtomicError::from(format!("Failed to write {}: {e}", target.display())))?;

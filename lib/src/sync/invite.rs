@@ -21,9 +21,7 @@
 //! devices. The invitee afterwards syncs the drive from this node like any
 //! peer, and the sync policy admits it because it can now read.
 //!
-//! Not enforced here: `max_usages`. Counting acceptances needs state that all
-//! the inviter's devices share; a peer redemption is as often as the token
-//! is opened. Expiry and the rights check still apply.
+//! Limited-use invitations are redeemed on the server that holds their acceptance ledger.
 
 use std::time::Duration;
 
@@ -67,6 +65,9 @@ pub(crate) async fn serve(payload: &[u8], store: &Db, via: &ForAgent) -> Vec<Vec
     };
     if token.check_expiry(crate::utils::now()).is_err() {
         return refuse(EXPIRED);
+    }
+    if let Err(e) = token.check_peer_redemption() {
+        return refuse(&e.to_string());
     }
     let agent = match store.get_default_agent() {
         Ok(a) => a,
@@ -148,6 +149,27 @@ fn unreached(message: impl Into<String>) -> RedeemError {
     }
 }
 
+// A directory record locates replicas. Only a device proving the issuer's
+// key on its own authenticated Iroh endpoint may receive a bearer token.
+fn proof_subject(node: &str, nonce: &str) -> String {
+    format!("urn:atomic:invite-proof:{node}:{nonce}")
+}
+
+pub(super) fn answer_challenge(nonce: &[u8], node: &str, store: &Db) -> Vec<Vec<u8>> {
+    let Some(nonce) = protocol::decode_challenge(nonce)
+        .filter(|n| n.len() == 64 && n.bytes().all(|b| b.is_ascii_hexdigit()))
+    else {
+        return refuse("Invalid invitation challenge.");
+    };
+    match store
+        .get_default_agent()
+        .and_then(|agent| protocol::encode_auth(&agent, &proof_subject(node, nonce)))
+    {
+        Ok(proof) => vec![proof],
+        Err(_) => refuse("This device cannot verify the invitation."),
+    }
+}
+
 async fn write_frame(send: &mut iroh::endpoint::SendStream, frame: &[u8]) -> Result<(), String> {
     send.write_all(&(frame.len() as u32).to_be_bytes())
         .await
@@ -170,6 +192,9 @@ pub async fn redeem_at(
     if parsed.check_expiry(crate::utils::now()).is_err() {
         return Err(unreached(EXPIRED));
     }
+    parsed
+        .check_peer_redemption()
+        .map_err(|e| unreached(e.to_string()))?;
     let remote_key = super::peer::normalize_node_id(remote_node_id);
     let node_id: iroh::NodeId = remote_key
         .parse()
@@ -196,19 +221,16 @@ pub async fn redeem_at(
     )
     .map_err(|e| unreached(e.to_string()))?;
     write_frame(&mut send, &auth).await.map_err(unreached)?;
-    write_frame(&mut send, &protocol::encode_invite(token))
+    let nonce = protocol::new_challenge_nonce();
+    let expected = proof_subject(&remote_key, &nonce);
+    write_frame(&mut send, &protocol::encode_challenge(&nonce))
         .await
         .map_err(unreached)?;
-
     let read = async {
-        let mut authed = false;
+        let mut sent = false;
         loop {
             let len = recv.read_u32().await.map_err(|_| unreached(OFFLINE))? as usize;
-            let cap = if authed {
-                protocol::IROH_FRAME_MAX_BYTES
-            } else {
-                protocol::IROH_PREAUTH_FRAME_MAX_BYTES
-            };
+            let cap = protocol::IROH_PREAUTH_FRAME_MAX_BYTES;
             if len == 0 || len > cap {
                 return Err(unreached("The other device sent something unreadable."));
             }
@@ -217,9 +239,38 @@ pub async fn redeem_at(
                 .await
                 .map_err(|_| unreached(OFFLINE))?;
             match buf[0] {
-                protocol::tag::AUTH_OK => authed = true,
-                protocol::tag::INVITE_OK => {
+                protocol::tag::AUTH if !sent => {
+                    let Ok(proof) =
+                        serde_json::from_slice::<crate::authentication::AuthValues>(&buf[1..])
+                    else {
+                        continue;
+                    };
+                    // A regular sync AUTH-back also arrives. Only the response to
+                    // this connection's fresh invitation challenge counts.
+                    if proof.requested_subject != expected {
+                        continue;
+                    }
+                    if parsed.signer.agent_public_key() != Some(proof.public_key.as_str())
+                        || crate::authentication::check_auth_signature(&expected, &proof).is_err()
+                    {
+                        return Err(RedeemError {
+                            reached: true,
+                            message:
+                                "This device did not make this invite, so it cannot accept it."
+                                    .into(),
+                        });
+                    }
+                    write_frame(&mut send, &protocol::encode_invite(token))
+                        .await
+                        .map_err(unreached)?;
+                    sent = true;
+                }
+                protocol::tag::INVITE_OK if sent => {
                     return protocol::decode_invite_ok(&buf[1..])
+                        .filter(|g| {
+                            let drive = crate::Subject::from(g.drive.as_str());
+                            drive == parsed.target && g.write == parsed.write
+                        })
                         .ok_or_else(|| unreached("The other device sent something unreadable."));
                 }
                 protocol::tag::ERROR => {
@@ -232,7 +283,7 @@ pub async fn redeem_at(
                         message,
                     });
                 }
-                // HELLO and the peer's auth-back AUTH are not for us.
+                // Ignore ordinary handshake frames.
                 _ => {}
             }
         }

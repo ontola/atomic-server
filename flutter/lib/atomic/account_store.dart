@@ -41,8 +41,18 @@ class AccountStore {
   static set store(shared.AtomicAccountSessionStore store) => _store = store;
 
   static shared.AtomicAccountSessionStore get sessionStore => _store;
-  static Future<void> save(String session) => _store.save(session);
-  static Future<void> clear() => _store.clear();
+  static int _sessionRevision = 0;
+
+  static Future<void> save(String session) {
+    _sessionRevision++;
+    return _store.save(session);
+  }
+
+  static Future<void> clear() {
+    _sessionRevision++;
+    return _store.clear();
+  }
+
   static Future<String?> read() => _store.read();
 
   /// The portal agents sign in to when no portal is linked yet.
@@ -76,19 +86,35 @@ class AccountStore {
     }
   }
 
-  /// Opens the account with the mailed sign-in [link] and saves the session,
-  /// so whatever waits for the account (the AI sign-up dialog polls) finds it.
+  /// Asks the person to confirm the identity reported by the temporary session
+  /// before replacing the linked account.
   /// Returns false when [link] is not a sign-in link for [portal] (nothing is
   /// sent); throws a [StateError] with a sentence fit to show when the portal
   /// refuses it (expired, already used) or cannot be reached.
   static Future<bool> redeemSignInLink(String link,
-      {String portal = defaultPortal, http.Client? client}) async {
+      {required Future<bool> Function(String address) confirmAccount,
+      String portal = defaultPortal,
+      http.Client? client}) async {
+    final revision = _sessionRevision;
     final parsed = SignInLink.parse(link,
         portal: shared.AtomicAccountClient.providerOrigin(portal));
     if (parsed == null) return false;
+    final previous = await read();
     final account = shared.AtomicAccountClient(portal, client: client);
     try {
       await account.loginWithLinkToken(parsed.token);
+      final me = await account.account();
+      final address = me['address'] ?? me['email'];
+      if (address is! String || address.trim().isEmpty) {
+        throw StateError(
+            'The portal could not identify the account for this link');
+      }
+      if (revision != _sessionRevision || !await confirmAccount(address)) {
+        return false;
+      }
+      if (await read() != previous || revision != _sessionRevision) {
+        return false;
+      }
       await save(account.exportSession());
       // Whoever was refused before the account existed may sign in now.
       _attemptedAgent = null;

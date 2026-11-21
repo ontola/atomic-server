@@ -272,7 +272,7 @@ on a `latest` node, every one on `all`), so the receiver can attribute the
 history it imports. The receiver verifies each envelope's signature and that
 it names a subject imported from the same frame before keeping it; a bad
 envelope is dropped, never the push. A decoder that predates the flag stops
-after `count` entries and does not see the section.
+after `count` entries and does not see the section. Each frame contains at most 100 resource entries. Receivers reject incomplete entries and incomplete flagged trailers before importing the frame.
 
 ### HELLO (0x37)
 
@@ -337,7 +337,10 @@ inviter) at a device of the inviter, without a server. Iroh only. The dialer
 finds the device the way it finds any device of a drive: the pkarr record of
 the token's target lists the Iroh node ids (`_atomic_nodes`). It sends `AUTH`
 for the token's target (`drive#nodeId`, as for a sync), which proves who the
-invitee is, and then `INVITE`. The frame is accepted from any authenticated
+invitee is. It sends a `CHALLENGE` with a fresh 32-byte hex nonce. The inviter
+answers with an `AUTH` signature over `urn:atomic:invite-proof:<responder-node-id>:<nonce>`
+and the timestamp. The invitee checks the signature against the token's issuer
+before sending `INVITE`. The frame is accepted from any authenticated
 agent, paired or not: the token is the authority, and `INVITE` for a drive other
 than the `AUTH`'s is refused like a `SYNC` for the wrong drive.
 
@@ -355,8 +358,7 @@ invite) in a commit signed by its agent, queues that commit for the inviter's
 servers and lets live peers carry it to the inviter's other devices, and
 answers `INVITE_OK`. The invitee then syncs the drive from the same device with
 an ordinary `SYNC`, which the sync policy admits because the invitee can now
-read. `max_usages` of the token is not counted: that needs state shared by all
-the inviter's devices. In the link form of the Flutter package this is
+read. Peers refuse limited or server-bound invitations. The issuing server keeps the acceptance ledger. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
 
 ### EPHEMERAL (0x40)

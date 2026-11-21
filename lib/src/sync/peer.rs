@@ -1661,7 +1661,7 @@ pub struct SyncEvent {
     pub kind: String,
 }
 
-#[allow(dead_code)] // Used via #[serde(default = "...")] attribute above
+#[allow(dead_code)]// Used via #[serde(default = "...")] attribute above
 fn default_event_kind() -> String {
     "sync".into()
 }
@@ -2974,6 +2974,8 @@ async fn handle_stream(
                 )
                 .await
             }
+        } else if tag == super::protocol::tag::CHALLENGE {
+            super::invite::answer_challenge(&buf[1..], &my_node_key, &store)
         } else if tag == super::protocol::tag::INVITE {
             // Open to any authenticated agent: the token, not a pairing, is
             // the invitee's authority.

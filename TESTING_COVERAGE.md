@@ -2988,3 +2988,7 @@ checks for code moves, not new schema-validation or persistence semantics.
 
 - `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
 - `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.
+
+Rust and browser tests cover issuer-signed invitation origins, peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
+
+Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.

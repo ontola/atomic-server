@@ -61,6 +61,9 @@ Alternatively you can declare the `full-drive-access` capability in the manifest
 
 ## The plugin package
 
+Use a ZIP32 archive with stored or deflated entries. The package may contain up to 4096 entries and 128 MiB in total, both before and after expansion. Individual files may expand to 64 MiB and `plugin.json` to 1 MiB.
+
+
 A WASM plugin is packaged as a zip file containing the following files:
 
 - `plugin.wasm`: The compiled Wasm binary of the plugin.

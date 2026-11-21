@@ -43,6 +43,13 @@ on:
 # rather than cancelling a deploy that is halfway through swapping a binary.
 # Per-environment groups are on the calling jobs below.
 jobs:
+  resolve-manual:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/resolve-deploy.yml
+    with:
+      ref: ${{ inputs.ref || 'develop' }}
+      skip_ci_check: ${{ !inputs.production }}
+
   check-current-tip:
     if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -94,26 +101,26 @@ jobs:
           echo "Asked atomic-saas to deploy atomic.place with atomic-server develop $SHA." >> "$GITHUB_STEP_SUMMARY"
 
   deploy-staging:
-    needs: check-current-tip
+    needs: [check-current-tip, resolve-manual]
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
     if: >-
       always() &&
-      (github.event_name == 'workflow_dispatch' ||
+      (needs.resolve-manual.result == 'success' ||
        (github.event.workflow_run.conclusion == 'success' &&
         needs.check-current-tip.outputs.current == 'true'))
     uses: "./.github/workflows/deployment.yml"
     with:
       environment: staging
       remote_host: staging.atomicdata.dev
-      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+      ref: ${{ needs.resolve-manual.outputs.sha || github.event.workflow_run.head_sha }}
     secrets: inherit
 
   # Staging is healthy on this commit; make sure it is still the develop tip
   # before it goes to production.
   recheck-tip:
-    needs: [check-current-tip, deploy-staging]
+    needs: [check-current-tip, resolve-manual, deploy-staging]
     if: >-
       always() &&
       needs.deploy-staging.result == 'success' &&
@@ -130,18 +137,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          DEPLOY_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          DEPLOY_REF: ${{ needs.resolve-manual.outputs.sha || github.event.workflow_run.head_sha }}
           EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          tip=$(gh api "repos/$REPO/branches/develop" --jq .commit.sha)
-          # A manual dispatch may name a branch or an older commit on purpose;
-          # resolve it to a sha before comparing. Only the workflow_run path
-          # insists on the tip.
+          # A manual promotion already passed CI and staging on this exact SHA.
           if [ "$EVENT" = workflow_dispatch ]; then
             echo 'current=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          tip=$(gh api "repos/$REPO/branches/develop" --jq .commit.sha)
           if [ "$DEPLOY_REF" = "$tip" ]; then
             echo 'current=true' >> "$GITHUB_OUTPUT"
           else
@@ -150,7 +155,7 @@ jobs:
           fi
 
   deploy-production:
-    needs: [deploy-staging, recheck-tip]
+    needs: [resolve-manual, deploy-staging, recheck-tip]
     if: >-
       always() &&
       needs.deploy-staging.result == 'success' &&
@@ -162,5 +167,5 @@ jobs:
     with:
       environment: production
       remote_host: atomicdata.dev
-      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+      ref: ${{ needs.resolve-manual.outputs.sha || github.event.workflow_run.head_sha }}
     secrets: inherit

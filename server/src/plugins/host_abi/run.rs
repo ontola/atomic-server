@@ -290,17 +290,14 @@ impl AbiState {
         dir: &std::path::Path,
         writable: bool,
     ) -> Result<Self, String> {
-        use wasmtime_wasi::{DirPerms, FilePerms};
-        let (dir_perms, file_perms) = if writable {
-            (
-                DirPerms::READ | DirPerms::MUTATE,
-                FilePerms::READ | FilePerms::WRITE,
-            )
+        use wasmtime_wasi::FsPerms;
+        let perms = if writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
         self.ctx = WasiCtxBuilder::new()
-            .preopened_dir(dir, "/", dir_perms, file_perms)
+            .preopened_dir(dir, "/", perms)
             .map_err(|e| format!("Failed to preopen directory: {e}"))?
             .build();
         Ok(self)

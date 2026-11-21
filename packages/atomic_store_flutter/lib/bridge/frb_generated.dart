@@ -128,7 +128,8 @@ abstract class RustLibApi extends BaseApi {
       required String target,
       required bool write,
       PlatformInt64? expiresAt,
-      PlatformInt64? maxUsages});
+      PlatformInt64? maxUsages,
+      String? serverOrigin});
 
   Future<String> crateApiResourcesAtomicStoreCreateResourceOfClass(
       {required AtomicStore that,
@@ -885,7 +886,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required String target,
       required bool write,
       PlatformInt64? expiresAt,
-      PlatformInt64? maxUsages}) {
+      PlatformInt64? maxUsages,
+      String? serverOrigin}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -895,6 +897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_bool(write, serializer);
         sse_encode_opt_box_autoadd_i_64(expiresAt, serializer);
         sse_encode_opt_box_autoadd_i_64(maxUsages, serializer);
+        sse_encode_opt_String(serverOrigin, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
       },
       codec: SseCodec(
@@ -902,7 +905,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_atomic_error,
       ),
       constMeta: kCrateApiResourcesAtomicStoreCreateInviteTokenConstMeta,
-      argValues: [that, target, write, expiresAt, maxUsages],
+      argValues: [that, target, write, expiresAt, maxUsages, serverOrigin],
       apiImpl: this,
     ));
   }
@@ -910,7 +913,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiResourcesAtomicStoreCreateInviteTokenConstMeta =>
       const TaskConstMeta(
         debugName: "AtomicStore_create_invite_token",
-        argNames: ["that", "target", "write", "expiresAt", "maxUsages"],
+        argNames: [
+          "that",
+          "target",
+          "write",
+          "expiresAt",
+          "maxUsages",
+          "serverOrigin"
+        ],
       );
 
   @override
@@ -7665,13 +7675,15 @@ class AtomicStoreImpl extends RustOpaque implements AtomicStore {
           {required String target,
           required bool write,
           PlatformInt64? expiresAt,
-          PlatformInt64? maxUsages}) =>
+          PlatformInt64? maxUsages,
+          String? serverOrigin}) =>
       RustLib.instance.api.crateApiResourcesAtomicStoreCreateInviteToken(
           that: this,
           target: target,
           write: write,
           expiresAt: expiresAt,
-          maxUsages: maxUsages);
+          maxUsages: maxUsages,
+          serverOrigin: serverOrigin);
 
   /// Create a resource of `class_url` named `name` ("Untitled" when empty)
   /// under `drive`, signed by this device's agent, and push it like every other
