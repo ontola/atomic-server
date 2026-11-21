@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { isServerUnreachable, useStore } from '@tomic/react';
 import { FaCloud, FaRegWindowMaximize } from 'react-icons/fa6';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ContainerNarrow } from '../components/Containers';
-import { Column, Row } from '../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   VaultRestoreAction,
   canRestoreFromVault,

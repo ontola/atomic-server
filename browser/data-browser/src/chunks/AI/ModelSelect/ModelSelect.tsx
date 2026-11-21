@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Column } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
 import { OllamaModelSelector } from './OllamaModelSelector';
 import { Link } from '@tanstack/react-router';
 import { useAISettings } from '@components/AI/AISettingsContext';
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 
 interface ModelSelectProps {
   onSelect?: (model: AIModelIdentifier) => void;

@@ -6,17 +6,24 @@ import { expect, it } from 'vitest';
 const remaining = [
   'browser/data-browser/src/chunks/PluginRuns/CreateEventAutomation.tsx',
   'browser/data-browser/src/chunks/PluginRuns/runScript.ts',
-  'browser/data-browser/src/chunks/TablePage/createTableFromSpec.ts',
   'browser/lib/src/catalog-app.ts',
   'browser/lib/src/plugin-app.ts',
   'browser/lib/src/plugin-destination.ts',
   'browser/lib/src/plugin-log.ts',
   'browser/lib/src/plugin-schema.ts',
+  'browser/table-page/src/TablePage/createTableFromSpec.ts',
 ];
 
 it('does not gain new ensureSchema callers', () => {
   const root = new URL('../../../', import.meta.url);
-  const callers = ['browser/lib/src', 'browser/data-browser/src']
+  const callers = [
+    'browser/lib/src',
+    'browser/data-browser/src',
+    'browser/ui/src',
+    'browser/table/src',
+    'browser/resource-ui/src',
+    'browser/table-page/src',
+  ]
     .flatMap(dir =>
       readdirSync(new URL(dir, root), {
         recursive: true,

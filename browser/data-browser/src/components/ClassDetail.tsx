@@ -1,10 +1,10 @@
 import React, { type JSX } from 'react';
 import { Resource, useResource } from '@tomic/react';
 import { Detail } from './Detail';
-import { getIconForClass } from '../helpers/iconMap';
-import { InlineFormattedResourceList } from './InlineFormattedResourceList';
-import { AtomicLink } from './AtomicLink';
-import { Row } from './Row';
+import { getIconForClass } from '@tomic/resource-ui/helpers/iconMap';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Row } from '@tomic/ui/components/Row';
 
 type ClassDetailProps = {
   resource: Resource;

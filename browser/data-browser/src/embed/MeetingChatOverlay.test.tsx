@@ -60,7 +60,7 @@ vi.mock('../components/Presence/FollowSessionPanelContainer', () => ({
     </div>
   ),
 }));
-vi.mock('../components/EditableTitle', () => ({
+vi.mock('@tomic/resource-ui/components/EditableTitle', () => ({
   EditableTitle: () => <h1>Title</h1>,
 }));
 beforeEach(() => {

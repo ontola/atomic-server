@@ -1,14 +1,17 @@
 import { styled } from 'styled-components';
-import { Popover } from '../Popover';
-import { CreateTagRow } from './CreateTagRow';
+import { Popover } from '@tomic/ui/components/Popover';
+import { CreateTagRow } from '@tomic/resource-ui/components/Tag/CreateTagRow';
 import { useEffect, useRef, useState } from 'react';
-import { Checkbox } from '../forms/Checkbox';
-import { InputWrapper, InputStyled } from '../forms/InputStyles';
-import { Column } from '../Row';
-import { Tag } from './Tag';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
+import {
+  InputWrapper,
+  InputStyled,
+} from '@tomic/ui/components/forms/InputStyles';
+import { Column } from '@tomic/ui/components/Row';
+import { Tag } from '@tomic/resource-ui/components/Tag/Tag';
 import { useStore, type Resource } from '@tomic/react';
-import { ScrollArea } from '../ScrollArea';
-import { useSelectedIndex } from '../../hooks/useSelectedIndex';
+import { ScrollArea } from '@tomic/ui/components/ScrollArea';
+import { useSelectedIndex } from '@tomic/resource-ui/hooks/useSelectedIndex';
 import { FaArrowUpRightFromSquare } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';

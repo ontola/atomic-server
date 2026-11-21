@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { Button } from '../components/Button';
-import { Column } from '../components/Row';
-import { InputStyled, InputWrapper } from '../components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import {
   accountAddress,
   getManagedAccount,

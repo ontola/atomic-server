@@ -9,9 +9,9 @@ import {
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaImage } from 'react-icons/fa6';
-import { Button } from '@components/Button';
-import { Row } from '@components/Row';
-import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
+import { FilePickerDialog } from '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog';
 import { useUpload } from '../../../hooks/useUpload';
 import { LinkableTagList } from './LinkableTagList';
 

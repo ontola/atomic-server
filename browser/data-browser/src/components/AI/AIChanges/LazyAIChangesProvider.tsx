@@ -3,7 +3,7 @@ import {
   AIChangesContext,
   defaultAIChangesValue,
   type AIChangesContextType,
-} from '@components/AIChangesContext';
+} from '@tomic/resource-ui/components/AIChangesContext';
 
 const AIChangesRuntime = lazy(() =>
   import('./AIChangesRuntime').then(m => ({ default: m.AIChangesRuntime })),

@@ -10,7 +10,7 @@ import {
   DataBrowser,
 } from '@tomic/react';
 import { useCallback } from 'react';
-import { optionSubjects } from '../../../helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 
 export function useEnumHandlers(
   property: Resource<Core.Property>,

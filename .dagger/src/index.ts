@@ -110,6 +110,13 @@ const PLAYWRIGHT_PACKAGE_VERSION = '1.63.0';
 const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
+// GitHub-hosted builders cannot reliably reach the primary Ubuntu HTTP mirrors.
+// Keep Ubuntu's existing archive signatures and TLS verification on its Azure mirror.
+const APT_UPDATE =
+  "find /etc/apt -type f \\( -name '*.list' -o -name '*.sources' \\) " +
+  "-exec sed -i -E 's@https?://(archive|security)\\.ubuntu\\.com/ubuntu@https://azure.archive.ubuntu.com/ubuntu@g' {} + " +
+  '&& apt-get update -qq -o APT::Update::Error-Mode=any';
+
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -682,25 +689,11 @@ export class AtomicServer {
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
         //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
-        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    needs `@tomic/form-renderer`. Build the complete dependency graph,
+        //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec([
-          'pnpm',
-          '--filter',
-          '@tomic/form-renderer',
-          '--filter',
-          '@tomic/lib',
-          '--filter',
-          '@tomic/react',
-          '--filter',
-          '@tomic/plugin',
-          '--filter',
-          '@tomic/service-ui',
-          '--filter',
-          '@tomic/edit-mode',
-          'build',
-        ])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build'])
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
@@ -711,6 +704,9 @@ export class AtomicServer {
         ])
         // 3. Pass the /browser project path explicitly so TypeScript uses
         //    that prefix. A working directory resolves the symlink to /app.
+        // The complete app graph exceeds Node's default 2 GiB heap on some
+        // hosts. Keep the larger heap limited to this final serial check.
+        .withEnvVariable('NODE_OPTIONS', '--max-old-space-size=4096')
         .withExec([
           'pnpm',
           '--filter',
@@ -782,7 +778,7 @@ export class AtomicServer {
         .withExec([
           'sh',
           '-c',
-          'apt-get update -qq && apt-get install -y --no-install-recommends ' +
+          APT_UPDATE + ' && apt-get install -y --no-install-recommends ' +
             'ca-certificates curl git build-essential cmake ninja-build ' +
             'pkg-config libssl-dev clang',
         ])
@@ -934,7 +930,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y protobuf-compiler',
           ]),
         CARGO_HOME_BOOKWORM,
       )
@@ -1074,6 +1070,17 @@ export class AtomicServer {
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/repo/browser/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
       .withFile(
         '/repo/browser/lib/package.json',
         browser.file('lib/package.json'),
@@ -1134,6 +1141,7 @@ export class AtomicServer {
     // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
     // imports its bridge from `../../mcp/src`.
     const withSource = installed
+      .withDirectory('/repo/browser/utils', browser.directory('utils'))
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
@@ -1142,6 +1150,8 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
       .withWorkdir('/repo/browser/lib')
       .withExec(['pnpm', 'run', 'test:integration'])
       .stdout();
@@ -1337,6 +1347,17 @@ export class AtomicServer {
         '/app/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
+      .withFile('/app/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/app/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/app/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/app/table-page/package.json',
+        browser.file('table-page/package.json'),
+      )
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
       .withFile('/app/svelte/package.json', browser.file('svelte/package.json'))
@@ -1474,10 +1495,17 @@ export class AtomicServer {
       dag
         .container()
         .from(image)
+        // Clang on an ARM host otherwise finds glibc headers for this musl
+        // target. Scope the musl headers to this target, not nested WASI or
+        // host builds that run in the same container.
+        .withEnvVariable(
+          `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+          `-isystem /usr/local/musl/${target}/include`,
+        )
         .withExec([
           'sh',
           '-c',
-          'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+          APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
         ]),
       CARGO_HOME_MUSL,
     )
@@ -1709,7 +1737,8 @@ export class AtomicServer {
    */
   private rustChecksContainer(): Container {
     const source = this.source;
-    const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
+    const target = 'x86_64-unknown-linux-musl';
+    const image = TARGET_IMAGE_MAP[target];
 
     // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo). Mounting
     // the bookworm path here was a silent miss — every CI run re-ran
@@ -1719,6 +1748,11 @@ export class AtomicServer {
         dag
           .container()
           .from(image)
+          // Match rustBuild's target-specific musl bindgen headers.
+          .withEnvVariable(
+            `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+            `-isystem /usr/local/musl/${target}/include`,
+          )
           // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
           // build script (a transitive dep via the vector-search feature) —
           // without it `cargo fetch`-triggered builds under this container
@@ -1728,7 +1762,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
           ]),
         CARGO_HOME_MUSL,
       )

@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { InputWrapper } from '@components/forms/InputStyles';
+import { InputWrapper } from '@tomic/ui/components/forms/InputStyles';
 
 /**
  * Two option inputs side by side (min/max, low/high label, ...).

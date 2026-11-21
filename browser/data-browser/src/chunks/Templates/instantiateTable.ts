@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import type { Store } from '@tomic/react';
-import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
-import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
+import { buildTableFromSpec } from '@tomic/table-page/TablePage/createTableFromSpec';
 
 /** Both New Table and workspace instantiation resolve the same catalog release. */
 export async function instantiateTableTemplate(

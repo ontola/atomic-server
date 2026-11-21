@@ -7,7 +7,7 @@ import { RoleSelect, roleLabel, type ShareRole } from './RoleSelect';
 import type { DirectRight } from './useShareRights';
 import type { MergedRight } from '../../routes/Share/useRights';
 import { useClassLabel } from './useClassLabel';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { FaEnvelope, FaLink } from 'react-icons/fa6';
 import type { PendingInvite } from '../../helpers/pendingInvites';
 

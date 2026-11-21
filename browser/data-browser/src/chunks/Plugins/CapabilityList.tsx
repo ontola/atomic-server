@@ -1,4 +1,4 @@
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import type { ReviewCapability } from '@tomic/react';
 import {
   FaDesktop,

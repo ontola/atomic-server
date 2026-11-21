@@ -1,8 +1,8 @@
-import { Button } from '@components/Button';
-import { Dialog, useDialog } from '@components/Dialog';
-import { JSONEditor } from '@components/JSONEditor';
-import Markdown from '@components/datatypes/Markdown';
-import { Column, Row } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { JSONEditor } from '@tomic/resource-ui/components/JSONEditor';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ConfigReference } from '@views/Installation/ConfigReference';
 import { CapabilityList } from './CapabilityList';
 import {

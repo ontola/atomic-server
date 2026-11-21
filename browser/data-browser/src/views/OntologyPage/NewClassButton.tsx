@@ -9,10 +9,13 @@ import {
   DialogTitle,
   useDialog,
 } from '../../components/Dialog';
-import { Button } from '../../components/Button';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
-import { stringToSlug } from '../../helpers/stringToSlug';
-import { Column } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
+import { Column } from '@tomic/ui/components/Row';
 import { newClass, subjectForClass } from './ontologyUtils';
 import { toAnchorId } from '../../helpers/toAnchorId';
 import { DashedButton } from './DashedButton';

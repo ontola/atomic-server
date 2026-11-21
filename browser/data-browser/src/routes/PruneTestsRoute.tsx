@@ -1,8 +1,8 @@
 import { Resource, Server, useStore } from '@tomic/react';
 import { useState } from 'react';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ContainerFull } from '../components/Containers';
-import { Column } from '../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { createLazyRoute } from '@tanstack/react-router';
 import { DEV_DRIVE_PRUNE_MARKER } from '../hooks/useDevDrive';
 

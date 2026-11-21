@@ -5,11 +5,11 @@ import { RightPanel } from '../RightPanel/RightPanel';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useContextualPanel } from '../RightPanel/useContextualPanel';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
-import { useLastSeenComments } from '../../hooks/useLastSeenComments';
+import { useLastSeenComments } from '@tomic/resource-ui/hooks/useLastSeenComments';
 import { getResourcesDrive } from '../../helpers/getResourcesDrive';
 import { getOrCreateCommentsFolder } from '../../helpers/standardLocations';
 import { ChatView, useChatMessages } from '../../views/ChatRoom/ChatRoomView';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
 
 /**
  * Right-side panel showing the comments on the current resource. Comments are

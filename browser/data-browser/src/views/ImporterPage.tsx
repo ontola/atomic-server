@@ -9,9 +9,9 @@ import {
   TextAreaStyled,
 } from '../components/forms/InputStyles.jsx';
 import { styled } from 'styled-components';
-import { Column } from '../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
-import { Title } from '../components/Title';
+import { Title } from '@tomic/resource-ui/components/Title';
 import toast from 'react-hot-toast';
 import { Main } from '@components/Main';
 

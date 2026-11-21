@@ -1,8 +1,8 @@
 import { core, useString } from '@tomic/react';
 
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
-import { markdownToPlainText } from '../../helpers/markdown';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { markdownToPlainText } from '@tomic/resource-ui/helpers/markdown';
 import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,

@@ -1,7 +1,7 @@
 import { classes } from '@tomic/react';
 import { useMemo, type JSX } from 'react';
 import { FaList, FaTableCellsLarge } from 'react-icons/fa6';
-import { ButtonGroup } from '../../components/ButtonGroup';
+import { ButtonGroup } from '@tomic/ui/components/ButtonGroup';
 
 export interface DisplayStyleButtonProps {
   displayStyle: string | undefined;

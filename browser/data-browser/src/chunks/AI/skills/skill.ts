@@ -1,7 +1,10 @@
 // @wc-ignore-file
 import { tool } from 'ai';
 import { z } from 'zod';
-import { setLocalStorageValue, useLocalStorage } from '@hooks/useLocalStorage';
+import {
+  setLocalStorageValue,
+  useLocalStorage,
+} from '@tomic/resource-ui/hooks/useLocalStorage';
 
 import { TOOL_NAMES } from '../useAtomicTools';
 import tablesSkillContent from './tables/SKILL.md?raw';
@@ -10,7 +13,7 @@ import tableFormulasContent from './table-formulas/SKILL.md?raw';
 import skillCreationContent from './skill-creation/SKILL.md?raw';
 import ontologiesSkillContent from './ontologies/SKILL.md?raw';
 
-import { stringToSlug } from '@helpers/stringToSlug';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 
 export interface AgentSkillMeta {
   id: string;

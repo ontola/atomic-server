@@ -11,9 +11,9 @@ import {
   canonicalIdentifier,
   isCommitSubject,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 
 export function ImportReferences({
   primary,

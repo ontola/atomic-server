@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { CARD_SUB_FONT } from '../cardSurface';
 import { formatBytes } from '../../helpers/formatBytes';
 import {
@@ -13,7 +13,7 @@ import {
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '../ConfirmationDialog';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
 import {
   type CompactResult,
   deleteVaultSnapshot,

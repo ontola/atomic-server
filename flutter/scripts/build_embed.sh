@@ -8,7 +8,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 browser="$here/../browser"
 
-(cd "$browser" && pnpm install --frozen-lockfile && pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/service-ui --filter @tomic/edit-mode --filter @tomic/form-renderer --filter @tomic/plugin run build)
+(cd "$browser" && pnpm install --frozen-lockfile && pnpm --filter '@tomic/data-browser^...' run build)
 (cd "$browser/data-browser" && TAURI=1 SKIP_WASM_BUILD=1 pnpm exec vite build -c vite.embed.config.ts)
 
 dest="$here/assets/embed"

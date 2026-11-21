@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { keyframes, styled } from 'styled-components';
-import { ContainerWide } from './Containers';
+import { ContainerWide } from '@tomic/ui/components/Containers';
 import { Main } from './Main';
 import { formatBytes } from '../helpers/formatBytes';
 import {

@@ -1,9 +1,9 @@
 import { Datatype, core, useCanWrite, type Server } from '@tomic/react';
-import { ContainerNarrow } from '@components/Containers';
-import { Button } from '@components/Button';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '@helpers/AppSettings';
 import { ResourcePageProps } from '../ResourcePage';
-import { EditableTitle } from '@components/EditableTitle';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import { useVisibleDriveChildren } from '@hooks/useVisibleDriveChildren';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { PrivateDriveBadge } from '@components/Drives/PrivateDriveBadge';
@@ -11,11 +11,11 @@ import {
   IconPickerDialog,
   ResourceCoverImage,
   TitleDecorationAffordances,
-} from '@components/ResourceDecorations';
-import { Column } from '@components/Row';
-import { IconButton } from '@components/IconButton/IconButton';
+} from '@tomic/resource-ui/components/ResourceDecorations';
+import { Column } from '@tomic/ui/components/Row';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { styled } from 'styled-components';
-import { useDialog } from '@components/Dialog/useDialog';
+import { useDialog } from '@tomic/ui/components/Dialog/useDialog';
 import { FaGear } from 'react-icons/fa6';
 import { useEffect, useState, type JSX } from 'react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';

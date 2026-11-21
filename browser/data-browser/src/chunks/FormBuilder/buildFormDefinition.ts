@@ -10,12 +10,12 @@ import {
   type JSONValue,
 } from '@tomic/react';
 import { isChoiceField, infoBoxStyle } from '@tomic/form-renderer';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import {
   columnConstraint,
   narrowFieldOptions,
   normalizeFieldOptions,
-} from './formConstraints';
+} from '@tomic/resource-ui/chunks/FormBuilder/formConstraints';
 import type {
   FieldOption,
   OptionsSource,
@@ -28,7 +28,7 @@ import type {
   FormStyling,
 } from '@tomic/form-renderer';
 import { parseStylingValue } from './SettingsTab';
-import { parseFieldOptions } from './FieldOptions/useFieldOptions';
+import { parseFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import { OPTIONS_SOURCE_KEY } from './FieldOptions/optionsSource';
 
 /**

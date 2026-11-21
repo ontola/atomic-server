@@ -3,10 +3,10 @@ import { Ai, dataBrowser, useCanWrite, useStore, useTitle } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import toast from 'react-hot-toast';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
-import { Column, Row } from '@components/Row';
-import { EditableTitle } from '@components/EditableTitle';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
-import { ResourceCoverImage } from '@components/ResourceDecorations';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {

@@ -8,9 +8,9 @@ import toast, {
 import { FaComment, FaCopy, FaXmark } from 'react-icons/fa6';
 import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
-import { Column, Row } from './Row';
-import { IconButton } from './IconButton/IconButton';
-import { Button } from './Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { shortenSubjects } from '../helpers/shortenSubjects';
 import {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '@tomic/react';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { registerBasicInstanceHandler } from '@components/forms/NewForm/useNewResourceUI';
 import { useAppClass } from '@chunks/PluginRuns/useDriveClass';

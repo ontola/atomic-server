@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 import { ErrorLook } from '../ErrorLook';
 
 import type { JSX } from 'react';
-import { ResourceRow } from '@views/ResourceRow';
+import { ResourceRow } from '@tomic/resource-ui/views/ResourceRow';
 
 interface UsageRowProps {
   subject: string;

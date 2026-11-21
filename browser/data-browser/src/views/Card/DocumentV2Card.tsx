@@ -1,8 +1,8 @@
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import type { CardViewProps } from './CardViewProps';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import { dataBrowser, useArray } from '@tomic/react';
-import { Tag } from '@components/Tag';
+import { Tag } from '@tomic/resource-ui/components/Tag/index';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import { useDocumentText } from '@hooks/useDocumentText';
 

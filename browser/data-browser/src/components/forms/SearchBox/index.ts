@@ -1,3 +1,1 @@
-export { SearchBox } from './SearchBox';
-export { SearchBoxButton } from './SearchBoxButton';
-export * from './searchboxVars';
+export * from '@tomic/resource-ui/components/forms/SearchBox/index';

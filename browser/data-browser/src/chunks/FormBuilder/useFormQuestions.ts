@@ -11,7 +11,7 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import { useMemo } from 'react';
 import type { FieldOption } from '@tomic/form-renderer';
 import type { FormFieldType } from './fieldTypes';

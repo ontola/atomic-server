@@ -6,8 +6,8 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { Column } from '@components/Row';
-import { BasicSelect as Select } from '@components/forms/BasicSelect';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect as Select } from '@tomic/ui/components/forms/BasicSelect';
 import { useState } from 'react';
 
 export function IntegrationDefaultView({ subject }: { subject: string }) {

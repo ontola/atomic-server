@@ -1,14 +1,14 @@
 import styled from 'styled-components';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { ComboBox } from '@components/ComboBox';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useState } from 'react';
 import { useOpenRouterModels } from '../useOpenRouterModels';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { ModelInfoLayout } from './ModelInfoLayout';
-import Markdown from '@components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { useAISettings } from '@components/AI/AISettingsContext';
 
 interface OpenRouterModelSelectorProps {

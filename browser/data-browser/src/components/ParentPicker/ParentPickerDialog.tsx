@@ -7,7 +7,7 @@ import {
   useDialog,
 } from '../Dialog';
 import { ParentPicker } from './ParentPicker';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { waitForActiveDocument } from '../Dialog/waitForActiveDocument';
 
 interface ParentPickerDialogProps {

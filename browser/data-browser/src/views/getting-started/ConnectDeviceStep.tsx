@@ -11,11 +11,14 @@ import { safePortalUrl } from '../../helpers/managed/api';
 import { openExternal } from '../../helpers/openExternal';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
-import { Button } from '../../components/Button';
-import { Column, Row } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { PairingCode } from '../../components/PairingCode';
 import { ConnectToDeviceForm } from '../../components/ConnectToDeviceForm';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
 import {
   usePairingFlow,

@@ -1,6 +1,6 @@
 import { FaRotateLeft } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useEffect, useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { SideBarItem } from './SideBarItem';
 
 /** Full-width row; matches resource links in the tree (clean AtomicLink is inline by default). */

@@ -13,7 +13,7 @@ import {
   isUnavailableResource,
   unavailableReason,
   withoutUnavailable,
-} from './unavailableResources';
+} from '@tomic/resource-ui/helpers/unavailableResources';
 
 const DRIVE = 'did:ad:drive:one';
 const TRASH = 'did:ad:folder:trash';

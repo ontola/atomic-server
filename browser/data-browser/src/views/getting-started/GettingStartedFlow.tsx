@@ -34,8 +34,8 @@ import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
-import { Button } from '../../components/Button';
-import { Column } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import { ResourceRow } from '../ResourceRow';
 import { NewIdentitySection } from '../../components/NewIdentitySection';
 import {
@@ -77,13 +77,16 @@ import {
   type RecoverySecret,
   type SecretAccountConflict,
 } from '../../helpers/managed/recovery';
-import { IconButton } from '../../components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { CodeBlock } from '../../components/CodeBlock';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
 } from './AccountSignInPanel';
-import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { FaArrowLeft, FaKey, FaXmark } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';

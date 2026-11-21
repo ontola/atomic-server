@@ -1,0 +1,62 @@
+import { useContext, type JSX } from 'react';
+import { FaEllipsisVertical } from 'react-icons/fa6';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
+import type { DraggableAttributes } from '@dnd-kit/core';
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
+import { TablePageContext } from './tablePageContext.js';
+import { DerivedColumnDialog } from './DerivedColumnDialog.js';
+import type { DerivedColumnSpec } from './derivedColumns.js';
+import { ColumnSpecHeading } from './ColumnSpecHeading.js';
+
+const Trigger = buildDefaultTrigger(
+  <FaEllipsisVertical />,
+  () => 'Edit computed column',
+);
+
+/**
+ * Heading of a computed column: its label plus the menu that edits or removes
+ * it. There is no property behind it, so nothing here sorts or filters —
+ * what it offers is the configuration that produced the column.
+ */
+export function DerivedColumnHeading({
+  spec,
+  readOnly,
+  dragListeners,
+  dragAttributes,
+}: {
+  spec: DerivedColumnSpec;
+  readOnly: boolean;
+  dragListeners?: SyntheticListenerMap;
+  dragAttributes?: DraggableAttributes;
+}): JSX.Element {
+  const { classProperties, updateDerivedColumn, removeDerivedColumn } =
+    useContext(TablePageContext);
+
+  return (
+    <ColumnSpecHeading
+      spec={spec}
+      readOnly={readOnly}
+      dragListeners={dragListeners}
+      dragAttributes={dragAttributes}
+      generatorTitle={spec.formula}
+      Trigger={Trigger}
+      removeTitle='Remove computed column'
+      removeBody={
+        <p>
+          Remove the {spec.label} column from this view. It is computed, so no
+          data is deleted — add it back any time.
+        </p>
+      }
+      onRemove={() => removeDerivedColumn(spec.id)}
+      renderEditDialog={({ bindShow }) => (
+        <DerivedColumnDialog
+          open
+          bindShow={bindShow}
+          classProperties={classProperties}
+          editing={spec}
+          onSave={updateDerivedColumn}
+        />
+      )}
+    />
+  );
+}

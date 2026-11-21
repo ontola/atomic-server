@@ -1,0 +1,194 @@
+name: Table package
+
+on:
+  pull_request:
+    paths:
+      - 'browser/table/**'
+      - 'browser/table-page/**'
+      - 'browser/resource-ui/**'
+      - 'browser/form-renderer/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
+      - 'browser/data-browser/src/AtomicResourceUIHost.tsx'
+      - 'browser/data-browser/src/Providers.tsx'
+      - 'browser/data-browser/src/views/ResourcePage.tsx'
+      - 'browser/data-browser/vite.config.ts'
+      - 'wasm/**'
+      - 'lib/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - 'tools/cargo-bin/**'
+      - 'browser/ui/**'
+      - 'browser/utils/**'
+      - 'browser/lib/src/EventManager.ts'
+      - 'browser/lib/src/calendar-date.ts'
+      - 'browser/lib/tsup.config.ts'
+      - 'browser/data-browser/src/components/**'
+      - 'browser/data-browser/src/hooks/**'
+      - 'browser/data-browser/src/globalCssVars.ts'
+      - 'browser/pnpm-lock.yaml'
+      - 'browser/pnpm-workspace.yaml'
+      - 'browser/package.json'
+      - 'browser/.ox*'
+      - 'browser/patches/**'
+      - '.github/workflows/table-package.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'browser/table/**'
+      - 'browser/table-page/**'
+      - 'browser/resource-ui/**'
+      - 'browser/form-renderer/**'
+      - 'browser/lib/**'
+      - 'browser/react/**'
+      - 'browser/data-browser/src/AtomicResourceUIHost.tsx'
+      - 'browser/data-browser/src/Providers.tsx'
+      - 'browser/data-browser/src/views/ResourcePage.tsx'
+      - 'browser/data-browser/vite.config.ts'
+      - 'wasm/**'
+      - 'lib/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - 'tools/cargo-bin/**'
+      - 'browser/ui/**'
+      - 'browser/utils/**'
+      - 'browser/lib/src/EventManager.ts'
+      - 'browser/lib/src/calendar-date.ts'
+      - 'browser/lib/tsup.config.ts'
+      - 'browser/data-browser/src/components/**'
+      - 'browser/data-browser/src/hooks/**'
+      - 'browser/data-browser/src/globalCssVars.ts'
+      - 'browser/pnpm-lock.yaml'
+      - 'browser/pnpm-workspace.yaml'
+      - 'browser/package.json'
+      - 'browser/.ox*'
+      - 'browser/patches/**'
+      - '.github/workflows/table-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: table-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build, test and install packed table
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - name: Install table dependencies
+        working-directory: browser
+        run: pnpm --filter @tomic/table... install --frozen-lockfile
+      - name: Build shared UI
+        working-directory: browser
+        run: pnpm --filter @tomic/ui... build
+      - name: Lint, typecheck and test
+        working-directory: browser
+        run: |
+          pnpm --filter @tomic/utils test
+          pnpm --filter @tomic/ui lint
+          pnpm --filter @tomic/ui typecheck
+          pnpm --filter @tomic/table lint
+          pnpm --filter @tomic/table typecheck
+          pnpm --filter @tomic/table test
+      - name: Build and pack
+        working-directory: browser
+        run: |
+          pnpm --filter @tomic/table pack --out "$RUNNER_TEMP/tomic-table.tgz"
+          pnpm --filter @tomic/ui pack --out "$RUNNER_TEMP/tomic-ui.tgz"
+      - name: Install and typecheck clean external table and UI consumers
+        run: |
+          node browser/table/scripts/check-package.mjs "$RUNNER_TEMP/tomic-table.tgz" "$RUNNER_TEMP/tomic-ui.tgz"
+          node browser/ui/scripts/check-package.mjs "$RUNNER_TEMP/tomic-ui.tgz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tomic-table-preview
+          path: |
+            ${{ runner.temp }}/tomic-table.tgz
+            ${{ runner.temp }}/tomic-ui.tgz
+
+  atomic-adapter:
+    name: Shared Atomic host controls
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build JavaScript host dependencies
+        run: pnpm --filter '@tomic/data-browser^...' build
+      - name: Check Atomic host types
+        run: pnpm --filter @tomic/data-browser typecheck
+      - name: Test shared host controls and table adapters
+        working-directory: browser/data-browser
+        run: pnpm exec vitest run src/components/sharedUI.test.tsx src/components/Dialog/DialogGlobalContextProvider.test.tsx src/components/Dropdown/positionMenu.test.tsx src/components/Dropdown/DefaultTrigger.test.tsx src/hooks/useResizable.test.tsx --maxWorkers=2
+  page:
+    name: Complete TablePage, SDK fields and packed locales
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: 2
+      # Catalog preservation is checked without making translation-provider calls.
+      OPENROUTER_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - name: Install shared page dependencies
+        working-directory: browser
+        run: pnpm --filter @tomic/table-page... install --frozen-lockfile
+      - name: Check source boundary and build SDK/page packages
+        working-directory: browser
+        run: |
+          node resource-ui/scripts/check-boundaries.mjs
+          pnpm --filter @tomic/table-page... build
+          pnpm --filter @tomic/resource-ui lint
+          pnpm --filter @tomic/table-page lint
+          pnpm --filter @tomic/resource-ui typecheck
+          pnpm --filter @tomic/table-page typecheck
+      - name: Prepare real formula evaluator
+        run: |
+          rustup target add wasm32-unknown-unknown
+          pnpm --dir browser/data-browser build:wasm
+      - name: Run moved page behavior tests
+        working-directory: browser
+        run: pnpm --filter @tomic/resource-ui test && pnpm --filter @tomic/table-page test
+      - name: Pack private dependency graph
+        working-directory: browser
+        run: |
+          pnpm --filter @tomic/table-page pack --out "$RUNNER_TEMP/tomic-table-page.tgz"
+          pnpm --filter @tomic/resource-ui pack --out "$RUNNER_TEMP/tomic-resource-ui.tgz"
+          pnpm --filter @tomic/table pack --out "$RUNNER_TEMP/tomic-table.tgz"
+          pnpm --filter @tomic/ui pack --out "$RUNNER_TEMP/tomic-ui.tgz"
+          pnpm --filter @tomic/react pack --out "$RUNNER_TEMP/tomic-react.tgz"
+          pnpm --filter @tomic/lib pack --out "$RUNNER_TEMP/tomic-lib.tgz"
+          pnpm --filter @tomic/form-renderer pack --out "$RUNNER_TEMP/tomic-form-renderer.tgz"
+      - name: Verify packed SDK binding and a Dutch validation journey
+        run: node browser/table-page/scripts/check-package.mjs "$RUNNER_TEMP/tomic-table-page.tgz" "$RUNNER_TEMP/tomic-resource-ui.tgz" "$RUNNER_TEMP/tomic-table.tgz" "$RUNNER_TEMP/tomic-ui.tgz" "$RUNNER_TEMP/tomic-react.tgz" "$RUNNER_TEMP/tomic-lib.tgz" "$RUNNER_TEMP/tomic-form-renderer.tgz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tomic-table-page-preview
+          path: ${{ runner.temp }}/tomic-*.tgz

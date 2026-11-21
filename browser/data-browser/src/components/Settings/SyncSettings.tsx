@@ -1,6 +1,6 @@
 import { ServiceGroup, ServiceSection } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
-import { Checkbox } from '../../components/forms/Checkbox';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 import {
   readKnownPeers,
   writeKnownPeers,
@@ -74,7 +74,7 @@ import {
   FaCloudArrowUp,
   FaKey,
 } from 'react-icons/fa6';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { VaultPanel } from '../../components/Vault/VaultPanel';
 import {
   ServiceRow,
@@ -116,9 +116,9 @@ import {
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import { getDriveUsage } from '../../helpers/managedUsage';
 import { sameOrigin, serverLabel } from '../../helpers/serverUrl';
-import { ResourceInline } from '../../views/ResourceInline';
-import { AtomicLink } from '../../components/AtomicLink';
-import { formatTimeAgo } from '../../helpers/formatTimeAgo';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { formatTimeAgo } from '@tomic/resource-ui/helpers/formatTimeAgo';
 import { getLocalServerOrigin, isRunningInTauri } from '../../helpers/tauri';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import {

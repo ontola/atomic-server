@@ -7,7 +7,7 @@ import {
   type FormEvent,
 } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '../../../../Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   Dialog,
   DialogActions,
@@ -15,7 +15,10 @@ import {
   useDialog,
 } from '../../../../Dialog';
 import Field from '../../../Field';
-import { InputStyled, InputWrapper } from '../../../InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 import type { CustomResourceDialogProps } from '../../useNewResourceUI';
 

@@ -9,7 +9,7 @@ import {
   type LoroDocType,
 } from 'loro-prosemirror';
 import type { LoroDoc } from 'loro-crdt';
-import { getCollaborativeEditorSchema } from './getCollaborativeEditorSchema';
+import { getCollaborativeEditorSchema } from '@tomic/resource-ui/chunks/RTE/getCollaborativeEditorSchema';
 import { getRegisteredCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
 
 const RECREATE_OPTIONS = {

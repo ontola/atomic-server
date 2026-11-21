@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { css, styled } from 'styled-components';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
-import { transition } from '../../helpers/transition';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { transition } from '@tomic/ui/helpers/transition';
 
 interface FollowingIndicatorProps extends DropdownTriggerProps {
   /** True when this avatar is the agent the signed-in user is following. */

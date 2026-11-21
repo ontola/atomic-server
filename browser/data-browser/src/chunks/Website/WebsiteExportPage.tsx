@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { useStore, type Resource } from '@tomic/react';
-import { AtomicLink } from '@components/AtomicLink';
-import { Button } from '@components/Button';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Button } from '@tomic/ui/components/Button';
 import {
   readWebsiteExport,
   readWebsiteVersion,

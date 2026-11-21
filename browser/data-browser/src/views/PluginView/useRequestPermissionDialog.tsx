@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Dialog, useDialog } from '@components/Dialog';
-import { Column } from '@components/Row';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { ResourceInline } from '@views/ResourceInline';
-import { Button } from '@components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Column } from '@tomic/ui/components/Row';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { Button } from '@tomic/ui/components/Button';
 
 import { useStoredPluginGrants } from './useStoredPluginGrants';
 

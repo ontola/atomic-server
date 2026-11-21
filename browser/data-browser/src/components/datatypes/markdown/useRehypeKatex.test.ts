@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { useRehypeKatex } from './useRehypeKatex';
+import { useRehypeKatex } from '@tomic/resource-ui/components/datatypes/markdown/useRehypeKatex';
 
 describe('useRehypeKatex', () => {
   it('does not load KaTeX for text without a dollar sign', async () => {
