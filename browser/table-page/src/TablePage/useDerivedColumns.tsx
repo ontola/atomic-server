@@ -159,14 +159,15 @@ function DerivedCell({
 }): JSX.Element {
   const values = useRowValues(subject, specProperties(spec));
   // The evaluator loads lazily: until it has, a cell is empty rather than wrong.
-  useFormulaReady();
+  const ready = useFormulaReady();
 
   // A running duration ticks; a finished one reads the same at any instant.
   const live =
+    ready &&
     isLive(spec) &&
     computeDerived(spec, values, 0) !== computeDerived(spec, values, 1);
   const now = useNow(live);
-  const value = computeDerived(spec, values, now);
+  const value = ready ? computeDerived(spec, values, now) : undefined;
 
   return (
     <Value $live={live} data-testid={`derived-${spec.id}`}>
