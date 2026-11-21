@@ -12,7 +12,8 @@ const REDEEM_AT = 'https://atomicdata.dev/properties/invite/redeemAt';
 function invitationOrigin(raw: string): string {
   const url = new URL(raw);
   const local =
-    ['localhost', '[::1]'].includes(url.hostname) ||
+    /(^|\.)localhost\.?$/.test(url.hostname) ||
+    url.hostname === '[::1]' ||
     /^127(?:\.\d+){3}$/.test(url.hostname);
   if (
     !(url.protocol === 'https:' || (local && url.protocol === 'http:')) ||

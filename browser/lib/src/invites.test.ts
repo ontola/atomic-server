@@ -6,7 +6,10 @@ import { properties } from './urls.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 
 describe('invites', () => {
-  it('includes the normalized issuing origin in the signed fields', async () => {
+  it.each([
+    ['https://team.example:443/', 'https://team.example'],
+    ['http://atomic.localhost:9883/', 'http://atomic.localhost:9883'],
+  ])('signs and verifies the issuing origin %s', async (input, expected) => {
     const keys = await Agent.generateKeyPair();
     const agent = await Agent.fromSecret(
       Agent.buildSecret(keys.privateKey, `did:ad:agent:${keys.publicKey}`),
@@ -19,9 +22,9 @@ describe('invites', () => {
       undefined,
       false,
       1,
-      'https://team.example:443/',
+      input,
     );
-    expect(verifiedInviteServer(token)).toBe('https://team.example');
+    expect(verifiedInviteServer(token)).toBe(expected);
     const changed = JSON.parse(atob(token));
     changed['https://atomicdata.dev/properties/invite/redeemAt'] =
       'https://another.example';
