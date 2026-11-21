@@ -555,6 +555,9 @@ export interface IncomingChange {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+/** These endpoints build a new result document for each request. */
+const isComputedResult = (subject: string) =>
+  /^https?:\/\/[^?#]+\/(?:query|search)\?/.test(subject);
 /** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
 const GET_MANY_CHUNK = 200;
 /** Subjects per local-database read. The worker walks the list serially and a
@@ -3049,7 +3052,11 @@ export class Store {
       this.addResource(change.resource, {
         skipCommitCompare: true,
         alias,
-        replaceLoroDocsFromRemote: change.replaceLoroDocsFromRemote,
+        replaceLoroDocsFromRemote:
+          change.replaceLoroDocsFromRemote ||
+          (change.source === 'http-fetch' &&
+            !change.resource.error &&
+            isComputedResult(change.resource.subject)),
       });
 
       return 'applied';
@@ -3059,6 +3066,12 @@ export class Store {
 
     const subject = this.normalizeSubject(change.subject);
     const existing = this.resources.get(this.aliases.get(subject) ?? subject);
+    // A query's definition can have the same commit on successive GETs.
+    // The answers have independent Loro histories and can contain different rows.
+    const freshResult =
+      change.source === 'ws-pending-get' &&
+      !!change.replaceLoroDocsFromRemote &&
+      isComputedResult(subject);
 
     // Echo dedup ⇒ no notify. Two ways to recognise our own commit: the
     // cached `lastCommit` matches (the ack already landed), or the id's
@@ -3084,6 +3097,7 @@ export class Store {
 
     if (
       !change.forceNotify &&
+      !freshResult &&
       existing &&
       !existing.loading &&
       !existing.error &&
@@ -3138,7 +3152,8 @@ export class Store {
       // two documents could no longer be merged afterwards. Replacing is for
       // a placeholder or a doc rebuilt without history (see
       // `replayOnLocalBase`, which makes the same call).
-      (this._withoutLoroHistory.has(subject) ||
+      (freshResult ||
+        this._withoutLoroHistory.has(subject) ||
         !this.hasRenderableContent(resource));
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
