@@ -127,18 +127,22 @@ function fixture() {
   add('atomic:row', 'atomic:table', rowKey, rowConfig);
   rows.get('atomic:row')!['atomic:user-note'] = 'Keep my note';
   let pageOverride: { total: number; pages: string[][] } | undefined;
+
+  const resource = (subject: string) => {
+    if (!rows.has(subject)) throw new Error('Missing');
+
+    return {
+      subject,
+      get: (property: string) => rows.get(subject)?.[property],
+      getSubjects: (property: string) => rows.get(subject)?.[property] ?? [],
+    };
+  };
+
   const store = {
     normalizeSubject: (subject: string) => subject,
     getServerUrl: () => 'https://node.example',
-    getResource: vi.fn(async (subject: string) => {
-      if (!rows.has(subject)) throw new Error('Missing');
-
-      return {
-        subject,
-        get: (property: string) => rows.get(subject)?.[property],
-        getSubjects: (property: string) => rows.get(subject)?.[property] ?? [],
-      };
-    }),
+    getResource: vi.fn(async (subject: string) => resource(subject)),
+    getResources: vi.fn(async (subjects: string[]) => subjects.map(resource)),
     fetchResourceFromServer: vi.fn(async (subject: string) => {
       const url = new URL(subject);
       expect(url.origin + url.pathname).toBe('https://node.example/query');
@@ -186,6 +190,86 @@ function fixture() {
     },
   };
 }
+
+it('hydrates cold source pages through existing bulk reads instead of one worker round trip per row', async () => {
+  const { rows, add, store, options, rowConfig } = fixture();
+
+  for (let id = 12; id < 110; id++) {
+    const config = { ...rowConfig, record: { id, name: 'Remote title' } };
+    add(
+      'atomic:row-' + id,
+      'atomic:table',
+      sourceKey({
+        ...config,
+        kind: 'record',
+        collection: { name: 'events', resource: 'event' },
+        remoteId: id,
+      }),
+      config,
+    );
+  }
+
+  const snapshot = JSON.stringify([...rows]);
+  const single = vi.mocked(store.getResource).getMockImplementation()!;
+  vi.mocked(store.getResource).mockImplementation(async subject => {
+    if (typeof rows.get(subject)?.[p['syncable-source-key']] === 'string')
+      throw new Error('Unexpected single cold-source hydration');
+
+    return single(subject);
+  });
+  const result = await collectSyncableFlatAdoption(store, options);
+  expect(result.blocks).toEqual([]);
+  expect(result.aliases).toHaveLength(100);
+  expect(
+    vi.mocked(store.getResources).mock.calls.map(([ids]) => ids.length),
+  ).toEqual([100, 1]);
+  expect(JSON.stringify([...rows])).toBe(snapshot);
+});
+
+it('never bulk-fetches foreign, credential-bearing or commit query subjects', async () => {
+  const { store, options, override } = fixture();
+  const members = [
+    'atomic:principal',
+    'https://foreign.example/source',
+    'atomic:commit:' + 'a'.repeat(86),
+    'https://user:secret@node.example/source',
+    'atomic:table',
+    'https://node.example/source#fragment',
+    'atomic:row',
+  ];
+  override({ total: members.length, pages: [members] });
+  const result = await collectSyncableFlatAdoption(store, options);
+  expect(result.blocks).toEqual([]);
+  expect(store.getResources).toHaveBeenCalledExactlyOnceWith([
+    'atomic:principal',
+    'atomic:table',
+    'atomic:row',
+  ]);
+  expect(vi.mocked(store.getResource).mock.calls.map(([id]) => id)).toEqual([
+    'atomic:app',
+  ]);
+});
+
+it('refuses bulk read errors and the resource budget without accepting partial adoption', async () => {
+  const { rows, store, options } = fixture();
+  const before = JSON.stringify([...rows]);
+  const bulk = vi.mocked(store.getResources).getMockImplementation()!;
+  vi.mocked(store.getResources).mockImplementationOnce(async subjects => {
+    const resources = await bulk(subjects);
+    Object.assign(resources[1], { error: new Error('Source unreadable') });
+
+    return resources;
+  });
+  await expect(collectSyncableFlatAdoption(store, options)).rejects.toThrow(
+    'Source unreadable',
+  );
+  vi.mocked(store.getResources).mockClear();
+  await expect(
+    collectSyncableFlatAdoption(store, { ...options, maxResources: 3 }),
+  ).rejects.toThrow('resource limit');
+  expect(store.getResources).not.toHaveBeenCalled();
+  expect(JSON.stringify([...rows])).toBe(before);
+});
 
 it('proves unique flat destinations without changing subjects, user fields, view data or saved metadata', async () => {
   const { rows, store, options, tableKey, rowKey, rowConfig } = fixture();

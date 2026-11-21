@@ -260,12 +260,35 @@ export async function collectSyncableFlatAdoption(
         'Flat source discovery is incomplete or changed; retry after synchronization',
       );
 
+    const members: string[] = [];
+
     for (const subject of result.members) {
       const normalized = store.normalizeSubject(subject);
       if (rawMembers.has(normalized))
         throw new Error('Flat source discovery returned duplicate members');
       rawMembers.add(normalized);
       if (isCommitSubject(subject) || !safe(subject)) continue;
+      members.push(subject);
+    }
+
+    // Hydrate each proven query page together through the existing Store path.
+    // Sequential cold reads otherwise require one local database round trip
+    // per imported record before the Sync frame can open.
+    const missing = members.filter(subject => !cache.has(subject));
+    if (cache.size + missing.length > maximum)
+      throw new Error('Flat source adoption exceeds its resource limit');
+
+    if (missing.length) {
+      const resources = await store.getResources(missing);
+      assertCurrent();
+
+      for (const [offset, row] of resources.entries()) {
+        if (row.error) throw row.error;
+        cache.set(missing[offset], row);
+      }
+    }
+
+    for (const subject of members) {
       const row = await load(subject);
       if (!(await beneath(subject, drive))) continue;
       const raw = row.get(sourceProperty),

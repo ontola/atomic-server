@@ -1310,6 +1310,10 @@ This does not yet prove restoration of the user's private staging workspace.
   and cold entry observes immutable View readiness rather than caching a mutable
   resource handle. Worker queue tests cover independent cancellation and serial whole-table
   materialization, with parallel execution for unrelated tables.
+- `syncableFlatAdoption.test.ts` verifies source pages use the existing Store
+  batch reader for cold records, retain read-only ancestry/identity checks, and
+  refuse foreign/commit subjects, duplicate or incomplete pages, returned errors
+  and allocations beyond the resource budget before import authority is created.
 - `syncableCollection.test.ts` and `SyncableCollectionView.test.tsx` verify native
   stored-data rendering with unrelated schema subjects, typed/enum values,
   cache isolation and navigation checks. The view never creates child collections
