@@ -97,7 +97,11 @@ describe('a sync delta for a resource with no local Loro history', () => {
   }) => {
     const { json, local } = history();
     const { store } = storeWith(json, local);
-    store.applyIncoming({ subject: SUBJECT, loroBytes: local, source: 'ws-sync-push' });
+    store.applyIncoming({
+      subject: SUBJECT,
+      loroBytes: local,
+      source: 'ws-sync-push',
+    });
     const resource = await store.getResource(SUBJECT);
     const version = resource.getLoroDoc()!.oplogVersion().encode();
     store.hydrateResourceFromJsonAd(SUBJECT, json);
@@ -113,7 +117,9 @@ describe('a sync delta for a resource with no local Loro history', () => {
     const opened = await store.getResource(SUBJECT);
     const original = new LoroLoader.Loro.LoroDoc();
     original.import(local);
-    expect(opened.getLoroDoc()!.oplogVersion().encode()).toEqual(original.oplogVersion().encode());
+    expect(opened.getLoroDoc()!.oplogVersion().encode()).toEqual(
+      original.oplogVersion().encode(),
+    );
   });
 
   it('does not write a doc rebuilt from JSON-AD back to the local database', async ({
