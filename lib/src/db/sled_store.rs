@@ -161,6 +161,23 @@ impl KvStore for SledStore {
         }))
     }
 
+    fn range_value_sizes(
+        &self,
+        tree: Tree,
+        start: Vec<u8>,
+        end: Vec<u8>,
+        limit: usize,
+    ) -> AtomicResult<Vec<(Vec<u8>, u64)>> {
+        self.tree(tree)
+            .range(start..end)
+            .take(limit)
+            .map(|row| {
+                let (key, value) = row.map_err(|e| format!("sled range error: {e}"))?;
+                Ok((key.to_vec(), value.len() as u64))
+            })
+            .collect()
+    }
+
     fn range(&self, tree: Tree, start: Vec<u8>, end: Vec<u8>, reverse: bool) -> KvIter {
         if reverse {
             Box::new(self.tree(tree).range(start..end).rev().map(|result| {

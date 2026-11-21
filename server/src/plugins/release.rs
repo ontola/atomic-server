@@ -65,9 +65,12 @@ pub async fn resolve(
 /// Bytes of a wasip2 package, from this node's blob store.
 pub async fn package_bytes(db: &Db, package: &str) -> AtomicResult<Vec<u8>> {
     let hash = package_hash(package)?;
-    db.get_blob(&hash)
-        .await?
-        .ok_or_else(|| AtomicError::from(format!("package blob {package} is not on this node")))
+    let missing = || AtomicError::from(format!("package blob {package} is not on this node"));
+    let size = db.blob_size(&hash).await?.ok_or_else(missing)?;
+    super::package_archive::check_package_size(size)?;
+    let bytes = db.get_blob(&hash).await?.ok_or_else(missing)?;
+    super::package_archive::check_package_size(bytes.len() as u64)?;
+    Ok(bytes)
 }
 
 /// One file of a release's package (`ui.js`, `ui.css`), when it has one.
@@ -193,7 +196,7 @@ pub async fn publish_package(
     claimed_world: Option<&str>,
 ) -> AtomicResult<(String, PluginRelease, Manifest)> {
     use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
-    let mut zip = super::package_archive::open(bytes.to_vec())?;
+    let mut zip = super::package_archive::open(bytes)?;
     let manifest = crate::plugins::wasm::describe_package(db, &mut zip).await?;
     expect_world(&manifest, claimed_world)?;
     let package = store_package(db, bytes).await?;

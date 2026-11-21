@@ -12,7 +12,7 @@
 use std::{
     collections::HashSet,
     ffi::OsStr,
-    io::Cursor,
+    io::{Cursor, Read, Seek},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -184,9 +184,7 @@ pub fn extender_id(drive_subject: &str, installation: &str) -> String {
     format!("{drive_subject}:{installation}")
 }
 
-pub fn validate_plugin_zip(
-    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
-) -> AtomicResult<PluginManifest> {
+pub fn validate_plugin_zip(zip: &mut ZipArchive<impl Read + Seek>) -> AtomicResult<PluginManifest> {
     super::package_archive::check_sizes(zip)?;
     // Check for plugin.wasm
     if zip.by_name("plugin.wasm").is_err() {
@@ -240,9 +238,7 @@ pub fn validate_plugin_zip(
 }
 
 /// The `plugin.wasm` inside a validated package.
-pub fn wasm_bytes_from_zip(
-    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
-) -> AtomicResult<Vec<u8>> {
+pub fn wasm_bytes_from_zip(zip: &mut ZipArchive<impl Read + Seek>) -> AtomicResult<Vec<u8>> {
     super::package_archive::check_sizes(zip)?;
     let file = zip
         .by_name("plugin.wasm")
@@ -279,7 +275,7 @@ pub async fn read_class_urls(db: &Db, wasm_bytes: &[u8]) -> AtomicResult<Vec<Str
 /// component itself. This is the manifest a wasip2 Release carries.
 pub async fn describe_package(
     db: &Db,
-    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+    zip: &mut ZipArchive<impl Read + Seek>,
 ) -> AtomicResult<Manifest> {
     let plugin_json = validate_plugin_zip(zip)?;
     let wasm_bytes = wasm_bytes_from_zip(zip)?;

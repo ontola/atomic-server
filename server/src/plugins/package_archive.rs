@@ -10,24 +10,43 @@ const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 /// Bound directory allocations before the ZIP parser opens a package. The parser
 /// may try earlier end records if the last one is invalid. Check each candidate.
-pub(super) fn open(bytes: Vec<u8>) -> AtomicResult<ZipArchive<Cursor<Vec<u8>>>> {
-    if bytes.len() as u64 > MAX_PACKAGE_BYTES {
-        return Err("Plugin archive is too large".into());
-    }
-    for pos in memchr::memmem::find_iter(&bytes, b"PK\x05\x06") {
+pub(super) fn open<B: AsRef<[u8]>>(source: B) -> AtomicResult<ZipArchive<Cursor<B>>> {
+    let bytes = source.as_ref();
+    check_package_size(bytes.len() as u64)?;
+    for pos in memchr::memmem::find_iter(bytes, b"PK\x05\x06") {
         let Some(end) = bytes.get(pos..pos + 22) else {
             continue;
         };
-        let count = u16::from_le_bytes([end[10], end[11]]) as usize;
         let zip64 = pos >= 20 && &bytes[pos - 20..pos - 16] == b"PK\x06\x07";
-        if zip64 || count > MAX_FILES {
+        let comment_len = usize::from(u16::from_le_bytes([end[20], end[21]]));
+        if pos + 22 + comment_len > bytes.len() {
+            continue;
+        }
+        // The ZIP32 reader allocates from the per-disk count. Both counts
+        // describe the same directory in a single-disk plugin package.
+        let disk = &end[4..6];
+        let directory_disk = &end[6..8];
+        let on_disk = u16::from_le_bytes([end[8], end[9]]);
+        let total = u16::from_le_bytes([end[10], end[11]]);
+        if zip64 || (disk == directory_disk && !counts_fit(on_disk, total)) {
             return Err("Use a ZIP32 plugin package with at most 4096 files".into());
         }
     }
-    let mut zip = ZipArchive::new(Cursor::new(bytes))
+    let mut zip = ZipArchive::new(Cursor::new(source))
         .map_err(|e| AtomicError::from(format!("Invalid plugin archive: {e}")))?;
     check_sizes(&mut zip)?;
     Ok(zip)
+}
+
+pub(super) fn check_package_size(size: u64) -> AtomicResult<()> {
+    if size > MAX_PACKAGE_BYTES {
+        return Err("Plugin archive is too large".into());
+    }
+    Ok(())
+}
+
+fn counts_fit(on_disk: u16, total: u16) -> bool {
+    usize::from(on_disk.max(total)) <= MAX_FILES
 }
 
 fn account_file(remaining: &mut u64, name: &str, size: u64) -> AtomicResult<()> {
@@ -83,6 +102,14 @@ pub(super) fn read_file(reader: impl Read, declared: u64) -> AtomicResult<Vec<u8
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn both_directory_counts_are_bounded() {
+        let limit = u16::try_from(MAX_FILES).unwrap();
+        assert!(counts_fit(limit, limit));
+        assert!(!counts_fit(limit + 1, limit));
+        assert!(!counts_fit(limit, limit + 1));
+    }
 
     #[test]
     fn opens_an_ordinary_package_and_reads_its_contents() {
