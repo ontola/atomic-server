@@ -1,5 +1,13 @@
 import { describe, it, vi, afterEach } from 'vitest';
-import { Resource, Store, core, Core, Datatype } from './index.js';
+import {
+  Resource,
+  Store,
+  core,
+  Core,
+  Datatype,
+  server,
+  commits,
+} from './index.js';
 
 describe('Store', () => {
   afterEach(() => {
@@ -18,6 +26,36 @@ describe('Store', () => {
       .get(core.properties.description)!
       .toString();
     expect(atomString).to.equal(testval);
+  });
+
+  it('refreshes unversioned and computed search results', ({ expect }) => {
+    const subject = 'https://example.test/search?q=folder';
+    const folder = 'https://example.test/folder';
+
+    for (const definition of [
+      undefined,
+      'https://example.test/commits/definition',
+    ]) {
+      const store = new Store();
+
+      for (const results of [[], [folder]]) {
+        const response = new Resource(subject);
+        response.loading = false;
+        response.new = false;
+
+        if (definition) {
+          response.setUnsafe(core.properties.isA, [server.classes.endpoint]);
+          response.setUnsafe(commits.properties.lastCommit, definition);
+        }
+
+        response.setUnsafe(server.properties.results, results);
+        store.addResources(response);
+      }
+
+      expect(
+        store.getResourceLoading(subject).get(server.properties.results),
+      ).toEqual([folder]);
+    }
   });
 
   it('fetches a resource', async ({ expect }) => {

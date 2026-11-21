@@ -212,15 +212,19 @@ export class Store {
 
     const storeResource = this.resources.get(resource.subject);
 
-    // Check if the resource has the same last commit as the one already in the store, if so, we don't want to notify so we don't trigger rerenders.
+    // A commit identifies the stored resource. Collections and endpoints
+    // compute results independently of the commit on their definitions.
     if (!skipCommitCompare) {
+      const revision = resource.get(commits.properties.lastCommit);
+
       if (
         storeResource &&
         !storeResource.hasClasses(collections.classes.collection) &&
+        !resource.hasClasses(server.classes.endpoint) &&
         !storeResource.loading &&
         !storeResource.new &&
-        storeResource.get(commits.properties.lastCommit) ===
-          resource.get(commits.properties.lastCommit)
+        revision &&
+        storeResource.get(commits.properties.lastCommit) === revision
       ) {
         return;
       }
