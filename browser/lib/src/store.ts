@@ -781,10 +781,11 @@ export class Store {
    *
    * Two consequences. It must not be written back to the local database,
    * where it would replace the real history the query read the values from.
-   * And a delta that arrives for it is replayed on that local history before
-   * anything asks the server.
+   * A delta is replayed on the local history before anything asks the server.
+   * Opening a query projection reads its stored snapshot. A legacy stored row
+   * that itself has no snapshot does not need a second lookup.
    */
-  private _withoutLoroHistory: Set<string> = new Set();
+  private _withoutLoroHistory = new Map<string, 'projection' | 'stored'>();
 
   /** Agent subjects already re-checked against the server this session — see
    *  the agent branch in {@link fetchResourceWithLocalFallback}. */
@@ -1359,6 +1360,31 @@ export class Store {
         'Connect to a server before disconnecting this drive.',
         ErrorType.Server,
       );
+
+    // A drive opened during bootstrap can already have a reconciliation in
+    // flight. Let it settle before taking either inventory. A changed identity,
+    // blocked edit or new write during verification still fails the checks.
+    if (this.getSyncStatus().syncInProgress) {
+      await new Promise<void>(resolve => {
+        const finish = () => {
+          off();
+          clearTimeout(timer);
+          resolve();
+        };
+
+        const off = this.on(StoreEvents.SyncStatusChanged, status => {
+          if (
+            !status.syncInProgress ||
+            status.blockedCount ||
+            this.getAgent() !== agent ||
+            this.getClientDb() !== db ||
+            this.serverUrl !== serverUrl
+          )
+            finish();
+        });
+        const timer = setTimeout(finish, 10_000);
+      });
+    }
 
     const current = () => {
       const status = this.getSyncStatus();
@@ -2594,7 +2620,7 @@ export class Store {
         this.hydrateOfflineReplay(
           subject,
           JSON.parse(jsonAd),
-          snapshot ?? undefined,
+          snapshot ?? null,
         ) ?? null
       );
     } catch {
@@ -2614,9 +2640,30 @@ export class Store {
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
-    snapshot?: Uint8Array,
+    snapshot?: Uint8Array | null,
   ): Resource | undefined {
     const existing = this.getResolved(subject);
+    const normalized = this.normalizeSubject(subject);
+    const withoutHistory = this._withoutLoroHistory.has(normalized);
+
+    if (!snapshot?.length && existing?.isReady()) {
+      if (snapshot === null && withoutHistory) {
+        this._withoutLoroHistory.set(normalized, 'stored');
+      }
+
+      // A query's projection contains no causal history. Importing it as a new
+      // peer makes subsequent edits depend on operations the server never saw.
+      if (
+        this.clientDb?.isInitialized &&
+        existing.get(commits.properties.lastCommit) !==
+          parsed[commits.properties.lastCommit]
+      ) {
+        void this.hydrateFromLocalDb(normalized).catch(() => undefined);
+      }
+
+      return existing;
+    }
+
     const resource = new Resource(subject);
     resource.applyHydratedValues(
       Object.entries(parsed).filter(([key]) => key !== '@id') as [
@@ -2637,7 +2684,10 @@ export class Store {
       // Only when nothing with real history is here to merge into: a
       // placeholder, or nothing at all.
       if (!existing || existing.loading) {
-        this._withoutLoroHistory.add(this.normalizeSubject(subject));
+        this._withoutLoroHistory.set(
+          normalized,
+          snapshot === undefined ? 'projection' : 'stored',
+        );
       }
     }
 
@@ -2646,6 +2696,8 @@ export class Store {
       subject: resource.subject,
       resource,
       source: 'offline-replay',
+      replaceLoroDocsFromRemote:
+        !!snapshot?.length && withoutHistory && !existing?.hasUnsavedChanges(),
     });
 
     return outcome === 'applied' ? this.getResolved(subject) : undefined;
@@ -4508,7 +4560,7 @@ export class Store {
         hasLocalData = this.hydrateResourceFromJson(
           subject,
           JSON.parse(jsonAd),
-          snapshot ?? undefined,
+          snapshot ?? null,
         );
       } catch (e) {
         console.warn(`[ClientDb] OPFS lookup failed for "${subject}":`, e);
@@ -4806,7 +4858,7 @@ export class Store {
   private hydrateResourceFromJson(
     subject: string,
     parsed: Record<string, unknown>,
-    snapshot?: Uint8Array,
+    snapshot?: Uint8Array | null,
   ): boolean {
     // `removeResource` tombstoned this subject in OPFS, but the worker may
     // not have processed that yet when a read races the delete. Whatever is
@@ -5417,6 +5469,13 @@ export class Store {
     }
 
     if (
+      this.clientDb?.isInitialized &&
+      this._withoutLoroHistory.get(resolved) === 'projection'
+    ) {
+      void this.hydrateFromLocalDb(resolved).catch(() => undefined);
+    }
+
+    if (
       !opts.allowIncomplete &&
       resource.loading === false &&
       !resource.error &&
@@ -5612,6 +5671,13 @@ export class Store {
       await this.fetchResourceWithLocalFallback(normalized);
       found =
         (this.resources.get(resolved) as Resource<C> | undefined) ?? found;
+    }
+
+    if (
+      this.clientDb?.isInitialized &&
+      this._withoutLoroHistory.get(resolved) === 'projection'
+    ) {
+      await this.hydrateFromLocalDb(resolved);
     }
 
     if (found.isReady() || found.error) {

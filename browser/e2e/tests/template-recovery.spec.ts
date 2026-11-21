@@ -2,24 +2,13 @@ import {
   managedDriveTest,
   expect as managedExpect,
 } from './deployment-fixtures';
-import { FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
+import { FRONTEND_URL } from './test-utils';
+import { mockManagedNode } from './managed-test-utils';
 
 managedDriveTest(
   'an unenrolled home can create a local drive',
   async ({ page }) => {
-    await page.route('**/server', async route => {
-      const response = await route.fetch({
-        url: nodeReachableServerUrl(route.request().url()),
-      });
-      const body = await response.json();
-      await route.fulfill({
-        json: {
-          ...body,
-          'https://atomicdata.dev/properties/server/managed': true,
-          'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
-        },
-      });
-    });
+    await mockManagedNode(page);
     await page.route('**/api/me', route =>
       route.fulfill({ json: { email: 'template@example.com' } }),
     );
@@ -48,19 +37,7 @@ managedDriveTest(
 managedDriveTest(
   'new drive errors can be reported with context',
   async ({ page }) => {
-    await page.route('**/server', async route => {
-      const response = await route.fetch({
-        url: nodeReachableServerUrl(route.request().url()),
-      });
-      const body = await response.json();
-      await route.fulfill({
-        json: {
-          ...body,
-          'https://atomicdata.dev/properties/server/managed': true,
-          'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
-        },
-      });
-    });
+    await mockManagedNode(page);
     await page.route('**/api/me', route =>
       route.fulfill({ json: { email: 'template@example.com' } }),
     );

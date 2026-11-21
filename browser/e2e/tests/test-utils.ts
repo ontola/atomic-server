@@ -1688,7 +1688,8 @@ export async function waitForDriveSettled(page: Page, timeoutMs = 30_000) {
         !s.syncInProgress &&
         s.pendingDirtyCount === 0 &&
         dbOk &&
-        !!s.lastDriveSync
+        !!s.drive &&
+        s.lastDriveSync?.drive === s.drive
       );
     },
     undefined,
