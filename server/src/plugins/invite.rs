@@ -167,7 +167,9 @@ pub fn handle_invite_post<'a>(
             add_rights(agent.as_str(), token.target.as_str(), false, store).await?;
         }
 
-        if token.max_usages.is_none() { token.record_acceptance(store, agent.as_str())?; }
+        if token.max_usages.is_none() {
+            token.record_acceptance(store, agent.as_str())?;
+        }
 
         let mut redirect = Resource::new_instance(urls::REDIRECT, store).await?;
         redirect

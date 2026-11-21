@@ -508,7 +508,7 @@ mod test {
         assert!(server_origin("https://example.test/path").is_err());
     }
 
-/// Builds a token the way `generateInviteToken` of `@tomic/lib` does:
+    /// Builds a token the way `generateInviteToken` of `@tomic/lib` does:
     /// `fast-json-stable-stringify` of the signable object (keys sorted, no
     /// whitespace), signed, then `btoa(JSON.stringify({...signable, signature}))`
     /// (insertion order: target, write, expiresAt, signer, [usagesLeft], signature).
