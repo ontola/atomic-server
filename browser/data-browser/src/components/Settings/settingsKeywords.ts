@@ -15,13 +15,13 @@ export const settingsKeywords = {
     'drive drives switch current my drives recently visited open url did new private',
   sync: 'sync devices device backup paired pairing connect another device local database restore offline',
   appearance:
-    'appearance theme thema dark donker light licht color colour kleur taal sidebar icons pictures avatars language locale panels messages favorites shared with me templates ontology aichats hide templates',
+    'appearance theme thema dark donker light licht color colour kleur taal sidebar icons pictures avatars language locale panels messages favorites shared with me templates ontology aichats apps hide templates',
   accessibility:
     'accessibility enable disable page transition animations view transitions motion',
   notifications: 'notify notifications alerts messages comments replies push',
   ai: 'ai enable features token usage panel sidebar openrouter ollama mcp server generative model chat provider api key local agents skills default voice microphone speech stt transcription privacy retention zdr generate titles follow up prompts temperature context tools system prompt content references transport headers',
   integration:
-    'integration proxy catalog marketplace server url experimental plugins',
+    'integration proxy catalog marketplace marketplaces server url experimental apps plugins',
 } as const;
 
 export type SettingsSectionKey = keyof typeof settingsKeywords;

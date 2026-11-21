@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { decodeBrowserInvite } from '@tomic/lib';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { Spinner } from '../components/Spinner';
 import { ContainerNarrow } from '../components/Containers';
-import { Column } from '../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { ErrorLook } from '../components/ErrorLook';
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import {

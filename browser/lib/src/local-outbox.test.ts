@@ -9,8 +9,6 @@ import {
 } from 'vitest';
 import {
   LocalOutbox,
-  isTerminalCommitErrorMessage,
-  isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
@@ -50,10 +48,10 @@ function fakeCommitJsonAd(subject: string, signer: string): unknown {
 
 const SUBJECT = 'did:ad:fakeresource';
 
-describe('isTerminalCommitErrorMessage', () => {
+describe('isTerminalCommitError', () => {
   it('flags genesis-collision errors', ({ expect }) => {
     expect(
-      isTerminalCommitErrorMessage(
+      isTerminalCommitError(
         'Commit for did:ad:abc has is_genesis: true, but the resource already exists.',
       ),
     ).toBe(true);
@@ -61,7 +59,7 @@ describe('isTerminalCommitErrorMessage', () => {
 
   it('flags required-property validation failures', ({ expect }) => {
     expect(
-      isTerminalCommitErrorMessage(
+      isTerminalCommitError(
         'Property https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content missing. Is required in class https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-message ',
       ),
     ).toBe(true);
@@ -70,21 +68,17 @@ describe('isTerminalCommitErrorMessage', () => {
   it('flags a write aimed at an immutable Commit', ({ expect }) => {
     // A `<server>/commits/<sig>` subject (imported from another server) once
     // reached the outbox and retried this rejection on backoff forever.
-    expect(isTerminalCommitErrorMessage('Commits cannot be edited.')).toBe(
-      true,
-    );
+    expect(isTerminalCommitError('Commits cannot be edited.')).toBe(true);
   });
 
   it("doesn't flag normal errors", ({ expect }) => {
-    expect(isTerminalCommitErrorMessage('Invalid signature')).toBe(false);
-    expect(isTerminalCommitErrorMessage('Network timeout')).toBe(false);
-    expect(isTerminalCommitErrorMessage('')).toBe(false);
+    expect(isTerminalCommitError('Invalid signature')).toBe(false);
+    expect(isTerminalCommitError('Network timeout')).toBe(false);
+    expect(isTerminalCommitError('')).toBe(false);
   });
 
   it('flags edits to a commit', ({ expect }) => {
-    expect(isTerminalCommitErrorMessage('Commits cannot be edited.')).toBe(
-      true,
-    );
+    expect(isTerminalCommitError('Commits cannot be edited.')).toBe(true);
   });
 });
 
@@ -168,7 +162,7 @@ describe('LocalOutbox.drain', () => {
         );
       },
       isTerminalError: (_entry, e) =>
-        isTerminalCommitErrorMessage(e instanceof Error ? e.message : ''),
+        isTerminalCommitError(e instanceof Error ? e.message : ''),
       onTerminalDrop,
     });
 
@@ -213,7 +207,7 @@ describe('LocalOutbox.drain', () => {
         throw new Error('Temporary network failure');
       },
       isTerminalError: (_entry, e) =>
-        isTerminalCommitErrorMessage(e instanceof Error ? e.message : ''),
+        isTerminalCommitError(e instanceof Error ? e.message : ''),
       onTerminalDrop,
     });
 
@@ -380,10 +374,10 @@ describe('LocalOutbox drain re-entrancy (planning/completed/outbox-drain-data-lo
   });
 });
 
-describe('isUnrecoverableCommitErrorMessage', () => {
+describe('isUnrecoverableCommitError', () => {
   it('flags the server "no write right" 401', ({ expect }) => {
     expect(
-      isUnrecoverableCommitErrorMessage(
+      isUnrecoverableCommitError(
         'Unauthorized. No https://atomicdata.dev/properties/write right has been found for did:ad:agent:Qmfp=',
       ),
     ).toBe(true);
@@ -391,12 +385,12 @@ describe('isUnrecoverableCommitErrorMessage', () => {
 
   it("doesn't flag unrelated or read 401s", ({ expect }) => {
     expect(
-      isUnrecoverableCommitErrorMessage(
+      isUnrecoverableCommitError(
         'Unauthorized. This resource is not publicly readable. Try signing in',
       ),
     ).toBe(false);
-    expect(isUnrecoverableCommitErrorMessage('Network timeout')).toBe(false);
-    expect(isUnrecoverableCommitErrorMessage('')).toBe(false);
+    expect(isUnrecoverableCommitError('Network timeout')).toBe(false);
+    expect(isUnrecoverableCommitError('')).toBe(false);
   });
 });
 
@@ -614,9 +608,7 @@ describe('LocalOutbox blocking', () => {
     sort: (e: readonly OutboxEntry[]) => [...e],
     drainSubject,
     isBlockingError: (_e: OutboxEntry, err: unknown) =>
-      isUnrecoverableCommitErrorMessage(
-        err instanceof Error ? err.message : '',
-      ),
+      isUnrecoverableCommitError(err instanceof Error ? err.message : ''),
     onBlocked,
   });
 

@@ -1,4 +1,4 @@
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   installRelease,
   publishZipRelease,
@@ -12,7 +12,7 @@ import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import {
   InstallationReviewDialog,
   type PendingInstallation,
@@ -72,7 +72,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
     // The server compares these with the zip's manifest, so they must be
     // the manifest's own identifiers.
     if (!p.review.name || !p.review.namespace) {
-      throw new Error('The plugin manifest has no name or namespace');
+      throw new Error('The app manifest has no name or namespace');
     }
 
     const subject = await installRelease(store, {
@@ -94,7 +94,7 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
       <label>
         <Button as='div' disabled={publishing}>
           <FaPlus aria-hidden />{' '}
-          <span>{publishing ? 'Publishing…' : 'Upload Plugin'}</span>
+          <span>{publishing ? 'Publishing…' : 'Upload App'}</span>
         </Button>
         <input
           ref={fileInputRef}

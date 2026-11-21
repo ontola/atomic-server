@@ -53,6 +53,10 @@ pub enum Tree {
     /// subject_pure_id`, value a JSON [`crate::sync::outbox::OutboxEntry`].
     /// See `crate::sync::outbox`.
     Outbox,
+    /// Each resource's Loro version vector, so a drive reconcile need not read
+    /// whole snapshots. Same key as [`Tree::LoroSnapshots`], written and
+    /// removed with it. See `db::version_vectors`.
+    VersionVectors,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -84,10 +88,11 @@ const SEARCH_DOCS: &str = "search_docs_v2";
 const SEARCH_TRIGRAMS: &str = "search_trigrams_v2";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
+const VERSION_VECTORS: &str = "version_vectors_v1";
 
 impl Tree {
     /// Every tree, in the order backends create them.
-    pub const ALL: [Tree; 19] = [
+    pub const ALL: [Tree; 20] = [
         Tree::Resources,
         Tree::WatchedQueries,
         Tree::PropValSub,
@@ -107,6 +112,7 @@ impl Tree {
         Tree::SearchTrigrams,
         Tree::Envelopes,
         Tree::Outbox,
+        Tree::VersionVectors,
     ];
 
     /// The on-disk name of this tree. Every backend (sled tree, redb table)
@@ -133,6 +139,7 @@ impl Tree {
             Tree::SearchTrigrams => SEARCH_TRIGRAMS,
             Tree::Envelopes => ENVELOPES,
             Tree::Outbox => OUTBOX,
+            Tree::VersionVectors => VERSION_VECTORS,
         }
     }
 }

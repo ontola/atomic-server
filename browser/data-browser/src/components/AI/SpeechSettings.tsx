@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAISettings } from './AISettingsContext';
 import { SettingCheckbox, SettingsSection } from '@components/Settings';
-import { Column } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { MicrophoneSelect } from './MicrophoneSelect';
 
 type Model = { id: string; name: string };

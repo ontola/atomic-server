@@ -1,11 +1,11 @@
-import { Checkbox } from '@components/forms/Checkbox';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 import {
   core,
   useArray,
   useMemberFromCollection,
   type Collection,
 } from '@tomic/react';
-import { ResourceInline } from '@views/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 interface PermissionRowProps {
   collection: Collection;
   index: number;

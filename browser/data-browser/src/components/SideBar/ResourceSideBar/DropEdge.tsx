@@ -1,7 +1,7 @@
 import { useDndMonitor, useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
 import { useState } from 'react';
-import { transition } from '../../../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 import { SideBarDropData } from '../useSidebarDnd';
 import { useCanWrite, useResource } from '@tomic/react';
 import { SIDEBAR_WIDTH_PROP } from '../SidebarCSSVars';

@@ -11,14 +11,14 @@ import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { FaFileLines, FaTrash } from 'react-icons/fa6';
-import Field, { FieldLabel } from '@components/forms/Field';
-import InputSwitcher from '@components/forms/InputSwitcher';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
+import Field, { FieldLabel } from '@tomic/resource-ui/components/forms/Field';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
 import { ConditionsEditor } from './ConditionsEditor';
 import { deleteFormPage } from './deleteFormPage';
 import { PanelHeader } from './PanelHeader';

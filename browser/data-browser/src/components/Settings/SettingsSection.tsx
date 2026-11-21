@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { Details, type DetailsPropsBase } from '../Details';
+import { Details, type DetailsPropsBase } from '@tomic/ui/components/Details';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useSettingsSearch, SettingsSearchProvider } from './SettingsSearch';
 import { useEffect, useMemo, useRef } from 'react';

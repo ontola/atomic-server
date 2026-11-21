@@ -8,10 +8,8 @@ import {
   savePeerLink,
   resumePeerLinks,
 } from '../../helpers/browserPeerSync';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { getManagedAccount } from '../../helpers/managed/session';
 import { isOriginWithoutNode } from '../../helpers/originNode';
-import { onboardingKeys } from '../../hooks/useOnboardingProgress';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 export interface InviteLinkOptions {
   write: boolean;
@@ -31,11 +29,6 @@ export function useCreateInviteLink(
 ): (options: InviteLinkOptions) => Promise<string> {
   const store = useStore();
   const [agent] = useCurrentAgent();
-  const isSaas = !!getManagedPortalUrl();
-  const [, markInvited] = useLocalStorage(
-    onboardingKeys.invited(agent?.subject),
-    false,
-  );
 
   return async ({ write, expiresAt, maxUsages }) => {
     if (!agent) {
@@ -45,7 +38,11 @@ export function useCreateInviteLink(
     const isDrive = target.hasClasses(server.classes.drive);
     let browserPeer = isDrive && store.isLocalOnlyDrive(target.subject);
 
-    if (isDrive && isSaas && !browserPeer) {
+    if (
+      isDrive &&
+      !browserPeer &&
+      (await getManagedAccount().catch(() => null))
+    ) {
       const response = await managedFetch('/sync-enrollments', {});
 
       if (!response.ok || response.status === 204)
@@ -73,6 +70,7 @@ export function useCreateInviteLink(
         'Wait for this drive to be saved on this device before sharing.',
       );
     const signalingUrl = browserPeer ? requirePeerSignalingUrl() : undefined;
+    const serverUrl = store.getServerUrl();
     const tokenBase64 = await generateInviteToken(
       target.subject,
       agent,
@@ -81,8 +79,8 @@ export function useCreateInviteLink(
       undefined,
       browserPeer,
       maxUsages,
+      browserPeer ? undefined : serverUrl,
     );
-    markInvited(true);
 
     if (browserPeer) {
       savePeerLink(store, {
@@ -92,8 +90,6 @@ export function useCreateInviteLink(
       });
       resumePeerLinks(store);
     }
-
-    const serverUrl = store.getServerUrl();
 
     if (browserPeer) {
       return `${window.location.origin}/app/invite?token=${encodeURIComponent(tokenBase64)}`;

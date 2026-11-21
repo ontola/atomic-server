@@ -10,22 +10,22 @@ import {
   isAtomicIdentifier,
 } from '@tomic/react';
 
-import AllProps from '../components/AllProps';
+import AllProps from '@tomic/resource-ui/components/AllProps';
 import { ContainerNarrow } from '../components/Containers';
-import { AtomicLink } from '../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { PropValRow, PropertyLabel } from '../components/PropVal';
 import { CommitDetail } from '../components/CommitDetail';
-import { Button } from '../components/Button';
-import { ErrMessage } from '../components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { ErrMessage } from '@tomic/ui/components/forms/InputStyles';
 import { useSettings } from '../helpers/AppSettings';
 import { CodeBlock } from '../components/CodeBlock';
-import { Title } from '../components/Title';
-import { Column, Row } from '../components/Row';
+import { Title } from '@tomic/resource-ui/components/Title';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ErrorLook } from '../components/ErrorLook';
-import { ResourceUsage } from '../components/ResourceUsage';
+import { ResourceUsage } from '@tomic/resource-ui/components/ResourceUsage/index';
 import { Main } from '../components/Main';
-import { IconButton } from '../components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaArrowLeft } from 'react-icons/fa6';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';

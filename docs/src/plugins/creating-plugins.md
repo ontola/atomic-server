@@ -1,4 +1,4 @@
-# Creating Plugins
+# Creating Apps
 
 Plugins can be made in any programming language that compiles to a Wasm component.
 To be specific, they should be compiled to WASM + WASI Preview 2 (aka wasip2).
@@ -60,6 +60,9 @@ The installer grants access to specific parts of the drive with the Installation
 Alternatively you can declare the `full-drive-access` capability in the manifest to give the agent full access to the drive, which is the widest scope.
 
 ## The plugin package
+
+Use a ZIP32 archive with stored or deflated entries. The package may contain up to 4096 entries and 128 MiB in total, both before and after expansion. Individual files may expand to 64 MiB and `plugin.json` to 1 MiB.
+
 
 A WASM plugin is packaged as a zip file containing the following files:
 

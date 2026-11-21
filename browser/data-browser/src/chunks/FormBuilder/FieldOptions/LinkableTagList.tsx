@@ -4,8 +4,8 @@ import { FaLink } from 'react-icons/fa6';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { useDialog } from '@components/Dialog';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import { TagListEditor } from './TagListEditor';
 import { LinkedOptions } from './LinkedOptions';
 import { LinkOptionsDialog } from './LinkOptionsDialog';

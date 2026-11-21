@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { core, forms, Datatype, getEffectiveConstraint } from '@tomic/react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import { buildFormFromSpec } from './createFormFromSpec';
 import { formTestFixture } from './formTestFixture';
 import {

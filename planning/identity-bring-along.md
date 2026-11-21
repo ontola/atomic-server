@@ -60,6 +60,7 @@ Not: agent, identity, drive rights, merge, it, here.
 | Site first, app used before signing in | App settings: "Sign in" | B signs in, A's work comes along, result line |
 | App first, then the site | Site: "Sign in with secret" (copied from the app) or hand-back | Plain sign-in; if the browser had a guest with work, the question |
 | Two apps used apart | App 2 settings: "Sign in", with the secret or a code from app 1 | Same as row 2 |
+| Guest first, then sign up on the portal | Web: Get started, edit, then portal sign-up by email; back at `/app/welcome?from_portal=true` | The new account is made in `NewIdentitySection`; the guest's drives are handed to it (`prepareIdentitySwitch`, no question) before it replaces the guest, and listed in the new home. The reconcile gate skips `/app/welcome`, so it never saw this switch |
 | Signed in as B, sign in as B again | Nothing to do | No step |
 
 The app needs a "Sign in" entry while signed in (today the login screen is
@@ -85,4 +86,5 @@ Sign out, and opens the same sign-in options as the login screen.
 - [x] Bridge, `node.identity`, fake, Dart tests
 - [x] App: sign in while signed in, result line, widget tests
 - [x] Web: archive + question on secret sign-in, vitest, e2e (`bring-along.spec.ts`)
+- [x] Web: guest's work comes along when the portal sign-up creates a new account (`NewIdentitySection.test.tsx`; a new identity is minted, the guest's agent is not adopted, because the account's key is its own secret/backup and the guest key stays archived on the device)
 - [ ] Screenshots of every screen, app and web

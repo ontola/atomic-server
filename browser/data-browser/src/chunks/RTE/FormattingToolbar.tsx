@@ -3,11 +3,11 @@ import { styled } from 'styled-components';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { FaAt, FaCheck, FaImage, FaListOl, FaListUl } from 'react-icons/fa6';
 import { useFormattingToolbarVisible } from './useFormattingToolbarVisible';
-import { useTipTapEditor } from './TiptapContext';
-import { NodeSelectMenu } from './NodeSelectMenu';
-import { MarkToggleButtons } from './MarkToggleButtons';
-import { LinkPopoverButton } from './LinkPopoverButton';
-import { ToggleButton } from './ToggleButton';
+import { useTipTapEditor } from '@tomic/resource-ui/chunks/RTE/TiptapContext';
+import { NodeSelectMenu } from '@tomic/resource-ui/chunks/RTE/NodeSelectMenu';
+import { MarkToggleButtons } from '@tomic/resource-ui/chunks/RTE/MarkToggleButtons';
+import { LinkPopoverButton } from '@tomic/resource-ui/chunks/RTE/LinkPopoverButton';
+import { ToggleButton } from '@tomic/resource-ui/chunks/RTE/ToggleButton';
 
 /**
  * Formatting toolbar above the document editor, for people who don't know

@@ -86,6 +86,23 @@ it.each([
   expect(f.resource.push).not.toHaveBeenCalled();
 });
 
+it('leaves limited invitations for the server acceptance ledger', async () => {
+  const f = await fixture();
+  const token = await generateInviteToken(
+    f.drive,
+    f.issuer,
+    false,
+    undefined,
+    undefined,
+    false,
+    1,
+  );
+  await expect(
+    authorizeBrowserInvite(f.store, f.drive, token, f.auth, f.challenge),
+  ).rejects.toThrow('issuing server');
+  expect(f.resource.save).not.toHaveBeenCalled();
+});
+
 it('a viewer invitation grants read access only', async () => {
   const f = await fixture();
   f.token = await generateInviteToken(f.drive, f.issuer, false);

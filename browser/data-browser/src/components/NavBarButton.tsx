@@ -1,5 +1,5 @@
 import { css, styled } from 'styled-components';
-import { transition } from '../helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 
 /**
  * A flat top-bar action button (Share, Comments, AI, Meet). Shared so the

@@ -14,15 +14,15 @@ import { useCallback } from 'react';
 import {
   createPropertyOnClass,
   createSelectPropertyOnClass,
-} from '../TablePage/Kanban/createSelectProperty';
-import { stringToSlug } from '@helpers/stringToSlug';
+} from '@tomic/table-page/TablePage/Kanban/createSelectProperty';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 import {
   carryValuesOver,
   createContentAddressedFromDraft,
   createPropertyDraft,
   isContentAddressed,
   replacePropertyReferences,
-} from '@helpers/propertyIdentity';
+} from '@tomic/resource-ui/helpers/propertyIdentity';
 import { DEFAULT_INFO_BOX_STYLE } from '@tomic/form-renderer';
 import {
   DEFAULT_CHOICE_TAGS,

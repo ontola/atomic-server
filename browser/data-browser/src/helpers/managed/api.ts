@@ -174,6 +174,23 @@ export function rememberManagedPortalUrl(url: string | null | undefined): void {
 }
 
 /**
+ * Undo {@link rememberManagedPortalUrl} for a portal the user tried and walked
+ * away from. A no-op while a device token exists: that portal stays until the
+ * device is unlinked.
+ */
+export function forgetManagedPortalUrl(): void {
+  if (getLinkedPortalOrigin()) return;
+
+  rememberedPortalUrl = null;
+
+  try {
+    localStorage.removeItem(PORTAL_URL_STORAGE_KEY);
+  } catch {
+    // Storage disabled: the in-memory copy is already cleared.
+  }
+}
+
+/**
  * The last control plane a managed node named, or null if none ever has.
  *
  * While a device token exists this is the portal that issued it, whatever any
@@ -198,6 +215,17 @@ export function getRememberedManagedPortalUrl(): string | null {
   }
 
   return rememberedPortalUrl;
+}
+
+let engagedService: string | null = null;
+
+/**
+ * Start talking to the account service for this page only. The default is an
+ * offer: nothing contacts it until a flow needs it. Not persisted; a sign-in
+ * that succeeds records its own portal.
+ */
+export function engageAccountService(url: string | null | undefined): void {
+  engagedService = safePortalUrl(url) ?? engagedService;
 }
 
 /**
@@ -226,6 +254,7 @@ export function hasManagedApi(): boolean {
     (typeof import.meta !== 'undefined' &&
       import.meta.env?.VITE_MANAGED_API_BASE) ||
     getRememberedManagedPortalUrl() ||
+    engagedService ||
     portalFromEnv(),
   );
 }
@@ -253,7 +282,8 @@ export function getManagedApiBase(): string {
   // Localhost alone does not imply a SaaS backend. Browser and desktop
   // clients use the discovered or configured portal; local SaaS development
   // can explicitly set VITE_MANAGED_API_BASE=http://localhost:3030/api.
-  const portalUrl = getRememberedManagedPortalUrl() ?? portalFromEnv();
+  const portalUrl =
+    getRememberedManagedPortalUrl() ?? engagedService ?? portalFromEnv();
 
   return portalUrl ? `${portalUrl}/api` : '/api';
 }

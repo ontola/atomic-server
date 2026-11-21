@@ -85,11 +85,17 @@ Remove planning documents that are completed.
 
 ## Git
 
-Default branch is `develop`. Open PRs against it. Staging deploys from `develop`
-after green CI; production and live docs deploy from a stable `v*` tag. Do not
-introduce a `main` branch, treat `master` as production, or add a job that
-fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
-branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
+Default branch is `develop`. Open PRs against it. A green `develop` tip asks
+ontola/atomic-saas to deploy atomic.place (its own gate also requires saas
+`main` green), and goes to staging, then (once staging is healthy and the commit is still the tip) to
+production and the live docs, and to TestFlight and Google Play internal
+testing. Store releases (App Store, Play production) stay manual. Release tags
+are plain `vX.Y.Z` (no pre-release suffixes), pushed only by the owner; they
+publish crates.io, npm, Docker, the GitHub release and desktop installers, and
+deploy nothing. Do not introduce a `main` branch, treat `master` as production,
+or add a job that fast-forwards `main` when a tag is pushed. Hotfixes are fixed
+on `develop` and reach production with the next green run; roll back by
+dispatching `deploy_production.yml` with an older sha. See `CONTRIBUTING.md`.
 
 Short-lived agent sessions: read [`AGENT_WORKFLOW.md`](./AGENT_WORKFLOW.md)
 first. It covers dispatching CI on a PR branch, the paired atomic-saas branch,
@@ -120,7 +126,7 @@ Never commit screenshots to the repository, not even temporarily or in a
   PR.
 - Show them in chat to the developer you are working with.
 
-## Translation catalogs (`src/locales/*.po`)
+## Translation catalogs (`browser/resource-ui/src/locales/*.po`)
 
 Wuchale extracts these from source *as vite serves it*, so the dev server is a
 second writer on tracked files. Four ways that has cost real time:
@@ -138,17 +144,18 @@ second writer on tracked files. Four ways that has cost real time:
   abandons in-flight work, and this silently cancelled a destroy mid-test. If
   `git status` shows `.po` churn on a clean checkout, settle them and commit.
 - **The compiled catalogs are a second artifact.** Wuchale compiles the `.po`
-  files into `src/locales/.wuchale/`, which is gitignored. `git checkout --
-  src/locales/` resets the `.po` files and leaves the compiled output from
-  another state; the two then disagree and *every indexed string shifts*.
+  files into `browser/resource-ui/src/locales/.wuchale/`, which is gitignored.
+  `git checkout -- browser/resource-ui/src/locales/` resets the `.po` files
+  and leaves the compiled output from another state; the two then disagree and *every indexed string shifts*.
   Missing entries show as `[i18n-404:NNN]`; shifted entries show a different
   real string, so nothing looks wrong and tests fail on the wrong element.
-  Whenever you reset the `.po` files, also `rm -rf
-  browser/data-browser/src/locales/.wuchale` and restart vite. Do not make
+  Whenever you reset the `.po` files, also
+  `rm -rf browser/resource-ui/src/locales/.wuchale` and restart vite. Do not make
   the `.po` files read-only to stop the rewrite; the compiled output goes
   stale instead.
-- **Settle with `pnpm clean-translations`.** `wuchale.config.js` ignores test
-  files, which the vite plugin never sees, so the CLI and the dev server now
+- **Settle with `pnpm clean-translations`.** The
+  `browser/resource-ui/wuchale.config.js` config ignores test files, which the
+  vite plugin never sees, so the CLI and the dev server now
   extract the same catalog. After adding or removing UI text, run it in
   `browser/data-browser` and commit the `.po` files. A component whose strings
   never made it into the catalogs renders them blank in a production build,
@@ -228,6 +235,17 @@ AtomicServer is its self-hostable server component. Optional managed accounts,
 billing and signaling are implemented in the internal sibling `atomic-saas`
 repository. Keep that repository's implementation details out of public FOSS
 copy unless they explain an integration boundary.
+
+**Account service and hosting hints.** Every build has one account service,
+`atomic.place` by default (`VITE_DEFAULT_ACCOUNT_PORTAL` overrides it, or turns
+it off). The app asks the service what it offers instead of asking "is this the
+SaaS build": no new `isSaas`-style branches. The app contacts the service only
+when someone opens a flow that needs it (save your work, sync, share), never at
+page load. Registering is always optional and the no-account route (download
+the secret, pair a device) sits next to it. Mentioning atomic.place hosting is
+fine where it closes a real gap, through the shared `HostingHint` component: one
+muted line and a plain link. A price only appears when the service returns one;
+never hardcode prices. No toasts, banners, pop-ups or blocking upsells.
 
 ### Crates
 

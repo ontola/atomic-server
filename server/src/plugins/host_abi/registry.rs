@@ -367,8 +367,7 @@ async fn load_release(
     let bytes = release::package_bytes(db, package)
         .await
         .map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-        .map_err(|e| format!("package is not a zip archive: {e}"))?;
+    let mut zip = crate::plugins::package_archive::open(bytes).map_err(|e| e.to_string())?;
     let wasm = crate::plugins::wasm::wasm_bytes_from_zip(&mut zip).map_err(|e| e.to_string())?;
 
     registry.register(

@@ -8,7 +8,8 @@ import { OnboardingFeedback } from './OnboardingFeedback';
 import { SideBar } from './SideBar';
 import { OverlayContainer } from './OverlayContainer';
 import { ShareDialogHost } from './Share/ShareDialogHost';
-import { CalculatedPageHeight } from '../globalCssVars';
+import { SaveWorkDialogHost } from './SaveWork/SaveWorkDialog';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
@@ -18,8 +19,8 @@ import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContai
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
 import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
-import { HideInPrint } from './HideInPrint';
-import { MAIN_CONTAINER } from '@helpers/containers';
+import { HideInPrint } from '@tomic/ui/components/HideInPrint';
+import { MAIN_CONTAINER } from '@tomic/ui/helpers/containers';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { useResource } from '@tomic/react';
 import NavBarContent from './NavBar';
@@ -130,6 +131,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {hideGlobalChrome && !embedded && <OnboardingFeedback />}
             <OverlayContainer />
             <ShareDialogHost />
+            <SaveWorkDialogHost />
           </AppSetupProvider>
         </AppVerifierProvider>
       </AISidebarContextProvider>

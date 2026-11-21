@@ -1,4 +1,4 @@
-import { ResourceInline } from '../../../views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 import { useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import {
@@ -7,8 +7,8 @@ import {
   cancelIntegrationAction,
   type ActionProposal,
 } from '@tomic/lib';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 
 /** Re-fetch the host proposal: conversation text is never the approval payload. */
 export function IntegrationActionReview({

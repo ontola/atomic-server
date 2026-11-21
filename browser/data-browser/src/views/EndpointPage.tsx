@@ -11,9 +11,9 @@ import {
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
-import Markdown from '../components/datatypes/Markdown';
-import ResourceField from '../components/forms/ResourceField';
-import { Button } from '../components/Button';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import ResourceField from '@tomic/resource-ui/components/forms/ResourceField';
+import { Button } from '@tomic/ui/components/Button';
 import { constructOpenURL } from '../helpers/navigation';
 import ResourceCard from './Card/ResourceCard';
 

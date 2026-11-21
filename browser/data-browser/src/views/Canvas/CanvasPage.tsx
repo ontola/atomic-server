@@ -38,9 +38,9 @@ import {
 } from './canvas-elements';
 import { useEmbedGestures } from '../../embed/gestures';
 import { useStore, type Store } from '@tomic/react';
-import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { FilePickerDialog } from '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog';
 import { useUpload } from '../../hooks/useUpload';
-import { imageMimeTypes } from '../../helpers/filetypes';
+import { imageMimeTypes } from '@tomic/resource-ui/helpers/filetypes';
 import { errorHandler } from '../../handlers/errorHandler';
 import {
   FaCircleInfo,
@@ -59,7 +59,7 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { FanOverlay } from './FanOverlay';
 import {
   hoveredColor as resolveHoveredColor,

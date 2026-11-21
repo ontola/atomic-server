@@ -14,9 +14,9 @@ import {
   type PluginSyncSession,
   type JSONValue,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { Card } from '@components/Card';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Card } from '@tomic/ui/components/Card';
 
 export interface ConnectionDefinition {
   release: string;

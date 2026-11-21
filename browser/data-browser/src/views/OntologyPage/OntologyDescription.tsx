@@ -7,7 +7,7 @@ import {
 } from '@tomic/react';
 
 import Markdown from '../../components/datatypes/Markdown';
-import InputMarkdown from '../../components/forms/InputMarkdown';
+import InputMarkdown from '@tomic/resource-ui/components/forms/InputMarkdown';
 
 import type { JSX } from 'react';
 

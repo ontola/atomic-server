@@ -54,6 +54,7 @@ mod v1_types;
 #[cfg(feature = "db-sled")]
 mod v2_types;
 mod val_prop_sub_index;
+pub mod version_vectors;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -821,6 +822,71 @@ impl Db {
         snapshot: Vec<u8>,
     ) -> AtomicResult<()> {
         self.persist_replicated(resource, Some(snapshot)).await
+    }
+
+    /// The `datatypes` tag a stored Property's datatype implies, for a value
+    /// the doc left untagged (a server doc, or a property the signing tab had
+    /// not loaded). `None` when the Property is not stored here, or its
+    /// datatype has no tag (numbers and booleans are not ambiguous).
+    fn property_tag(&self, property: &str) -> Option<&'static str> {
+        let (_, propvals) = self.get_propvals_canonical(property).ok()?;
+        let datatype = propvals.get(urls::DATATYPE_PROP)?.to_string();
+        Some(match crate::datatype::match_datatype(&datatype) {
+            crate::datatype::DataType::String => "string",
+            crate::datatype::DataType::Markdown => "markdown",
+            crate::datatype::DataType::Slug => "slug",
+            crate::datatype::DataType::Uri => "uri",
+            crate::datatype::DataType::Date => "date",
+            crate::datatype::DataType::Timestamp => "timestamp",
+            crate::datatype::DataType::AtomicUrl => "atomicUrl",
+            crate::datatype::DataType::ResourceArray => "resourceArray",
+            crate::datatype::DataType::Json => "json",
+            _ => return None,
+        })
+    }
+
+    /// Store a resource from its Loro snapshot alone: the row, the index
+    /// entries and the stored snapshot are all derived from the doc in one
+    /// transaction (see [`Resource::from_loro_snapshot`]). `last_commit` is the
+    /// one derived value the doc cannot hold. Errors when `snapshot` does not
+    /// import.
+    pub async fn persist_replicated_loro_snapshot(
+        &self,
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<&str>,
+    ) -> AtomicResult<()> {
+        let resource = Resource::from_loro_snapshot(
+            subject,
+            snapshot.clone(),
+            last_commit,
+            Some(&self.lenses()),
+            Some(&|prop: &str| self.property_tag(prop)),
+        )?;
+        self.persist_replicated_resource_with_snapshot(&resource, snapshot)
+            .await
+    }
+
+    /// [`Self::persist_replicated_loro_snapshot`] for many resources in one
+    /// write, as [`Self::persist_replicated_resources`]. Every snapshot is
+    /// checked before anything is written.
+    pub async fn persist_replicated_loro_snapshots(
+        &self,
+        puts: Vec<(String, Vec<u8>, Option<String>)>,
+    ) -> AtomicResult<()> {
+        let lenses = self.lenses();
+        let mut entries = Vec::with_capacity(puts.len());
+        for (subject, snapshot, last_commit) in puts {
+            let resource = Resource::from_loro_snapshot(
+                &subject,
+                snapshot.clone(),
+                last_commit.as_deref(),
+                Some(&lenses),
+                Some(&|prop: &str| self.property_tag(prop)),
+            )?;
+            entries.push((resource, Some(snapshot)));
+        }
+        self.persist_replicated_resources(entries).await
     }
 
     /// [`Self::persist_replicated_resource_with_snapshot`] for many resources in
@@ -5050,11 +5116,11 @@ impl Storelike for Db {
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
-                    return Err(format!(
+                    return Err(crate::AtomicError::from(format!(
                         "Destroy commit for {} was already applied here; refusing replay",
                         commit.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::DESTROY_SETTLED));
                 }
             }
         }

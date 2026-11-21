@@ -1,3 +1,4 @@
+import { rowFromLoroSnapshot } from './test-client-db-row.js';
 import { describe, it, vi } from 'vitest';
 import { Commit, isCommitSubject } from './commit.js';
 import { Store } from './store.js';
@@ -100,10 +101,13 @@ describe('Resource save flow', () => {
       deferGenesis: true,
     });
     await child.set(core.properties.name, 'Child', false);
+    const persist = vi.spyOn(child, 'persistToClientDb');
 
     // The parent does not exist yet, so the child waits for it.
-    expect(await child.save()).toBe('offline');
+    expect(await child.save()).toBe('queued');
     expect(postCommitSpy).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+    expect(child.hasUnsavedChanges()).toBe(true);
 
     await form.set(core.properties.name, 'Form', false);
     await form.save();
@@ -113,6 +117,7 @@ describe('Resource save flow', () => {
     expect(posted).toEqual([form.subject, child.subject]);
     expect(child.get(core.properties.parent)).toBe(form.subject);
     expect(store.outbox.hasPending(child.subject)).toBe(false);
+    expect(child.hasUnsavedChanges()).toBe(false);
   });
 
   it('creates a DID resource and posts sequential saves', async ({
@@ -339,9 +344,12 @@ describe('offline persistence', () => {
       isInitialized: true,
       initError: undefined,
       flush: async () => undefined,
-      putResourceWithSnapshot: vi.fn(
-        async (subject: string, json: string, snapshot?: Uint8Array) => {
-          dbState.set(subject, { json, snapshot });
+      putLoroSnapshot: vi.fn(
+        async (subject: string, snapshot: Uint8Array, lastCommit?: string) => {
+          dbState.set(subject, {
+            json: rowFromLoroSnapshot(subject, snapshot, lastCommit),
+            snapshot,
+          });
         },
       ),
       getResource: async (s: string) => dbState.get(s)?.json ?? null,

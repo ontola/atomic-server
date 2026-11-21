@@ -16,8 +16,8 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '../Dialog';
-import { Button } from '../Button';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
 import { Spinner } from '../Spinner';
 import { runPairing } from '../../helpers/pairing';
 

@@ -6,11 +6,11 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
-import { SimpleErrorBlock } from '@components/ErrorLook';
-import { LoaderInline } from '@components/Loader';
-import { toRelativeDateTime } from '@helpers/dates/relativeDate';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { SimpleErrorBlock } from '@tomic/resource-ui/components/ErrorLook';
+import { LoaderInline } from '@tomic/ui/components/Loader';
+import { toRelativeDateTime } from '@tomic/resource-ui/helpers/dates/relativeDate';
 import type { ProxyConnection } from '@helpers/proxyConnections';
 
 interface ConnectDialogProps {

@@ -1,4 +1,8 @@
-import { getRuntimeManagedPortalUrl } from './api';
+import {
+  engageAccountService,
+  getRememberedManagedPortalUrl,
+  getRuntimeManagedPortalUrl,
+} from './api';
 // Turning on hosted sync for a local or server-hosted drive —
 // the Cloud Server action on the /sync page. This is the bridge between
 // the open-core connection layer (connect a server, promote a local drive) and
@@ -24,15 +28,13 @@ import { createManagedSyncEnrollment, genesisCertOf } from './enrollment';
 import { getManagedEnrollments } from './enrollmentApi';
 import type { ManagedInfo } from '../managedServer';
 import { isRunningInTauri } from '../tauri';
+import { isE2E } from '../../config';
 import { signRequest, type Store } from '@tomic/react';
 
 /**
- * Where to send a user to create a hosted-sync account, or null when no portal
- * is known — in which case the CTA stays hidden, so a pure self-hosted / FOSS
- * node never surfaces a hosted-product prompt. The URL is NOT hardcoded here
- * (that would bake a specific product into the open core): it comes from the
- * connected node's `/node-info` (`portalUrl`, set by a managed node) or an
- * explicit build-time `VITE_MANAGED_PORTAL_URL` override for local dev.
+ * The portal this build or the connected node names, never the default: "is
+ * this a hosted build", not "is there an account to offer" (that is
+ * {@link getAccountServiceUrl}).
  */
 export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
   const runtime = getRuntimeManagedPortalUrl();
@@ -50,12 +52,33 @@ export function getManagedPortalUrl(info?: ManagedInfo | null): string | null {
 }
 
 /**
- * Is Cloud Server even offered here? True when there's a portal to sign
- * up at (or the app was built pointing at one). Keeps the CTA out of a pure
- * self-hosted node's UI, where there is no control plane to enroll against.
+ * The account service (sign-up, backup, hosting) this install offers, or null
+ * when there is none: the configured or remembered portal, else
+ * `VITE_DEFAULT_ACCOUNT_PORTAL`, else atomic.place. The value `none` turns it
+ * off (an empty value counts as unset), and an e2e build has none by default.
+ *
+ * An offer, not a connection: nothing contacts it until a flow engages it
+ * (`engageAccountService`). Offers show with a service, features that need an
+ * account show with a session (`useHasManagedAccount`).
  */
-export function isCloudSyncAvailable(info?: ManagedInfo | null): boolean {
-  return getManagedPortalUrl(info) !== null;
+export function getAccountServiceUrl(info?: ManagedInfo | null): string | null {
+  const configured = safePortalUrl(
+    getManagedPortalUrl(info) ?? getRememberedManagedPortalUrl(),
+  );
+
+  if (configured) return configured;
+
+  const fromEnv = import.meta.env?.VITE_DEFAULT_ACCOUNT_PORTAL as
+    | string
+    | undefined;
+
+  if (fromEnv === 'none') return null;
+
+  // An e2e build never dials the public service: specs that need a portal
+  // name one (managed `/server` info, or a configured URL).
+  if (!fromEnv && isE2E()) return null;
+
+  return safePortalUrl(fromEnv || 'https://atomic.place') ?? null;
 }
 
 /**
@@ -136,6 +159,8 @@ function delay(ms: number): Promise<void> {
 export async function ensureManagedSession(
   portalUrl: string,
 ): Promise<boolean> {
+  engageAccountService(portalUrl);
+
   if (await getManagedAccount({ fresh: true }).catch(() => null)) return true;
 
   // Not an address this app opens (see safePortalUrl): reported as "no
@@ -201,7 +226,7 @@ export async function enableCloudSyncForDrive(params: {
     return {
       ok: false,
       reason: 'no-account',
-      portalUrl: getManagedPortalUrl(managedInfo),
+      portalUrl: getAccountServiceUrl(managedInfo),
     };
   }
 

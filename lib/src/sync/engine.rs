@@ -497,33 +497,50 @@ pub async fn handle_frame_full_for_caps(
                 // resource is created by this probe.
                 let drive =
                     crate::Subject::from_raw(&sync.drive, store.get_base_domain().as_deref());
+                let started = web_time::Instant::now();
+                let probe_stats = |outcome: &str, subjects: usize, cached: bool| {
+                    tracing::info!(
+                        target: "sync_stats",
+                        kind = "probe",
+                        drive = %sync.drive,
+                        outcome,
+                        cached,
+                        subjects,
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                    );
+                };
                 if store.get_resource(&drive).await.is_err_and(|error| {
                     error.error_type == crate::errors::AtomicErrorType::NotFoundError
                 }) && admit_unknown_drive(store, &sync.drive, agent)
                 {
+                    probe_stats("unknown_drive", 0, false);
                     return HandleOutput {
                         frames: vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
                         ..Default::default()
                     };
                 }
-                match drive_sync_hash_for_wire_version(
-                    store,
-                    &sync.drive,
-                    agent,
-                    wire,
-                    sync.hash_version,
-                )
-                .await
-                {
-                    Ok(server_hash) if server_hash == sync.drive_hash => {
+                match probe_drive_hash(store, &sync.drive, agent, wire, sync.hash_version).await {
+                    Ok(answer) if answer.hash == sync.drive_hash => {
+                        let outcome = if answer.cached {
+                            "cache_hit"
+                        } else {
+                            "computed_match"
+                        };
+                        probe_stats(outcome, answer.subjects, answer.cached);
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
-                    Ok(_) => vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))],
-                    Err(reason) => vec![protocol::encode_error(
-                        0,
-                        protocol::error_code::UNAUTHORIZED_READ,
-                        &format!("SYNC refused for {}: {reason}", sync.drive),
-                    )],
+                    Ok(answer) => {
+                        probe_stats("mismatch", answer.subjects, answer.cached);
+                        vec![protocol::encode_sync_resend(&wire.subject(&sync.drive))]
+                    }
+                    Err(reason) => {
+                        probe_stats("refused", 0, false);
+                        vec![protocol::encode_error(
+                            0,
+                            protocol::error_code::UNAUTHORIZED_READ,
+                            &format!("SYNC refused for {}: {reason}", sync.drive),
+                        )]
+                    }
                 }
             }
             Some(sync) => {
@@ -928,7 +945,7 @@ impl CommitAck {
 
     /// The `COMMIT_OK` or `ERROR` frame answering request `request_id`.
     /// `pace_ms` is only sent in the paced form.
-    pub fn frame<E: ToString>(
+    pub fn frame<E: ToString + protocol::RefusalCode>(
         self,
         request_id: u16,
         result: &Result<String, E>,
@@ -951,12 +968,7 @@ impl CommitAck {
                     None => protocol::encode_commit_ok(request_id, commit_json),
                 }
             }
-            Err(e) => {
-                // Classify so the outbox can switch on a structured code
-                // instead of pattern-matching the message text.
-                let msg = e.to_string();
-                protocol::encode_error(request_id, protocol::classify_commit_error(&msg), &msg)
-            }
+            Err(e) => protocol::encode_error(request_id, e.refusal_code(), &e.to_string()),
         }
     }
 }
@@ -1339,13 +1351,8 @@ pub fn build_drive_vvs(
     let mut vvs = std::collections::HashMap::new();
 
     for subject_str in drive_subjects {
-        if let Ok(Some(snapshot_bytes)) = store.kv.get(Tree::LoroSnapshots, subject_str.as_bytes())
-        {
-            // Read the version vector from the snapshot header instead of
-            // rebuilding the whole CRDT doc (see `vv_map_from_snapshot`).
-            if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
-                vvs.insert(subject_str.clone(), vv);
-            }
+        if let Some(vv) = crate::db::version_vectors::read(&*store.kv, subject_str.as_bytes()) {
+            vvs.insert(subject_str.clone(), vv);
         }
     }
 
@@ -1377,8 +1384,20 @@ pub async fn drive_items_for(
     Ok(drive_items_walk(store, drive, agent).await?.0)
 }
 
+/// One subject a drive walk found, with what a reconcile reads of it:
+/// whether `agent` may read it and the blob it points at. Kept with the probe's
+/// cache entry so the full `SYNC` that follows a probe miss need not walk again.
+pub struct WalkedSubject {
+    subject: String,
+    vv: std::collections::HashMap<String, i32>,
+    readable: bool,
+    blob: Option<[u8; 32]>,
+}
+
 /// What a drive walk looked at besides the items, for [`ProbeCache`].
 struct DriveWalk {
+    /// Every subject with a snapshot, sorted, readable or not.
+    walked: Vec<WalkedSubject>,
     /// Every subject found under the drive, readable or not.
     subjects: std::collections::HashSet<String>,
     /// Subjects outside it that a read decision consults: the drive root's
@@ -1420,9 +1439,9 @@ async fn drive_items_walk(
         }
     }
 
-    let mut items: Vec<DriveItem> = Vec::with_capacity(vvs.len());
+    let mut walked: Vec<WalkedSubject> = Vec::with_capacity(vvs.len());
     for (subject, vv) in vvs {
-        let readable = match store
+        let (readable, blob) = match store
             .get_resource(&crate::Subject::from_raw(
                 &subject,
                 store.get_base_domain().as_deref(),
@@ -1433,19 +1452,34 @@ async fn drive_items_walk(
                 if let Ok(stamp) = r.get(crate::urls::DRIVE_PROP) {
                     externals.insert(crate::Subject::from(stamp.to_string()).pure_id());
                 }
-                crate::hierarchy::check_read(store, &r, agent).await.is_ok()
+                (
+                    crate::hierarchy::check_read(store, &r, agent).await.is_ok(),
+                    r.blob_hash(),
+                )
             }
-            Err(_) => false,
+            Err(_) => (false, None),
         };
-        if readable {
-            items.push((subject, vv.into_iter().collect()));
-        }
+        walked.push(WalkedSubject {
+            subject,
+            vv,
+            readable,
+            blob,
+        });
     }
-    items.sort_by(|a, b| a.0.cmp(&b.0));
+    walked.sort_by(|a, b| a.subject.cmp(&b.subject));
+    let items = walked
+        .iter()
+        .filter(|w| w.readable)
+        .map(|w| {
+            let vv = w.vv.iter().map(|(p, c)| (p.clone(), *c)).collect();
+            (w.subject.clone(), vv)
+        })
+        .collect();
     externals.retain(|e| !drive_subjects.contains(e));
     Ok((
         items,
         DriveWalk {
+            walked,
             subjects: drive_subjects,
             externals,
         },
@@ -1496,30 +1530,68 @@ pub async fn drive_sync_hash_for_wire_version(
     wire: WireScheme,
     hash_version: u8,
 ) -> Result<String, String> {
-    // A probe over a drive that did not change is answered from the cache,
-    // validated against the writes since (see `db::write_log`). Only DID
-    // drives: the HTTP-URL walk is a prefix scan the parent test can't mirror.
+    Ok(probe_drive_hash(store, drive, agent, wire, hash_version)
+        .await?
+        .hash)
+}
+
+/// The cache key of a probe, for DID drives only: the HTTP-URL walk is a
+/// prefix scan the cache's parent test can't mirror.
+fn probe_key(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Option<crate::db::write_log::ProbeKey> {
     let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let key = drive_subject
+    drive_subject
         .is_did()
         .then(|| crate::db::write_log::ProbeKey {
             drive: drive_subject.pure_id(),
             agent: agent.to_string(),
             wire,
             hash_version,
-        });
+        })
+}
+
+fn parent_pure_id(store: &Db, subject: &str) -> Option<String> {
+    let propvals = store.get_propvals(subject).ok()?;
+    let parent = propvals.get(crate::urls::PARENT)?;
+    Some(crate::Subject::from(parent.to_string()).pure_id())
+}
+
+/// A probe answer and what it cost to get, for the `sync_stats` log line.
+struct ProbeAnswer {
+    hash: String,
+    /// Served from [`ProbeCache`] without walking the drive.
+    cached: bool,
+    /// Subjects found under the drive.
+    subjects: usize,
+}
+
+async fn probe_drive_hash(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+    hash_version: u8,
+) -> Result<ProbeAnswer, String> {
+    // A probe over a drive that did not change is answered from the cache,
+    // validated against the writes since (see `db::write_log`).
+    let key = probe_key(store, drive, agent, wire, hash_version);
     // Read before computing: a write landing mid-walk then counts as newer.
     let generation = store.write_log().generation();
     if let Some(key) = &key {
         let cached = store
             .probe_cache()
-            .lookup(store.write_log(), key, |subject| {
-                let propvals = store.get_propvals(subject).ok()?;
-                let parent = propvals.get(crate::urls::PARENT)?;
-                Some(crate::Subject::from(parent.to_string()).pure_id())
+            .lookup(store.write_log(), key, |s| parent_pure_id(store, s));
+        if let Some((hash, subjects)) = cached {
+            return Ok(ProbeAnswer {
+                hash,
+                cached: true,
+                subjects,
             });
-        if let Some(hash) = cached {
-            return Ok(hash);
         }
     }
 
@@ -1536,12 +1608,22 @@ pub async fn drive_sync_hash_for_wire_version(
     } else {
         compute_drive_hash(&vvs)
     };
+    let subjects = walk.subjects.len();
     if let Some(key) = key {
-        store
-            .probe_cache()
-            .store(key, generation, hash.clone(), walk.subjects, walk.externals);
+        store.probe_cache().store(
+            key,
+            generation,
+            hash.clone(),
+            walk.subjects,
+            walk.externals,
+            std::sync::Arc::new(walk.walked),
+        );
     }
-    Ok(hash)
+    Ok(ProbeAnswer {
+        hash,
+        cached: false,
+        subjects,
+    })
 }
 
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH
@@ -1656,38 +1738,65 @@ pub async fn handle_sync_vv_reconcile(
     wire: WireScheme,
     trust_owned: bool,
 ) -> Vec<Vec<u8>> {
+    let started = web_time::Instant::now();
     let canonical_subjects = subjects.map(|set| {
         set.iter()
             .map(|s| crate::Subject::from_raw(s, None).pure_id())
             .collect::<std::collections::HashSet<_>>()
     });
     let subjects = canonical_subjects.as_ref();
-    let server_vvs = match subjects {
-        // Filtered path: build VVs for only the differing subjects — no full-drive
-        // parent walk, no full-drive snapshot reads.
-        Some(set) => {
-            let mut vvs = std::collections::HashMap::new();
-            for subject in set {
-                if let Ok(Some(bytes)) = store.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
-                    if let Ok(vv) = AtomicLoroDoc::vv_map_from_snapshot(&bytes) {
-                        vvs.insert(subject.clone(), vv);
-                    }
-                }
-            }
-            vvs
-        }
+    // After a probe miss the full SYNC follows within moments: when nothing in
+    // the drive was written since, the probe's walk is still the answer.
+    let cached = match (subjects, probe_key(store, drive, agent, wire, hash_version)) {
+        (None, Some(key)) => store
+            .probe_cache()
+            .walked(store.write_log(), &key, |s| parent_pure_id(store, s)),
+        _ => None,
+    };
+    let walked = match cached.clone() {
+        Some(walked) => walked,
         None => {
-            let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-            let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
-            build_drive_vvs(store, &drive_subjects)
+            let server_vvs = match subjects {
+                // Filtered path: build VVs for only the differing subjects — no full-drive
+                // parent walk, no full-drive snapshot reads.
+                Some(set) => {
+                    let mut vvs = std::collections::HashMap::new();
+                    for subject in set {
+                        if let Some(vv) =
+                            crate::db::version_vectors::read(&*store.kv, subject.as_bytes())
+                        {
+                            vvs.insert(subject.clone(), vv);
+                        }
+                    }
+                    vvs
+                }
+                None => {
+                    let drive_subject =
+                        crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+                    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
+                    build_drive_vvs(store, &drive_subjects)
+                }
+            };
+            // Not read yet: the loop below asks `check_read` per subject.
+            let mut walked: Vec<WalkedSubject> = server_vvs
+                .into_iter()
+                .map(|(subject, vv)| WalkedSubject {
+                    subject,
+                    vv,
+                    readable: false,
+                    blob: None,
+                })
+                .collect();
+            walked.sort_by(|a, b| a.subject.cmp(&b.subject));
+            std::sync::Arc::new(walked)
         }
     };
 
     // Fast path: hash match
     if !drive_hash.is_empty() {
-        let wire_vvs = server_vvs
+        let wire_vvs = walked
             .iter()
-            .map(|(s, vv)| (wire.subject(s), vv.clone()))
+            .map(|w| (wire.subject(&w.subject), w.vv.clone()))
             .collect();
         let server_hash = if hash_version >= 2 {
             compute_drive_hash_v2(&wire_vvs)
@@ -1696,7 +1805,20 @@ pub async fn handle_sync_vv_reconcile(
         };
 
         if server_hash == drive_hash {
-            tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
+            // The hashes agree, so the client holds as many entries as we do.
+            tracing::info!(
+                target: "sync_stats",
+                kind = "reconcile",
+                drive = %drive,
+                outcome = "computed_match",
+                cached = cached.is_some(),
+                subjects = walked.len(),
+                client_entries = walked.len(),
+                push = 0,
+                pull = 0,
+                remove = 0,
+                elapsed_ms = started.elapsed().as_millis() as u64,
+            );
 
             return vec![protocol::encode_sync_ok(&wire.subject(drive))];
         }
@@ -1715,25 +1837,38 @@ pub async fn handle_sync_vv_reconcile(
     let mut may_read_drive: Option<bool> = None;
     let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
-    for (subject, server_vv) in &server_vvs {
-        // Check read permission
-        let resource = match store
-            .get_resource(&crate::Subject::from_raw(
-                subject,
-                store.get_base_domain().as_deref(),
-            ))
-            .await
-        {
-            Ok(r) => {
-                if crate::hierarchy::check_read(store, &r, agent)
-                    .await
-                    .is_err()
-                {
-                    continue;
-                }
-                r
+    for WalkedSubject {
+        subject,
+        vv: server_vv,
+        readable,
+        blob,
+    } in walked.iter()
+    {
+        // Check read permission. A cached walk has asked already.
+        let blob = if cached.is_some() {
+            if !readable {
+                continue;
             }
-            Err(_) => continue,
+            *blob
+        } else {
+            match store
+                .get_resource(&crate::Subject::from_raw(
+                    subject,
+                    store.get_base_domain().as_deref(),
+                ))
+                .await
+            {
+                Ok(r) => {
+                    if crate::hierarchy::check_read(store, &r, agent)
+                        .await
+                        .is_err()
+                    {
+                        continue;
+                    }
+                    r.blob_hash()
+                }
+                Err(_) => continue,
+            }
         };
 
         if let Some(client_vv) = client_vvs.get(subject) {
@@ -1766,7 +1901,7 @@ pub async fn handle_sync_vv_reconcile(
 
             // New logic: even if VVs match (or server is ahead), if the server is missing the blob, we must pull it.
             // This handles the case where metadata was pushed via HTTP POST /commit but the blob is still on the client.
-            if let Some(hash) = resource.blob_hash() {
+            if let Some(hash) = blob {
                 if !store.has_blob(&hash).await.unwrap_or(false) {
                     // If we don't have the blob, add to pull so the server requests it
                     if !pull.contains(subject) {
@@ -1784,13 +1919,18 @@ pub async fn handle_sync_vv_reconcile(
     }
 
     // Client resources not on server: pull new data, or tell client to delete tombstones.
-    for subject in client_vvs.keys() {
+    let mut client_subjects: Vec<&String> = client_vvs.keys().collect();
+    client_subjects.sort();
+    for subject in client_subjects {
         // On the filtered path, only reconcile the differing set even if the client
         // sent extra version vectors.
         if subjects.is_some_and(|set| !set.contains(subject)) {
             continue;
         }
-        if !server_vvs.contains_key(subject) {
+        if walked
+            .binary_search_by(|w| w.subject.as_str().cmp(subject))
+            .is_err()
+        {
             if super::tombstones::is_tombstoned(store, subject) {
                 remove.push(subject.clone());
                 if let Some(json) = super::tombstones::destroy_envelope(store, subject) {
@@ -1837,11 +1977,17 @@ pub async fn handle_sync_vv_reconcile(
     let push_subjects: Vec<String> = push_entries.iter().map(|(s, _)| s.clone()).collect();
 
     tracing::info!(
-        "SYNC: drive {} — {} to push, {} to pull, {} to remove",
-        drive,
-        push_subjects.len(),
-        pull.len(),
-        remove.len(),
+        target: "sync_stats",
+        kind = "reconcile",
+        drive = %drive,
+        outcome = "mismatch",
+        cached = cached.is_some(),
+        subjects = walked.len(),
+        client_entries = client_vvs.len(),
+        push = push_subjects.len(),
+        pull = pull.len(),
+        remove = remove.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
     );
 
     // Every subject on the wire follows the peer's scheme; the map keys must
@@ -2014,50 +2160,76 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
-/// A resource accepted earlier in this frame, else the stored one.
-async fn staged_or_stored(
-    store: &Db,
-    subject: &crate::Subject,
-    staged: &[(crate::Resource, Option<Vec<u8>>)],
-    by_subject: &std::collections::HashMap<String, usize>,
-) -> Option<crate::Resource> {
-    if let Some(index) = by_subject.get(&subject.pure_id()) {
-        return Some(staged[*index].0.clone());
-    }
-    store.get_resource(subject).await.ok()
-}
-
-/// Resolve a parent's drive from accepted state in this frame before storage.
-/// A `drive` stamp wins. With none, the parent's own parent is asked the same
-/// way, so an unstamped child of an unstamped child still resolves to the
-/// drive root, and a resource with neither contributes its own subject. The
-/// walk stops at the last resource we have. `None` when `parent` itself is
-/// neither staged nor stored.
-async fn staged_parent_drive(
+/// Every staged resource has already been scoped to this drive. Walking
+/// stops as soon as it reaches one, including on an unstamped parent chain.
+fn staged_parent_drive(
     store: &Db,
     parent: &crate::Subject,
-    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    admitted_drive: &str,
     by_subject: &std::collections::HashMap<String, usize>,
 ) -> Option<String> {
-    let mut current = staged_or_stored(store, parent, staged, by_subject).await?;
+    let mut current = parent.clone();
+    let mut last = None;
     let mut seen = std::collections::HashSet::new();
     loop {
-        let subject = current.get_subject().to_string();
-        if !seen.insert(crate::Subject::from(subject.clone()).pure_id()) {
-            return Some(subject);
+        let key = store.normalize_subject(&current).pure_id();
+        if by_subject.contains_key(&key) {
+            return Some(admitted_drive.to_owned());
         }
-        if let Ok(drive) = current.get(crate::urls::DRIVE_PROP) {
+        if !seen.insert(key) {
+            return Some(current.to_string());
+        }
+        let Ok(resource) = store.get_resource_shallow(&current) else {
+            return last;
+        };
+        if let Ok(drive) = resource.get(crate::urls::DRIVE_PROP) {
             return Some(drive.to_string());
         }
-        let Ok(parent_val) = current.get(crate::urls::PARENT) else {
-            return Some(subject);
+        last = Some(resource.get_subject().to_string());
+        let Ok(parent) = resource.get(crate::urls::PARENT) else {
+            return last;
         };
-        let next = crate::Subject::from(parent_val.to_string());
-        match staged_or_stored(store, &next, staged, by_subject).await {
-            Some(resource) => current = resource,
-            None => return Some(subject),
-        }
+        current = crate::Subject::from(parent.to_string());
     }
+}
+
+/// Merge and materialize once. A delayed entry keeps this result until its
+/// parent is ready, and later deltas for the same subject wait behind it.
+fn prepare_sync_entry(
+    store: &Db,
+    key: &str,
+    entry: &protocol::SyncPushEntry,
+    staged_snapshot: Option<&[u8]>,
+) -> Option<(crate::Resource, Vec<u8>)> {
+    let stored;
+    let base = if let Some(snapshot) = staged_snapshot {
+        Some(AtomicLoroDoc::from_snapshot(snapshot).ok()?)
+    } else {
+        stored = store.kv.get(Tree::LoroSnapshots, key.as_bytes()).ok()?;
+        stored
+            .as_deref()
+            .and_then(|s| AtomicLoroDoc::from_snapshot(s).ok())
+    };
+    let doc = match base {
+        Some(doc) => {
+            doc.import_update(&entry.loro_bytes).ok()?;
+            doc
+        }
+        None => {
+            let doc = AtomicLoroDoc::new();
+            if doc.import_update(&entry.loro_bytes).is_ok() {
+                doc
+            } else {
+                AtomicLoroDoc::from_snapshot(&entry.loro_bytes).ok()?
+            }
+        }
+    };
+    let snapshot = doc.export_snapshot();
+    let mut resource = crate::Resource::new(key.to_owned());
+    resource
+        .apply_state_doc_with_snapshot(doc, snapshot.clone())
+        .ok()?;
+    Some((resource, snapshot))
 }
 
 /// Import resources from a SYNC_PUSH message into the local store.
@@ -2078,6 +2250,13 @@ pub async fn import_sync_push(
     for_agent: &crate::agents::ForAgent,
     trust_owned: bool,
 ) -> Result<(usize, Vec<Vec<u8>>), SyncPushRejected> {
+    use std::collections::{BTreeSet, HashMap, VecDeque};
+    if push.entries.len() > protocol::SYNC_PUSH_MAX_ENTRIES {
+        return Err(SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: "Too many entries in one SYNC_PUSH".into(),
+        });
+    }
     let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
     let policy = store.sync_policy();
 
@@ -2144,8 +2323,8 @@ pub async fn import_sync_push(
     // entries and be overwritten by the stale snapshot this push started
     // from. Db takes import-identity locks afterwards, matching signed commit
     // ordering and avoiding lock inversion.
-    let mut subject_keys: Vec<String> =
-        push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    let entry_keys: Vec<_> = push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    let mut subject_keys = entry_keys.clone();
     subject_keys.sort();
     subject_keys.dedup();
     let mut _subject_guards = Vec::with_capacity(subject_keys.len());
@@ -2162,34 +2341,31 @@ pub async fn import_sync_push(
     let mut staged_by_subject: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
-    // One arrival-order pass would skip a new unstamped child whose parent
-    // comes later in the same frame. Hold those back, without staging, and
-    // retry once later entries are staged. A pass that stages nothing, or
-    // `entries.len()` passes, ends it: whatever is left is decided for good,
-    // so a missing, rejected, or cyclic parent is skipped.
-    let mut pending: Vec<usize> = (0..push.entries.len()).collect();
-    let mut settled = vec![false; push.entries.len()];
+    let mut groups: HashMap<&str, VecDeque<usize>> = HashMap::new();
+    for (idx, key) in entry_keys.iter().enumerate() {
+        groups.entry(key.as_str()).or_default().push_back(idx);
+    }
+    let mut ready: BTreeSet<usize> = groups.values().map(|group| group[0]).collect();
+    let mut waiting: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut prepared = HashMap::new();
     let mut strict = false;
-    let mut passes = 0usize;
-
-    while !pending.is_empty() {
-        let batch = std::mem::take(&mut pending);
-        let mut staged_this_pass = 0usize;
-        for idx in batch {
-            let entry = &push.entries[idx];
-            settled[idx] = true;
-            if super::tombstones::is_tombstoned(store, &entry.subject) {
-                tracing::debug!(
-                    "import_sync_push: skip {:?} (tombstoned locally)",
-                    &entry.subject[..entry.subject.len().min(24)]
-                );
-                continue;
+    'schedule: loop {
+        let Some(idx) = ready.pop_first() else {
+            if waiting.is_empty() {
+                break;
             }
-
-            let snapshot_key =
-                crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref())
-                    .pure_id();
-
+            // Only unresolved cycles remain. Apply the ordinary missing-parent
+            // rule to each once, so an unsubstantiated claim cannot enter.
+            strict = true;
+            ready.extend(waiting.drain().flat_map(|(_, entries)| entries));
+            continue;
+        };
+        let entry = &push.entries[idx];
+        let snapshot_key = entry_keys[idx].clone();
+        'entry: {
+            if super::tombstones::is_tombstoned(store, &entry.subject) {
+                break 'entry;
+            }
             // Admission above was for `push.drive` as a whole. Each entry names
             // its own subject, so an existing resource must actually live in
             // that drive, or a peer admitted for one drive could overwrite any
@@ -2221,8 +2397,7 @@ pub async fn import_sync_push(
                     drive.to_string()
                 } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
                     let parent_subject = crate::Subject::from(parent.to_string());
-                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
-                        .await
+                    staged_parent_drive(store, &parent_subject, &admitted_drive, &staged_by_subject)
                         .unwrap_or_else(|| existing.get_subject().to_string())
                 } else {
                     existing.get_subject().to_string()
@@ -2234,73 +2409,26 @@ pub async fn import_sync_push(
                     stored_drive,
                     push.drive
                 );
-                    continue;
+                    break 'entry;
                 }
             }
 
-            // Load existing doc or create new
-            let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
-                let snapshot = staged[*index]
-                    .1
-                    .as_ref()
-                    .expect("sync snapshots are explicit");
-                match AtomicLoroDoc::from_snapshot(snapshot) {
-                    Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
-                    _ => continue,
-                }
-            } else if let Ok(Some(existing)) =
-                store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
-            {
-                match AtomicLoroDoc::from_snapshot(&existing) {
-                    Ok(d) => {
-                        // A SYNC_PUSH may carry either an incremental update or a
-                        // complete snapshot; Loro accepts both and merges them.
-                        if d.import_update(&entry.loro_bytes).is_err() {
-                            tracing::warn!(
-                                "import_sync_push: delta import failed for {}",
-                                entry.subject
-                            );
-                            continue;
-                        }
-                        d
-                    }
-                    Err(_) => {
-                        // Existing snapshot corrupt, treat incoming as fresh
-                        match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                            Ok(d) => d,
-                            Err(_) => continue,
-                        }
-                    }
-                }
-            } else {
-                // New resource — import as snapshot
-                let doc = AtomicLoroDoc::new();
-                if doc.import_update(&entry.loro_bytes).is_err() {
-                    // Try as snapshot
-                    match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                        Ok(d) => d,
-                        Err(_) => {
-                            tracing::warn!("import_sync_push: import failed for {}", entry.subject);
-                            continue;
-                        }
-                    }
-                } else {
-                    doc
-                }
+            let staged_snapshot = staged_by_subject
+                .get(&snapshot_key)
+                .and_then(|i| staged[*i].1.as_deref());
+            let Some((resource, snapshot)) = prepared
+                .remove(&idx)
+                .or_else(|| prepare_sync_entry(store, &snapshot_key, entry, staged_snapshot))
+            else {
+                break 'entry;
             };
-
-            // No `get_resource` — `apply_state_doc` rebuilds propvals from the
-            // merged doc, so the read would be discarded. Sync builds directly.
-            let snapshot = doc.export_snapshot();
-            let subject =
-                crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
-            let mut resource = crate::Resource::new(subject.to_string());
-
+            // A staged row is subsequently authoritative for its children. Its
+            // explicit drive stamp must agree with the drive we admitted.
             if resource
-                .apply_state_doc_with_snapshot(doc, snapshot.clone())
-                .is_err()
+                .get(crate::urls::DRIVE_PROP)
+                .is_ok_and(|v| normalize(&v.to_string()) != admitted_drive)
             {
-                continue;
+                break 'entry;
             }
 
             // A new subject: it may only enter the drive this push was admitted
@@ -2331,20 +2459,17 @@ pub async fn import_sync_push(
                 if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                     let parent_subject = crate::Subject::from(parent_val.to_string());
                     if let Some(drive) =
-                        staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
-                            .await
+                        staged_parent_drive(store, &parent_subject, &admitted_drive, &staged_by_subject)
                     {
                         claimed = drive;
                     } else if !strict {
                         // The parent is not here yet, but this frame still has an
                         // entry for it that is neither staged nor finally skipped.
                         let parent_key = normalize(&parent_subject.to_string());
-                        if push.entries.iter().enumerate().any(|(i, other)| {
-                            i != idx && !settled[i] && normalize(&other.subject) == parent_key
-                        }) {
-                            settled[idx] = false;
-                            pending.push(idx);
-                            continue;
+                        if parent_key != snapshot_key && groups.contains_key(parent_key.as_str()) {
+                            prepared.insert(idx, (resource, snapshot));
+                            waiting.entry(parent_key).or_default().push(idx);
+                            continue 'schedule;
                         }
                     }
                 }
@@ -2356,7 +2481,7 @@ pub async fn import_sync_push(
                         claimed,
                         push.drive
                     );
-                    continue;
+                    break 'entry;
                 }
             }
 
@@ -2370,7 +2495,6 @@ pub async fn import_sync_push(
                 staged.push((resource.clone(), Some(snapshot)));
             }
             count += 1;
-            staged_this_pass += 1;
             imported.insert(snapshot_key.clone());
 
             // Check for missing blobs
@@ -2381,12 +2505,23 @@ pub async fn import_sync_push(
             }
         }
 
-        if pending.is_empty() || strict {
-            break;
+        let group = groups
+            .get_mut(snapshot_key.as_str())
+            .expect("scheduled subject");
+        group.pop_front();
+        if let Some(next) = group.front() {
+            ready.insert(*next);
+        } else {
+            groups.remove(snapshot_key.as_str());
         }
-        passes += 1;
-        if staged_this_pass == 0 || passes >= push.entries.len() {
-            strict = true;
+        // Wake only entries waiting for this subject, once it is usable or
+        // every candidate for it has been rejected.
+        if staged_by_subject.contains_key(&snapshot_key)
+            || !groups.contains_key(snapshot_key.as_str())
+        {
+            if let Some(children) = waiting.remove(&snapshot_key) {
+                ready.extend(children);
+            }
         }
     }
 

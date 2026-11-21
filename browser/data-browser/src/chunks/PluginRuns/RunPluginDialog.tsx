@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { useStore, type Resource } from '@tomic/react';
-import { Dialog, useDialog } from '@components/Dialog';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { LoaderBlock } from '@components/Loader';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import {
   applyRun,
   pluginClassesFor,
@@ -129,7 +129,7 @@ export function RunPluginDialog({
       if (!cancelled) setPrepared(result);
     })().catch((e: Error) => {
       if (cancelled) return;
-      toast.error(`Could not run this plugin: ${e.message}`);
+      toast.error(`Could not run this app: ${e.message}`);
       closeDialog();
     });
 
@@ -193,7 +193,7 @@ export function RunPluginDialog({
           <Column>
             {prepared.timedOut && (
               <Message $tone='error'>
-                This plugin ran too long and was stopped. Nothing was planned.
+                This app ran too long and was stopped. Nothing was planned.
               </Message>
             )}
             {plan!.blocked && (

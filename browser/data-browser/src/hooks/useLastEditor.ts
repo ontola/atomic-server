@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import { useEffect, useState } from 'react';
 import { useResource, useStore, type Store } from '@tomic/react';
-import { useServerConnected } from './useServerConnected';
+import { useServerConnected } from '@tomic/resource-ui/hooks/useServerConnected';
 
 /**
  * Who signed the newest change, per resource and edit time. Holds the

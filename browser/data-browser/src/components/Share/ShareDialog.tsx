@@ -27,34 +27,36 @@ import { styled } from 'styled-components';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 
 import { Dialog, useDialog } from '../Dialog';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ErrorLook } from '../ErrorLook';
 import { TeamProfileStep } from '../TeamProfileStep';
 import {
   profileReviewedBefore,
   rememberProfileReviewed,
 } from './profileReviewed';
-import { paths } from '../../routes/paths';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
-import { CLOUD_SERVER_PRICE } from '../../helpers/cloudServerPrice';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { openCloudServerSales } from '../../helpers/openCloudServerSales';
+import { getAccountServiceUrl } from '../../helpers/managed/cloudSync';
+import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
 import {
   accountAddress,
   getManagedAccount,
 } from '../../helpers/managed/session';
+import { useIsLinkedToAccount } from '@hooks/useIsLinkedToAccount';
+import { openSaveWorkDialog } from '../SaveWork/saveWorkDialogState';
 import { sendShareInvites } from '../../helpers/managed/shareInvites';
 import { EmailInviteInput, isEmailAddress } from './EmailInviteInput';
 import { describeEditorSeats, useEditorSeats } from './useEditorSeats';
 import { PeopleWithAccess, effectiveRole } from './PeopleWithAccess';
-import { ResourceLinkNavigationContext } from '../ResourceLinkNavigationContext';
+import { ResourceLinkNavigationContext } from '@tomic/resource-ui/components/ResourceLinkNavigationContext';
 import { PublicAccess } from './PublicAccess';
 import { RoleSwitch, type ShareRole } from './RoleSelect';
 import { useShareRights } from './useShareRights';
 import { usePendingInvites } from './usePendingInvites';
 import { useClassLabel } from './useClassLabel';
 import { inviteLinkPrefix, useCreateInviteLink } from './useCreateInviteLink';
+import { copyInviteLink, type CreateInviteLink } from './copyInviteLink';
 import {
   UNLIMITED,
   UsageLimitField,
@@ -199,7 +201,8 @@ function ShareOverview({
   classLabel: string;
   onDone: () => void;
 }): JSX.Element {
-  const isSaas = !!getManagedPortalUrl();
+  const hasAccount = useHasManagedAccount() === true;
+  const accountLinked = useIsLinkedToAccount();
   const isPrivateDrive = useIsPrivateDrive(resource.subject);
   const store = useStore();
   const isUnhostedDrive =
@@ -213,7 +216,7 @@ function ShareOverview({
   const createInviteLink = useCreateInviteLink(resource);
   const editorSeats = useEditorSeats(resource);
   const pending = usePendingInvites(resource.subject);
-  const agentDetail = useCurrentAgentDetail(agent?.subject, isSaas);
+  const agentDetail = useCurrentAgentDetail(agent?.subject, hasAccount);
   const agentResource = useResource(agent?.subject);
   const [agentName] = useTitle(agentResource);
 
@@ -225,7 +228,7 @@ function ShareOverview({
   const [err, setErr] = useState<Error>();
 
   const composing =
-    isSaas && canWrite && (emails.length > 0 || draft.trim() !== '');
+    hasAccount && canWrite && (emails.length > 0 || draft.trim() !== '');
 
   const publicRight = rights.find(
     r => r.agentSubject === urls.instances.publicAgent,
@@ -296,11 +299,11 @@ function ShareOverview({
           {isUnhostedDrive && (
             <UnhostedDriveNotice
               subject={resource.subject}
-              isSaas={isSaas}
+              offerHosting={!!getAccountServiceUrl()}
               onDone={onDone}
             />
           )}
-          {canWrite && isSaas && (
+          {canWrite && hasAccount && (
             <EmailInviteInput
               emails={emails}
               onEmailsChange={setEmails}
@@ -311,11 +314,14 @@ function ShareOverview({
               disabled={sending}
             />
           )}
-          {canWrite && isSaas && editorSeats && (
+          {canWrite && hasAccount && editorSeats && (
             <SeatsNote>{describeEditorSeats(editorSeats)}</SeatsNote>
           )}
-          {canWrite && !isSaas && (
-            <InviteLinkField createInviteLink={createInviteLink} />
+          {canWrite && !hasAccount && (
+            <InviteLinkField
+              createInviteLink={createInviteLink}
+              onCopied={pending.recordLink}
+            />
           )}
           {composing ? (
             <MessageField>
@@ -374,6 +380,20 @@ function ShareOverview({
             </>
           )}
           {err && <ErrorLook>{err.message}</ErrorLook>}
+          {canWrite &&
+            !hasAccount &&
+            !accountLinked &&
+            getAccountServiceUrl() && (
+              <Button
+                subtle
+                onClick={() => {
+                  onDone();
+                  openSaveWorkDialog();
+                }}
+              >
+                Register with email
+              </Button>
+            )}
         </Stack>
       </Dialog.Content>
       <Actions>
@@ -392,8 +412,11 @@ function ShareOverview({
           </>
         ) : (
           <>
-            {canWrite && isSaas && (
-              <CopyInviteLinkSplit createInviteLink={createInviteLink} />
+            {canWrite && hasAccount && (
+              <CopyInviteLinkSplit
+                createInviteLink={createInviteLink}
+                onCopied={pending.recordLink}
+              />
             )}
             <Spacer />
             <Button onClick={onDone}>Done</Button>
@@ -404,30 +427,13 @@ function ShareOverview({
   );
 }
 
-type CreateInviteLink = ReturnType<typeof useCreateInviteLink>;
-
-async function copyInviteLink(
-  createInviteLink: CreateInviteLink,
-  role: ShareRole,
-  maxUsages?: number,
-): Promise<string> {
-  const link = await createInviteLink({ write: role === 'write', maxUsages });
-
-  try {
-    await navigator.clipboard.writeText(link);
-    toast.success('Invite link copied');
-  } catch {
-    toast.error('Could not copy the link. Select it and copy it by hand.');
-  }
-
-  return link;
-}
-
 /** Hosted: a secondary way to invite, next to email. */
 function CopyInviteLinkSplit({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const [role, setRole] = useState<ShareRole>('read');
   const [busy, setBusy] = useState(false);
@@ -436,7 +442,7 @@ function CopyInviteLinkSplit({
     setBusy(true);
 
     try {
-      await copyInviteLink(createInviteLink, role);
+      await copyInviteLink(createInviteLink, role, undefined, onCopied);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -471,8 +477,10 @@ function CopyInviteLinkSplit({
  */
 function InviteLinkField({
   createInviteLink,
+  onCopied,
 }: {
   createInviteLink: CreateInviteLink;
+  onCopied: (role: ShareRole) => Promise<void>;
 }): JSX.Element {
   const store = useStore();
   const [role, setRole] = useState<ShareRole>('write');
@@ -487,7 +495,9 @@ function InviteLinkField({
 
     try {
       const maxUsages = parseMaxUsages(limit);
-      setLink(await copyInviteLink(createInviteLink, role, maxUsages));
+      setLink(
+        await copyInviteLink(createInviteLink, role, maxUsages, onCopied),
+      );
     } catch (e) {
       setErr(e as Error);
     }
@@ -539,7 +549,7 @@ function InviteLinkField({
  */
 function useCurrentAgentDetail(
   agent: string | undefined,
-  isSaas: boolean,
+  hasAccount: boolean,
 ): string | undefined {
   const store = useStore();
   const drive = useResource(store.getDrive());
@@ -547,7 +557,7 @@ function useCurrentAgentDetail(
   const [email, setEmail] = useState<string>();
 
   useEffect(() => {
-    if (!isSaas) return;
+    if (!hasAccount) return;
     let cancelled = false;
     getManagedAccount()
       .then(
@@ -561,7 +571,7 @@ function useCurrentAgentDetail(
     return () => {
       cancelled = true;
     };
-  }, [isSaas]);
+  }, [hasAccount]);
 
   if (email) return email;
   if (agent && driveWriters.includes(agent)) return 'Owner';
@@ -584,11 +594,11 @@ function PrivateDriveWarning(): JSX.Element {
 
 function UnhostedDriveNotice({
   subject,
-  isSaas,
+  offerHosting,
   onDone,
 }: {
   subject: string;
-  isSaas: boolean;
+  offerHosting: boolean;
   onDone: () => void;
 }): JSX.Element {
   return (
@@ -599,7 +609,7 @@ function UnhostedDriveNotice({
           This drive is not on a server. People you invite can open it only
           while one of your devices has it open in a browser.
         </span>
-        {isSaas && <UpgradePitch subject={subject} onDone={onDone} />}
+        {offerHosting && <UpgradePitch subject={subject} onDone={onDone} />}
       </UnhostedBody>
     </PrivateDriveWarningBox>
   );
@@ -612,7 +622,7 @@ function UpgradePitch({
   subject: string;
   onDone: () => void;
 }): JSX.Element {
-  const navigate = useNavigateWithTransition();
+  const [name] = useString(useResource(subject), core.properties.name);
 
   return (
     <>
@@ -625,12 +635,10 @@ function UpgradePitch({
       <UpgradeButton
         onClick={() => {
           onDone();
-          void navigate(
-            `${paths.sync}&${new URLSearchParams({ drive: subject })}`,
-          );
+          void openCloudServerSales(subject, name);
         }}
       >
-        Upgrade to Cloud Server from {CLOUD_SERVER_PRICE}
+        Read more
       </UpgradeButton>
     </>
   );

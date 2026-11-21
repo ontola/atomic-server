@@ -73,12 +73,8 @@ function storeWith(json: string, local: Uint8Array) {
     waitForInit: async () => true,
     flush: async () => undefined,
     getResourceWithSnapshot: async () => ({ jsonAd: json, snapshot: local }),
-    putResourceWithSnapshot: async (
-      _subject: string,
-      _json: string,
-      snapshot?: Uint8Array,
-    ) => {
-      if (snapshot) writes.push(snapshot);
+    putLoroSnapshot: async (_subject: string, snapshot: Uint8Array) => {
+      writes.push(snapshot);
     },
     removeResource: async () => undefined,
   } as never);

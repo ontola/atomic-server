@@ -1,7 +1,10 @@
 import { type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Row } from '@components/Row';
-import { InputStyled, InputWrapper } from './InputStyles';
+import { Row } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 
 export interface SliderInputProps {
   id?: string;

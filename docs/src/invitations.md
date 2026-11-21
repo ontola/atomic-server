@@ -10,7 +10,7 @@ In order to make this process of inviting others as simple as possible, we've co
 
 - **Edit without registration**. Be able to edit or view things without being required to complete a registration process.
 - **Share with a single URL**. A single URL should contain all the information needed.
-- **Stateless**. Invitations are self-contained signed tokens. The server does not need to store invite state.
+- **Stateless**. Invitations are self-contained signed tokens. Issuing a token requires no database write. Limited-use redemption records an acceptance on the issuing server.
 
 ## Flow
 
@@ -24,4 +24,5 @@ In order to make this process of inviting others as simple as possible, we've co
 
 - Invite tokens are signed by the issuer. If the issuer loses write access to the target resource, previously issued tokens will fail when redeemed.
 - Tokens have an expiration timestamp. Expired tokens are rejected.
-- A usage limit is part of the signed token, so it cannot be raised afterwards. The server records which agents accepted a token and rejects further agents with "This invite has no usages left" once the limit is reached. An agent that already accepted can open the link again without using a place. The count lives on the server that accepts the invite, so a drive that is available on several servers counts per server. Invites for drives that sync directly between browsers never reach a server and cannot be limited.
+- A usage limit is part of the signed token, so it cannot be raised afterwards. The server records which agents accepted a token and rejects further agents with "This invite has no usages left" once the limit is reached. An agent that already accepted can open the link again without using a place. The signed `https://atomicdata.dev/properties/invite/redeemAt` names the issuing HTTPS origin (HTTP is supported on loopback). Only that server spends places. A URL target can identify its own origin. Older limited-use tokens for a DID must be reissued with the server named.
+- Peer-only invitations are unlimited. The accepting device challenges the Iroh endpoint and verifies the inviter’s signature over its node ID and a fresh nonce before sending the token. Both devices must support this handshake.

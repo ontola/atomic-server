@@ -3,7 +3,7 @@ import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
 import { FaArrowUpRightFromSquare, FaCopy } from 'react-icons/fa6';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 
 /** A link as a QR code, with Copy and Open. Used by the share dialogs. */
 export function ShareLink({

@@ -90,10 +90,9 @@ export interface SyncPushEnvelope {
 /**
  * Structured error codes on `ERROR` frames (mirrors `lib/src/sync/protocol.rs`
  * `error_code`; F5, planning/unified-sync.md). `UNKNOWN` means "no
- * structured classification" — callers fall back to message string
- * matching (`local-outbox.ts`'s `isTerminalCommitErrorMessage` /
- * `isUnrecoverableCommitErrorMessage`), which also covers older servers
- * that predate this field.
+ * structured classification" — callers fall back to `legacyRefusalCode`
+ * (`local-outbox.ts`), the one place that reads refusal text, for servers
+ * that predate the codes.
  */
 export const ErrorCode = {
   UNKNOWN: 0,
@@ -138,6 +137,8 @@ export const ErrorCode = {
    *  message carries `retry_after_ms=<n>` (see `retryAfterMsFromMessage`).
    *  Not a failure: keep the local state, wait, then send one merged delta. */
   BUSY: 12,
+  /** An INVITE was refused. The message is a sentence for the person. */
+  INVITE_REFUSED: 13,
   /** A notice, not a refusal, sent once per connection with request id 0 to
    *  a client that predates `canonical-scheme`: the connection keeps working
    *  but will stop being supported. Log it; never fail a request over it. */
@@ -145,6 +146,15 @@ export const ErrorCode = {
   /** A `GET_MANY` entry left unfetched because the batch's byte budget was
    *  spent. Nothing is wrong with the subject: fetch it again on its own. */
   RESULT_TOO_LARGE: 15,
+  /** A commit's delta starts past ops the server never received. Retry with
+   *  a self-contained snapshot (drop the save cursor), not the same delta. */
+  PENDING_DEPS: 16,
+  /** The server does not hold the resource's parent. Parked; a finished
+   *  resync of the drive re-arms it. */
+  MISSING_PARENT: 17,
+  /** A destroy with nothing left to do (already gone, or the subject was
+   *  re-created after it was signed): an acknowledgement. */
+  DESTROY_SETTLED: 19,
 } as const;
 
 /** The `retry_after_ms=<n>` hint of a BUSY error message (or an HTTP error
@@ -829,17 +839,23 @@ export function encodeSyncPushChunks(
 }
 
 export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
+  if (data.length < 2) return undefined;
   const [drive, off1] = readStr16(data, 0);
-  if (off1 >= data.length) return undefined;
+  if (off1 + 3 > data.length) return undefined;
   const flags = data[off1];
   const last = (flags & SyncPushFlags.LAST) !== 0;
   const [count, off2] = readU16(data, off1 + 1);
+  if (count > SYNC_PUSH_MAX_ENTRIES || count * 6 > data.length - off2)
+    return undefined;
   const entries: DecodedSyncPushEntry[] = [];
   let off = off2;
 
   for (let i = 0; i < count; i++) {
+    if (off + 2 > data.length) return undefined;
     const [subject, sOff] = readStr16(data, off);
+    if (sOff + 4 > data.length) return undefined;
     const [bytesLen, bOff] = readU32(data, sOff);
+    if (bytesLen < 0 || bytesLen > data.length - bOff) return undefined;
     const loroBytes = data.subarray(bOff, bOff + bytesLen);
     entries.push({ subject, loroBytes });
     off = bOff + bytesLen;
@@ -847,15 +863,17 @@ export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
 
   const envelopes: SyncPushEnvelope[] = [];
 
-  if ((flags & SyncPushFlags.ENVELOPES) !== 0 && off + 2 <= data.length) {
+  if ((flags & SyncPushFlags.ENVELOPES) !== 0) {
+    if (off + 2 > data.length) return undefined;
     const [envCount, eOff] = readU16(data, off);
     off = eOff;
 
     for (let i = 0; i < envCount; i++) {
-      if (off + 2 > data.length) break;
+      if (off + 2 > data.length) return undefined;
       const [subject, sOff] = readStr16(data, off);
-      if (sOff + 4 > data.length) break;
+      if (sOff + 4 > data.length) return undefined;
       const [jsonLen, jOff] = readU32(data, sOff);
+      if (jsonLen < 0 || jsonLen > data.length - jOff) return undefined;
       const json = decoder.decode(data.subarray(jOff, jOff + jsonLen));
       envelopes.push({ subject, json });
       off = jOff + jsonLen;

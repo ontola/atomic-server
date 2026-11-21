@@ -2,7 +2,7 @@ import {
   readDocumentV2TiptapJson,
   hasDocumentContent,
   type DocumentV2TiptapJsonResult,
-} from '@chunks/RTE/readDocumentV2TiptapJson';
+} from '@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson';
 import { type Resource, type Store } from '@tomic/react';
 import { tiptapJsonToAgentXml } from './tiptapJsonToAgentXml';
 

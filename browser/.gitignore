@@ -45,3 +45,6 @@ data-browser/src/locales/data.js
 
 # Dev-server crash dumps
 data-browser/frontend.log
+
+resource-ui/src/locales/.wuchale
+resource-ui/src/locales/data.js

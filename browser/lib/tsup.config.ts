@@ -5,6 +5,7 @@ import { exec } from 'node:child_process';
 
 export default defineConfig(options => ({
   minify: !options.watch,
+  noExternal: [/^@tomic\/utils(?:\/|$)/],
   entry: {
     index: 'src/index.ts',
     // Node-only helpers (file system), so browsers never bundle them.
@@ -51,7 +52,14 @@ export default defineConfig(options => ({
 
         // We need a copy of index.d.ts for cjs builds but the actual content can be the same so we can just copy it.
         console.log('Creating index.d.cts...');
-        fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts')
+        Promise.all(
+          ['EventManager', 'calendar-date'].map(name =>
+            fs.copyFile(`../utils/dist/${name}.d.ts`, `dist/src/${name}.d.ts`),
+          ),
+        )
+          .then(() =>
+            fs.copyFile('dist/src/index.d.ts', 'dist/src/index.d.cts'),
+          )
           .then(() => {
             console.log('Build Finished!');
             resolve();

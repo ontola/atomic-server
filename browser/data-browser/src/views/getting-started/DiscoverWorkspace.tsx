@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore } from '@tomic/react';
-import { Button } from '../../components/Button';
-import { Column, Row } from '../../components/Row';
-import { InputStyled } from '../../components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
 import { normalizeServerUrl } from '../../helpers/serverUrl';
 import { fetchManagedInfo } from '../../helpers/managedServer';
 import {

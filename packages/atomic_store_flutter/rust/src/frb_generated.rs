@@ -468,6 +468,7 @@ fn wire__crate__api__resources__AtomicStore_create_invite_token_impl(
             let api_write = <bool>::sse_decode(&mut deserializer);
             let api_expires_at = <Option<i64>>::sse_decode(&mut deserializer);
             let api_max_usages = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_server_origin = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, crate::api::error::AtomicError>((move || {
                 let mut api_that_guard = None;
@@ -490,6 +491,7 @@ fn wire__crate__api__resources__AtomicStore_create_invite_token_impl(
                     api_write,
                     api_expires_at,
                     api_max_usages,
+                    api_server_origin,
                 )?;
                 Ok(output_ok)
             })())

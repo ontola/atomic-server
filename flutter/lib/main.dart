@@ -262,7 +262,7 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
     if (SignInLink.parse(uri,
             portal: Uri.parse(AccountStore.defaultPortal)) !=
         null) {
-      unawaited(_redeemSignInLink(uri));
+      _pendingSignIn = _pendingSignIn.then((_) => _redeemSignInLink(uri));
       return;
     }
     final peer = PairScreen.parsePeerInfo(uri);
@@ -277,11 +277,34 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
     });
   }
 
-  /// The mailed sign-in link opened in the app: spend its token and save the
-  /// session. A failure (expired, used, offline) is said once, calmly.
+  Future<void> _pendingSignIn = Future<void>.value();
+
+  Future<bool> _confirmLinkedAccount(String address) async {
+    await WidgetsBinding.instance.endOfFrame;
+    final context = _navKey.currentContext;
+    if (!mounted || context == null || !context.mounted) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Link this account?'),
+            content: Text('Use $address as the linked account on this device?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Link account')),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _redeemSignInLink(String link) async {
     try {
-      if (await AccountStore.redeemSignInLink(link)) {
+      if (await AccountStore.redeemSignInLink(link,
+          confirmAccount: _confirmLinkedAccount)) {
         _toasts.show('sign-in-link:ok', 'Signed in', icon: Icons.check);
       }
     } on StateError catch (e) {

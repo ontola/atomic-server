@@ -1,5 +1,5 @@
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 
 export const StyledLink = styled(AtomicLink)`
   box-sizing: border-box;

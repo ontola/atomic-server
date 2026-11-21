@@ -4,24 +4,27 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { LocalOllamaDiscovery } from '@components/AI/LocalOllamaDiscovery';
 import React, { Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AIProvider } from '@components/AI/aiContstants';
 import { OpenRouterLoginButton } from '@components/AI/OpenRouterLoginButton';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { OutlinedSection } from '@components/OutlinedSection';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { OutlinedSection } from '@tomic/ui/components/OutlinedSection';
 import { useIsOllamaUrlValid } from '@components/AI/useIsOllamaUrlValid';
 import { ProviderStatus } from '@components/AI/ProviderStatus';
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { LocalNetworkNotice } from '@components/AI/LocalNetworkNotice';
 import { effectFetch } from '@helpers/effectFetch';
 import { DEFAULT_CHAT_MODEL } from '@components/AI/AISettingsContext';
 import type { AIModelIdentifier } from './types';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { useAIAgentConfig } from './AgentConfig';
 import { hasManagedApi } from '@helpers/managed/api';
 

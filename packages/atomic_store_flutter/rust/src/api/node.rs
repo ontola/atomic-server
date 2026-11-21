@@ -326,6 +326,7 @@ impl AtomicStore {
         write: bool,
         expires_at: Option<i64>,
         max_usages: Option<i64>,
+        server_origin: Option<String>,
     ) -> Result<String, AtomicError> {
         if matches!(max_usages, Some(n) if n < 1) {
             return Err(AtomicError::invalid(
@@ -335,9 +336,21 @@ impl AtomicStore {
         let agent = self.db.get_default_agent().map_err(other)?;
         let expires = expires_at
             .unwrap_or_else(|| atomic_lib::utils::now() + 30 * 24 * 60 * 60 * 1000);
-        atomic_lib::invite_token::InviteToken::new(target, write, expires, &agent, max_usages)
-            .and_then(|token| token.encode())
-            .map_err(other)
+        atomic_lib::invite_token::InviteToken::new_for_server(
+            target,
+            write,
+            expires,
+            &agent,
+            max_usages,
+            server_origin.as_deref(),
+        )
+        .and_then(|token| {
+            if max_usages.is_some() && token.redemption_origin()?.is_none() {
+                return Err("Choose the issuing server for a limited-use invitation.".into());
+            }
+            token.encode()
+        })
+        .map_err(other)
     }
 
     /// Open an invite that needs no server. `token` is the token of a link
@@ -354,6 +367,7 @@ impl AtomicStore {
             .check_expiry(atomic_lib::utils::now())
             .map_err(|_| AtomicError::invalid(invite::EXPIRED))?;
         let target = parsed.target.to_string();
+        parsed.check_peer_redemption().map_err(other)?;
         let mine = self.start_peer().await?;
         let endpoint = atomic_lib::sync::peer::endpoint()
             .ok_or_else(|| AtomicError::network("Peer not started."))?;
@@ -505,7 +519,13 @@ mod tests {
         let (store, dir) = open_with_agent("inviter").await;
         let drive = store.drive().unwrap();
         let token = store
-            .create_invite_token(drive.clone(), true, Some(4_102_444_800_000), Some(3))
+            .create_invite_token(
+                drive.clone(),
+                true,
+                Some(4_102_444_800_000),
+                Some(3),
+                Some("https://team.example".into()),
+            )
             .unwrap();
         let bytes = base64_decode_standard(&token);
         let json: serde_json::Map<String, serde_json::Value> =
@@ -522,11 +542,14 @@ mod tests {
         decoded.verify_signature(&agent.public_key).unwrap();
 
         assert!(store
-            .create_invite_token(drive.clone(), false, None, Some(0))
+            .create_invite_token(drive.clone(), false, None, Some(0), None)
             .is_err());
         // Default expiry is in the future, and unlimited tokens carry no limit.
-        let open = store.create_invite_token(drive, false, None, None).unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&base64_decode_standard(&open)).unwrap();
+        let open = store
+            .create_invite_token(drive, false, None, None, None)
+            .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&base64_decode_standard(&open)).unwrap();
         assert!(json[urls::EXPIRES_AT].as_i64().unwrap() > atomic_lib::utils::now());
         assert!(json.get(urls::USAGES_LEFT).is_none());
         std::fs::remove_dir_all(dir).ok();

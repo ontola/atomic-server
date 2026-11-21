@@ -18,6 +18,12 @@ const EXPIRES = 'https://atomicdata.dev/properties/invite/expiresAt';
 export function decodeBrowserInvite(token: string) {
   if (token.length > 4096) throw new Error('Invite is too large');
   const data = JSON.parse(atob(token));
+  if ('https://atomicdata.dev/properties/invite/redeemAt' in data)
+    throw new Error('Open this invitation on its issuing server');
+  if (server.properties.usagesLeft in data)
+    throw new Error(
+      'Open this invitation on its issuing server to apply the usage limit',
+    );
   const drive = data[server.properties.target];
   const issuer = data[properties.commit.signer];
   if (

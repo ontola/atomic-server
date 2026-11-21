@@ -124,7 +124,10 @@ pub async fn handle_app_write(
             )))
         }
     }
-    .map_err(AtomicServerError::bad_request)?;
+    .map_err(|e| {
+        let code = host.refusal_code.load(std::sync::atomic::Ordering::Relaxed);
+        AtomicServerError::bad_request(e).with_code(code)
+    })?;
 
     Ok(HttpResponse::Ok().json(AppWriteResult { subject }))
 }

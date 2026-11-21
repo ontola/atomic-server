@@ -376,14 +376,10 @@ export async function pickVaultFileTarget(
     let handle: SaveHandle;
 
     try {
+      // Keep the existing filename, but omit a type filter: File System Access
+      // forbids hyphens in filter extensions, even though filenames allow them.
       handle = await picker.call(window, {
         suggestedName: fileName,
-        types: [
-          {
-            description: 'Atomic vault backup',
-            accept: { 'application/octet-stream': [VAULT_FILE_EXTENSION] },
-          },
-        ],
       });
     } catch (e) {
       if ((e as Error).name === /* @wc-ignore */ 'AbortError') return null;

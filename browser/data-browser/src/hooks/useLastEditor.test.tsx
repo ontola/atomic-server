@@ -13,7 +13,7 @@ const store = {
 let resource = { loading: false, hasPendingCommits: false };
 
 let connected = true;
-vi.mock('./useServerConnected', () => ({
+vi.mock('@tomic/resource-ui/hooks/useServerConnected', () => ({
   useServerConnected: () => connected,
 }));
 vi.mock('@tomic/react', () => ({

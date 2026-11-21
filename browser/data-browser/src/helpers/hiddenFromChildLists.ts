@@ -9,6 +9,8 @@ export const HIDDEN_CLASS_LABELS: Record<string, string> = {
   [ai.classes.aiChat]: 'AI chats',
   // Records of apps that use the drive; listed in Drive settings instead.
   [server.classes.externalApp]: 'App records',
+  // Installed apps are listed in the Apps panel and on the Apps page.
+  [server.classes.installation]: 'Installed apps',
 };
 
 /**

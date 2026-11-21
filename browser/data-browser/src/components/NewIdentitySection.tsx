@@ -17,19 +17,26 @@ import { isOriginWithoutNode } from '../helpers/originNode';
 import { isRunningInTauri } from '../helpers/tauri';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
+import {
+  applyBroughtAlong,
+  prepareIdentitySwitch,
+} from '../helpers/bringAlong';
 import { saveAgentResource } from '../helpers/startLocalIdentity';
 import { reopenRestoredDrive } from '../helpers/driveData';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { Button } from './Button';
-import { Column, Row } from './Row';
-import { CodeBlock } from './CodeBlock';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import { SecretCodeBlock } from './SecretCodeBlock';
 import toast from 'react-hot-toast';
 import { FaDownload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { InputStyled, InputWrapper } from './forms/InputStyles';
-import Field from './forms/Field';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import { PRODUCT_NAME } from '../helpers/managed';
 import { ProfileForm } from './ProfileForm';
 import {
@@ -130,6 +137,8 @@ export function NewIdentitySection({
   const [error, setError] = useState<string | undefined>();
   const [identity, setIdentity] = useState<IdentityData | null>(null);
   const creatingIdentity = useRef(false);
+  /** The identity this browser held (a guest) handed its drives to the new one. */
+  const broughtAlong = useRef(false);
   /** True after the user copies the secret or saves the backup file. */
   const [secretBackedUp, setSecretBackedUp] = useState(false);
   /** Set once a backup resolves; shown once, then never again. */
@@ -167,6 +176,23 @@ export function NewIdentitySection({
       }
 
       const newAgent = new Agent(agentProvider, agentDID);
+
+      // A guest (Get started, no account) has no account of its own: its work
+      // comes along to the identity made here, before that one replaces it
+      // (the old key must still sign the grants). Same rule as signing in with
+      // a secret (`prepareIdentitySwitch`); an identity that is not a guest is
+      // only archived here, never handed over unasked.
+      // Never in the way of making the account: the guest's key is archived
+      // before anything is handed over, so a failed hand-over loses nothing
+      // and the reconcile gate can still bring the work along later.
+      try {
+        broughtAlong.current =
+          (await prepareIdentitySwitch(store, agentDID, async () => false)) ===
+          'brought';
+      } catch (e) {
+        broughtAlong.current = false;
+        console.warn('Bringing the guest work along failed', e);
+      }
 
       store.setAgent(newAgent);
 
@@ -291,6 +317,21 @@ export function NewIdentitySection({
       store.setAgent(updatedAgent);
 
       setDrive(resource.subject);
+
+      if (broughtAlong.current) {
+        // Lists the guest's drives in the new home and imports its local-only
+        // ones. Never blocks onboarding: until it succeeds the record stays
+        // and the reconcile gate retries it.
+        try {
+          await applyBroughtAlong(
+            store,
+            identity.agentSubject,
+            resource.subject,
+          );
+        } catch (e) {
+          console.warn('Bringing the guest work along failed, will retry', e);
+        }
+      }
 
       if (onAfterCreate) {
         await onAfterCreate(resource.subject);

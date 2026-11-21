@@ -272,7 +272,7 @@ on a `latest` node, every one on `all`), so the receiver can attribute the
 history it imports. The receiver verifies each envelope's signature and that
 it names a subject imported from the same frame before keeping it; a bad
 envelope is dropped, never the push. A decoder that predates the flag stops
-after `count` entries and does not see the section.
+after `count` entries and does not see the section. Each frame contains at most 100 resource entries. Receivers reject incomplete entries and incomplete flagged trailers before importing the frame.
 
 ### HELLO (0x37)
 
@@ -337,7 +337,10 @@ inviter) at a device of the inviter, without a server. Iroh only. The dialer
 finds the device the way it finds any device of a drive: the pkarr record of
 the token's target lists the Iroh node ids (`_atomic_nodes`). It sends `AUTH`
 for the token's target (`drive#nodeId`, as for a sync), which proves who the
-invitee is, and then `INVITE`. The frame is accepted from any authenticated
+invitee is. It sends a `CHALLENGE` with a fresh 32-byte hex nonce. The inviter
+answers with an `AUTH` signature over `urn:atomic:invite-proof:<responder-node-id>:<nonce>`
+and the timestamp. The invitee checks the signature against the token's issuer
+before sending `INVITE`. The frame is accepted from any authenticated
 agent, paired or not: the token is the authority, and `INVITE` for a drive other
 than the `AUTH`'s is refused like a `SYNC` for the wrong drive.
 
@@ -355,8 +358,7 @@ invite) in a commit signed by its agent, queues that commit for the inviter's
 servers and lets live peers carry it to the inviter's other devices, and
 answers `INVITE_OK`. The invitee then syncs the drive from the same device with
 an ordinary `SYNC`, which the sync policy admits because the invitee can now
-read. `max_usages` of the token is not counted: that needs state shared by all
-the inviter's devices. In the link form of the Flutter package this is
+read. Peers refuse limited or server-bound invitations. The issuing server keeps the acceptance ledger. In the link form of the Flutter package this is
 `atomic:invite?token=<token>`; the web app does not parse that form yet.
 
 ### EPHEMERAL (0x40)
@@ -513,13 +515,13 @@ Everything else is open to an anonymous socket and gated per subject by
 
 | Code | Name | Meaning |
 | --- | --- | --- |
-| `0` | `UNKNOWN` | No structured classification. Only the message text is meaningful. |
+| `0` | `UNKNOWN` | No structured classification. A plain, retryable failure; the message is for people. |
 | `1` | `GENESIS_COLLISION` | The commit's subject already exists. Terminal: this write can never succeed. |
 | `2` | `MISSING_REQUIRED_PROPERTY` | The result is missing a property its class requires. Terminal. |
 | `3` | `UNAUTHORIZED_WRITE` | The signer has no write right on the target or its parents. Blocking, not terminal. |
 | `4` | `MISSING_CLASS` | The commit names a class this node does not hold, so validation cannot run. Blocking, not terminal: the class may still arrive. |
 | `5` | `AUTH_REQUIRED` | The frame needs an authenticated session. `request_id = 0`. |
-| `6` | `SYNC_REJECTED` | A commit was refused by node enrollment/quota policy, or a `SYNC_PUSH` was refused as a whole. Keep local edits; stop unbounded retries. Commits carry their request ID; `SYNC_PUSH` uses `request_id = 0` and message `SYNC_PUSH rejected for drive <drive>: <reason>`. |
+| `6` | `SYNC_REJECTED` | A commit was refused by node enrollment/quota policy ("not enrolled" is told apart from quota by its message), or a `SYNC_PUSH` was refused as a whole. Keep local edits; stop unbounded retries. Commits carry their request ID; `SYNC_PUSH` uses `request_id = 0` and message `SYNC_PUSH rejected for drive <drive>: <reason>`. |
 | `7` | `UNAUTHORIZED_READ` | A subscription or a read-side reconcile frame was refused. `request_id = 0`. Message: `<FRAME> refused for <subject>: <reason>`. |
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
 | `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
@@ -527,10 +529,18 @@ Everything else is open to an anonymous socket and gated per subject by
 | `11` | `CAUSALITY_CONFLICT` | A new Loro write lost against stored state. Keep the local edit; stop sending the same stale update until it is rebased. |
 | `12` | `BUSY` | The node is overloaded with writes, or the agent spent its write rate budget. Refused **before** any work; nothing landed. The message carries `retry_after_ms=<n>`. Not a failure: keep the edit, wait, send one merged delta, and do not retry over another transport. See [Write load and pacing](#write-load-and-pacing). |
 | `14` | `DEPRECATED_CLIENT` | A notice, not a refusal, sent with `request_id` 0 in answer to the `HELLO` to a client that predates `canonical-scheme` (see [Versioning and capabilities](#versioning-and-capabilities)). The connection stays usable; log it and carry on. A client that predates the code sees an unknown code with request id 0. |
+| `13` | `INVITE_REFUSED` | An `INVITE` was refused. The message is a plain sentence for the person. |
 | `15` | `RESULT_TOO_LARGE` | A `GET_MANY` entry that was not fetched because the entries before it filled the batch's byte budget (32 MiB). Nothing is wrong with the subject: ask for it again, on its own or in a smaller batch. |
+| `16` | `PENDING_DEPS` | A commit's Loro delta starts past ops the node never received, so none of it applied. Retrying the same delta cannot succeed: drop the save cursor and send a self-contained snapshot. |
+| `17` | `MISSING_PARENT` | The node does not hold the resource's parent. Blocking: park the entry; a finished resync of the drive re-arms it. |
+| `19` | `DESTROY_SETTLED` | A destroy with nothing left to do: the resource is already gone, or was re-created after the destroy was signed. An acknowledgement for the sender. |
 
-Codes `1` to `4` and `9` to `12` come from `classify_commit_error`, which pattern-matches the
-underlying error text where the frame is built. Many other engine failures
+The code is set where the refusal is raised (`AtomicError::code`) and no layer
+reads the message text; the HTTP `/commit` error body carries it as `errorCode`.
+What a client's outbox does with each code is listed in
+`lib/tests/fixtures/commit-refusals.json`, asserted by both the Rust and the
+TypeScript outbox. The list is additive: never renumber or reuse a code.
+Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,
 `Blob not found`, `Unsolicited blob response`, `Drive not admitted for sync`.

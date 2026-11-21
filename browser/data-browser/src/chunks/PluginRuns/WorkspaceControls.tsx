@@ -8,11 +8,11 @@ import {
   type WorkspaceConnection,
 } from '@tomic/react';
 import { useSettings } from '@helpers/AppSettings';
-import { Dialog, useDialog } from '@components/Dialog';
-import { Button } from '@components/Button';
-import { AtomicLink } from '@components/AtomicLink';
-import { Row, Column } from '@components/Row';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { Row, Column } from '@tomic/ui/components/Row';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 import { NewAutomation } from './NewAutomation';
 import { paths } from '../../routes/paths';
 

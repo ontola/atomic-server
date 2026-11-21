@@ -20,13 +20,13 @@ import type {
   MentionItem,
   SkillSuggestion,
 } from './types';
-import { Row } from '../../../components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '../../../components/IconButton/IconButton';
+} from '@tomic/ui/components/IconButton/IconButton';
 import { FaArrowRight } from 'react-icons/fa6';
-import { addIf } from '../../../helpers/addIf';
+import { addIf } from '@tomic/resource-ui/helpers/addIf';
 import { useAISettings } from '@components/AI/AISettingsContext';
 
 const createAttribute = (propName: string, dataName: string) => {

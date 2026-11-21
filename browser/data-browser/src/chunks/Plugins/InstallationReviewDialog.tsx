@@ -1,8 +1,8 @@
-import { Button } from '@components/Button';
-import { Dialog, useDialog } from '@components/Dialog';
-import { JSONEditor } from '@components/JSONEditor';
-import Markdown from '@components/datatypes/Markdown';
-import { Column, Row } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { JSONEditor } from '@tomic/resource-ui/components/JSONEditor';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ConfigReference } from '@views/Installation/ConfigReference';
 import { CapabilityList } from './CapabilityList';
 import {
@@ -54,7 +54,7 @@ interface InstallationReviewDialogProps {
 }
 
 const INSTALL_VERB = {
-  title: 'Install plugin',
+  title: 'Install app',
   confirm: 'Install',
   busy: 'Installing…',
 };
@@ -91,7 +91,7 @@ export const InstallationReviewDialog: React.FC<
   const title =
     review.name && review.namespace
       ? `${review.namespace}/${review.name}`
-      : (review.name ?? pending.title ?? 'plugin');
+      : (review.name ?? pending.title ?? 'app');
   const description = review.description ?? pending.description;
   const hasConfig =
     review.configSchema !== undefined ||

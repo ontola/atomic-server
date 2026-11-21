@@ -79,6 +79,7 @@ test.describe('icon picker', { tag: '@icons' }, () => {
     await uploadImage(page, 'icon-a.svg', 'red');
     await uploadImage(page, 'icon-b.svg', 'blue');
     await page.goto(driveUrl);
+    await expect(editableTitle(page)).toBeVisible({ timeout: 30_000 });
 
     // Entry point: the "Add icon" hover affordance.
     await editableTitle(page).hover();

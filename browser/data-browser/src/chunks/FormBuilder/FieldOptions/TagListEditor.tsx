@@ -18,17 +18,20 @@ import {
 } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus, FaTrash } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { Column, Row } from '@components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { stringToSlug } from '@helpers/stringToSlug';
-import { randomItem } from '@helpers/randomItem';
-import { useDraftString } from '@helpers/useDraftString';
-import { tagColours } from '@components/Tag/tagColours';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
+import { randomItem } from '@tomic/resource-ui/helpers/randomItem';
+import { useDraftString } from '@tomic/resource-ui/helpers/useDraftString';
+import { tagColours } from '@tomic/resource-ui/components/Tag/tagColours';
 import { ReorderableList } from '../ReorderableList';
 import { AddButton } from './StringListEditor';
 import { useColumnOptions } from '../formDataClass';

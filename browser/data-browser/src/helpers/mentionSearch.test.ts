@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { core, type Store } from '@tomic/react';
-import { findMemberSubjects } from './mentionSearch';
+import { findMemberSubjects } from '@tomic/resource-ui/helpers/mentionSearch';
 
 const fakeResource = (props: Record<string, unknown>) => ({
   get: (prop: string) => props[prop],

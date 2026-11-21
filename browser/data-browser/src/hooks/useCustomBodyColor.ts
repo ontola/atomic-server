@@ -1,5 +1,5 @@
 import { useInsertionEffect } from 'react';
-import { CurrentBackgroundColor } from '../globalCssVars';
+import { CurrentBackgroundColor } from '@tomic/ui/globalCssVars';
 
 export function useCustomBodyColor(color: string) {
   useInsertionEffect(() => {

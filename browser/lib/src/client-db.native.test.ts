@@ -75,6 +75,21 @@ describe('NativeClientDb', () => {
     expect(db.initError?.message).toBe('store is locked');
   });
 
+  it('sends a Loro-only write to the host as base64 bytes', async () => {
+    const { channel, calls } = host({ putLoroSnapshot: () => undefined });
+    const db = new NativeClientDb(channel);
+
+    await db.putLoroSnapshot('s', new Uint8Array([4, 5]), 'did:ad:commit:c');
+
+    expect(calls[0][0]).toBe('putLoroSnapshot');
+    expect(calls[0][1]).toEqual([
+      's',
+      encodeB64(new Uint8Array([4, 5])),
+      'did:ad:commit:c',
+      null,
+    ]);
+  });
+
   it('sends bytes to the host as base64', async () => {
     const { channel, calls } = host({
       putResourceWithSnapshot: () => undefined,
