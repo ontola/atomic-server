@@ -40,6 +40,8 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
+import { useLiveChatEntries } from './useLiveChatEntries';
+import type { AiMessageRef } from './chatConversionUtils';
 import { BasicSelect } from '@components/forms/BasicSelect';
 import { MicrophoneSelect } from '@components/AI/MicrophoneSelect';
 import { MessageContextItem } from './MessageContextItem';
@@ -114,6 +116,8 @@ interface RealAIChatProps {
   onSummaryDeleted?: (restoredMessages: AtomicUIMessage[]) => void;
   externalContextItems: AIMessageContext[];
   chatSubject?: string;
+  /** Messages that arrived from elsewhere (another device) and were added. */
+  onSyncedMessages?: (added: Map<AtomicUIMessage, AiMessageRef>) => void;
   setExternalContextItems: React.Dispatch<
     React.SetStateAction<AIMessageContext[]>
   >;
@@ -140,6 +144,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   autoSubmitMessage,
   externalContextItems,
   chatSubject,
+  onSyncedMessages,
   setExternalContextItems,
   onNewMessage,
   prepareToLeave,
@@ -520,6 +525,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             onFinish: handleChatFinish,
           },
     );
+
+  // Entries added to the saved chat from another device or tab.
+  useLiveChatEntries({
+    chatSubject,
+    idle: status === 'ready' || status === 'error',
+    messages,
+    setMessages,
+    onSynced: onSyncedMessages,
+  });
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.

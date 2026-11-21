@@ -237,6 +237,9 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       onSummaryDeleted={handleSummaryDeleted}
       onDeleteMessage={handleDeleteMessage}
       onRegenerateMessage={removeFollowingMessages}
+      onSyncedMessages={added =>
+        setMessageToResourceMap(prev => new Map([...prev, ...added]))
+      }
     >
       <Column gap='0.5rem'>
         <ResourceCoverImage resource={resource} />
