@@ -42,7 +42,10 @@ pub fn server_origin(raw: &str) -> AtomicResult<String> {
     let loopback = match url.host() {
         Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
         Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        Some(url::Host::Domain(name)) => name == "localhost",
+        Some(url::Host::Domain(name)) => {
+            let name = name.strip_suffix('.').unwrap_or(name);
+            name == "localhost" || name.ends_with(".localhost")
+        }
         None => false,
     };
     if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
@@ -506,6 +509,11 @@ mod test {
         let legacy = InviteToken::new("did:ad:drive".into(), false, 10, &issuer, None).unwrap();
         assert_eq!(legacy.redemption_origin().unwrap(), None);
         assert!(server_origin("https://example.test/path").is_err());
+        assert_eq!(
+            server_origin("http://atomic.localhost:9883/").unwrap(),
+            "http://atomic.localhost:9883"
+        );
+        assert!(server_origin("http://localhost.example").is_err());
     }
 
     /// Builds a token the way `generateInviteToken` of `@tomic/lib` does:
