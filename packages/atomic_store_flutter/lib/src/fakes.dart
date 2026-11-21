@@ -255,6 +255,17 @@ class FakeServerSync implements ServerSync {
     return reached ? ResumeStatus.needsSync : ResumeStatus.offline;
   }
 
+  /// What [follow] was asked for.
+  final List<String> followed = [];
+
+  @override
+  Future<void> follow(String drive) async {
+    if (!_status.connected) {
+      throw const StoreException(StoreErrorKind.network, 'No server session.');
+    }
+    followed.add(drive);
+  }
+
   @override
   Future<bool> pushPending() async {
     pushes++;
