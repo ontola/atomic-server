@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import { before } from './test-utils';
 import {
   enableAIForTesting,
@@ -7,6 +7,24 @@ import {
   setupScriptedToolCallMocks,
   sendChatMessage,
 } from './ai-mock';
+
+// The layout can update immediately after scrollTop changes. Wait until the
+// viewport has delivered the reader's scroll before resizing the keyboard.
+async function scrollChatUp(viewport: Locator) {
+  await viewport.evaluate(async element => {
+    const scrolled = new Promise<void>(resolve =>
+      element.addEventListener('scroll', () => resolve(), { once: true }),
+    );
+    element.dispatchEvent(
+      new WheelEvent('wheel', { bubbles: true, deltaY: -100 }),
+    );
+    element.scrollTop = 100;
+    await scrolled;
+  });
+  await expect
+    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .toBe(100);
+}
 
 test('mobile AI chat fills the width and keeps its composer above the keyboard', async ({
   page,
@@ -295,14 +313,7 @@ test('keyboard resize keeps the final sentence visible without a spacer above th
     (await composer.boundingBox())!.y - finalText.y - finalText.height,
   ).toBeLessThanOrEqual(16);
   await page.screenshot({ path: 'test-results/ai-mobile-long-keyboard.png' });
-  // A reader scrolls by hand: the list only detaches after real input.
-  await viewport.evaluate(element => {
-    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
-    element.scrollTop = 100;
-  });
-  await expect
-    .poll(() => viewport.evaluate(element => element.scrollTop))
-    .toBe(100);
+  await scrollChatUp(viewport);
   await page.evaluate(() =>
     document.documentElement.style.setProperty('--keyboard-inset', '240px'),
   );
@@ -357,14 +368,7 @@ test('scrolling up right after the keyboard resize keeps the reading position', 
       return text.y + text.height - bounds.y - bounds.height;
     })
     .toBeLessThanOrEqual(0);
-  // A reader scrolls by hand: the list only detaches after real input.
-  await viewport.evaluate(element => {
-    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
-    element.scrollTop = 100;
-  });
-  await expect
-    .poll(() => viewport.evaluate(element => element.scrollTop))
-    .toBe(100);
+  await scrollChatUp(viewport);
   await page.evaluate(() =>
     document.documentElement.style.setProperty('--keyboard-inset', '240px'),
   );
