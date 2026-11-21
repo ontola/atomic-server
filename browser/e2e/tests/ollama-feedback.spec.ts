@@ -52,7 +52,6 @@ test('settings detects local Ollama and accepts it with one click', async ({
   }
 
   await page.getByText('AI', { exact: true }).click();
-  await page.getByText('Ollama', { exact: true }).click();
   await expect(
     page.getByText('Local Ollama detected', { exact: true }),
   ).toBeVisible();
@@ -80,7 +79,6 @@ test('settings detects local Ollama and accepts it with one click', async ({
   }
 
   await page.getByText('AI', { exact: true }).click();
-  await page.getByText('Ollama', { exact: true }).click();
   await expect(page.locator('#ollama-url')).toHaveValue(
     'http://localhost:11434',
   );

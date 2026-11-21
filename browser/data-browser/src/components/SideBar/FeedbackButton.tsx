@@ -87,8 +87,9 @@ export function useFeedbackDialog({
           <Column>
             <p>
               Report a bug or suggest an improvement. Your message and optional
-              email go to the Atomic team through Sentry. Please leave out
-              private workspace content.
+              email go to the Atomic team through Sentry, with technical details
+              about your setup (app version, server address and status). Please
+              leave out private workspace content.
             </p>
             <label htmlFor={messageId}>
               Feedback

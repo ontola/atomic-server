@@ -25,7 +25,8 @@ import {
 import {
   assertPrivateWebsiteParent,
   readWebsite,
-  findWebsiteSchema,
+  websiteTerms,
+  websiteTermValue,
   websiteConfigSchema,
   type WebsiteConfig,
 } from './websiteModel';
@@ -363,8 +364,8 @@ export async function readWebsiteRelease(
       return readWebsiteVersion(store, resource.subject, latest);
   }
 
-  const { schema } = await readWebsite(store, drive, resource);
-  const subject = resource.get(schema.properties!['website-release']);
+  const { terms } = await readWebsite(store, drive, resource);
+  const subject = websiteTermValue(resource, terms, 'release');
   if (typeof subject !== 'string') return undefined;
   const release = await store.getResource(subject);
 
@@ -415,14 +416,10 @@ export async function readWebsiteExport(
   release: Resource,
   project = String(release.get(core.properties.parent)),
 ): Promise<WebsiteArtifact> {
-  const schema = await findWebsiteSchema(store, drive);
-  if (
-    !schema.classes?.['website-export'] ||
-    !release.hasClasses(schema.classes['website-export'])
-  )
-    throw new Error('This resource is not a website export.');
+  const terms = await websiteTerms(store, drive, release, 'export');
+  if (!terms) throw new Error('This resource is not a website export.');
   const artifact = JSON.parse(
-    String(release.get(schema.properties!['website-artifact'])),
+    String(websiteTermValue(release, terms, 'artifact')),
   ) as WebsiteArtifact;
   if (
     artifact.version !== 1 ||

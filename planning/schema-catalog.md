@@ -319,12 +319,13 @@ conformance is claimed.
 
 - [x] Time tracker, Expenses, Deals, Job applications and Guest list bind generic columns to embedded `work/v1`, `money/v1`, `pipeline/v1` and `contact/v1` (`lib/defaults/vocabularies.json`, `browser/lib/src/shared-vocabularies.ts`), the same mechanism as `task/v1`. Row classes stay in the drive ontology.
 - [ ] Existing tables keep drive-local properties; reviewed Lens mappings only.
-- [ ] Clockify import (atomic-plugins) still allocates `timeTrackingSchema()` in the drive; move it to `workSchema`.
+- [ ] `timeTrackingSchema()` is removed from `@tomic/lib`. The Clockify app (atomic-plugins) now writes ontology-kit's `time-entry-v1` (`work-*` on the kit's base), not `workSchema`; the two are still different properties.
 - [ ] Same frozen-package caveat as the task pilot.
+- [x] Rule: a term that more than one drive or app must understand lives in a fixed namespace with the same ID everywhere (`lib/defaults`, `shared-vocabularies.ts`), never in `ensureSchema`, which gives every drive its own property ID. The integration visibility flags were the first conversion (`preferences/v1`); `ensure-schema-callers.test.ts` lists the callers that remain, and that list may only shrink. Websites were the second (`website/v1`, `websiteSchema`): new websites use the fixed terms, and an old per-drive website migrates to them on its next write (`websiteModel.ts`, remove the legacy lookup once old websites are migrated).
 
 ## Time Tracker / Clockify pilot (2026-09-07)
 
-- [x] Time Tracker and Clockify import use the same per-drive time interval, Project, Person, Billable and source-identity properties through `timeTrackingSchema()` and table schema bindings.
+- [x] Time Tracker and Clockify import use the same per-drive time interval, Project, Person, Billable and source-identity properties through table schema bindings (originally `timeTrackingSchema()`, now removed in favour of `workSchema`).
 - [x] Project/Person links use the table relation datatype, and duration remains derived from start/end instants.
 - [ ] Verify live import and reuse across independently created Time Tracker tables.
 - [ ] Replace per-drive schema allocation with frozen package dependencies; no external standard conformance or cross-drive identity is claimed.

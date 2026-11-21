@@ -11,8 +11,8 @@ use crate::{
 // ---------------------------------------------------------------------------
 // SSRF guard for outbound fetches of caller-supplied URLs.
 //
-// Only `fetch_body_untrusted` (used by the `/bookmark` and `/import` endpoints,
-// which pass a `url` parameter straight through from an unauthenticated
+// Only `fetch_body_untrusted` (used by the `/import` endpoint,
+// which passes a `url` parameter straight through from an unauthenticated
 // caller) goes through this guard. Plain `fetch_body`/`fetch_resource`/
 // `post_commit` fetch or post to URLs the system itself determined (a
 // resource's own subject, a peer/federation target, its own configured server)
@@ -31,7 +31,7 @@ use crate::{
 // the browser's own fetch sandboxing and get neither hook.
 //
 // Escape hatch: `ATOMIC_ALLOW_PRIVATE_FETCH=1` disables the guard for
-// deployments that intentionally want `/bookmark`/`/import` to reach internal
+// deployments that intentionally want `/import` to reach internal
 // hosts. Secure by default.
 #[cfg(not(target_arch = "wasm32"))]
 mod ssrf_guard {
@@ -470,7 +470,7 @@ pub async fn fetch_bytes(
 pub const UNTRUSTED_BODY_MAX_BYTES: usize = 10 * 1024 * 1024;
 
 /// Fetches a URL that was supplied by an unauthenticated, external caller
-/// (currently: the `/bookmark` and `/import` endpoints' `url` parameter).
+/// (currently: the `/import` endpoint's `url` parameter).
 /// Guards against SSRF — see the `ssrf_guard` module docs above — and refuses
 /// bodies over [`UNTRUSTED_BODY_MAX_BYTES`].
 #[tracing::instrument(skip_all)]
@@ -638,10 +638,7 @@ async fn fetch_body_with_client(
             .map_err(|e| format!("Could not parse HTTP response for {}: {}", url, e))?,
     };
     if status != 200 {
-        let message = format!(
-            "Could not fetch url '{}'. Status: {}. Body: {}",
-            url, status, body
-        );
+        let message = format!("Could not fetch url '{}'. Status: {}", url, status);
         // 404 and 410 are the server's definitive answer, unlike a 5xx or a
         // network error. Callers use the type to remember it.
         return Err(if status == 404 || status == 410 {
@@ -969,7 +966,7 @@ mod ssrf_guard_tests {
     }
 
     /// End-to-end wiring: fetching a loopback-resolving domain must be refused
-    /// via the untrusted (bookmark/import) path.
+    /// via the untrusted (import) path.
     #[tokio::test]
     async fn fetch_body_untrusted_blocks_localhost_domain() {
         let result = super::fetch_body_untrusted("http://localhost:1/", "text/html").await;

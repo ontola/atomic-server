@@ -7,6 +7,7 @@ export 'package:atomic_flutter/atomic_flutter.dart'
     show
         AppColors,
         AppColorsExt,
+        AtomicSpinner,
         HoldFan,
         HoldFanItem,
         HoldFanLayout,

@@ -6,8 +6,17 @@ import {
   validDefault,
 } from './runtimeSetting';
 
-/** The public LocalThought integration proxy. */
-const DEFAULT_PROXY = 'https://localthought.io';
+/**
+ * Atomic Place's integration proxy. It speaks the client-held connection key
+ * protocol (ontola/atomic-plugins#730) that `proxyConnections.ts` uses.
+ */
+const DEFAULT_PROXY = 'https://integrations.atomic.place';
+/**
+ * The previous default. It stays on the older protocol, which this build no
+ * longer speaks, so a stored copy of it (saved while it was the default)
+ * counts as "no setting" and moves to the new default.
+ */
+const RETIRED_DEFAULT_PROXY = 'https://localthought.io';
 const storageKey = 'integration-proxy-url';
 
 /** A bare HTTPS (or loopback HTTP) origin, or it throws. */
@@ -35,8 +44,10 @@ export const getIntegrationProxy = (): string => {
   // value that no longer validates (hand-edited, or left by an older build)
   // falls back to the default rather than throwing out of a render.
   try {
+    const stored = localStorage.getItem(storageKey);
+
     return proxyOrigin(
-      localStorage.getItem(storageKey) || defaultIntegrationProxy,
+      (stored !== RETIRED_DEFAULT_PROXY && stored) || defaultIntegrationProxy,
     );
   } catch {
     return defaultIntegrationProxy;

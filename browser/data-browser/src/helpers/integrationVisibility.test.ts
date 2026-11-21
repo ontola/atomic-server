@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   integrationVisibility,
-  integrationVisibilitySchema,
+  visibilityProperties,
   readPendingVisibility,
   readPreviewUnlocked,
   readVisibilityCache,
@@ -10,14 +10,11 @@ import {
   writeVisibilityCache,
 } from './integrationVisibility';
 
-const properties = {
-  'show-api-plugins': 'did:ad:api-preference',
-  'show-experimental-plugins': 'did:ad:experimental-preference',
-};
+const properties = visibilityProperties;
 
 describe('Atomic integration visibility preferences', () => {
-  it('defaults to hidden before schema hydration without writing defaults', () => {
-    expect(integrationVisibility({ get: () => true })).toEqual({
+  it('defaults to hidden when the drive has no value', () => {
+    expect(integrationVisibility({ get: () => undefined })).toEqual({
       showApiPlugins: false,
       showExperimentalPlugins: false,
     });
@@ -26,7 +23,7 @@ describe('Atomic integration visibility preferences', () => {
   it.each([undefined, false, 'true', 1, null])(
     'does not opt in for %s',
     value => {
-      expect(integrationVisibility({ get: () => value }, properties)).toEqual({
+      expect(integrationVisibility({ get: () => value })).toEqual({
         showApiPlugins: false,
         showExperimentalPlugins: false,
       });
@@ -43,24 +40,10 @@ describe('Atomic integration visibility preferences', () => {
       [properties['show-api-plugins']]: api,
       [properties['show-experimental-plugins']]: experimental,
     };
-    expect(
-      integrationVisibility({ get: key => values[key] }, properties),
-    ).toEqual({
+    expect(integrationVisibility({ get: key => values[key] })).toEqual({
       showApiPlugins: api,
       showExperimentalPlugins: experimental,
     });
-  });
-
-  it('defines both preferences as Atomic boolean properties', () => {
-    expect(
-      integrationVisibilitySchema().properties.map(p => [
-        p.shortname,
-        p.datatype,
-      ]),
-    ).toEqual([
-      ['show-api-plugins', 'https://atomicdata.dev/datatypes/boolean'],
-      ['show-experimental-plugins', 'https://atomicdata.dev/datatypes/boolean'],
-    ]);
   });
 });
 

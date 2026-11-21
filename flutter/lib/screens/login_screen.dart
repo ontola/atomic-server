@@ -513,7 +513,7 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (_step) {
       case _Step.loading:
         return const Center(
-            key: ValueKey('loading'), child: CircularProgressIndicator());
+            key: ValueKey('loading'), child: shared.AtomicSpinner());
       case _Step.welcome:
         return _buildWelcome(c);
       case _Step.signInOptions:
@@ -579,7 +579,7 @@ class _LoginScreenState extends State<LoginScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const CircularProgressIndicator(),
+        const shared.AtomicSpinner(),
         const SizedBox(height: 24),
         const Text('Setting up your workspace\u2026',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
@@ -727,7 +727,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2))
+                            child: shared.AtomicSpinner())
                         : const Text('Sign In'),
                   ),
                 ),

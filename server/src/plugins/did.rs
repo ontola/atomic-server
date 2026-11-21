@@ -56,7 +56,18 @@ fn handle_identifier_request<'a>(
             .map(|(_, v)| v.to_string())
             .ok_or("No subject query parameter")?;
 
-        let identifier_subject = atomic_lib::Subject::from_raw(&identifier, None);
+        // Only identifiers and this server's own subjects. An external URL
+        // here would make the server fetch it on the caller's behalf.
+        let identifier_subject =
+            atomic_lib::Subject::from_raw(&identifier, store.get_base_domain().as_deref());
+        if !atomic_lib::identifiers::is_atomic_identifier(&identifier)
+            && !identifier_subject.is_internal()
+        {
+            return Err(atomic_lib::errors::AtomicError::other_error(
+                "Only `atomic:`, `did:ad:` and local subjects can be resolved here, not external URLs."
+                    .to_string(),
+            ));
+        }
         store
             .fetch_resource_with_did_fallback(
                 &identifier_subject,

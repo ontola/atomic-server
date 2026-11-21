@@ -101,7 +101,7 @@ Keep these in step. A change to one is usually a change to its twin.
 
 | Concern | Browser | Flutter |
 | --- | --- | --- |
-| sync screen | `data-browser/src/routes/SyncRoute.tsx` | `packages/atomic_flutter/lib/src/server_settings_section.dart` |
+| sync screen | `data-browser/src/components/Settings/SyncSettings.tsx` | `packages/atomic_flutter/lib/src/server_settings_section.dart` |
 | settings shell | (same route) | `packages/atomic_flutter/lib/src/user_panel.dart` |
 | onboarding, data elsewhere | `data-browser/src/views/getting-started/ConnectDeviceStep.tsx` | `flutter/lib/screens/login_screen.dart` |
 | pairing code, show / scan | `components/PairingCode.tsx`, `ConnectToDeviceForm.tsx` (`ScanCodeButton`), shown by `ConnectDevice.tsx` | `flutter/lib/screens/pair_screen.dart` |
@@ -118,7 +118,7 @@ and welcome branches live in
 account does not change.
 | push a workspace up | `browser/lib/src/store.ts` (`promoteLocalDrive`) | `AtomicClient.syncDriveToServer` |
 
-**Which servers the browser's Devices list shows.** `SyncRoute` renders every
+**Which servers the browser's Devices list shows.** `SyncSettings` renders every
 origin in `serverURLStorage`'s known-servers list. Origins get in through
 `setServer` (switching, Cloud Sync enrollment) and through `AppSettings`
 registering the origin the app itself was served from — but only after
@@ -187,7 +187,7 @@ only after that copy succeeds. Local-only drives connect to the assigned node
 before promotion. Enrollment alone is not a successful transfer: pending or
 empty placements must not override the source on the next app launch.
 
-The account portal hands setup to `/app/sync?drive=…`, preserving the selected
+The account portal hands setup to `/app/settings?section=sync&drive=…` (`/app/sync` redirects there), preserving the selected
 drive. It shows hosting beside each drive and keeps unfinished setup actionable.
 The confirmation explains that hosting is a readable copy, distinct from Vault.
 Flutter has no equivalent managed-hosting setup action; its generic device
@@ -252,7 +252,7 @@ no account sign-in yet.
 `packages/atomic_flutter` now owns the Canvas settings and Devices widgets.
 Canvas delegates storage and transport through `flutter/lib/atomic/settings_backend.dart`.
 Atomic Audio can provide its own adapter without copying the dialog. The browser
-SyncRoute remains the visual/wording twin; this extraction changes no browser
+SyncSettings remains the visual/wording twin; this extraction changes no browser
 behavior. Pairing and authentication screens remain host-owned for now.
 
 ## Sync page layout (2026-10-08)
@@ -311,7 +311,7 @@ Developer.
   mobile Tauri. `focusConnectDevice()` is the one way other screens lead here.
 - **Sync problem banner** (`components/SyncProblemBanner.tsx`, wording in
   `helpers/syncProblem.ts`). The sidebar's warning icon links to it
-  (`/app/sync#sync-problem`). It separates *ours* (unexpected errors, commits
+  (`/app/settings?section=sync#sync-problem`). It separates *ours* (unexpected errors, commits
   that keep failing: "a problem on our side", Try again, reported to Sentry
   once) from *yours* (the server does not hold the workspace: Connect a device
   or turn off server sync; no write access; plan full: storage) and plain

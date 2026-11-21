@@ -223,6 +223,56 @@ async fn subscription_without_read_right_is_refused_out_loud() {
     assert_quiet(&mut rx_owner).await;
 }
 
+/// `SUBSCRIBE_INDEX_STATUS` is a read of the drive's indexing state, so it
+/// follows the same gate as `SUB`. Without read rights, and for a drive this
+/// server does not hold, the answer is "not indexing" with no error (the app
+/// asks for every drive it shows); the owner and an anonymous session on a
+/// public drive get the real state.
+#[tokio::test]
+async fn index_status_subscription_is_gated_by_check_read() {
+    let port = start_server("ws_gate_index_status");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+    let (drive, _secret) = private_drive_with_child(&client, &alice).await;
+    let public_drive = client.new_public_drive(&alice, "Public").await.unwrap();
+    let mallory = client.new_agent("Mallory").await.unwrap();
+    let subscribe = |drive: &str| format!(r#"SUBSCRIBE_INDEX_STATUS {{"drive":"{drive}"}}"#);
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    ws.authenticate(&mallory).await.unwrap();
+    let mut rx = ws.subscribe();
+    ws.send_raw(&subscribe(&drive)).await.unwrap();
+    let reply = next_text(&mut rx).await;
+    assert_eq!(
+        reply,
+        format!(r#"INDEX_STATUS {{"drive":"{drive}","indexing":false}}"#)
+    );
+    let absent = "did:ad:not-on-this-server";
+    ws.send_raw(&subscribe(absent)).await.unwrap();
+    let reply = next_text(&mut rx).await;
+    assert_eq!(
+        reply,
+        format!(r#"INDEX_STATUS {{"drive":"{absent}","indexing":false}}"#)
+    );
+
+    let ws_owner = WsClient::connect(&ws_url).await.unwrap();
+    ws_owner.authenticate(&alice).await.unwrap();
+    let mut rx_owner = ws_owner.subscribe();
+    ws_owner.send_raw(&subscribe(&drive)).await.unwrap();
+    let reply = next_text(&mut rx_owner).await;
+    assert!(reply.starts_with("INDEX_STATUS "), "{reply}");
+
+    let ws_anon = WsClient::connect(&ws_url).await.unwrap();
+    let mut rx_anon = ws_anon.subscribe();
+    ws_anon.send_raw(&subscribe(&public_drive)).await.unwrap();
+    let reply = next_text(&mut rx_anon).await;
+    assert!(reply.starts_with("INDEX_STATUS "), "{reply}");
+}
+
 /// A SYNC_PUSH into a drive the agent may not write is answered with
 /// `SYNC_REJECTED` — and, the point of the change, *not* with `SYNC_OK`.
 #[tokio::test]

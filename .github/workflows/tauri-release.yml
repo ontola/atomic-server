@@ -143,7 +143,12 @@ jobs:
             # Ubuntu silently drops support for every older distro. 22.04 is the
             # oldest image GitHub still provides with webkit2gtk 4.1.
             os: ubuntu-22.04
-            args: ""
+            # No .rpm. tauri's rpm bundler rejects a version with a `-` in it
+            # (`0.41.0-beta.8`: "contains invalid character") and bundling died
+            # after the .deb, so the whole Linux job failed on beta.8. Betas are
+            # a normal part of this project's release flow. Revisit for stable
+            # tags, where rpm would bundle fine.
+            args: "--bundles deb,appimage"
             rust-targets: "wasm32-unknown-unknown"
           - name: Windows (x86_64)
             os: windows-latest
@@ -159,6 +164,12 @@ jobs:
             args: "--bundles nsis"
             rust-targets: "wasm32-unknown-unknown"
     runs-on: ${{ matrix.os }}
+    env:
+      # pnpm runs package scripts through the platform shell, which on Windows
+      # is cmd.exe. data-browser's `build` script uses `if [ ... ]` and died
+      # there ("$SKIP_WASM_BUILD" was unexpected at this time) on beta.8.
+      # Git for Windows ships bash on the runner's PATH.
+      npm_config_script_shell: bash
     steps:
       - uses: actions/checkout@v4
         with:

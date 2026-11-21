@@ -2,7 +2,7 @@ import { styled } from 'styled-components';
 import { Details, type DetailsPropsBase } from '../Details';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useSettingsSearch, SettingsSearchProvider } from './SettingsSearch';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 /** Container for a group of settings sections. Adds top border and resets Details toggle styling. */
 export const SettingsGroup = styled.div`
@@ -41,23 +41,12 @@ export const SettingsLabel = styled.span`
   color: ${p => p.theme.colors.text};
 `;
 
-/** Indentation and a guide keep expanded children visibly inside their section. */
+/** Indentation keeps expanded children visibly inside their section. */
 export const SettingsContent = styled.div`
-  /* Summary padding + half the toggle, minus half the rule. */
-  margin: 0.5rem 0 0.75rem calc(1.1rem - 1px);
+  /* Aligns children with the section label, past the toggle. */
+  margin: 0.5rem 0 0.75rem 1.1rem;
   padding: 0.25rem 0 0.25rem 1rem;
-  border-inline-start: 2px solid ${p => p.theme.colors.bg2};
   min-width: 0;
-
-  ${SettingsSectionWrapper} {
-    border-bottom: 0;
-    padding-block: 0.25rem;
-  }
-
-  ${SettingsLabel} {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
 
   @media (max-width: 600px) {
     padding-inline-start: 0.65rem;
@@ -67,6 +56,8 @@ export const SettingsContent = styled.div`
 interface SettingsSectionProps extends DetailsPropsBase {
   /** Label shown as the collapsible title */
   label: string;
+  /** Target for the page's `?section=`: this section opens and scrolls into view. */
+  id?: string;
   /** Keywords from child sections (matching these shows this section, but children still filter themselves) */
   childSearchKeywords?: string;
 }
@@ -83,7 +74,7 @@ export function queryMatches(query: string, haystack: string): boolean {
 
 /** Extracts text content from React children without rendering them to DOM.
  *  Walks the React element tree and collects string content. */
-function extractTextFromChildren(node: ReactNode): string {
+export function extractTextFromChildren(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === 'boolean') {
     return '';
   }
@@ -94,10 +85,20 @@ function extractTextFromChildren(node: ReactNode): string {
     return node.map(extractTextFromChildren).join(' ');
   }
 
-  if (typeof node === 'object' && 'props' in node) {
-    const props = (node as { props: { children?: ReactNode } }).props;
+  // A nested section indexes and filters itself.
+  if (
+    typeof node === 'object' &&
+    'type' in node &&
+    node.type === SettingsSection
+  ) {
+    return '';
+  }
 
-    return extractTextFromChildren(props.children);
+  if (typeof node === 'object' && 'props' in node) {
+    const props = (node as { props: { children?: ReactNode; hint?: string } })
+      .props;
+
+    return `${extractTextFromChildren(props.children)} ${props.hint ?? ''}`;
   }
 
   return '';
@@ -108,12 +109,26 @@ function extractTextFromChildren(node: ReactNode): string {
  *  Automatically indexes the text content of children for search. */
 export function SettingsSection({
   label,
+  id,
   childSearchKeywords,
   children,
   ...detailsProps
 }: PropsWithChildren<SettingsSectionProps>) {
-  const { query, parentMatched } = useSettingsSearch();
+  const searchContext = useSettingsSearch();
+  const {
+    query,
+    parentMatched,
+    depth = 0,
+    openSection,
+    setOpenSection,
+  } = searchContext;
   const isSearching = query.length > 0;
+  const targeted = !!id && searchContext.section === id;
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (targeted) ref.current?.scrollIntoView?.({ block: 'start' });
+  }, [targeted]);
 
   // Build search haystack from label + children text content
   const childText = useMemo(
@@ -132,11 +147,17 @@ export function SettingsSection({
     !!childSearchKeywords &&
     queryMatches(query, childSearchKeywords.toLowerCase());
 
-  // Only set parentMatched for children when this section's OWN content matched
-  // (or it was already set by an ancestor). Don't set it for childMatch — let children filter.
+  // Only a match on the section's own label (or an ancestor's) shows all of
+  // its settings. A match on content shows the section, and its settings
+  // rows (SettingCheckbox, SettingField) then filter themselves.
+  const labelMatch = isSearching && queryMatches(query, label.toLowerCase());
   const childContext = useMemo(
-    () => ({ query, parentMatched: parentMatched || ownMatch }),
-    [query, parentMatched, ownMatch],
+    () => ({
+      ...searchContext,
+      parentMatched: parentMatched || labelMatch,
+      depth: depth + 1,
+    }),
+    [searchContext, parentMatched, labelMatch, depth],
   );
 
   // If searching and nothing matches (own, child, or inherited parent), hide.
@@ -144,21 +165,72 @@ export function SettingsSection({
     return null;
   }
 
+  const content = (
+    <SettingsSearchProvider value={childContext}>
+      {children}
+    </SettingsSearchProvider>
+  );
+
+  // Only top-level sections fold; inside one, a section is a plain subheading.
+  if (depth > 0) {
+    return (
+      <SubSection ref={ref} id={id}>
+        <SettingsLabel as='h3'>{label}</SettingsLabel>
+        {content}
+      </SubSection>
+    );
+  }
+
   return (
-    <SettingsSectionWrapper>
+    <SettingsSectionWrapper ref={ref} id={id}>
       <Details
         noIndent
         title={<SettingsLabel>{label}</SettingsLabel>}
-        open={isSearching}
-        initialState={isSearching}
+        {...(setOpenSection
+          ? {
+              // One open at a time; a search opens every match.
+              open: isSearching || openSection === (id ?? label),
+              initialState: isSearching || openSection === (id ?? label),
+              onStateToggle: (state: boolean) =>
+                setOpenSection(state ? (id ?? label) : undefined),
+            }
+          : {
+              open: isSearching || targeted,
+              initialState: isSearching || targeted,
+            })}
         {...detailsProps}
       >
-        <SettingsContent>
-          <SettingsSearchProvider value={childContext}>
-            {children}
-          </SettingsSearchProvider>
-        </SettingsContent>
+        <SettingsContent>{content}</SettingsContent>
       </Details>
     </SettingsSectionWrapper>
   );
+}
+
+/** A subsection inside an open section: a small heading above its settings. */
+const SubSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+
+  & + & {
+    border-top: 1px solid ${p => p.theme.colors.bg2};
+  }
+
+  > ${SettingsLabel} {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
+
+/** Whether a settings row with this text shows: always, unless a search is
+ *  running that neither it nor an enclosing section's label matches. */
+export function useSettingVisible(text: string): boolean {
+  const { query, parentMatched } = useSettingsSearch();
+
+  return !query || parentMatched || queryMatches(query, text.toLowerCase());
 }

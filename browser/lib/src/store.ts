@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -12,6 +13,7 @@ import { taskSchema } from './task-schema.js';
 import {
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
+  sharedVocabularyClasses,
 } from './shared-vocabularies.js';
 import {
   mergeHistoryAttributions,
@@ -77,6 +79,7 @@ import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
+import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
@@ -592,6 +595,7 @@ const embeddedVocabulary = new Set<string>([
   ...Object.values(taskSchema.properties),
   ...Object.values(taskSchema.tags),
   ...sharedVocabularyProperties,
+  ...sharedVocabularyClasses,
   // These classes ship in lib/defaults/plugins.json on every host. Their
   // public atomicdata.dev URLs are not published on the catalog yet.
   server.classes.plugin,
@@ -717,7 +721,7 @@ export class Store {
   private presenceManagers: Map<string, DrivePresenceManager> = new Map();
   private localPresenceListeners = new Set<LocalPresenceListener>();
   /** This tab's presence session, shared by every channel it announces in. */
-  public readonly presenceSessionId: string = crypto.randomUUID();
+  public readonly presenceSessionId: string = randomUUID();
   private injectedFetch: Fetch;
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
@@ -3259,7 +3263,9 @@ export class Store {
       // A snapshot export commits pending ops, untagged; keep a mid-edit
       // persist from stripping the edit's history token.
       resource.sealPendingEdits();
-      const snapshot = doc?.export({ mode: 'snapshot' });
+      const snapshot = doc
+        ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
+        : undefined;
 
       // Skipped when this exact state is already written there: a table
       // built from a template used to do 64 writes for 15 resources.
@@ -6120,6 +6126,17 @@ export class Store {
     }
 
     this.emitSyncStatus();
+
+    // A node that does not host this drive refuses all of it. Ask the app
+    // whether it is an unhosted drive it can keep browser-only, the same as
+    // for a refused outbox write. Moving it local clears the error again
+    // (`makeDriveLocal`), so the Sync page stops showing the refusal.
+    if (isNotEnrolledMessage(message) && this.refusedDriveHandler) {
+      void this.healRefusedDrive(
+        this.refusedDriveOf(message) ?? drive,
+        message,
+      ).catch(e => console.warn('[Store] refused drive handler failed:', e));
+    }
   }
 
   /** How long a read waits for the local database before asking the

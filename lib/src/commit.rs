@@ -1158,6 +1158,7 @@ impl Commit {
         }
 
         if opts.validate_rights {
+            let parent_changed = applied.changed_props.iter().any(|p| p == urls::PARENT);
             let signer_str = commit.signer.to_string();
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
             // A repeat genesis of a Property ID needs append rights on the
@@ -1258,6 +1259,22 @@ impl Commit {
                         )?;
                     }
                     Err(e) => return Err(e),
+                }
+
+                // Moving needs the same right as creating there: `append` on
+                // the new parent. The write check above only covers the
+                // resource itself, so without this a signer could create in
+                // their own drive and then move into any other drive.
+                // (A chat log member holding only `append` never gets here
+                // with a parent change: `check_chat_log_member_commit`
+                // refuses every property but the server-managed ones.)
+                if parent_changed && !commit.destroy.unwrap_or(false) {
+                    crate::hierarchy::check_append(
+                        store,
+                        &applied.resource_new,
+                        &validate_for.into(),
+                    )
+                    .await?;
                 }
             }
 
@@ -1365,6 +1382,9 @@ impl Commit {
         // Check if all required props are there
         if opts.validate_schema {
             applied.resource_new.check_required_props(store).await?;
+            // `envelopes` only exists with the `db` feature (clients such as
+            // atomic-cli build without it and never store envelopes).
+            #[cfg(feature = "db")]
             if applied.changed_props.contains(urls::RETENTION) {
                 crate::envelopes::check_retention_value(&applied.resource_new)?;
             }

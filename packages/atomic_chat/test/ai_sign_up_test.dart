@@ -62,7 +62,7 @@ void main() {
     await tester.pumpWidget(app(ChatScreen(api: api)));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create an atomic.place account'), findsOneWidget);
+    expect(find.text('Sign in or create an account'), findsOneWidget);
     await tester.tap(find.byKey(const Key('sign-up-open')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -71,6 +71,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(api.sent, ['me@example.com']);
+    // Asked in a dialog, not a field under the notice.
+    expect(find.byKey(const Key('sign-up-dialog')), findsOneWidget);
     expect(find.textContaining('Check your email and open the link.'),
         findsOneWidget);
     expect(find.textContaining('Your drives and documents stay as they are.'),
@@ -87,6 +89,7 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('sign-up-sent')), findsNothing);
+    expect(find.byKey(const Key('sign-up-dialog')), findsNothing);
     expect(find.text('AI chat needs an atomic.place account'), findsNothing);
     expect(find.text('Message'), findsOneWidget);
   });
@@ -109,7 +112,7 @@ void main() {
     expect(find.text('Message'), findsOneWidget);
   });
 
-  testWidgets('a refusal shows inline and the email stays editable',
+  testWidgets('a refusal shows in the dialog and the email stays editable',
       (tester) async {
     final api = _SignUpApi()..failWith = StateError('Enter a valid email.');
     await tester.pumpWidget(app(ChatScreen(api: api)));

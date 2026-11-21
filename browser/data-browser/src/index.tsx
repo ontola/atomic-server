@@ -1,3 +1,5 @@
+// First, so `crypto.randomUUID` exists before any other module uses it.
+import './helpers/cryptoPolyfill';
 // First, so the catalog download starts before the rest of the app evaluates.
 import './helpers/preloadLocale';
 import { reactErrorHandler } from '@sentry/react';

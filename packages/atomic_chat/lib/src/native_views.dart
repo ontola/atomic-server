@@ -15,14 +15,15 @@ const aiChatClass =
     'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat';
 const conversationClass = 'https://atomicdata.dev/classes/Conversation';
 const chatRoomClass = 'https://atomicdata.dev/classes/ChatRoom';
+const meetingClass = 'https://atomicdata.dev/classes/Meeting';
 
 /// Resource classes that have a native view, by the class's subject URL
 /// (what recents, activity, search and drive rows carry as `classUrl`),
 /// matched exactly. Everything else is drawn by the web page in a
 /// [ResourceView]. A native view is one more entry here: a host adds its own
 /// (or replaces or removes a default) with [registerNativeView] before the
-/// views open. The package registers AI chats, conversations and chat rooms
-/// (a meeting's chat is a chat room's).
+/// views open. The package registers AI chats, conversations, chat rooms and
+/// meetings (a meeting is its chat, with the call above it).
 final Map<String, NativeViewBuilder> nativeViews = {
   aiChatClass: (api, drive, subject, title) =>
       ChatScreen(api: api, drive: drive, subject: subject, title: title),
@@ -30,6 +31,8 @@ final Map<String, NativeViewBuilder> nativeViews = {
       api: api, drive: drive, subject: subject, title: title),
   chatRoomClass: (api, drive, subject, title) =>
       ChatRoomScreen(api: api, drive: drive, subject: subject, title: title),
+  meetingClass: (api, drive, subject, title) => ChatRoomScreen(
+      api: api, drive: drive, subject: subject, title: title, meeting: true),
 };
 
 /// Whether resources of the class [classUrl] have a native view.

@@ -14,12 +14,12 @@ homepage = "https://atomicserver.eu/"
 # has all these files regardless. It only shows up as a compile error inside
 # `cargo publish`'s verification build, i.e. mid-release. `wit/` was missing here
 # until v0.41.0-beta.2 and cost a tag to find.
-include = ["src/**/*", "Cargo.toml", "assets_tmp", "build.rs", "build_assets.rs", "wit/**/*"]
+include = ["src/**/*", "Cargo.toml", "assets_tmp", "build.rs", "build_assets.rs", "build_plugin_runtime.rs", "wit/**/*"]
 license = "MIT"
 name = "atomic-server"
 readme = "./README.md"
 repository = "https://github.com/atomicdata-dev/atomic-server"
-version = "0.41.0-beta.8"
+version = "0.41.0-beta.9"
 
 [[bin]]
 name = "atomic-server"
@@ -88,10 +88,7 @@ wasmtime = { version = "47.0.4", optional = true, features = [
 wasmtime-wasi = { version = "47.0.4", optional = true, features = ["p2"] }
 ulid = "1.2.1"
 url = "2.5.8"
-html2md = "0.2.15"
-kuchikiki = "0.8.2"
 indexmap = { version = "2.14.0", features = ["std"] }
-lol_html = "2.9"
 zip = { version = "8.6.0", optional = true }
 reqwest = { version = "0.13.3", default-features = false, features = [
   "rustls",
@@ -179,7 +176,7 @@ version = "4.13.0"
 # present, so it adds no runtime cost for fresh installs.
 features = ["config", "db-redb", "db-sled", "rdf", "discovery", "iroh", "ring", "ws"]
 path = "../lib"
-version = "0.41.0-beta.8"
+version = "0.41.0-beta.9"
 
 [dependencies.clap]
 features = ["derive", "env", "cargo"]

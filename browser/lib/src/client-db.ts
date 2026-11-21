@@ -25,6 +25,7 @@
  * ```
  */
 
+import { randomUUID } from './uuid.js';
 import {
   publishIndexMigration,
   type IndexMigrationProgress,
@@ -45,6 +46,8 @@ import type {
   RpcReq,
   RpcRes,
   RpcType,
+  VaultBlobPlan,
+  VaultBlobRestoreResult,
   VaultExportResult,
   VaultImportSummary,
   WorkerRequest,
@@ -362,9 +365,7 @@ export class ClientDbWorker {
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
   private role: Role = 'initializing';
-  private tabId = (crypto as Crypto & { randomUUID?: () => string }).randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  private tabId = randomUUID();
   private nextId = 1;
   private pending = new Map<string, PendingRequest>();
   private observedLeader: string | undefined;
@@ -1288,6 +1289,63 @@ export class ClientDbWorker {
       drivePseudonym,
       devicePubkey,
       segment,
+    });
+  }
+
+  /** Hashes of the files this drive's File resources reference. */
+  vaultFileHashes(driveSubject: string): Promise<string[]> {
+    return this.call('vaultFileHashes', { driveSubject });
+  }
+
+  /** Whether this device holds the bytes for a file hash. */
+  vaultBlobPresent(hash: string): Promise<boolean> {
+    return this.call('vaultBlobPresent', { hash });
+  }
+
+  /**
+   * Load one local file, verified against its hash, derive its id in this
+   * vault and get its chunk layout. The worker keeps that one file until
+   * `vaultBlobClose` or the next open.
+   */
+  vaultBlobOpen(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+  ): Promise<VaultBlobPlan> {
+    return this.call('vaultBlobOpen', { hash, key, keyEpoch });
+  }
+
+  /** One chunk of the file opened with {@link vaultBlobOpen}, sealed. */
+  vaultBlobChunk(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    index: number,
+  ): Promise<Uint8Array> {
+    return this.call('vaultBlobChunk', { hash, key, keyEpoch, index });
+  }
+
+  vaultBlobClose(): Promise<void> {
+    return this.call('vaultBlobClose');
+  }
+
+  /**
+   * Open one stored file from its sealed chunks and store it if one of the
+   * `wanted` hashes (plain BLAKE3) names it.
+   */
+  vaultBlobRestore(
+    key: Uint8Array,
+    keyEpoch: number,
+    blobId: string,
+    chunks: Uint8Array[],
+    wanted: string[],
+  ): Promise<VaultBlobRestoreResult> {
+    return this.call('vaultBlobRestore', {
+      key,
+      keyEpoch,
+      blobId,
+      chunks,
+      wanted,
     });
   }
 

@@ -67,7 +67,7 @@ QR envelope simply bundles their answers:
   `{privateKey, subject: did:ad:agent:…}`; the browser imports it via
   `Agent.fromSecret` (`browser/lib/src/agent.ts`, `agentStorage.ts`) and the
   server mints one on first boot.
-- Every node has a `did:ad:node:…` (Iroh NodeID). `SyncRoute.tsx` shows the
+- Every node has a `did:ad:node:…` (Iroh NodeID). `SyncSettings.tsx` shows the
   local one (`/iroh-node-id`) with a copy button, accepts a pasted peer DID,
   and triggers `/iroh-sync`. `KnownPeer{nodeId, label, lastSync}` lives in
   localStorage.
@@ -286,7 +286,7 @@ for it.
       the whole config file (secret included) via `tracing::warn!` on
       first boot; now logs only the config path + a pointer to the
       pairing/sign-in flow.
-- [x] `SyncRoute`: show local node DID as QR (`pair` kind). **Built
+- [x] `SyncSettings`: show local node DID as QR (`pair` kind). **Built
       2026-07-09** as a "Pair device" dialog (`PairDeviceDialog.tsx`,
       QR renderer: `uqr`, zero-dep SVG).
 

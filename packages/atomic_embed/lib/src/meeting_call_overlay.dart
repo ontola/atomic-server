@@ -41,8 +41,12 @@ class _CallView extends StatelessWidget {
     final pad = MediaQuery.paddingOf(context);
     final Rect rect;
     final full = call.expanded;
+    final dock = call.dock;
     if (full) {
       rect = Offset.zero & room;
+    } else if (dock != null) {
+      // Above the meeting's chat, on its own screen.
+      rect = dock;
     } else {
       final size = tileSize(room);
       // By default under the top bar, on the right.
@@ -63,10 +67,10 @@ class _CallView extends StatelessWidget {
       rect: rect,
       child: Material(
         key: const ValueKey('meeting-call'),
-        elevation: full ? 0 : 8,
+        elevation: full || dock != null ? 0 : 8,
         color: c.surface,
         shadowColor: c.shadow,
-        borderRadius: BorderRadius.circular(full ? 0 : 12),
+        borderRadius: BorderRadius.circular(full || dock != null ? 0 : 12),
         clipBehavior: Clip.antiAlias,
         child: Stack(fit: StackFit.expand, children: [
           // Full screen, the page stays clear of the status bar and the
@@ -77,7 +81,7 @@ class _CallView extends StatelessWidget {
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
                 : page.build(),
           ),
-          if (!call.expanded)
+          if (!call.expanded && dock == null)
             // The tile is not for touching the page: a tap expands it and a
             // drag moves it.
             Positioned.fill(
@@ -98,6 +102,13 @@ class _CallView extends StatelessWidget {
                   tooltip: 'Minimize call',
                   icon: Icons.close_fullscreen,
                   onPressed: call.collapse,
+                )
+              else if (dock != null)
+                _RoundButton(
+                  key: const ValueKey('meeting-call-expand'),
+                  tooltip: 'Full screen',
+                  icon: Icons.open_in_full,
+                  onPressed: call.expand,
                 ),
               _RoundButton(
                 key: const ValueKey('meeting-call-leave'),

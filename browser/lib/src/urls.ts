@@ -8,7 +8,6 @@ export const classes = {
   commit: 'https://atomicdata.dev/classes/Commit',
   class: 'https://atomicdata.dev/classes/Class',
   document: 'https://atomicdata.dev/classes/Document',
-  bookmark: 'https://atomicdata.dev/class/Bookmark',
   elements: {
     paragraph: 'https://atomicdata.dev/classes/elements/Paragraph',
   },
@@ -136,11 +135,6 @@ export const properties = {
     messages: 'https://atomicdata.dev/properties/messages',
     nextPage: 'https://atomicdata.dev/properties/nextPage',
     replyTo: 'https://atomicdata.dev/properties/replyTo',
-  },
-  bookmark: {
-    url: 'https://atomicdata.dev/property/url',
-    preview: 'https://atomicdata.dev/property/preview',
-    imageUrl: 'https://atomicdata.dev/properties/imageUrl',
   },
   constraints: {
     max: 'https://atomicdata.dev/properties/max',

@@ -1212,19 +1212,19 @@ fn ontology_from_node(root: &Node, options: &ImportOptions) -> AtomicResult<Onto
 // Checking a plan
 // ---------------------------------------------------------------------------
 
-struct CheckedClass {
-    shortname: String,
+pub(super) struct CheckedClass {
+    pub(super) shortname: String,
     name: String,
     description: String,
-    requires: Vec<String>,
-    recommends: Vec<String>,
+    pub(super) requires: Vec<String>,
+    pub(super) recommends: Vec<String>,
     /// `None`: leave the class's constraints alone.
-    constraints: Option<BTreeMap<String, Map<String, Json>>>,
+    pub(super) constraints: Option<BTreeMap<String, Map<String, Json>>>,
 }
 
 pub(super) struct CheckedPlan {
     pub(super) properties: Vec<PropertyPlan>,
-    classes: Vec<CheckedClass>,
+    pub(super) classes: Vec<CheckedClass>,
 }
 
 fn unique(names: &[String]) -> Vec<String> {
@@ -1995,6 +1995,42 @@ pub async fn ensure_ontology_with(
     for property in &checked.properties {
         let id = property_id(&ontology, &property.shortname, &property.datatype)?;
         if store.get_resource(&id.as_str().into()).await.is_err() {
+            // A property's subject follows from its datatype, so a changed
+            // datatype is a second property with the same shortname. Only one
+            // resource under the ontology may hold the localId, and it names
+            // the current property: the old one gets a unique localId, keeps
+            // its subject and stays listed. Listed subjects are fetched with
+            // `get_resource`, as `store` may not be able to query.
+            let local_id = format!("schema:property:{}", property.shortname);
+            for listed in subjects_of(&ontology_resource, urls::PROPERTIES) {
+                if canonicalize_scheme(&listed) == canonicalize_scheme(&id) {
+                    continue;
+                }
+                let Ok(old) = store.get_resource(&listed.as_str().into()).await else {
+                    continue;
+                };
+                let same_shortname = old
+                    .get(urls::SHORTNAME)
+                    .map(|v| v.to_string() == property.shortname)
+                    .unwrap_or(false);
+                let holds_local_id = old
+                    .get(urls::LOCAL_ID)
+                    .map(|v| v.to_string() == local_id)
+                    .unwrap_or(false);
+                if same_shortname && holds_local_id {
+                    edit(
+                        store,
+                        agent,
+                        target,
+                        &listed,
+                        vec![(
+                            urls::LOCAL_ID,
+                            Value::String(format!("{local_id}:superseded:{listed}")),
+                        )],
+                    )
+                    .await?;
+                }
+            }
             let mut builder = CommitBuilder::new(id.as_str().into());
             builder.is_genesis = true;
             let mut set = vec![
@@ -2017,10 +2053,7 @@ pub async fn ensure_ontology_with(
                     urls::DESCRIPTION,
                     Value::Markdown(property.description.clone().unwrap_or_default()),
                 ),
-                (
-                    urls::LOCAL_ID,
-                    Value::String(format!("schema:property:{}", property.shortname)),
-                ),
+                (urls::LOCAL_ID, Value::String(local_id)),
             ];
             if let Some(classtype) = &property.classtype {
                 set.push((
@@ -2612,6 +2645,77 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert!(constraints.is_empty());
+        }
+
+        #[tokio::test]
+        async fn a_changed_datatype_makes_a_new_property_and_supersedes_the_old() {
+            let (store, parent, agent) = setup().await;
+            let prop = |datatype: &str| PropertyPlan {
+                shortname: "age".into(),
+                datatype: datatype.into(),
+                ..Default::default()
+            };
+            let plan = |datatype: &str| OntologyPlan {
+                shortname: "people".into(),
+                classes: vec![ClassPlan {
+                    shortname: "person".into(),
+                    properties: vec![prop(datatype)],
+                    requires: vec!["age".into()],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+
+            let first = ensure_ontology(&store, &parent, &plan(urls::INTEGER), &agent)
+                .await
+                .unwrap();
+            let second = ensure_ontology(&store, &parent, &plan(urls::STRING), &agent)
+                .await
+                .unwrap();
+            let old = first.properties["age"].clone();
+            let new = second.properties["age"].clone();
+            assert_ne!(old, new);
+            assert_eq!(second.ontology, first.ontology);
+
+            let local_id =
+                |resource: &crate::Resource| resource.get(urls::LOCAL_ID).unwrap().to_string();
+            let old_resource = store.get_resource(&old.as_str().into()).await.unwrap();
+            let new_resource = store.get_resource(&new.as_str().into()).await.unwrap();
+            assert_eq!(local_id(&new_resource), "schema:property:age");
+            assert_eq!(
+                local_id(&old_resource),
+                format!("schema:property:age:superseded:{old}")
+            );
+
+            let person = store
+                .get_resource(&second.classes["person"].as_str().into())
+                .await
+                .unwrap();
+            assert_eq!(
+                subjects_of(&person, urls::REQUIRES)
+                    .iter()
+                    .map(|s| canonicalize_scheme(s))
+                    .collect::<Vec<_>>(),
+                [canonicalize_scheme(&new)]
+            );
+
+            // The old property stays listed.
+            let ontology = store
+                .get_resource(&second.ontology.as_str().into())
+                .await
+                .unwrap();
+            let listed: Vec<String> = subjects_of(&ontology, urls::PROPERTIES)
+                .iter()
+                .map(|s| canonicalize_scheme(s))
+                .collect();
+            assert!(listed.contains(&canonicalize_scheme(&old)));
+            assert!(listed.contains(&canonicalize_scheme(&new)));
+
+            // Idempotent.
+            let third = ensure_ontology(&store, &parent, &plan(urls::STRING), &agent)
+                .await
+                .unwrap();
+            assert_eq!(third, second);
         }
     }
 }

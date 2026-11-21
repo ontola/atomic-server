@@ -322,7 +322,7 @@ Questions:
 ## Sync Settings UI
 
 Reticulum settings belong on the existing Sync page
-(`browser/data-browser/src/routes/SyncRoute.tsx`). That page already owns the
+(`browser/data-browser/src/components/Settings/SyncSettings.tsx`). That page already owns the
 mental model for:
 
 - current drive

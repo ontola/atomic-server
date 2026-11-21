@@ -8,3 +8,5 @@ export {
 } from './SettingsSection';
 
 export { SettingsSearchProvider, useSettingsSearch } from './SettingsSearch';
+
+export { SettingCheckbox, SettingField } from './SettingCheckbox';

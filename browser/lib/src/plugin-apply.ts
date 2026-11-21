@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.js';
 import { IMPORT_BASELINE } from './import-records.js';
 import type { PlannedChange, RunPlan } from './plugin-plan.js';
 import type { JSONValue } from './value.js';
@@ -503,6 +504,6 @@ export function stampImportApproval(
 
   return {
     ...values,
-    [IMPORT_BASELINE]: { ...baseline, approval: crypto.randomUUID() },
+    [IMPORT_BASELINE]: { ...baseline, approval: randomUUID() },
   };
 }

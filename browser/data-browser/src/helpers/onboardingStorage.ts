@@ -6,6 +6,23 @@ interface OnboardingStore {
     | undefined;
 }
 
+let storageScreens = 0;
+
+/**
+ * Called while a screen that reports a storage failure itself is mounted, so
+ * the same failure is not also toasted and reported as an error. Returns the
+ * release function.
+ */
+export function ownStorageErrors(): () => void {
+  storageScreens++;
+
+  return () => {
+    storageScreens--;
+  };
+}
+
+export const storageErrorsOwned = () => storageScreens > 0;
+
 /** Check the actual storage engine, including worker OPFS access, before signup. */
 export async function checkOnboardingStorage(
   store: OnboardingStore,
