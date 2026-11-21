@@ -1661,7 +1661,7 @@ pub struct SyncEvent {
     pub kind: String,
 }
 
-#[allow(dead_code)]// Used via #[serde(default = "...")] attribute above
+#[allow(dead_code)] // Used via #[serde(default = "...")] attribute above
 fn default_event_kind() -> String {
     "sync".into()
 }
