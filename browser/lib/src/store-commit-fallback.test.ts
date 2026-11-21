@@ -7,16 +7,21 @@ import { ErrorCode } from './ws-v2.js';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('commit transport fallback', () => {
-  it.each([undefined, ErrorCode.SYNC_REJECTED])(
-    'does not retry an enrollment refusal over HTTP (code %s)',
-    async code => {
+  const enrollment =
+    'Drive did:ad:private is not enrolled for sync on this node.';
+  const settled = 'Destroy commit has no such resource to destroy on this node';
+
+  it.each([
+    { message: enrollment, code: undefined, destroy: false },
+    { message: enrollment, code: ErrorCode.SYNC_REJECTED, destroy: false },
+    { message: settled, code: undefined, destroy: true },
+    { message: settled, code: ErrorCode.DESTROY_SETTLED, destroy: true },
+  ])(
+    'does not retry a server refusal over HTTP ($message, code $code)',
+    async ({ message, code, destroy }) => {
       const store = new Store({ serverUrl: 'https://example.com' });
       vi.stubGlobal('WebSocket', { OPEN: 1 });
-      const rejected = new AtomicError(
-        'Drive did:ad:private is not enrolled for sync on this node.',
-        ErrorType.Server,
-        code,
-      );
+      const rejected = new AtomicError(message, ErrorType.Server, code);
       const internals = store as unknown as {
         getWebSocketForEndpoint: () => unknown;
         client: { postCommit: () => Promise<Commit> };
@@ -30,7 +35,7 @@ describe('commit transport fallback', () => {
         .mockRejectedValue(rejected);
       await expect(
         store.postCommit(
-          { subject: 'did:ad:edit' } as Commit,
+          { subject: 'did:ad:edit', destroy } as Commit,
           'https://example.com/commit',
         ),
       ).rejects.toBe(rejected);

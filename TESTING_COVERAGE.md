@@ -1747,7 +1747,7 @@ setup currently fails opening OPFS before it can create its dev drive.
   retain dirty edits, and can be re-armed by a new edit; legacy messages and
   structured `SYNC_REJECTED` classification are covered.
 - `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not
-  duplicated over HTTP; a transport failure still falls back.
+  duplicated over HTTP; a transport failure still falls back. A destroy that the server already settled also reaches the outbox without a second HTTP request, with either the wire code or the legacy message.
 - `local-outbox.test.ts` ("classification is code-first") and
   `save-acknowledgement.test.ts` ("terminal drops are classified by error
   code"): a recognized `AtomicError.code` (`GENESIS_COLLISION`,

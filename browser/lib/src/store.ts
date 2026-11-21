@@ -8160,7 +8160,8 @@ export class Store {
 
         if (
           isUnrecoverableCommitError(message, code) ||
-          isTerminalCommitError(message, code)
+          isTerminalCommitError(message, code) ||
+          (commit.destroy && isSettledDestroyRefusal(message, code))
         ) {
           throw e;
         }
