@@ -126,7 +126,9 @@ export function DerivedColumnDialog({
 
   const problem = missing
     ? `There is no column "${missing}".${suggestion ? ` Did you mean "${suggestion}"?` : ''}`
-    : formula.trim() && validateFormula({ kind: 'formula', formula, vars });
+    : ready &&
+      formula.trim() &&
+      validateFormula({ kind: 'formula', formula, vars });
   const valid =
     ready && formula.trim() !== '' && label.trim() !== '' && problem === null;
 
