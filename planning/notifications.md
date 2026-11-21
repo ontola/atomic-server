@@ -1,7 +1,36 @@
 # Notifications
 
-Status: **Proposal, 2026-09-28.** Builds on #1859 (toasts, OS notifications,
-Inbox in the private drive). Nothing below is implemented yet.
+Status: **Proposal, 2026-09-28; first server part built 2026-11-20.** Builds
+on #1859 (toasts, OS notifications, Inbox in the private drive).
+
+## Built (2026-11-20)
+
+- [x] Server notifier `lib/src/notify.rs`, run by `server/src/notifier.rs`
+  every `--notify-interval` seconds (default 30). Reads the event stream of
+  every drive that holds something followed, with its own checkpoint.
+- [x] `Follow` as a child of the Inbox (not an array on it: one resource per
+  follow syncs and merges better), with `followLevel` `everything` /
+  `newItems` / `muted`, plus `followClasses` and `followProperties` to narrow
+  it. Nearest follow wins. Kinds `created` and `changed`.
+- [x] Batching (quiet 10 minutes, at most an hour) and coalescing into the
+  unread Notification (`notificationCount`, `changedProperties`).
+- [x] `Announcement`: an explicit message to chosen `recipients` about a
+  resource, optionally `actionRequired`. Only someone who may write where it is
+  can send one.
+- [x] Preferences on the Inbox: `notifyEmail`, `emailFrequency` (`instant`,
+  `daily`, `off`), `mutedNotificationKinds`, `notifyLanguage`.
+- [x] Push: `PushRegistration` children of the Inbox with a `pushEndpoint`;
+  the server POSTs JSON there (UnifiedPush / ntfy). No FCM or Web Push
+  encryption yet.
+- [x] Mail: no mailer in the server. An embedder installs a sink
+  (`notifier::set_sink`); otherwise `--notify-webhook` receives each delivery
+  as JSON. Daily digests are computed here.
+- Owner rule: the server only delivers to an Inbox in a drive that exactly one
+  agent reads and writes. So the private drive has to live on (sync to) the
+  server; that is the "only Inboxes this server hosts" decision below.
+- Not yet: auto-follows, the client listening to the Inbox instead of
+  recording, access and meeting kinds, server Inbox `append` right (the
+  server writes as itself, locally).
 
 ## Where #1859 leaves us
 
