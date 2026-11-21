@@ -6,20 +6,15 @@ test.beforeEach(before);
 test('onboarding checks storage before showing account controls and keeps feedback available', async ({
   page,
 }) => {
-  await page.evaluate(() => {
-    // Simulate the real ClientDb reporting a denied initialization, without
-    // breaking the test account's database or depending on private-mode policy.
-    window.store!.getClientDb = () =>
-      ({
-        waitForInit: async () => false,
-        // A denied database is still a database: code that reads from it
-        // (collections fall back to the local index first) calls these, and a
-        // stub without them threw a TypeError out of the read path instead of
-        // taking the "no local db" branch this test is about.
-        isReady: false,
-        waitForReady: async () => false,
-        initError: new Error('Storage denied'),
-      }) as ReturnType<NonNullable<typeof window.store>['getClientDb']>;
+  await page.evaluate(async () => {
+    // Fail the onboarding probe while the signed-in drive can finish its writes.
+    const store = window.store!;
+    await store.waitForClientDb(20_000);
+    const db = store.getClientDb();
+
+    if (!db) throw new Error('The test drive has no client database.');
+
+    db.waitForInit = async () => false;
     window.history.pushState({}, '', '/app/welcome');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
