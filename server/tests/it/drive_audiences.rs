@@ -48,7 +48,10 @@ async fn drive_for(
     client.store().set_default_agent(owner.clone());
     let mut drive = Resource::new("did:ad:placeholder".into());
     drive
-        .set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![urls::DRIVE.into()]))
+        .set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        )
         .unwrap();
     drive.set_name(name).unwrap();
     drive
@@ -89,16 +92,14 @@ async fn doc_in(client: &Client, owner: &Agent, parent: &str, word: &str) -> Res
 }
 
 /// A folder under `parent` with its own `read` list.
-async fn folder_in(
-    client: &Client,
-    owner: &Agent,
-    parent: &str,
-    readers: &[&Agent],
-) -> String {
+async fn folder_in(client: &Client, owner: &Agent, parent: &str, readers: &[&Agent]) -> String {
     client.store().set_default_agent(owner.clone());
     let mut folder = client.new_resource(parent).unwrap();
     folder
-        .set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![urls::FOLDER.into()]))
+        .set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::FOLDER.into()]),
+        )
         .unwrap();
     folder.set_name("Map").unwrap();
     set_readers(&mut folder, owner, readers);
@@ -200,8 +201,7 @@ async fn every_way_in_honours_the_drive_read_list() {
     let (all_drive, _) = drive_for(&client, &owner, "Iedereen", &everyone).await;
     let (members_drive, _) = drive_for(&client, &owner, "Leden", &[&m1, &m2, &m3]).await;
     let (few_drive, _) = drive_for(&client, &owner, "Enkelen", &[&m1]).await;
-    let (group_drive, mut group_res) =
-        drive_for(&client, &owner, "Commissie", &[&m1, &m2]).await;
+    let (group_drive, mut group_res) = drive_for(&client, &owner, "Commissie", &[&m1, &m2]).await;
 
     let mut all_doc = doc_in(&client, &owner, &all_drive, "aardvark").await;
     let mut members_doc = doc_in(&client, &owner, &members_drive, "bever").await;
@@ -254,10 +254,22 @@ async fn every_way_in_honours_the_drive_read_list() {
             let may = case.readers.iter().any(|r| r.subject == agent.subject);
             let what = format!("{name} on the {} drive", case.word);
 
-            assert_eq!(http_get(&client, agent, &case.doc).await, may, "GET document: {what}");
-            assert_eq!(http_get(&client, agent, case.drive).await, may, "GET drive: {what}");
+            assert_eq!(
+                http_get(&client, agent, &case.doc).await,
+                may,
+                "GET document: {what}"
+            );
+            assert_eq!(
+                http_get(&client, agent, case.drive).await,
+                may,
+                "GET drive: {what}"
+            );
             if let Some(commit) = &commit {
-                assert_eq!(http_get(&client, agent, commit).await, may, "GET commit: {what}");
+                assert_eq!(
+                    http_get(&client, agent, commit).await,
+                    may,
+                    "GET commit: {what}"
+                );
             }
 
             assert_eq!(
@@ -269,7 +281,10 @@ async fn every_way_in_honours_the_drive_read_list() {
             let inventory = sync_inventory(&store, agent, case.drive).await;
             if may {
                 let items = inventory.unwrap_or_else(|| panic!("sync refused: {what}"));
-                assert!(items.contains(&case.doc), "sync misses the document: {what}");
+                assert!(
+                    items.contains(&case.doc),
+                    "sync misses the document: {what}"
+                );
             } else {
                 assert!(inventory.is_none(), "sync not refused: {what}");
             }
@@ -277,7 +292,10 @@ async fn every_way_in_honours_the_drive_read_list() {
             // Search never lists a document the agent may not read.
             if !may {
                 let body = search(&server_url, agent, case.word).await;
-                assert!(!body.contains(&case.doc), "search leaks the document: {what}: {body}");
+                assert!(
+                    !body.contains(&case.doc),
+                    "search leaks the document: {what}: {body}"
+                );
             }
         }
     }
@@ -290,7 +308,9 @@ async fn every_way_in_honours_the_drive_read_list() {
         ws.authenticate(agent).await.unwrap();
         let rx = ws.subscribe();
         for case in &cases {
-            ws.send_binary(protocol::encode_sub(case.drive)).await.unwrap();
+            ws.send_binary(protocol::encode_sub(case.drive))
+                .await
+                .unwrap();
         }
         feeds.push((name, agent, ws, rx));
     }
@@ -324,11 +344,17 @@ async fn every_way_in_honours_the_drive_read_list() {
     // members' document goes to the drive only m1 reads.
     client.store().set_default_agent(owner.clone());
     members_doc
-        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(few_drive.clone().into()))
+        .set_unsafe(
+            urls::PARENT.into(),
+            Value::AtomicUrl(few_drive.clone().into()),
+        )
         .unwrap();
     members_doc.save_remote(client.store()).await.unwrap();
     let moved = members_doc.get_subject().to_string();
-    assert!(http_get(&client, &m1, &moved).await, "m1 lost the moved document");
+    assert!(
+        http_get(&client, &m1, &moved).await,
+        "m1 lost the moved document"
+    );
     for agent in [&m2, &m3] {
         assert!(
             !http_get(&client, agent, &moved).await,
@@ -336,20 +362,38 @@ async fn every_way_in_honours_the_drive_read_list() {
             agent.subject
         );
         let left = sync_inventory(&store, agent, &members_drive).await.unwrap();
-        assert!(!left.contains(&moved), "the old drive still syncs the moved document");
+        assert!(
+            !left.contains(&moved),
+            "the old drive still syncs the moved document"
+        );
     }
     let few = sync_inventory(&store, &m1, &few_drive).await.unwrap();
-    assert!(few.contains(&moved), "the new drive does not sync the moved document");
+    assert!(
+        few.contains(&moved),
+        "the new drive does not sync the moved document"
+    );
 
     // Taking m2 off the committee drive ends their access to it.
     client.store().set_default_agent(owner.clone());
     set_readers(&mut group_res, &owner, &[&m1]);
     group_res.save_remote(client.store()).await.unwrap();
     let group_doc_subject = group_doc.get_subject().to_string();
-    assert!(!http_get(&client, &m2, &group_doc_subject).await, "m2 still reads after removal");
-    assert!(sync_inventory(&store, &m2, &group_drive).await.is_none(), "m2 still syncs after removal");
-    assert!(sub_refused(&ws_url, &m2, &group_drive).await, "m2 can still SUB after removal");
-    assert!(http_get(&client, &m1, &group_doc_subject).await, "m1 lost access too");
+    assert!(
+        !http_get(&client, &m2, &group_doc_subject).await,
+        "m2 still reads after removal"
+    );
+    assert!(
+        sync_inventory(&store, &m2, &group_drive).await.is_none(),
+        "m2 still syncs after removal"
+    );
+    assert!(
+        sub_refused(&ws_url, &m2, &group_drive).await,
+        "m2 can still SUB after removal"
+    );
+    assert!(
+        http_get(&client, &m1, &group_doc_subject).await,
+        "m1 lost access too"
+    );
 }
 
 /// The commit that last changed `subject`, if the resource names it.
@@ -358,10 +402,7 @@ async fn all_or_last_commit(client: &Client, owner: &Agent, subject: &str) -> Op
         .await
         .ok()?;
     let resource = response.to_single();
-    resource
-        .get(urls::LAST_COMMIT)
-        .ok()
-        .map(|v| v.to_string())
+    resource.get(urls::LAST_COMMIT).ok().map(|v| v.to_string())
 }
 
 /// Rights add up along the parent chain: a folder with a short `read` list
@@ -409,7 +450,10 @@ async fn a_folder_grant_inside_an_unreadable_drive_does_not_sync() {
     let doc = doc_in(&client, &owner, &folder, "fret").await;
     let doc = doc.get_subject().to_string();
 
-    assert!(http_get(&client, &m1, &doc).await, "the folder grant reaches the document");
+    assert!(
+        http_get(&client, &m1, &doc).await,
+        "the folder grant reaches the document"
+    );
     assert!(
         sync_inventory(&store, &m1, &drive).await.is_none(),
         "the drive now syncs per readable subject: apps may put audiences in folders again"
@@ -447,7 +491,11 @@ async fn append_lets_each_agent_write_only_its_own_child() {
     .unwrap();
     let vote = vote.save_remote(client.store()).await.unwrap();
 
-    async fn ballot(client: &Client, who: &Agent, vote: &str) -> atomic_lib::errors::AtomicResult<Resource> {
+    async fn ballot(
+        client: &Client,
+        who: &Agent,
+        vote: &str,
+    ) -> atomic_lib::errors::AtomicResult<Resource> {
         client.store().set_default_agent(who.clone());
         let mut b = client.new_resource(vote)?;
         b.set_name("voor")?;
@@ -459,7 +507,9 @@ async fn append_lets_each_agent_write_only_its_own_child() {
         Ok(b)
     }
 
-    let mut mine = ballot(&client, &m1, &vote).await.expect("m1 may add a ballot");
+    let mut mine = ballot(&client, &m1, &vote)
+        .await
+        .expect("m1 may add a ballot");
     client.store().set_default_agent(m1.clone());
     mine.set_name("tegen").unwrap();
     mine.save_remote(client.store())
@@ -503,10 +553,11 @@ async fn an_invite_accepted_at_the_server_grants_its_target() {
     assert!(!http_get(&client, &guest, &claim).await);
 
     let expires = atomic_lib::utils::now() + 60_000;
-    let token = atomic_lib::invite_token::InviteToken::new(claim.clone(), true, expires, &owner, Some(1))
-        .unwrap()
-        .encode()
-        .unwrap();
+    let token =
+        atomic_lib::invite_token::InviteToken::new(claim.clone(), true, expires, &owner, Some(1))
+            .unwrap()
+            .encode()
+            .unwrap();
     atomic_lib::client::helpers::accept_invite_at_server(&server_url, &token, &guest)
         .await
         .expect("the server accepts the invite");
@@ -515,13 +566,12 @@ async fn an_invite_accepted_at_the_server_grants_its_target() {
         .await
         .unwrap()
         .to_single();
-    let writers: Vec<String> = target
-        .get(urls::WRITE)
-        .unwrap()
-        .to_subjects(None)
-        .unwrap();
+    let writers: Vec<String> = target.get(urls::WRITE).unwrap().to_subjects(None).unwrap();
     assert!(writers.contains(&guest.subject.to_string()), "{writers:?}");
-    assert!(http_get(&client, &guest, &claim).await, "the guest reads the target");
+    assert!(
+        http_get(&client, &guest, &claim).await,
+        "the guest reads the target"
+    );
     // The rest of the drive stays closed to the guest.
     assert!(!http_get(&client, &guest, &drive).await);
 
