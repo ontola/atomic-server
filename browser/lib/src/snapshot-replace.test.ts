@@ -1,10 +1,10 @@
-import { beforeAll, describe, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { Store } from './store.js';
 import { Agent } from './agent.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { LoroLoader } from './loro-loader.js';
 import { Resource } from './resource.js';
-import { core } from './index.js';
+import { collections, core } from './index.js';
 
 /**
  * A WS GET response carries the SNAPSHOT flag = authoritative FULL state. The
@@ -53,9 +53,7 @@ describe('applyIncoming — a SNAPSHOT GET response replaces a partial seed', ()
   // Map is keyed by `atomic:`.
   const subject = 'atomic:driveSnapshotReplaceReproAAAAAAAAAAAAAAAAAAAAAA==';
 
-  it('surfaces the full class after replacing a class-less seeded doc', async ({
-    expect,
-  }) => {
+  it('surfaces the full class after replacing a class-less seeded doc', async () => {
     const store = await makeStore();
     const r = new Resource(subject);
     r.setStore(store);
@@ -93,4 +91,52 @@ describe('applyIncoming — a SNAPSHOT GET response replaces a partial seed', ()
     expect(got?.get(core.properties.isA)).toEqual([DRIVE]);
     expect(got?.get(NAME)).toBe('My Drive');
   });
+});
+
+describe('computed collection responses', () => {
+  it.each(['ws-pending-get', 'http-fetch'] as const)(
+    'takes the latest members from %s even when an earlier answer wins a CRDT tie',
+    source => {
+      const store = new Store({
+        serverUrl: 'https://example.com',
+        connect: false,
+      });
+      const subject = 'https://example.com/query?property=parent';
+      const { members, totalMembers } = collections.properties;
+
+      function answer(peer: number, rows: string[]) {
+        const doc = new LoroLoader.Loro.LoroDoc();
+        doc.setPeerId(peer);
+        const props = doc.getMap('properties');
+        props.set(core.properties.isA, [collections.classes.collection]);
+        props.set(members, rows);
+        props.set(totalMembers, rows.length);
+        const bytes = doc.export({ mode: 'snapshot' });
+
+        if (source === 'http-fetch') {
+          const resource = new Resource(subject);
+          resource.importLoroUpdate(bytes, true);
+          resource.loading = false;
+          store.applyIncoming({ subject, source, resource });
+        } else {
+          store.applyIncoming({
+            subject,
+            source,
+            loroBytes: bytes,
+            replaceLoroDocsFromRemote: true,
+            commitId: 'atomic:commit:query-definition',
+          });
+        }
+      }
+
+      answer(90, []);
+      answer(10, ['atomic:chat-log']);
+      expect(store.resources.get(subject)?.get(members)).toEqual([
+        'atomic:chat-log',
+      ]);
+      expect(store.resources.get(subject)?.get(totalMembers)).toBe(1);
+      answer(5, []);
+      expect(store.resources.get(subject)?.get(members)).toEqual([]);
+    },
+  );
 });

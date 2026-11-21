@@ -16,6 +16,7 @@ import {
   spaUrl,
   timestamp,
   topBarShareButton,
+  waitForStoredChatMessages,
   waitForSynced,
 } from './test-utils';
 
@@ -55,26 +56,7 @@ test.describe('chat log', () => {
     const second = `Second ${timestamp()}`;
     await send(page, second);
 
-    // Rendering is optimistic. Confirm that the server can read both entries
-    // before discarding this browser session and checking the restored view.
-    const id = await entry(page, first).getAttribute('about');
-    const logPage = id!.split('#')[0];
-    await expect
-      .poll(
-        () =>
-          page.evaluate(async subject => {
-            const pageResource = await window.store
-              .getDefaultWebSocket()!
-              .fetch(subject);
-
-            return pageResource
-              .listChatLogEntries()
-              .map(message => message.entry.t);
-          }, logPage),
-        { timeout: 20_000 },
-      )
-      .toEqual([first, second]);
-    await waitForSynced(page);
+    await waitForStoredChatMessages(page, entry(page, first), [first, second]);
     await page.reload();
     await expect(entry(page, first)).toBeVisible({ timeout: 15_000 });
     await expect(entry(page, second)).toBeVisible();
@@ -127,7 +109,11 @@ test.describe('chat log', () => {
     await entry(page, second).hover();
     await entry(page, second).getByTitle('Delete message').click();
     await expect(entry(page, second)).toHaveCount(0);
-    await waitForSynced(page);
+    await waitForStoredChatMessages(page, entry(page, plain), [
+      edited,
+      reply,
+      plain,
+    ]);
     await page.reload();
     await expect(entry(page, edited).first()).toBeVisible({ timeout: 15_000 });
     await expect(entry(page, second)).toHaveCount(0);
