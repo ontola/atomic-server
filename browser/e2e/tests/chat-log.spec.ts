@@ -55,7 +55,25 @@ test.describe('chat log', () => {
     const second = `Second ${timestamp()}`;
     await send(page, second);
 
-    // Both are in the page of the log, in order, and survive a reload.
+    // Rendering is optimistic. Confirm that the server can read both entries
+    // before discarding this browser session and checking the restored view.
+    const id = await entry(page, first).getAttribute('about');
+    const logPage = id!.split('#')[0];
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async subject => {
+            const pageResource = await window.store
+              .getDefaultWebSocket()!
+              .fetch(subject);
+
+            return pageResource
+              .listChatLogEntries()
+              .map(message => message.entry.t);
+          }, logPage),
+        { timeout: 20_000 },
+      )
+      .toEqual([first, second]);
     await waitForSynced(page);
     await page.reload();
     await expect(entry(page, first)).toBeVisible({ timeout: 15_000 });
