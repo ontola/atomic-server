@@ -39,6 +39,9 @@ export interface ActionContext {
   addChild: () => void;
   /** Current drive subject, if any. */
   drive?: string;
+  /** Subscribed values used to refresh action availability as the drive loads. */
+  parent: string | undefined;
+  trashFolder: string | undefined;
   /**
    * The page title renders its own "Add icon" / "Add cover" buttons, so the
    * menu can tuck the matching actions away. False on touch and narrow
