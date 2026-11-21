@@ -99,6 +99,8 @@ export interface E2EModules {
     ): Promise<string>;
   };
   tomicLib: {
+    CollectionBuilder: typeof import('@tomic/lib').CollectionBuilder;
+    forks: typeof import('@tomic/lib').forks;
     core: {
       classes: Record<string, string>;
       properties: Record<string, string>;
