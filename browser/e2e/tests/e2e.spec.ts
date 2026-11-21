@@ -30,6 +30,7 @@ import {
   signIn,
   timestamp,
   waitForCommit,
+  waitForStoredChatMessages,
   waitForSynced,
   openAgentPage,
   fillSearchBox,
@@ -364,11 +365,9 @@ test.describe('data-browser', async () => {
       'Message date missing — genesis createdAt not retrievable',
     ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
-    // Regression: author + date must SURVIVE A REFRESH. They are derived from
-    // the message's genesis certificate, materialized server-side into
-    // propvals and served in JSON-AD — NOT refetched from a
-    // `did:ad:commit:<sig>` resource. A hard reload drops the in-memory store,
-    // so this proves the metadata round-trips from the DB.
+    // Once the server has stored this entry, a cold view must recover both
+    // its author and its timestamp from the log page.
+    await waitForStoredChatMessages(page, messageLocator, [teststring]);
     await page.reload();
     const messageAfterReload = page
       .getByText(teststring)
