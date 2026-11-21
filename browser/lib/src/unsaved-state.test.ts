@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { core } from './ontologies/core.js';
 import { Resource, ResourceEvents } from './resource.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 
 const FOLDER = 'https://atomicdata.dev/classes/Folder';
 const DRIVE = 'https://atomicdata.dev/classes/Drive';
@@ -72,10 +72,10 @@ describe('unsaved state', () => {
     expect(resource.hasUnsavedChanges()).toBe(true);
     expect(resource.hasOpsPastSaveCursor()).toBe(true);
     expect(resource.commitError).toBe(refusal);
-    // The outbox entry outranks the flag in the status.
+    // A failed explicit save is an error even while its outbox entry remains.
     expect(store.outbox.hasPending(resource.subject)).toBe(true);
     expect(store.getSaveState(resource)).toMatchObject({
-      kind: 'queued',
+      kind: 'error',
       error: refusal.message,
     });
     store.setServerConnected(false);
@@ -84,6 +84,7 @@ describe('unsaved state', () => {
   it('offline: the edit stays unsaved and is shown as queued', async () => {
     const { store, resource } = await savedFolder();
     store.setServerConnected(false);
+    mockLocalPersistence(store);
     await resource.set(core.properties.name, 'Offline edit', false);
 
     await expect(resource.save()).resolves.toBe('offline');

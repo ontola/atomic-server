@@ -1,3 +1,4 @@
+import { HostingHint } from '../../components/HostingHint';
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
 import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
@@ -41,7 +42,7 @@ import {
   accountAddress,
   getManagedAccount,
 } from '../../helpers/managed/session';
-import { getManagedPortalUrl } from '../../helpers/managed/cloudSync';
+import { getAccountServiceUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
 import {
   fetchManagedInfo,
@@ -89,10 +90,7 @@ import {
 import { FaArrowLeft, FaKey, FaXmark } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
-import {
-  canHoldProviderCookie,
-  getRememberedProvider,
-} from '../../helpers/managed/deviceLink';
+import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import {
   Shell,
   CardTitle,
@@ -179,13 +177,12 @@ export function GettingStartedFlow({
    * stays strict: only a node that says it is managed sends people to a portal.
    * Restoring one is different — the portal is the *only* route, so a screen
    * that cannot name one has nothing to offer at all. Resolved through
-   * `getManagedPortalUrl`, so a build-time override counts even before any
-   * server has answered, which is the state a wiped browser is in. Null on a
-   * self-hosted install, where the button stays hidden rather than dead.
+   * `getAccountServiceUrl`, so a build-time override counts even before any
+   * server has answered, which is the state a wiped browser is in. Null only when
+   * the build turned the account service off.
    */
-  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(
-    () =>
-      safePortalUrl(getManagedPortalUrl() ?? getRememberedProvider()) ?? null,
+  const [knownPortalUrl, setKnownPortalUrl] = useState<string | null>(() =>
+    getAccountServiceUrl(),
   );
 
   useEffect(() => {
@@ -197,10 +194,7 @@ export function GettingStartedFlow({
       // The remembered provider covers the desktop and Android apps: their
       // embedded node names no portal, and the build may not either, but a
       // device that linked once knows exactly where its account lives.
-      setKnownPortalUrl(
-        safePortalUrl(getManagedPortalUrl(info) ?? getRememberedProvider()) ??
-          null,
-      );
+      setKnownPortalUrl(getAccountServiceUrl(info));
     });
 
     return () => {
@@ -1124,23 +1118,7 @@ export function GettingStartedFlow({
                 competing with Sign in. */}
             {createTarget?.kind === 'unavailable' ? (
               <OwnedElsewhere key='elsewhere'>
-                Want a server of your own?{' '}
-                <PlainExternalLink
-                  href='https://atomic.place'
-                  target='_blank'
-                  rel='noreferrer'
-                >
-                  Get one hosted
-                </PlainExternalLink>{' '}
-                or{' '}
-                <PlainExternalLink
-                  href='https://github.com/atomicdata-dev/atomic-server'
-                  target='_blank'
-                  rel='noreferrer'
-                >
-                  run it yourself
-                </PlainExternalLink>
-                .
+                <HostingHint reason='own-server' />
               </OwnedElsewhere>
             ) : null}
             {error ? (
@@ -1883,13 +1861,6 @@ function PasskeyOnlyHint(): React.JSX.Element {
     </OwnedElsewhere>
   );
 }
-
-const PlainExternalLink = styled.a`
-  color: ${p => p.theme.colors.main};
-  text-decoration: underline;
-  /* A link that reads as one thing should wrap as one thing. */
-  white-space: nowrap;
-`;
 
 /** The two agents a secret conflict is about, so the choice is concrete. */
 const AgentList = styled.dl`

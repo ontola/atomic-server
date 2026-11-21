@@ -13,6 +13,8 @@ import { useSettings } from '../helpers/AppSettings';
 interface PairingCodeProps {
   /** The Iroh identity to advertise: `did:ad:node:<64 hex>`. */
   nodeDid: string;
+  /** A smaller QR, for where vertical room is tight (the Save dialog). */
+  compact?: boolean;
 }
 
 /**
@@ -33,7 +35,10 @@ interface PairingCodeProps {
  * it for, and grants neither. Whoever dials still has to prove they hold a key
  * that may read the drive, so this is safe to show on screen.
  */
-export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
+export function PairingCode({
+  nodeDid,
+  compact,
+}: PairingCodeProps): JSX.Element {
   const { baseURL, drive } = useSettings();
 
   // A LAN/WS fast path is only worth advertising when another device could
@@ -78,7 +83,7 @@ export function PairingCode({ nodeDid }: PairingCodeProps): JSX.Element {
 
   return (
     <>
-      <QrBox dangerouslySetInnerHTML={{ __html: pairSvg }} />
+      <QrBox $compact={compact} dangerouslySetInnerHTML={{ __html: pairSvg }} />
       <CodeRow>
         <CodeText title={pairUri}>{pairUri}</CodeText>
         <Button subtle onClick={copyCode}>
@@ -115,9 +120,9 @@ const CodeText = styled.code`
   border-radius: ${p => p.theme.radius};
 `;
 
-const QrBox = styled.div`
-  width: 13rem;
-  height: 13rem;
+const QrBox = styled.div<{ $compact?: boolean }>`
+  width: ${p => (p.$compact ? '9rem' : '13rem')};
+  height: ${p => (p.$compact ? '9rem' : '13rem')};
   max-width: 100%;
   border-radius: ${p => p.theme.radius};
   overflow: hidden;

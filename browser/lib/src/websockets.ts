@@ -1332,6 +1332,7 @@ export class WSClient {
           this.store.failDriveSync(
             this.driveFromRejection(msg.message),
             msg.message,
+            msg.code,
           );
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||

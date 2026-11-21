@@ -226,6 +226,21 @@ export class NativeClientDb {
     ]);
   }
 
+  /** The page's cache write-back as Loro bytes; see `ClientDbWorker`. */
+  async putLoroSnapshot(
+    subject: string,
+    snapshot: Uint8Array,
+    lastCommit?: string,
+    outbox?: ClientDbOutboxWrite,
+  ): Promise<void> {
+    await this.channel.call('putLoroSnapshot', [
+      subject,
+      encodeB64(snapshot),
+      lastCommit ?? null,
+      outbox ?? null,
+    ]);
+  }
+
   /** A commit this device signed: the host applies it and queues it. */
   async applyCommit(commitJsonAd: string): Promise<void> {
     await this.channel.call('applyCommit', [commitJsonAd]);

@@ -4,7 +4,10 @@ Audit: 2026-09-09. Implementation: `codex/calendar-recurring-meetings`, based on
 `develop` with the coordinated Google importer prerequisite (`421e4d12f`) and
 all-day implementation (`82a6e4460`, cherry-picked here as `19373a6bf`).
 
-## What is implemented
+This audit describes the retired LocalThought browser importer. For the current
+integration, see the [Google Calendar drive app](https://github.com/ontola/atomic-plugins/tree/main/integrations/calendar).
+
+## What was implemented
 
 The existing browser-owned OAuth/Syncables importer remains a manual, one-way
 import with preview and apply. Atomic edits do not write to Google. Source

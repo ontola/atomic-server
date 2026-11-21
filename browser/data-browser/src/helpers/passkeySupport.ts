@@ -11,6 +11,12 @@ export function hasPasskeyApi(): boolean {
   );
 }
 
+function isAndroidGecko(): boolean {
+  const ua = navigator.userAgent;
+
+  return /Android/i.test(ua) && /Gecko\/\d|Firefox\//.test(ua);
+}
+
 type ClientCapabilities = Record<string, boolean | undefined>;
 
 type PasskeyCredentialApi = {
@@ -35,6 +41,12 @@ export async function deviceCanUsePasskeys(): Promise<boolean> {
 
   try {
     const capabilities = await api.getClientCapabilities?.();
+
+    // GeckoView on Android without `getClientCapabilities` (search launchers
+    // and other apps embedding an older Gecko) exposes WebAuthn and says yes
+    // to everything, but has no passkey provider behind it. Current Firefox
+    // for Android answers the capability question, so it is not affected.
+    if (!capabilities && isAndroidGecko()) return false;
 
     if (capabilities) {
       if (

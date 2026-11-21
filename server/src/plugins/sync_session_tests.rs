@@ -222,6 +222,7 @@ impl Test {
             store: db.clone(),
             for_agent: account,
             signing_as: None,
+            refusal_code: Default::default(),
         };
         Self {
             appstate: f.appstate.clone(),
@@ -720,6 +721,7 @@ async fn hard_restart_stops_uncertain_create_then_resumes_from_verified_receipt(
             store: db,
             for_agent: account,
             signing_as: None,
+            refusal_code: Default::default(),
         },
     };
     let run = meta["run"].as_str().unwrap();

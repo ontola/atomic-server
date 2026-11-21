@@ -587,9 +587,11 @@ impl WebSocketConnection {
                     ForAgent::Public => self.write_rate_limiter.check(&self.peer_ip, true),
                 };
                 if let Err(limited) = limited {
-                    let msg = limited.to_string();
-                    let code = ws_v2::classify_commit_error(&msg);
-                    ctx.binary(ws_v2::encode_error(request_id, code, &msg));
+                    ctx.binary(ws_v2::encode_error(
+                        request_id,
+                        ws_v2::error_code::BUSY,
+                        &limited.to_string(),
+                    ));
                     return;
                 }
                 // Overloaded: refuse before any work, with a jittered delay.

@@ -196,8 +196,8 @@ const RequestPermissionDialog = ({
   const title = type === 'read' ? 'Read Request' : 'Write Request';
   const checkboxLabel =
     type === 'read'
-      ? 'Allow all reads done by this plugin'
-      : 'Allow all writes done by this plugin';
+      ? 'Allow all reads done by this app'
+      : 'Allow all writes done by this app';
 
   return (
     <Dialog {...dialogProps}>

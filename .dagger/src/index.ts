@@ -575,9 +575,9 @@ export class AtomicServer {
     @argument() netlifyAuthToken: Secret,
     /**
      * Publish docs to the live sites instead of preview URLs. Pass
-     * `--publish-docs` only from a stable `v*` tag (the same ref production
-     * deploys). Left off, every build gets a Netlify preview and the published
-     * docs stay whatever the last stable tag put there.
+     * `--publish-docs` only from `develop` (the branch production follows).
+     * Left off, every build gets a Netlify preview and the published docs stay
+     * whatever the last develop run put there.
      */
     @argument() publishDocs = false,
     /**
@@ -702,21 +702,10 @@ export class AtomicServer {
           '--parallel',
           'typecheck',
         ])
-        // 3. data-browser is the one package that reaches repo-root
-        //    `integrations`, and those files import
-        //    `../../browser/lib/src/index.js`, which here is /browser: the
-        //    symlink `jsSource()` makes so integration tsconfigs can find
-        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
-        //    prefix it is handed, so compiling data-browser as /app while its
-        //    own imports arrive as /browser produces two unrelated
-        //    declarations of every type in `lib`, which is the wall of
-        //    "Store is not assignable to Store" the first attempt hit.
-        //    Naming the project by its /browser path puts both ends on one
-        //    prefix. A workdir cannot do this: the kernel resolves the
-        //    symlink, so `process.cwd()` would be /app again.
-        // The app's complete dependency graph exceeds Node's default 2 GiB
-        // heap on some CI hosts. Raise only this final, serial typecheck;
-        // the preceding parallel workspace checks keep their existing budget.
+        // 3. Pass the /browser project path explicitly so TypeScript uses
+        //    that prefix. A working directory resolves the symlink to /app.
+        // The complete app graph exceeds Node's default 2 GiB heap on some
+        // hosts. Keep the larger heap limited to this final serial check.
         .withEnvVariable('NODE_OPTIONS', '--max-old-space-size=4096')
         .withExec([
           'pnpm',
@@ -740,15 +729,6 @@ export class AtomicServer {
       depsContainer
         .withWorkdir('/app')
         .withExec(['pnpm', 'run', 'test'])
-        // jsBuild mounts external integration tests at /integrations and
-        // exposes the installed browser workspace at /browser.
-        .withExec([
-          '/app/node_modules/.bin/vitest',
-          'run',
-          '--config',
-          '/integrations/localthought/vitest.config.ts',
-        ])
-        .withWorkdir('/app')
         .withExec([
           'node',
           '--test',
@@ -1416,9 +1396,6 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
-      // Integration sources live at the repository root. The browser mounts at
-      // /app, and its raw imports resolve these paths from /integrations.
-      .withDirectory('/integrations', this.source.directory('integrations'))
       // `@tomic/plugin`'s export-bindings test reads the Rust example's
       // manifest and checked-in bindings from the repository root, which
       // resolves from /app/plugin/src to /plugin-examples.
@@ -1426,9 +1403,7 @@ export class AtomicServer {
         '/plugin-examples/host-abi-statement',
         this.source.directory('plugin-examples/host-abi-statement'),
       )
-      // integrations/localthought/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
-      // so that relative path resolves.
+      // jsTypecheck() addresses the data-browser project through this alias.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1520,6 +1495,13 @@ export class AtomicServer {
       dag
         .container()
         .from(image)
+        // Clang on an ARM host otherwise finds glibc headers for this musl
+        // target. Scope the musl headers to this target, not nested WASI or
+        // host builds that run in the same container.
+        .withEnvVariable(
+          `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+          `-isystem /usr/local/musl/${target}/include`,
+        )
         .withExec([
           'sh',
           '-c',
@@ -1755,7 +1737,8 @@ export class AtomicServer {
    */
   private rustChecksContainer(): Container {
     const source = this.source;
-    const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
+    const target = 'x86_64-unknown-linux-musl';
+    const image = TARGET_IMAGE_MAP[target];
 
     // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo). Mounting
     // the bookworm path here was a silent miss — every CI run re-ran
@@ -1765,6 +1748,11 @@ export class AtomicServer {
         dag
           .container()
           .from(image)
+          // Match rustBuild's target-specific musl bindgen headers.
+          .withEnvVariable(
+            `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+            `-isystem /usr/local/musl/${target}/include`,
+          )
           // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
           // build script (a transitive dep via the vector-search feature) —
           // without it `cargo fetch`-triggered builds under this container
@@ -1832,7 +1820,6 @@ export class AtomicServer {
           source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withDirectory('/code/server', source.directory('server'))
-        .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory(

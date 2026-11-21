@@ -41,10 +41,6 @@ vi.mock('@tomic/ui/components/Button', () => ({
 vi.mock('@helpers/AppSettings', () => ({
   useSettings: () => ({ drive: 'did:ad:settings-drive', setDrive: vi.fn() }),
 }));
-vi.mock('@components/SideBar/DriveSwitcher', () => ({
-  DriveSwitcher: () => <button>Switch Drive</button>,
-  DriveSwitcherChevronTrigger: () => <button />,
-}));
 vi.mock('@tomic/resource-ui/components/EditableTitle', () => ({
   EditableTitle: () => <h1>Drive title</h1>,
 }));
@@ -68,6 +64,8 @@ vi.mock('@components/Drives/PrivateDriveBadge', () => ({
 }));
 vi.mock('@tomic/resource-ui/components/ResourceDecorations', () => ({
   ResourceCoverImage: () => <div />,
+  TitleDecorationAffordances: () => <button>Add icon</button>,
+  IconPickerDialog: () => <div />,
 }));
 vi.mock('@tomic/ui/components/Row', () => ({
   Column: ({ children }: { children: React.ReactNode }) => (
@@ -81,8 +79,15 @@ vi.mock('react-icons/fa6', () => ({
 vi.mock('@tomic/ui/components/Dialog/useDialog', () => ({
   useDialog: () => [{}, vi.fn(), vi.fn(), false],
 }));
-vi.mock('./GettingStartedCard', () => ({ GettingStartedCard: () => null }));
 vi.mock('./EmptyDriveStart', () => ({ EmptyDriveStart: () => <div /> }));
+vi.mock('@tomic/ui/components/IconButton/IconButton', () => ({
+  IconButton: ({ children }: { children?: React.ReactNode }) => (
+    <button>{children}</button>
+  ),
+}));
+vi.mock('@components/SideBar/GettingStartedPanel', () => ({
+  GettingStartedPanel: () => <div />,
+}));
 vi.mock('./DriveSettingsDialog', () => ({
   DriveSettingsDialog: () => <div />,
 }));

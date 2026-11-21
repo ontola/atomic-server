@@ -121,7 +121,16 @@ test('ci validates E2E overrides before work and forwards all budget arguments',
   pipeline.endToEnd = async (...args) => (endToEndArgs = args);
 
   await pipeline.ci('token', false, 'hosted', 'light', 3, 4, 0, true, 'run-7');
-  assert.deepEqual(endToEndArgs, ['token', 'light', 3, 4, 0, '', true, 'run-7']);
+  assert.deepEqual(endToEndArgs, [
+    'token',
+    'light',
+    3,
+    4,
+    0,
+    '',
+    true,
+    'run-7',
+  ]);
 
   calls.length = 0;
   await assert.rejects(() =>
@@ -187,4 +196,62 @@ test('end-to-end applies overrides to the actual shard run and clone setting', a
     retries: '0',
     grep: 'focused',
   });
+});
+
+test('musl builds select headers for their target without changing nested WASI builds', () => {
+  for (const target of [
+    'x86_64-unknown-linux-musl',
+    'aarch64-unknown-linux-musl',
+    'armv7-unknown-linux-musleabihf',
+  ]) {
+    const pipeline = new AtomicServer(source());
+    pipeline.jsBuild = () => makeChain('js-build');
+    resetCalls();
+    pipeline.rustBuild(false, target);
+    const bindgenEnv = recordedCalls().filter(
+      ([name, variable]) =>
+        name === 'withEnvVariable' && variable.startsWith('BINDGEN_'),
+    );
+    assert.deepEqual(bindgenEnv, [
+      [
+        'withEnvVariable',
+        `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+        `-isystem /usr/local/musl/${target}/include`,
+      ],
+    ]);
+  }
+});
+
+test('Rust checks use the same musl headers while glibc and WASM keep their own includes', async () => {
+  const pipeline = new AtomicServer(source());
+  resetCalls();
+  await pipeline.rustClippy();
+  assert.deepEqual(
+    recordedCalls().filter(
+      ([name, variable]) =>
+        name === 'withEnvVariable' && variable.startsWith('BINDGEN_'),
+    ),
+    [
+      [
+        'withEnvVariable',
+        'BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_musl',
+        '-isystem /usr/local/musl/x86_64-unknown-linux-musl/include',
+      ],
+    ],
+  );
+
+  for (const build of [
+    () => pipeline.rustBuildSlim(),
+    () => pipeline.wasmBuild(),
+  ]) {
+    resetCalls();
+    build();
+    assert.equal(
+      recordedCalls().some(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable.startsWith('BINDGEN_'),
+      ),
+      false,
+    );
+  }
 });

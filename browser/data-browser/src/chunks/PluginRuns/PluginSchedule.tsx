@@ -199,7 +199,7 @@ export function PluginSchedule({
             <Muted>
               {schedule.autoApply
                 ? `Allowed by ${schedule.autoApply.agent}. Every write is still checked against what that account may change.`
-                : 'Available once you have run this plugin and applied its changes at least once.'}
+                : 'Available once you have run this app and applied its changes at least once.'}
             </Muted>
           </Column>
         </Checkbox.Label>

@@ -4,10 +4,26 @@ use crate::errors::AtomicServerResult;
 use crate::vector_search::fastembed_gpu::fastembed_gpu_execution_providers;
 use async_trait::async_trait;
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// fastembed `AllMiniLML6V2Q` output width; must match the LanceDB `vector` column when using local embeddings.
 const LOCAL_EMBEDDING_DIM: usize = 384;
+
+/// Where fastembed keeps its downloaded models (~1.1 GB with the reranker).
+///
+/// fastembed's own default is `.fastembed_cache` relative to the working
+/// directory, so every checkout, worktree and directory a server or test was
+/// started from got its own copy. Use one per-user cache instead.
+/// `FASTEMBED_CACHE_DIR` still wins when set.
+pub(crate) fn model_cache_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("FASTEMBED_CACHE_DIR") {
+        return PathBuf::from(dir);
+    }
+    directories::ProjectDirs::from("", "", "atomic-data")
+        .map(|d| d.cache_dir().join("fastembed"))
+        .unwrap_or_else(|| PathBuf::from(".fastembed_cache"))
+}
 
 const LOCAL_INDEX_BATCH_SIZE: usize = 64;
 const LOCAL_INDEX_BATCH_CONCURRENCY: usize = 1;
@@ -18,8 +34,9 @@ pub(crate) struct LocalEmbedder {
 
 impl LocalEmbedder {
     pub(crate) fn new(config: &Config) -> AtomicServerResult<Self> {
-        let mut embedding_options =
-            InitOptions::new(EmbeddingModel::AllMiniLML6V2Q).with_show_download_progress(true);
+        let mut embedding_options = InitOptions::new(EmbeddingModel::AllMiniLML6V2Q)
+            .with_cache_dir(model_cache_dir())
+            .with_show_download_progress(true);
 
         if config.gpu_indexing {
             tracing::info!("Enabling GPU execution providers for fastembed");

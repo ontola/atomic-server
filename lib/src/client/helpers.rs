@@ -447,6 +447,7 @@ pub async fn fetch_bytes(
                 message,
                 error_type: AtomicErrorType::NotFoundError,
                 subject: Some(url.to_string()),
+                code: 0,
             }
         } else {
             message.into()
@@ -646,6 +647,7 @@ async fn fetch_body_with_client(
                 message,
                 error_type: AtomicErrorType::NotFoundError,
                 subject: Some(url.to_string()),
+                code: 0,
             }
         } else {
             message.into()

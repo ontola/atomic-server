@@ -170,7 +170,7 @@ export function FileImport({
             />
           </Field>
           <p>
-            The file is read by this plugin on your AtomicServer, up to{' '}
+            The file is read by this app on your AtomicServer, up to{' '}
             {formatBytes(maxBytes(accepts))}. Review the proposed changes before
             anything is saved.
           </p>

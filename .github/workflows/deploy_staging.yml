@@ -1,11 +1,21 @@
-name: Deployment Staging
+name: "Deploy develop: atomic.place, staging, then atomicdata.dev"
 
-# Staging follows `develop`. Production follows a stable `v*` tag, not a
-# branch. Same rule otherwise: deploy the commit whose pipeline passed, not
-# merely the latest commit. Superseded develop runs must not deploy even if
-# they completed successfully before GitHub processed their cancellation.
-# See deploy_production.yml for why `workflow_run` rather than `push`, and why
-# the head_sha has to be passed explicitly.
+# Production follows green `develop`, the same commit staging just took. Staging
+# is the canary: deployment.yml health-checks the host and rolls back, so a
+# failed staging deploy stops the run before production is touched. The point
+# is that regressions surface sooner when code reaches real users fast, instead
+# of piling up behind a release tag.
+#
+# Deploy the commit whose pipeline passed, not merely the latest commit.
+# Superseded develop runs must not deploy even if they completed successfully
+# before GitHub processed their cancellation, so the tip is checked twice: when
+# the run starts, and again right before production (staging can take a while,
+# and an older commit must never land on production after a newer one).
+# `workflow_run` rather than `push`, and an explicit head_sha, because
+# `workflow_run` checks out the default branch, not the tested commit.
+#
+# Rollback or manual redeploy of production: dispatch deploy_production.yml
+# with any commit. Release tags no longer deploy anything.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +24,11 @@ on:
         required: false
         default: develop
         type: string
+      production:
+        description: "Also deploy this ref to production after staging succeeds"
+        required: false
+        default: false
+        type: boolean
   # Was on hold from 25 September 2026 to 15 October: the pre-swap
   # `./atomic-server export` was OOM-killed on the host (exit 137) on four
   # deploys in a row, and each failure rolled back to an unchecked binary. The
@@ -24,6 +39,9 @@ on:
     branches: ["develop"]
     types: [completed]
 
+# One staging deploy and one production deploy at a time; a queued run waits
+# rather than cancelling a deploy that is halfway through swapping a binary.
+# Per-environment groups are on the calling jobs below.
 jobs:
   check-current-tip:
     if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
@@ -49,8 +67,37 @@ jobs:
             echo 'current=false' >> "$GITHUB_OUTPUT"
           fi
 
+  # atomic.place is the production that matters. Its deploy lives in
+  # ontola/atomic-saas, which embeds this repo; tell it a new green develop
+  # exists. Independent of staging.atomicdata.dev on purpose: a broken staging
+  # host must not hold atomic.place back. The saas gate re-reads which develop
+  # commit is green itself and requires its own main to be green too.
+  atomic-place:
+    needs: check-current-tip
+    if: needs.check-current-tip.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Ask atomic-saas to deploy atomic.place
+        env:
+          GH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::ATOMIC_SAAS_DISPATCH_TOKEN is not set; atomic.place will only pick up $SHA on its daily schedule."
+            exit 1
+          fi
+          gh api repos/ontola/atomic-saas/dispatches \
+            -f event_type=atomic-server-develop-green \
+            -f "client_payload[sha]=$SHA"
+          echo "Asked atomic-saas to deploy atomic.place with atomic-server develop $SHA." >> "$GITHUB_STEP_SUMMARY"
+
   deploy-staging:
     needs: check-current-tip
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     if: >-
       always() &&
       (github.event_name == 'workflow_dispatch' ||
@@ -60,5 +107,60 @@ jobs:
     with:
       environment: staging
       remote_host: staging.atomicdata.dev
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+    secrets: inherit
+
+  # Staging is healthy on this commit; make sure it is still the develop tip
+  # before it goes to production.
+  recheck-tip:
+    needs: [check-current-tip, deploy-staging]
+    if: >-
+      always() &&
+      needs.deploy-staging.result == 'success' &&
+      (github.event_name == 'workflow_run' ||
+       (github.event_name == 'workflow_dispatch' && inputs.production))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      current: ${{ steps.tip.outputs.current }}
+    steps:
+      - name: Check that staging's commit is still the develop tip
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEPLOY_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          tip=$(gh api "repos/$REPO/branches/develop" --jq .commit.sha)
+          # A manual dispatch may name a branch or an older commit on purpose;
+          # resolve it to a sha before comparing. Only the workflow_run path
+          # insists on the tip.
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$DEPLOY_REF" = "$tip" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping production: $DEPLOY_REF was superseded by $tip"
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-production:
+    needs: [deploy-staging, recheck-tip]
+    if: >-
+      always() &&
+      needs.deploy-staging.result == 'success' &&
+      needs.recheck-tip.outputs.current == 'true'
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    uses: "./.github/workflows/deployment.yml"
+    with:
+      environment: production
+      remote_host: atomicdata.dev
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
     secrets: inherit

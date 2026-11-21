@@ -85,11 +85,17 @@ Remove planning documents that are completed.
 
 ## Git
 
-Default branch is `develop`. Open PRs against it. Staging deploys from `develop`
-after green CI; production and live docs deploy from a stable `v*` tag. Do not
-introduce a `main` branch, treat `master` as production, or add a job that
-fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
-branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
+Default branch is `develop`. Open PRs against it. A green `develop` tip asks
+ontola/atomic-saas to deploy atomic.place (its own gate also requires saas
+`main` green), and goes to staging, then (once staging is healthy and the commit is still the tip) to
+production and the live docs, and to TestFlight and Google Play internal
+testing. Store releases (App Store, Play production) stay manual. Release tags
+are plain `vX.Y.Z` (no pre-release suffixes), pushed only by the owner; they
+publish crates.io, npm, Docker, the GitHub release and desktop installers, and
+deploy nothing. Do not introduce a `main` branch, treat `master` as production,
+or add a job that fast-forwards `main` when a tag is pushed. Hotfixes are fixed
+on `develop` and reach production with the next green run; roll back by
+dispatching `deploy_production.yml` with an older sha. See `CONTRIBUTING.md`.
 
 Short-lived agent sessions: read [`AGENT_WORKFLOW.md`](./AGENT_WORKFLOW.md)
 first. It covers dispatching CI on a PR branch, the paired atomic-saas branch,
@@ -229,6 +235,17 @@ AtomicServer is its self-hostable server component. Optional managed accounts,
 billing and signaling are implemented in the internal sibling `atomic-saas`
 repository. Keep that repository's implementation details out of public FOSS
 copy unless they explain an integration boundary.
+
+**Account service and hosting hints.** Every build has one account service,
+`atomic.place` by default (`VITE_DEFAULT_ACCOUNT_PORTAL` overrides it, or turns
+it off). The app asks the service what it offers instead of asking "is this the
+SaaS build": no new `isSaas`-style branches. The app contacts the service only
+when someone opens a flow that needs it (save your work, sync, share), never at
+page load. Registering is always optional and the no-account route (download
+the secret, pair a device) sits next to it. Mentioning atomic.place hosting is
+fine where it closes a real gap, through the shared `HostingHint` component: one
+muted line and a plain link. A price only appears when the service returns one;
+never hardcode prices. No toasts, banners, pop-ups or blocking upsells.
 
 ### Crates
 

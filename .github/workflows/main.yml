@@ -258,6 +258,9 @@ jobs:
       # a `cargo check` needs them on disk; contents are irrelevant here.
       - name: Build the data-browser embed
         working-directory: atomic-server/browser
+        env:
+          # Skip hook setup before pnpm's Husky shim invokes wslpath on WSL.
+          HUSKY: "0"
         run: |
           pnpm install --frozen-lockfile
           pnpm run build

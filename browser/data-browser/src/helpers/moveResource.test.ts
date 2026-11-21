@@ -136,6 +136,7 @@ describe('copyResourceTree', () => {
   it('trashes the direct children of the Redirect, and only those', async () => {
     const trashed: string[][] = [];
     const trashStore = {
+      getAgent: () => undefined,
       driveOfSubject: () => 'old:drive',
       getResource: async () => ({
         getChildrenCollection: async () => ({

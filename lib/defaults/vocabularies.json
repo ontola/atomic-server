@@ -239,6 +239,35 @@
     ]
   },
   {
+    "@id": "https://atomicdata.dev/preferences/v1/onboarding-panel-open",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Onboarding panel open",
+    "https://atomicdata.dev/properties/shortname": "onboarding-panel-open",
+    "https://atomicdata.dev/properties/description": "Whether the Getting started panel is unfolded. Stored with the person so every device they use shows the same state.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/preferences/v1/welcome-drive",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Welcome drive",
+    "https://atomicdata.dev/properties/shortname": "welcome-drive",
+    "https://atomicdata.dev/properties/description": "The drive the app made for the person when they started. It stays the Welcome drive when renamed.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Drive",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
     "@id": "https://atomicdata.dev/preferences/v1",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/class/ontology"
@@ -248,7 +277,9 @@
     "https://atomicdata.dev/properties/description": "Experimental shared properties for a person's own preferences, stored on their private drive.",
     "https://atomicdata.dev/properties/properties": [
       "https://atomicdata.dev/preferences/v1/show-api-plugins",
-      "https://atomicdata.dev/preferences/v1/show-experimental-plugins"
+      "https://atomicdata.dev/preferences/v1/show-experimental-plugins",
+      "https://atomicdata.dev/preferences/v1/onboarding-panel-open",
+      "https://atomicdata.dev/preferences/v1/welcome-drive"
     ],
     "https://atomicdata.dev/properties/read": [
       "https://atomicdata.dev/agents/publicAgent"

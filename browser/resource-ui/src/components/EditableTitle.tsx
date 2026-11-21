@@ -18,6 +18,7 @@ import { transition } from '@tomic/ui/helpers/transition';
 import { caretOffsetAt } from '../helpers/caretOffsetAt.js';
 import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances.js';
 import { Flex } from '@tomic/ui/components/Row';
+import { UiHint } from './UiHint.js';
 import {
   AffordanceRow,
   IconPickerDialog,
@@ -55,6 +56,8 @@ export interface EditableTitleProps {
    * decision.
    */
   lockedReason?: string;
+  /** The page's own title, which a UI hint may point at (see `UiHint`). */
+  pointedAt?: boolean;
 }
 
 const opts = {
@@ -70,6 +73,7 @@ export function EditableTitle({
   onCommit,
   transitionTag = PAGE_TITLE_TRANSITION_TAG,
   withDecorations,
+  pointedAt,
   // Destructured rather than left in `...props`, which is spread onto the
   // input — React would warn about an unknown DOM attribute.
   lockedReason,
@@ -246,7 +250,7 @@ export function EditableTitle({
   );
 
   return (
-    <>
+    <UiHint target='drive-title' scope={resource.subject} disabled={!pointedAt}>
       {withDecorations && inlineAffordances ? (
         <TitleWrapper>
           {titleElement}
@@ -269,7 +273,7 @@ export function EditableTitle({
           onShowChange={setIconPickerOpen}
         />
       )}
-    </>
+    </UiHint>
   );
 }
 

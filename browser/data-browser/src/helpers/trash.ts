@@ -13,7 +13,7 @@ export async function moveToTrash(
   const moved = await store.trash(subject, drive);
 
   if (moved) {
-    removeRecentResource(drive, subject);
+    removeRecentResource(store.getAgent()?.subject, drive, subject);
   }
 
   return moved;

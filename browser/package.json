@@ -19,7 +19,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "cd .. && husky",
+    "prepare": "if [ \"${HUSKY:-}\" != 0 ]; then cd .. && husky; fi",
     "dev": "pnpm run start",
     "lint": "pnpm run -r lint",
     "lint-fix": "pnpm run -r lint-fix",

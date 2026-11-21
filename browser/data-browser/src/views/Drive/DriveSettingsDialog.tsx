@@ -14,9 +14,6 @@ import { styled } from 'styled-components';
 import { Dialog } from '@tomic/resource-ui/components/Dialog/index';
 import type { InternalDialogProps } from '@tomic/resource-ui/components/Dialog/index';
 import { Column, Row } from '@tomic/ui/components/Row';
-import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
-import { onboardingKeys } from '@hooks/useOnboardingProgress';
-import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { SettingsGroup, SettingsSection } from '@components/Settings';
 import { Tag } from '@tomic/resource-ui/components/Tag/Tag';
@@ -24,7 +21,6 @@ import { CreateTagRow } from '@tomic/resource-ui/components/Tag/CreateTagRow';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { useGettingStartedAgent } from './GettingStartedCard';
 import { PluginList } from './PluginList';
 import { ExternalAppList } from './ExternalAppList';
 
@@ -65,7 +61,6 @@ function DriveSettingsBody({
 
   return (
     <SettingsGroup>
-      <GettingStartedSetting drive={drive} canEdit={canEdit} />
       <SettingsSection label='Tags' initialState>
         <DriveTagList resource={drive} />
       </SettingsSection>
@@ -101,7 +96,7 @@ function DriveSettingsBody({
         </Column>
       </SettingsSection>
       <ExternalAppList drive={drive.subject} />
-      <SettingsSection label='Plugins' initialState>
+      <SettingsSection label='Apps' initialState>
         <Column gap='1rem'>
           <PluginList drive={drive} />
           {canEdit && (
@@ -112,36 +107,6 @@ function DriveSettingsBody({
         </Column>
       </SettingsSection>
     </SettingsGroup>
-  );
-}
-
-/** Brings the Getting started card back after Hide; same flag, so they stay in sync. */
-function GettingStartedSetting({
-  drive,
-  canEdit,
-}: {
-  drive: Resource;
-  canEdit: boolean;
-}): JSX.Element | null {
-  const agent = useGettingStartedAgent(drive, canEdit);
-
-  // Keyed by agent: the flag is read once, and the agent may load after mount.
-  return agent ? <ShowGettingStarted key={agent} agent={agent} /> : null;
-}
-
-function ShowGettingStarted({ agent }: { agent: string }): JSX.Element {
-  const [hidden, setHidden] = useLocalStorage(
-    onboardingKeys.hidden(agent),
-    false,
-  );
-
-  return (
-    <SettingsSection label='Getting started' initialState>
-      <CheckboxLabel>
-        <Checkbox checked={!hidden} onChange={checked => setHidden(!checked)} />{' '}
-        <span>Show Getting started on my drives</span>
-      </CheckboxLabel>
-    </SettingsSection>
   );
 }
 

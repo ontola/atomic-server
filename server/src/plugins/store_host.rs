@@ -61,6 +61,10 @@ pub struct StoreApplyHost {
     /// a commit carries one identity — so this is the only place the two can
     /// be made to agree.
     pub signing_as: Option<AppAgentKey>,
+    /// The `error_code` of the last rights refusal. `ApplyHost` reports
+    /// failures as plain strings, so the code travels beside them for the
+    /// callers that answer a client (`/app-write`).
+    pub refusal_code: std::sync::atomic::AtomicU16,
 }
 
 impl StoreApplyHost {
@@ -78,7 +82,14 @@ impl StoreApplyHost {
             signing_as: super::installation::resolve(store, drive, plugin)
                 .await?
                 .signing_as,
+            refusal_code: Default::default(),
         })
+    }
+
+    fn refused(&self, e: atomic_lib::AtomicError) -> String {
+        self.refusal_code
+            .store(e.code, std::sync::atomic::Ordering::Relaxed);
+        e.to_string()
     }
 
     /// A selected installation must still have a key at effect time. Only an
@@ -131,7 +142,7 @@ impl StoreApplyHost {
             &ForAgent::AgentSubject(agent.subject),
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| self.refused(e))?;
         if !self
             .write_scope()
             .await
@@ -156,7 +167,7 @@ impl StoreApplyHost {
 
         check_write(&self.store, &resource, &self.for_agent)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| self.refused(e))?;
         self.installation_may_write(&resource).await
     }
 
@@ -405,6 +416,7 @@ mod installation_tests {
             store: db.clone(),
             for_agent: ForAgent::AgentSubject(agent.subject),
             signing_as: selected,
+            refusal_code: Default::default(),
         };
         db.delete_app_agent(&key).unwrap();
         assert!(

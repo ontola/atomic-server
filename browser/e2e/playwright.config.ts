@@ -84,8 +84,8 @@ const seededStorage = [
   // deterministic if either of those ever changes.
   { name: 'viewTransitionsEnabled', value: 'false' },
   {
-    name: 'plugin-catalog-url',
-    value: checkSeed('PLUGIN_CATALOG_URL', catalogUrl, false),
+    name: 'marketplaces',
+    value: JSON.stringify([checkSeed('PLUGIN_CATALOG_URL', catalogUrl, false)]),
   },
   ...(integrationProxy
     ? [

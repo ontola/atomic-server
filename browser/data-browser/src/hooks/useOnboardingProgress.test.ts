@@ -1,54 +1,31 @@
 // @wc-ignore-file
-// @vitest-environment jsdom
-import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  binding: vi.fn(),
-  deviceLinked: vi.fn(),
-  hasAccount: vi.fn(),
-}));
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tomic/react', () => ({
-  core: { properties: { read: 'read', write: 'write' } },
+  contacts: { properties: {} },
+  core: {},
   urls: { instances: {} },
-  useCurrentAgent: () => [{ subject: 'did:ad:agent:me' }],
-  useResources: () => new Map(),
 }));
-vi.mock('@components/AI/AISettingsContext', () => ({
-  useAISettings: () => ({ enableAI: false, availableProviders: [] }),
-}));
-vi.mock('@components/SideBar/AIPanel', () => ({ useDriveChats: () => [] }));
-vi.mock('./usePrivateDrive', () => ({
-  usePrivateDrive: () => ({ privateDrive: 'atomic:home' }),
-}));
-vi.mock('./useSavedDrives', () => ({ useSavedDrives: () => [[]] }));
-vi.mock('./useLocalStorage', () => ({
-  useLocalStorage: (_key: string, initial: unknown) => [initial, () => {}],
-}));
-vi.mock('./useHasManagedAccount', () => ({
-  useHasManagedAccount: mocks.hasAccount,
-}));
-vi.mock('@helpers/managed/binding', () => ({
-  readManagedAccountBinding: mocks.binding,
-}));
-vi.mock('@helpers/managed/deviceLink', () => ({
-  isDeviceLinked: mocks.deviceLinked,
-}));
+vi.mock('@components/AI/AISettingsContext', () => ({}));
+vi.mock('@components/SideBar/AIPanel', () => ({}));
+vi.mock('./usePrivateDrive', () => ({}));
+vi.mock('./useUserSetting', () => ({}));
+vi.mock('./useVisibleDriveChildren', () => ({}));
+vi.mock('@helpers/managed/binding', () => ({}));
+vi.mock('@helpers/managed/deviceLink', () => ({}));
 
-const { deriveOnboardingSteps, isDefaultDriveName, projectDrives } =
+import type { OnboardingInput } from './useOnboardingProgress';
+
+const { deriveOnboardingSteps, hasInviteForDrives, isDefaultDriveName } =
   await import('./useOnboardingProgress');
-const { useOnboardingProgress } = await import('./useOnboardingProgress');
 
-const base = {
+const base: OnboardingInput = {
   driveName: 'Welcome to Atomic',
-  savedDrives: ['atomic:home', 'atomic:welcome'],
-  privateDrive: 'atomic:home',
-  welcomeDrive: 'atomic:welcome',
+  childCount: 4,
+  templateChildCount: 4,
   hasAIChat: false,
   aiAvailable: true,
-  otherAgentsOnProjects: false,
-  invited: false,
+  otherAgentsOnDrives: false,
   accountLinked: false,
 };
 const done = (input = base) =>
@@ -60,12 +37,26 @@ describe('deriveOnboardingSteps', () => {
 
     expect(steps.map(s => s.id)).toEqual([
       'name',
-      'project',
+      'create',
       'ai',
       'invite',
       'save',
     ]);
     expect(steps.some(s => s.done)).toBe(false);
+  });
+
+  it('adds Read Start here first, only on a drive that has the document', () => {
+    expect(deriveOnboardingSteps(base).some(s => s.id === 'start')).toBe(false);
+
+    const withDoc = deriveOnboardingSteps({
+      ...base,
+      startHere: { opened: false },
+    });
+
+    expect(withDoc[0]).toEqual({ id: 'start', done: false });
+    expect(
+      deriveOnboardingSteps({ ...base, startHere: { opened: true } })[0].done,
+    ).toBe(true);
   });
 
   it('counts a name as done once it is not a default one', () => {
@@ -75,15 +66,15 @@ describe('deriveOnboardingSteps', () => {
     expect(done({ ...base, driveName: 'Acme' }).name).toBe(true);
   });
 
-  it('counts a project as a drive besides home and Welcome, even renamed', () => {
-    expect(done().project).toBe(false);
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(done(withProject).project).toBe(true);
-    expect(projectDrives(withProject)).toEqual(['did:ad:p']);
+  it('counts Make something once the drive has more than its template gave', () => {
+    expect(done().create).toBe(false);
+    expect(done({ ...base, childCount: 5 }).create).toBe(true);
+    expect(done({ ...base, childCount: 0, templateChildCount: 0 }).create).toBe(
+      false,
+    );
+    expect(done({ ...base, childCount: 1, templateChildCount: 0 }).create).toBe(
+      true,
+    );
   });
 
   it('is done for the AI once a chat exists, and names the missing source', () => {
@@ -94,24 +85,11 @@ describe('deriveOnboardingSteps', () => {
     expect(deriveOnboardingSteps(base)[2].needs).toBeUndefined();
   });
 
-  it('blocks Invite until there is a project, then accepts a link or another agent', () => {
-    const blocked = deriveOnboardingSteps({ ...base, invited: true })[3];
-
-    expect(blocked.needs).toBe('project');
-
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(deriveOnboardingSteps(withProject)[3]).toMatchObject({
-      done: false,
-      needs: undefined,
-    });
-    expect(done({ ...withProject, invited: true }).invite).toBe(true);
-    expect(done({ ...withProject, otherAgentsOnProjects: true }).invite).toBe(
-      true,
-    );
+  it('is done for Invite once another agent has rights on a drive', () => {
+    expect(done().invite).toBe(false);
+    expect(done({ ...base, otherAgentsOnDrives: true }).invite).toBe(true);
+    expect(done({ ...base, inviteSent: true }).invite).toBe(true);
+    expect(done(base).invite).toBe(false);
   });
 
   it('is done for Save once an account is linked', () => {
@@ -119,37 +97,19 @@ describe('deriveOnboardingSteps', () => {
   });
 });
 
-describe('useOnboardingProgress Save step', () => {
-  const save = () =>
-    renderHook(() => useOnboardingProgress()).result.current.steps.find(
-      s => s.id === 'save',
+describe('hasInviteForDrives', () => {
+  it('matches an invite target against the drives', () => {
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a'])).toBe(true);
+    expect(hasInviteForDrives(['did:ad:b', undefined], ['did:ad:a'])).toBe(
+      false,
     );
-
-  beforeEach(() => {
-    mocks.binding.mockReturnValue(null);
-    mocks.deviceLinked.mockReturnValue(false);
-    mocks.hasAccount.mockReturnValue(undefined);
+    expect(hasInviteForDrives([], ['did:ad:a'])).toBe(false);
   });
 
-  it('is not done with no binding, no device token and no account', () => {
-    expect(save()?.done).toBe(false);
-    mocks.hasAccount.mockReturnValue(false);
-    expect(save()?.done).toBe(false);
-  });
-
-  it('is done for a signed-in account without a binding or device token', () => {
-    mocks.hasAccount.mockReturnValue(true);
-    expect(save()?.done).toBe(true);
-  });
-
-  it('is still done by a binding or a linked device alone', () => {
-    mocks.binding.mockReturnValue({
-      owner_email: 'a',
-      expected_agent_subject: 'b',
-    });
-    expect(save()?.done).toBe(true);
-    mocks.binding.mockReturnValue(null);
-    mocks.deviceLinked.mockReturnValue(true);
-    expect(save()?.done).toBe(true);
+  it('counts a copied invite link record, which has no address', () => {
+    // Same target the record holds (see pendingInvites.test.ts).
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a', 'did:ad:b'])).toBe(
+      true,
+    );
   });
 });
