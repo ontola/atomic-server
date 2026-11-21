@@ -48,8 +48,8 @@ import { z } from 'zod';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useAddToOntology } from '@hooks/useAddToOntology';
-import { constructOpenURL } from '@helpers/navigation';
-import { buildTableFromSpec } from '@chunks/TablePage/createTableFromSpec';
+import { constructOpenURL } from '../../helpers/navigation';
+import { buildTableFromSpec } from '@tomic/table-page/TablePage/createTableFromSpec';
 import {
   createPlugin,
   prepareRun,
@@ -62,20 +62,20 @@ import {
   describeTable,
   readTableColumns,
   resolveView,
-} from '@chunks/TablePage/tableOps';
-import { TABLE_TEMPLATES } from '@chunks/TablePage/tableTemplates';
+} from '@tomic/table-page/TablePage/tableOps';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import { useDocumentEditAgent } from './documentEditAgent';
 import { getClassContextForAgent } from './resourceContextProviders';
 import type { AIModelIdentifier } from './types';
 import {
   buildDashboardFromSpec,
   type DashboardBlockSpec,
-} from '../DashboardPage/createDashboardFromSpec';
+} from '@tomic/table-page/DashboardPage/createDashboardFromSpec';
 import {
   configureBlock,
   describeDashboard,
   resolveBlock,
-} from '../DashboardPage/dashboardOps';
+} from '@tomic/table-page/DashboardPage/dashboardOps';
 import { resourceActions } from '../../actions/resourceActions';
 import { deriveActionTools } from '../../actions/deriveTools';
 import { buildActionContext } from '../../actions/useActionContext';

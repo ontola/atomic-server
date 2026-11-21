@@ -1,4 +1,4 @@
-import { CSSVar } from '@helpers/CSSVar';
+import { CSSVar } from '@tomic/ui/helpers/CSSVar';
 
 export const SIDEBAR_WIDTH_PROP = new CSSVar('sidebar-width');
 

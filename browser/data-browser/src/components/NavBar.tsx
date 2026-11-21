@@ -17,11 +17,14 @@ import {
   useBackForward,
 } from '../hooks/useNavigateWithTransition';
 import { useSettings } from '../helpers/AppSettings';
-import { Button } from './Button';
-import { BREADCRUMB_BAR_TRANSITION_TAG } from '../helpers/transitionName';
-import { transition } from '../helpers/transition';
+import { Button } from '@tomic/ui/components/Button';
+import { BREADCRUMB_BAR_TRANSITION_TAG } from '@tomic/ui/helpers/transitionName';
+import { transition } from '@tomic/ui/helpers/transition';
 import { ResourceContextMenu } from './ResourceContextMenu';
-import { DIVIDER, DropdownMenu } from './Dropdown';
+import {
+  DIVIDER,
+  DropdownMenu,
+} from '@tomic/resource-ui/components/Dropdown/index';
 import { OPEN_TAGS_EVENT } from '../actions/resourceActions';
 import { useAppMenuItems } from '../actions/appMenuItems';
 import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMenuTrigger';
@@ -54,21 +57,21 @@ import {
   COMPACT_MEDIA,
   TOUCH_TARGET,
 } from './NavBarButton';
-import { useCommentCount } from '../hooks/useCommentCount';
+import { useCommentCount } from '@tomic/resource-ui/hooks/useCommentCount';
 import { UiHint } from './UiHint';
-import { AIIcon } from './AI/AIIcon';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
 import { TagSelectPopover } from './Tag/TagSelectPopover';
-import { Tag } from './Tag/Tag';
+import { Tag } from '@tomic/resource-ui/components/Tag/Tag';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
 import { ShareDialog } from './Share/ShareDialog';
-import { IconButton } from './IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { displayShortcut, shortcuts } from './HotKeyWrapper';
-import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import { isRunningInTauri } from '../helpers/tauri';
 import { openSearchOverlay } from './OverlayContainer';
-import { useAIChanges } from './AIChangesContext';
-import { Row } from './Row';
+import { useAIChanges } from '@tomic/resource-ui/components/AIChangesContext';
+import { Row } from '@tomic/ui/components/Row';
 import { ContentLanguageSelect } from './ContentLanguageSelect';
 import { ResourcePresenceRow } from './Presence/ResourcePresenceRow';
 import { FollowStatus } from './Presence/FollowStatus';

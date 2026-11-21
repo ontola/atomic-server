@@ -13,13 +13,13 @@ import {
 import './reset.css';
 import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
-import { CurrentBackgroundColor } from './globalCssVars';
+import { CurrentBackgroundColor } from '@tomic/ui/globalCssVars';
 import {
   BREADCRUMB_BAR_TRANSITION_TAG,
   MEETING_PANEL_TITLE_TRANSITION_TAG,
   PAGE_TITLE_TRANSITION_TAG,
   RESOURCE_PAGE_TRANSITION_TAG,
-} from './helpers/transitionName';
+} from '@tomic/ui/helpers/transitionName';
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -45,16 +45,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
  * The app's muted color palette: the main-color presets in the appearance
  * settings, and the default colors for new tags.
  */
-export const presetColors = [
-  '#4C6FA5', // dusty blue
-  '#6E9B7B', // sage green
-  '#CC7B54', // terracotta
-  '#B5657A', // dusty rose
-  '#CC9A44', // mustard
-  '#7C7BB8', // periwinkle
-  '#4E9B96', // muted teal
-  '#A9825E', // warm taupe
-];
+export { presetColors } from '@tomic/ui/themeTokens';
 
 /**
  * Wraps the app chrome (sidebar, navbar). In colorful mode it swaps the
@@ -112,7 +103,8 @@ export const zIndex = {
 };
 
 /** Default animation duration in ms */
-export const animationDuration = 100;
+export { animationDuration } from '@tomic/ui/themeTokens';
+import { animationDuration } from '@tomic/ui/themeTokens';
 
 /** Taller on touch screens (see GlobalStyle) so the bar's buttons are easy to hit. */
 const breadCrumbBarHeight = 'var(--breadcrumb-bar-height, 2.2rem)';

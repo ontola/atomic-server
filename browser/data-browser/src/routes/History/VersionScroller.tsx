@@ -2,9 +2,9 @@ import { useId, Fragment, type JSX } from 'react';
 import { GroupedVersions } from './HistoryViewProps';
 import { Version } from '@tomic/react';
 import { styled } from 'styled-components';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { VersionButton } from './VersionButton';
-import { IconButton } from '../../components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 
 interface VersionScrollerProps {

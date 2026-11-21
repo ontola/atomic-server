@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { styled } from 'styled-components';
 import { useResourcePresence, type PresenceItem } from '@tomic/react';
-import { colorForAgent } from '@components/Presence/AgentAvatar';
-import { PresenceUserTag } from '@components/Presence/PresenceUserTag';
+import { colorForAgent } from '@tomic/resource-ui/components/Presence/AgentAvatar';
+import { PresenceUserTag } from '@tomic/resource-ui/components/Presence/PresenceUserTag';
 
 /** What a canvas session shares about its pointer: world coordinates,
  *  mapped through each receiver's own zoom/pan. */

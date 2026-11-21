@@ -4,8 +4,8 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { Shell } from '../views/getting-started/chrome';
-import { Button } from '../components/Button';
-import { Column } from '../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import {
   cameFromPortal,
   portalReturnUrl,

@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { FaPlus } from 'react-icons/fa6';
 import { ModelSelect } from './ModelSelect/ModelSelect';
 import { type AIAgent, type AIModelIdentifier } from './types';
-import { useLocalStorage } from '@hooks/useLocalStorage';
-import { SkeletonButton } from '@components/SkeletonButton';
-import { MarkdownInput } from '@components/forms/MarkdownInput';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { Input } from '@components/forms/InputStyles';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
+import { SkeletonButton } from '@tomic/ui/components/SkeletonButton';
+import { MarkdownInput } from '@tomic/resource-ui/components/forms/MarkdownInput';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import { Input } from '@tomic/ui/components/forms/InputStyles';
 import { SliderInput } from '@components/forms/SliderInput';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { AgentConfigItem } from './AgentConfigItem';
 import { ConfigEditorDialog } from './ConfigEditorDialog';
 import atomicAgentPrompt from './system-prompts/atomic-agent.md?raw';
-import Field from '@components/forms/Field';
-import Markdown from '@components/datatypes/Markdown';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 
 // Add this formatter at the top of the file, after imports
 const temperatureFormatter = new Intl.NumberFormat(undefined, {

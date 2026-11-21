@@ -1,6 +1,6 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { PairingCode } from './PairingCode';
 import { cardSurface } from './cardSurface';
 import {

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Resource, Store, StoreContext, server } from '@tomic/react';
-import { useFileInfo } from './useFile';
+import { useFileInfo } from '@tomic/resource-ui/hooks/useFile';
 
 const downloadUrl = 'https://example.com/download/files/image';
 

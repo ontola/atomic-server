@@ -1,5 +1,5 @@
-import { Button } from '@components/Button';
-import { PopoverContainer } from '@components/Popover';
+import { Button } from '@tomic/ui/components/Button';
+import { PopoverContainer } from '@tomic/ui/components/Popover';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { lazy, Suspense, useState } from 'react';
 import { StyleSheetManager } from 'styled-components';

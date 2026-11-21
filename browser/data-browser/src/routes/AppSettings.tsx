@@ -3,10 +3,10 @@ import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { DarkModeOption } from '../helpers/useDarkMode';
-import { Column, Row } from '../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { Main } from '../components/Main';
 import { Panel, usePanelList } from '../components/SideBar/usePanelList';
 import { pathNames } from './paths';
@@ -18,7 +18,7 @@ import { NotificationSettings } from '@components/Settings/NotificationSettings'
 import { isVirtualDriveAvailable } from '../helpers/virtualDrive';
 import { useLocale } from '@components/LocaleContext';
 import { SUPPORTED_LOCALES } from '@helpers/preloadLocale';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { styled } from 'styled-components';
 import { isAtomicIdentifier } from '@tomic/react';
 import {
@@ -45,7 +45,10 @@ const SyncSettings = lazy(() =>
   })),
 );
 import { presetColors } from '../styling';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 import {
   showAppearanceOption,

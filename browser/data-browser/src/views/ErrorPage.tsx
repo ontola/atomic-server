@@ -9,12 +9,11 @@ import {
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
-import { Column, Row } from '../components/Row';
-import CrashPage from './CrashPage';
-import { AtomicLink } from '../components/AtomicLink';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
@@ -219,44 +218,4 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
 
 export default ErrorPage;
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  FallBackComponent?: React.ComponentType<{ error: Error }>;
-}
-
-interface ErrorBoundaryState {
-  error?: Error;
-}
-
-export class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  public constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { error: undefined };
-  }
-
-  public static getDerivedStateFromError(error: Error) {
-    // Update state so the next render will show the fallback UI.
-    return { error };
-  }
-
-  public render() {
-    if (this.state.error) {
-      if (this.props.FallBackComponent) {
-        return <this.props.FallBackComponent error={this.state.error} />;
-      }
-
-      return (
-        <CrashPage
-          error={this.state.error}
-          clearError={() => this.setState({ error: undefined })}
-          info={{} as React.ErrorInfo}
-        />
-      );
-    }
-
-    return this.props.children;
-  }
-}
+export { ErrorBoundary } from '@tomic/resource-ui/components/ErrorBoundary';

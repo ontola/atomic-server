@@ -1,6 +1,6 @@
 import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 
 type SemanticSearchResultItem = {
   subject?: string;

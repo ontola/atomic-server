@@ -133,8 +133,9 @@ export function auditCatalogs(catalogs, sourceLocale = 'en') {
 
 export async function auditProject() {
   // Importing config does not invoke its optional translation provider.
-  const { default: config } = await import('../wuchale.config.js');
-  const root = fileURLToPath(new URL('../', import.meta.url));
+  const { default: config } =
+    await import('../../resource-ui/wuchale.config.js');
+  const root = fileURLToPath(new URL('../../resource-ui/', import.meta.url));
   const catalogs = Object.fromEntries(
     config.locales.map(locale => [
       locale,

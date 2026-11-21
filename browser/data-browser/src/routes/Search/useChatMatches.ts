@@ -2,7 +2,7 @@
 import { core, useResources, useStore } from '@tomic/react';
 import { useMemo } from 'react';
 import { useConversations } from '../../helpers/conversations/useConversations';
-import { knownPages, scopeKey } from '../../helpers/chatLog';
+import { knownPages, scopeKey } from '@tomic/resource-ui/helpers/chatLog';
 import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { useDriveChats } from '../../components/SideBar/AIPanel';
 import {

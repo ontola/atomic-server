@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../../helpers/AppSettings';
-import { Button } from '../Button';
-import { Column, Row } from '../Row';
-import { WarningBlock } from '../WarningBlock';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
 import { AccountRecoveryCard } from '../AccountRecoveryCard';
 import { ConnectedAppsCard } from '../ConnectedAppsCard';
 import { AgentProfileHeader } from '../AgentProfileHeader';

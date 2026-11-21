@@ -19,7 +19,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { createOllama } from 'ollama-ai-provider-v2';
-import { addFieldsIf } from '@helpers/addIf';
+import { addFieldsIf } from '@tomic/resource-ui/helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@tomic/react';

@@ -1,3 +1,22 @@
+Grid extraction and shared helpers: `browser/table/src` retains the existing grid,
+keyboard, selection and primitive-editor tests. The SDK's EventManager and civil
+calendar tests move with their implementations to `browser/utils/src` (nine
+cases). Both SDK and UI builds include the private helper modules' declarations;
+packed-consumer checks verify the grid uses the host's UI module instance.
+TableCell's local fixture seeds createdAt metadata to avoid external HTTP reads
+while asserting cell commits. These changes do not introduce new state policies.
+
+Shared UI extraction: `browser/data-browser/src/components/sharedUI.test.tsx`
+checks that compatibility paths and the extracted package share keyboard locks,
+the dialog tree and generated background CSS variables. Existing spinner,
+dropdown positioning/trigger, resize, Back-to-close, expanded-row and column-filter
+tests exercise the same implementation through host entry points.
+`browser/ui/scripts/check-package.mjs` mounts compiled controls in a clean packed
+consumer and verifies NodeNext declarations without application source aliases.
+`browser/data-browser/src/oxc-styled-components.test.ts` runs the canonical shared
+Button source through the React Compiler and styled-components transforms,
+retaining display-name coverage after the host file becomes a compatibility export.
+
 Cloud Vault backup download (#2560): `browser/data-browser/src/helpers/managed/vaultFile.test.ts` exercises the save picker with File System Access suffix validation, preserves the suggested `.atomic-vault` filename, parses the streamed bytes to verify their contents, and checks cancellation and picker-error propagation. This is a simulated picker contract test; the physical macOS Save dialog is not covered.
 
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
@@ -230,6 +249,24 @@ failure and successful server visibility. The provider setup browser flows
 (`app-setup.spec.ts`) moved to atomic-plugins with the providers.
 
 # Testing coverage map
+
+Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
+checks the existing date radio choices/previews and uncontrolled precision input,
+including host change/blur callbacks, bounds and error rendering.
+Quick-add presentation: `browser/table/src/QuickAddBar.test.tsx` checks the
+existing local serial queue, preservation of newly typed text, and reporting a
+failed request while continuing already accepted submissions.
+Stored table-view configuration: `browser/table/src/views/configuration.test.ts`
+covers backend-free legacy formula decoding, permissive saved formats, raw
+action values, quick-add JSON, aggregate specs and column/filter identities.
+The existing Atomic parser/row-action suites exercise compatibility re-exports;
+formula execution still needs the real WASM evaluator.
+
+Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
+covers host value/operator/removal callbacks and the existing numeric/date/now
+input policy. Actual-component Chromium checks cover edit/readback, operator
+selection, Escape/reopen/removal and desktop/mobile layout; these are component
+fixtures, not a claim of full backend-integrated TablePage coverage.
 
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
@@ -2145,7 +2182,7 @@ number by keyboard, or a click on the day's empty space) shows every event and
 opens each row on top of it. How many chips fit is measured, so it needs a
 real browser; jsdom can't cover it.
 
-All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
+All-day ranges: `browser/utils/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
 boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati.
 
@@ -2939,3 +2976,15 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+Table format extraction (#2539): `browser/table/src/schema/PropertyChoiceField.test.tsx`
+checks controlled radio selection; `browser/table/src/chunks/TablePage/EditorCells/FloatCell.test.tsx`
+checks decimal, exponent and comma input commit without truncation or writes while typing.
+`browser/data-browser/src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx`
+uses real Atomic Resources to preserve number-draft initialization without saving and
+text-format changes with the clean host's explicit save. These are compatibility
+checks for code moves, not new schema-validation or persistence semantics.
+### Create-button field extraction
+
+- `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
+- `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.

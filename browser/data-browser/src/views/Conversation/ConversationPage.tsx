@@ -9,7 +9,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { FaLock } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useSettings } from '../../helpers/AppSettings';
 import {
   openPayloads,

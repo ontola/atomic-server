@@ -4,10 +4,10 @@ import toast from 'react-hot-toast';
 import { FaClock } from 'react-icons/fa6';
 import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
 import { setPluginSchedule } from './runScript';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { Checkbox } from '@components/forms/Checkbox';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 
 /**
  * Running a plugin when nobody is watching.

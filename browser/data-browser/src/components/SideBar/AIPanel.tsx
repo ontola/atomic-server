@@ -8,7 +8,7 @@ import {
 } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
 import { FaPlus, FaRegComment } from 'react-icons/fa6';
-import { IconButton } from '@components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { dataBrowser, useTitle } from '@tomic/react';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';

@@ -1,5 +1,5 @@
 import { SettingsSection } from '@components/Settings';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { AgentConfigTab, useAIAgentConfig } from './AgentConfig';
 import { SkillsConfigTab } from './SkillsConfigTab';
 import { MCPConfigTab } from './MCPConfigTab';

@@ -1,14 +1,14 @@
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
-import { ContainerNarrow } from '@components/Containers';
-import Markdown from '@components/datatypes/Markdown';
-import { JSONEditor } from '@components/JSONEditor';
-import { Card } from '@components/Card';
-import { Details } from '@components/Details';
-import { Column, Row } from '@components/Row';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import { ContainerNarrow } from '@tomic/ui/components/Containers';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { JSONEditor } from '@tomic/resource-ui/components/JSONEditor';
+import { Card } from '@tomic/ui/components/Card';
+import { Details } from '@tomic/ui/components/Details';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import {
   core,
@@ -27,7 +27,7 @@ import {
 } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import type { JSONSchema7 } from 'ai';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   FaFloppyDisk,
@@ -57,7 +57,7 @@ import {
   type OnboardingStepId,
 } from './configFormLogic';
 import { useInstallationConfigSchema } from './useInstallationConfigSchema';
-import { ResourceInline } from '@views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
 import {
   InstallationReviewDialog,

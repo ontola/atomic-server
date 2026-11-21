@@ -19,19 +19,19 @@ import {
 } from 'react-icons/fa6';
 
 import { useViewport } from '../helpers/useMedia';
-import { Button } from '../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ContainerFull } from '../components/Containers';
-import Markdown from '../components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import { NewInstanceButton } from '../components/NewInstanceButton';
 import ResourceCard from './Card/ResourceCard';
 import Table from '../components/Table';
 import { useSubjectParam } from '../helpers/useCurrentSubject';
 import { ComboBox, type ComboBoxOption } from '../components/ComboBox';
-import { AtomicLink } from '../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { ResourcePageProps } from './ResourcePage';
 import { useEffectOnce } from '../hooks/useEffectOnce';
-import { Row } from '../components/Row';
-import { EditableTitle } from '../components/EditableTitle';
+import { Row } from '@tomic/ui/components/Row';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 import type { JSX } from 'react';

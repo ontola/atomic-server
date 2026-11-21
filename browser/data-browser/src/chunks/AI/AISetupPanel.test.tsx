@@ -19,13 +19,13 @@ beforeEach(() => {
   hosted.enable.mockReset();
 });
 
-vi.mock('@components/Row', () => ({ Column: 'div', Row: 'div' }));
+vi.mock('@tomic/ui/components/Row', () => ({ Column: 'div', Row: 'div' }));
 vi.mock('@helpers/managed/api', () => ({
   hasManagedApi: () => hosted.managed,
 }));
 vi.mock('@chunks/AI/ModelSelect/ModelSelect', () => ({ default: () => null }));
 
-vi.mock('@components/Dialog', () => ({
+vi.mock('@tomic/resource-ui/components/Dialog/index', () => ({
   useDialog: ({ onCancel }: { onCancel: () => void }) => [
     { onCancel },
     () => {},
@@ -72,17 +72,17 @@ vi.mock('@components/AI/ProviderStatus', () => ({
 vi.mock('@components/AI/OpenRouterLoginButton', () => ({
   OpenRouterLoginButton: () => null,
 }));
-vi.mock('@components/Button', () => ({
+vi.mock('@tomic/ui/components/Button', () => ({
   Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
 }));
-vi.mock('@components/OutlinedSection', () => ({
+vi.mock('@tomic/ui/components/OutlinedSection', () => ({
   OutlinedSection: ({ children }: React.PropsWithChildren) => (
     <div>{children}</div>
   ),
 }));
-vi.mock('@components/forms/InputStyles', () => ({
+vi.mock('@tomic/ui/components/forms/InputStyles', () => ({
   InputStyled: 'input',
   InputWrapper: 'div',
 }));

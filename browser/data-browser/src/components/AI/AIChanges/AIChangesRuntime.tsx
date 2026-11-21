@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import styled from 'styled-components';
 import type { JSONContent } from '@tiptap/core';
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   dataBrowser,
   StoreEvents,
@@ -10,31 +10,31 @@ import {
   useStore,
   type Resource,
 } from '@tomic/react';
-import { Dialog, useDialog } from '@components/Dialog';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import {
   ResourceDiff,
   useResourceDiff,
-} from '@components/ResourceDiff/ResourceDiff';
-import { Details } from '@components/Details';
-import { Column, Row } from '@components/Row';
+} from '@tomic/resource-ui/components/ResourceDiff/ResourceDiff';
+import { Details } from '@tomic/ui/components/Details';
+import { Column, Row } from '@tomic/ui/components/Row';
 import toast from 'react-hot-toast';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
+} from '@tomic/ui/components/IconButton/IconButton';
 import { FaCheck, FaXmark } from 'react-icons/fa6';
-import { plural } from '@helpers/plural';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 import {
   hasDocumentContent,
   readDocumentV2TiptapJson,
-} from '@chunks/RTE/readDocumentV2TiptapJson';
+} from '@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson';
 import { applyPatchedJsonToLoroDocCollaborative } from '@chunks/RTE/applyPatchedJsonToLoroDocCollaborative';
 import {
   ensureAIReviewPersistHoldInstalled,
   holdAIReviewEdits,
   releaseAIReviewEdits,
 } from '@chunks/AI/aiReviewPersistHold';
-import type { AIChangesContextType } from '@components/AIChangesContext';
+import type { AIChangesContextType } from '@tomic/resource-ui/components/AIChangesContext';
 
 export const AIChangesRuntime: React.FC<{
   setValue: React.Dispatch<React.SetStateAction<AIChangesContextType>>;

@@ -5,8 +5,8 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
 
 interface ConfigEditorDialogProps {
   /** Opens the dialog when true. Stays true until `onClosed` runs. */

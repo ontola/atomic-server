@@ -13,7 +13,7 @@ import {
   getTransitionName,
 } from '../../../helpers/transitionName';
 import { useSettings } from '../../../helpers/AppSettings';
-import { IconButton } from '../../IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { FaCaretRight, FaGripVertical } from 'react-icons/fa6';
 import { SidebarPresence } from '../../Presence/SidebarPresence';
 

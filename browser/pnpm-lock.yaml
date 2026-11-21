@@ -262,9 +262,21 @@ importers:
       '@tomic/react':
         specifier: workspace:*
         version: link:../react
+      '@tomic/resource-ui':
+        specifier: workspace:*
+        version: link:../resource-ui
       '@tomic/service-ui':
         specifier: workspace:*
         version: link:../service-ui
+      '@tomic/table':
+        specifier: workspace:*
+        version: link:../table
+      '@tomic/table-page':
+        specifier: workspace:*
+        version: link:../table-page
+      '@tomic/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@uiw/codemirror-theme-github':
         specifier: ^4.25.10
         version: 4.25.10(@codemirror/language@6.12.3)(@codemirror/state@6.7.4)(@codemirror/view@6.43.0)
@@ -618,6 +630,9 @@ importers:
       '@microsoft/api-extractor':
         specifier: ^7.58.7
         version: 7.58.7(@types/node@25.9.1)
+      '@tomic/utils':
+        specifier: workspace:*
+        version: link:../utils
       loro-crdt:
         specifier: ^1.12.1
         version: 1.12.1
@@ -723,6 +738,208 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
+  resource-ui:
+    dependencies:
+      '@codemirror/lang-json':
+        specifier: ^6.0.2
+        version: 6.0.2
+      '@codemirror/lint':
+        specifier: ^6.9.6
+        version: 6.9.7
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@emoji-mart/react':
+        specifier: ^1.1.1
+        version: 1.1.1(emoji-mart@5.6.0)(react@19.2.6)
+      '@floating-ui/dom':
+        specifier: ^1.7.6
+        version: 1.7.6
+      '@radix-ui/react-popover':
+        specifier: ^1.1.15
+        version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@radix-ui/react-scroll-area':
+        specifier: ^1.2.10
+        version: 1.2.10(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@tiptap/core':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/pm@3.31.3)
+      '@tiptap/extension-image':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
+      '@tiptap/extension-link':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tiptap/extension-list':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tiptap/extension-placeholder':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/extensions@3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3))
+      '@tiptap/extension-table':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tiptap/extension-text-align':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
+      '@tiptap/extension-text-style':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
+      '@tiptap/extension-typography':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
+      '@tiptap/markdown':
+        specifier: ^3.30.4
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tiptap/pm':
+        specifier: ^3.30.4
+        version: 3.31.3
+      '@tiptap/react':
+        specifier: ^3.30.4
+        version: 3.31.3(@floating-ui/dom@1.7.6)(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@tiptap/starter-kit':
+        specifier: ^3.30.4
+        version: 3.31.3
+      '@tiptap/suggestion':
+        specifier: ^3.30.4
+        version: 3.31.3(@floating-ui/dom@1.7.6)(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tomic/form-renderer':
+        specifier: workspace:*
+        version: link:../form-renderer
+      '@tomic/lib':
+        specifier: workspace:*
+        version: link:../lib
+      '@tomic/react':
+        specifier: workspace:*
+        version: link:../react
+      '@tomic/table':
+        specifier: workspace:*
+        version: link:../table
+      '@tomic/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@uiw/codemirror-theme-github':
+        specifier: ^4.25.10
+        version: 4.25.10(@codemirror/language@6.12.3)(@codemirror/state@6.7.4)(@codemirror/view@6.43.0)
+      '@uiw/react-codemirror':
+        specifier: ^4.25.10
+        version: 4.25.10(@babel/runtime@7.29.2)(@codemirror/autocomplete@6.20.2)(@codemirror/language@6.12.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.5.11)(@codemirror/state@6.7.4)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.43.0)(codemirror@6.0.2)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      ai:
+        specifier: ^6.0.191
+        version: 6.0.191(zod@4.4.3)
+      best-effort-json-parser:
+        specifier: 1.4.0
+        version: 1.4.0
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      codemirror-json-schema:
+        specifier: ^0.8.1
+        version: 0.8.1(@codemirror/language@6.12.3)(@codemirror/lint@6.9.7)(@codemirror/state@6.7.4)(@codemirror/view@6.43.0)(@lezer/common@1.5.2)
+      diff:
+        specifier: ^8.0.4
+        version: 8.0.4
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.47
+      linkifyjs:
+        specifier: 4.3.3
+        version: 4.3.3
+      loro-crdt:
+        specifier: ^1.12.1
+        version: 1.12.1
+      loro-prosemirror:
+        specifier: ^0.4.3
+        version: 0.4.3(patch_hash=cfeb56b4474c59fdd4a3feb56f010825ca89494fca7a5bb422aef1a84e626bf8)(loro-crdt@1.12.1)
+      polished:
+        specifier: ^4.3.1
+        version: 4.3.1
+      prismjs:
+        specifier: ^1.30.0
+        version: 1.30.0
+      quick-score:
+        specifier: ^0.2.0
+        version: 0.2.0
+      react:
+        specifier: ^19.2.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.6(react@19.2.6)
+      react-dropzone:
+        specifier: ^15.0.0
+        version: 15.0.0(react@19.2.6)
+      react-hot-toast:
+        specifier: ^2.6.0
+        version: 2.6.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-hotkeys-hook:
+        specifier: ^5.3.2
+        version: 5.3.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-icons:
+        specifier: ^5.6.0
+        version: 5.6.0(react@19.2.6)
+      react-markdown:
+        specifier: ^10.1.0
+        version: 10.1.0(@types/react@19.2.15)(react@19.2.6)
+      rehype-katex:
+        specifier: ^7.0.1
+        version: 7.0.1
+      remark-breaks:
+        specifier: ^4.0.0
+        version: 4.0.0
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      remark-math:
+        specifier: ^6.0.0
+        version: 6.0.0
+      styled-components:
+        specifier: ^6.1.0
+        version: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      unist-util-visit:
+        specifier: ^5.1.0
+        version: 5.1.0
+      wuchale:
+        specifier: ^0.25.6
+        version: 0.25.6(patch_hash=511c67ffd9eb6bf2eb31fa7c28a0333018922baa4709799b976e33184a78b5ac)
+    devDependencies:
+      '@openrouter/ai-sdk-provider':
+        specifier: ^2.9.0
+        version: 2.9.0(ai@6.0.191(zod@4.4.3))(zod@4.4.3)
+      '@tanstack/react-router':
+        specifier: ^1.170.7
+        version: 1.170.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      '@types/prismjs':
+        specifier: ^1.26.6
+        version: 1.26.6
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      '@wuchale/jsx':
+        specifier: ^0.12.5
+        version: 0.12.5(patch_hash=c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6)(react@19.2.6)
+      esbuild:
+        specifier: '>=0.28.1 <0.29.0'
+        version: 0.28.1
+      jsdom:
+        specifier: ^30.1.0
+        version: 30.1.0(@noble/hashes@2.2.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
   service-ui:
     devDependencies:
       '@types/react':
@@ -768,6 +985,198 @@ importers:
       vite:
         specifier: '>=8.0.16 <9.0.0'
         version: 8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  table:
+    dependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@radix-ui/react-scroll-area':
+        specifier: ^1.2.10
+        version: 1.2.10(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      polished:
+        specifier: ^4.3.1
+        version: 4.3.1
+      react:
+        specifier: ^19.2.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.6(react@19.2.6)
+      react-icons:
+        specifier: ^5.6.0
+        version: 5.6.0(react@19.2.6)
+      react-virtualized-auto-sizer:
+        specifier: ^2.0.3
+        version: 2.0.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-window:
+        specifier: ^2.2.7
+        version: 2.2.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      styled-components:
+        specifier: ^6.1.0
+        version: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+    devDependencies:
+      '@testing-library/dom':
+        specifier: ^10.4.2
+        version: 10.4.2
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@tomic/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      esbuild:
+        specifier: '>=0.28.1 <0.29.0'
+        version: 0.28.1
+      jsdom:
+        specifier: ^30.1.0
+        version: 30.1.0(@noble/hashes@2.2.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  table-page:
+    dependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@dnd-kit/sortable':
+        specifier: ^10.0.0
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
+      '@dnd-kit/utilities':
+        specifier: ^3.2.2
+        version: 3.2.2(react@19.2.6)
+      '@tomic/lib':
+        specifier: workspace:*
+        version: link:../lib
+      '@tomic/react':
+        specifier: workspace:*
+        version: link:../react
+      '@tomic/resource-ui':
+        specifier: workspace:*
+        version: link:../resource-ui
+      '@tomic/table':
+        specifier: workspace:*
+        version: link:../table
+      '@tomic/ui':
+        specifier: workspace:*
+        version: link:../ui
+      polished:
+        specifier: ^4.3.1
+        version: 4.3.1
+      react:
+        specifier: ^19.2.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.6(react@19.2.6)
+      react-hot-toast:
+        specifier: ^2.6.0
+        version: 2.6.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-icons:
+        specifier: ^5.6.0
+        version: 5.6.0(react@19.2.6)
+      styled-components:
+        specifier: ^6.1.0
+        version: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+    devDependencies:
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      '@wuchale/jsx':
+        specifier: ^0.12.5
+        version: 0.12.5(patch_hash=c62a6c8ae50964c9b52a44a8f50a85ccd1e7bd003758e3143f2e985b9051e8e6)(react@19.2.6)
+      esbuild:
+        specifier: '>=0.28.1 <0.29.0'
+        version: 0.28.1
+      jsdom:
+        specifier: ^30.1.0
+        version: 30.1.0(@noble/hashes@2.2.0)
+      loro-crdt:
+        specifier: ^1.12.1
+        version: 1.12.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+
+  ui:
+    dependencies:
+      '@radix-ui/react-popover':
+        specifier: ^1.1.15
+        version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@radix-ui/react-scroll-area':
+        specifier: ^1.2.10
+        version: 1.2.10(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      csstype:
+        specifier: ^3.2.3
+        version: 3.2.3
+      polished:
+        specifier: ^4.3.1
+        version: 4.3.1
+      react:
+        specifier: ^19.2.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.6(react@19.2.6)
+      react-hotkeys-hook:
+        specifier: ^5.3.2
+        version: 5.3.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-icons:
+        specifier: ^5.6.0
+        version: 5.6.0(react@19.2.6)
+      styled-components:
+        specifier: ^6.1.0
+        version: 6.4.2(css-to-react-native@3.2.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+    devDependencies:
+      '@tomic/utils':
+        specifier: workspace:*
+        version: link:../utils
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      esbuild:
+        specifier: '>=0.28.1 <0.29.0'
+        version: 0.28.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  utils:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.2.2(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
@@ -6888,6 +7297,7 @@ packages:
   image-size@2.0.2:
     resolution: {integrity: sha512-IRqXKlaXwgSMAMtpNzZa1ZAe8m+Sa1770Dhk8VkSsP9LS+iHD62Zd8FQKs8fbPiagBE7BzoFX23cxFnwshpV6w==}
     engines: {node: '>=16.x'}
+    deprecated: Use latest 2.x please
     hasBin: true
 
   import-in-the-middle@3.0.1:
@@ -12204,7 +12614,7 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1(supports-color@10.2.2)
-      express-rate-limit: 8.7.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)
+      express-rate-limit: 8.7.0(express@5.2.1)(supports-color@10.2.2)
       hono: 4.13.7
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -16429,7 +16839,7 @@ snapshots:
     dependencies:
       on-headers: 1.1.0
 
-  express-rate-limit@8.7.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2):
+  express-rate-limit@8.7.0(express@5.2.1)(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       express: 5.2.1(supports-color@10.2.2)

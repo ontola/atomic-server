@@ -7,7 +7,7 @@ import {
   useStore,
 } from '@tomic/react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
-import { sortSubjectList } from './sortSubjectList';
+import { sortSubjectList } from '@tomic/resource-ui/views/OntologyPage/sortSubjectList';
 
 interface OntologyContext {
   addClass: (subject: string) => Promise<void>;

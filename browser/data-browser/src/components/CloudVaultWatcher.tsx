@@ -8,7 +8,7 @@ import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { CLOUD_SERVER_PRICE } from '../helpers/cloudServerPrice';
 import { paths } from '../routes/paths';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { ToastBody } from './Notifications/toastStyles';
 import {
   AUTO_BACKUP_RETRY_MS,

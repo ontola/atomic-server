@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { useStore, type Resource } from '@tomic/react';
-import { Dialog, useDialog } from '@components/Dialog';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { LoaderBlock } from '@components/Loader';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import {
   applyRun,
   pluginClassesFor,

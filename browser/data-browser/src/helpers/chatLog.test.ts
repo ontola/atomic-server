@@ -9,7 +9,7 @@ import {
   toEntryId,
   windowChat,
   type Timed,
-} from './chatLog';
+} from '@tomic/resource-ui/helpers/chatLog';
 
 const t = (id: string, at: number): Timed => ({ id, at });
 

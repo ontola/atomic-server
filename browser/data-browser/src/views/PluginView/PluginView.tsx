@@ -6,7 +6,7 @@ import { usePluginRPC } from '@views/PluginView/pluginRPC';
 import styled from 'styled-components';
 import { useEffect, useState } from 'react';
 import { signRequest } from '@tomic/lib';
-import { ErrorBlock } from '@components/ErrorLook';
+import { ErrorBlock } from '@tomic/resource-ui/components/ErrorLook';
 
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars, useFrameColorScheme } from './useCreateThemeVars';

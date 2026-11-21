@@ -11,19 +11,19 @@ import {
   useString,
 } from '@tomic/react';
 import { useCallback, type JSX } from 'react';
-import { Column, Row } from '../../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { SearchBox } from '../../../components/forms/SearchBox';
 import { OntologyDescription } from '../OntologyDescription';
 import { PropertyDatatypePicker } from '../PropertyDatatypePicker';
 import { newClass } from '../ontologyUtils';
 import { toAnchorId } from '../../../helpers/toAnchorId';
 import { useCurrentSubject } from '../../../helpers/useCurrentSubject';
-import InputResourceArray from '../../../components/forms/InputResourceArray';
+import InputResourceArray from '@tomic/resource-ui/components/forms/InputResourceArray';
 import { EnumFormPart } from './EnumFormPart';
 import { LabelText } from '../LabelText';
 import { filterAllowsOnly } from './filterAllowsOnly';
 import { isContentAddressed } from '../../../helpers/propertyIdentity';
-import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { ResourceInline } from '../../ResourceInline';
 import { LinkedClassField } from '../Class/ClassConstraintEditor';
 

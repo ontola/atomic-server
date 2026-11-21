@@ -9,7 +9,7 @@ import {
   useStore,
   useString,
 } from '@tomic/react';
-import { useChatLogRevision } from './useChatLog';
+import { useChatLogRevision } from '@tomic/resource-ui/hooks/useChatLog';
 import {
   newestCommentTimes,
   type CommentInfo,

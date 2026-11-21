@@ -1,7 +1,7 @@
 import { useValue, type Datatype, type Resource } from '@tomic/react';
-import { ValueForm } from './ValueForm';
+import { ValueForm } from '@tomic/resource-ui/components/forms/ValueForm/ValueForm';
 import { useState } from 'react';
-import { SkeletonButton } from '@components/SkeletonButton';
+import { SkeletonButton } from '@tomic/ui/components/SkeletonButton';
 import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 

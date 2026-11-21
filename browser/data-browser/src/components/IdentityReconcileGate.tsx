@@ -23,8 +23,8 @@ import { importDriveCarryOver } from '../helpers/managed/driveCarryOver';
 import { handOverFrom } from '../helpers/bringAlong';
 import { onManagedSessionChanged } from '../helpers/managed/session';
 import { paths } from '../routes/paths';
-import { Button } from './Button';
-import { Column } from './Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import {
   CardError,
   CardSubtitle,

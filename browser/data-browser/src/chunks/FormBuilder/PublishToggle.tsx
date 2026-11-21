@@ -1,9 +1,9 @@
 import { forms, Resource, useNumber } from '@tomic/react';
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
-import { Row } from '@components/Row';
-import { Button } from '@components/Button';
-import { useServerConnected } from '../../hooks/useServerConnected';
+import { Row } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { useServerConnected } from '@tomic/resource-ui/hooks/useServerConnected';
 import { formatScheduleMoment, getFormAvailability } from './formSchedule';
 
 interface PublishToggleProps {

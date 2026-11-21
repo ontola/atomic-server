@@ -11,7 +11,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useNewRoute } from '../helpers/useNewRoute';
 import { useFavorites } from '../hooks/useFavorites';
-import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances';
+import { useInlineTitleAffordances } from '@tomic/resource-ui/hooks/useInlineTitleAffordances';
 import {
   newContextItem,
   useAISidebar,

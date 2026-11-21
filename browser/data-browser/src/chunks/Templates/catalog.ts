@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import type { TemplateDefinition, TemplatePart } from './model';
 const version = '1';
 

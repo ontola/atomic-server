@@ -12,8 +12,8 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { paths } from '../routes/paths';
 import { useAISidebar } from '../components/AI/AISidebarContext';
 import { useAISettings } from '../components/AI/AISettingsContext';
-import { AIIcon } from '../components/AI/AIIcon';
-import type { DropdownItem } from '../components/Dropdown';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
+import type { DropdownItem } from '@tomic/resource-ui/components/Dropdown/index';
 
 /** Opens the sidebar's feedback dialog (the sidebar's AccountMenu listens). */
 export const OPEN_FEEDBACK_EVENT = 'atomic-open-feedback';

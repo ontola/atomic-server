@@ -7,12 +7,12 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
-import { Column, Row } from '@components/Row';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ShareLink } from '@components/ShareLink';
-import { CodeBlock } from '@components/CodeBlock';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import { Tabs } from '@components/Tabs';
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
 import { paths } from '../../routes/paths';

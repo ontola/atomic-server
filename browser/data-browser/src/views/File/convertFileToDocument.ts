@@ -122,7 +122,7 @@ export async function fileContentsToTiptapJson(
 
   const { MarkdownManager } = await import('@tiptap/markdown');
   const { getCollaborativeEditorSchema } =
-    await import('@chunks/RTE/getCollaborativeEditorSchema');
+    await import('@tomic/resource-ui/chunks/RTE/getCollaborativeEditorSchema');
   const { extensions } = getCollaborativeEditorSchema(store);
 
   return markdownParseToJson(new MarkdownManager({ extensions }).parse(text));
@@ -230,7 +230,7 @@ async function convertFileToDocumentInner(options: {
   const text = await response.text();
   const patchedJson = await fileContentsToTiptapJson(text, kind, store);
   const { getCollaborativeEditorSchema } =
-    await import('@chunks/RTE/getCollaborativeEditorSchema');
+    await import('@tomic/resource-ui/chunks/RTE/getCollaborativeEditorSchema');
 
   // Validate before touching any Loro document. This also catches malformed
   // Markdown output before the File class can change.

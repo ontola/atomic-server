@@ -1,12 +1,16 @@
 import { Resource, useStore } from '@tomic/react';
 import { useNavigate } from '@tanstack/react-router';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { compatibleColumnTypes, columnLabel } from './tableColumns';
 import { FormDataClassContext } from './formDataClass';
 import { useContext, useMemo, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { DIVIDER, DropdownMenu, DropdownItem } from '@components/Dropdown';
-import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import {
+  DIVIDER,
+  DropdownMenu,
+  DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 import {
   FIELD_TYPE_GROUPS,
   FORM_LAYOUT_TYPES,

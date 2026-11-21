@@ -7,10 +7,10 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { Button } from './Button';
-import { Column } from './Row';
-import { WarningBlock } from './WarningBlock';
-import { Checkbox } from './forms/Checkbox';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { moveToTrash } from '../helpers/trash';
@@ -20,8 +20,8 @@ import {
   DialogContent,
   DialogTitle,
   useDialog,
-} from './Dialog';
-import { ResourceSelector } from './forms/ResourceSelector';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
 import {
   copyResourceTree,
   moveBlockedReason,

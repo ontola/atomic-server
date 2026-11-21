@@ -1,13 +1,13 @@
 import { styled } from 'styled-components';
 import { useState } from 'react';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   InputStyled,
   InputWrapper,
   ErrMessage,
-} from '@components/forms/InputStyles';
-import { Button } from '@components/Button';
+} from '@tomic/ui/components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
 import { FaRotateLeft, FaTrash } from 'react-icons/fa6';
 import { SettingsSection } from './SettingsSection';
 import { SettingCheckbox } from './SettingCheckbox';

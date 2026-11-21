@@ -7,7 +7,7 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { isContentAddressed } from './propertyIdentity';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
 import { moveToTrash } from './trash';
 
 /**

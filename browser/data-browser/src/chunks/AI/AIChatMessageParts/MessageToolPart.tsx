@@ -12,12 +12,12 @@ import {
   FaPlus,
   FaWrench,
 } from 'react-icons/fa6';
-import { Details } from '@components/Details';
+import { Details } from '@tomic/ui/components/Details';
 import { Shimmer } from '@components/Shimmer';
 import { PartSummary } from './PartSummary';
 import { SearchToolMessageContent } from './SearchToolMessageContent';
 import { TOOL_NAMES } from '../useAtomicTools';
-import { InlineFormattedResourceList } from '@components/InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { useResource } from '@tomic/react';
 import { MCP_TOOL_NAMES } from '../defaultMCPServers';
 import { core, Client } from '@tomic/lib';

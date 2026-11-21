@@ -126,7 +126,7 @@ Never commit screenshots to the repository, not even temporarily or in a
   PR.
 - Show them in chat to the developer you are working with.
 
-## Translation catalogs (`src/locales/*.po`)
+## Translation catalogs (`browser/resource-ui/src/locales/*.po`)
 
 Wuchale extracts these from source *as vite serves it*, so the dev server is a
 second writer on tracked files. Four ways that has cost real time:
@@ -144,17 +144,18 @@ second writer on tracked files. Four ways that has cost real time:
   abandons in-flight work, and this silently cancelled a destroy mid-test. If
   `git status` shows `.po` churn on a clean checkout, settle them and commit.
 - **The compiled catalogs are a second artifact.** Wuchale compiles the `.po`
-  files into `src/locales/.wuchale/`, which is gitignored. `git checkout --
-  src/locales/` resets the `.po` files and leaves the compiled output from
-  another state; the two then disagree and *every indexed string shifts*.
+  files into `browser/resource-ui/src/locales/.wuchale/`, which is gitignored.
+  `git checkout -- browser/resource-ui/src/locales/` resets the `.po` files
+  and leaves the compiled output from another state; the two then disagree and *every indexed string shifts*.
   Missing entries show as `[i18n-404:NNN]`; shifted entries show a different
   real string, so nothing looks wrong and tests fail on the wrong element.
-  Whenever you reset the `.po` files, also `rm -rf
-  browser/data-browser/src/locales/.wuchale` and restart vite. Do not make
+  Whenever you reset the `.po` files, also
+  `rm -rf browser/resource-ui/src/locales/.wuchale` and restart vite. Do not make
   the `.po` files read-only to stop the rewrite; the compiled output goes
   stale instead.
-- **Settle with `pnpm clean-translations`.** `wuchale.config.js` ignores test
-  files, which the vite plugin never sees, so the CLI and the dev server now
+- **Settle with `pnpm clean-translations`.** The
+  `browser/resource-ui/wuchale.config.js` config ignores test files, which the
+  vite plugin never sees, so the CLI and the dev server now
   extract the same catalog. After adding or removing UI text, run it in
   `browser/data-browser` and commit the `.po` files. A component whose strings
   never made it into the catalogs renders them blank in a production build,
