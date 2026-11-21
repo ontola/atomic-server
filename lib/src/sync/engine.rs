@@ -2458,9 +2458,12 @@ pub async fn import_sync_push(
                     .unwrap_or_else(|_| resource.get_subject().to_string());
                 if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                     let parent_subject = crate::Subject::from(parent_val.to_string());
-                    if let Some(drive) =
-                        staged_parent_drive(store, &parent_subject, &admitted_drive, &staged_by_subject)
-                    {
+                    if let Some(drive) = staged_parent_drive(
+                        store,
+                        &parent_subject,
+                        &admitted_drive,
+                        &staged_by_subject,
+                    ) {
                         claimed = drive;
                     } else if !strict {
                         // The parent is not here yet, but this frame still has an
