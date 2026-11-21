@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use atomic_lib::{
     agents::{Agent, ForAgent},
@@ -144,13 +147,19 @@ async fn do_install_plugin(
     let bytes = if let Ok(Value::String(internal_id)) = plugin_file.get(urls::INTERNAL_ID) {
         let file_path = uploads_dir.join(internal_id);
         info!("Reading plugin from local file: {:?}", file_path);
-        std::fs::read(&file_path).map_err(|e| {
+        let file = std::fs::File::open(&file_path).map_err(|e| {
             error!(
                 "Failed to read plugin file locally at {:?}: {}",
                 file_path, e
             );
             AtomicError::from(format!("Failed to read plugin file locally: {}", e))
-        })?
+        })?;
+        super::package_archive::check_package_size(file.metadata()?.len())?;
+        let mut bytes = Vec::new();
+        file.take(super::package_archive::MAX_PACKAGE_BYTES + 1)
+            .read_to_end(&mut bytes)?;
+        super::package_archive::check_package_size(bytes.len() as u64)?;
+        bytes
     } else {
         let Value::String(download_url) = plugin_file.get(DOWNLOAD_URL)? else {
             error!(
@@ -163,28 +172,31 @@ async fn do_install_plugin(
         info!("Downloading plugin from: {}", download_url);
 
         // download the zip file from the download URL
-        let response = reqwest::get(download_url.as_str())
+        let mut response = reqwest::get(download_url.as_str())
             .await
             .map_err(|e| AtomicError::from(format!("Failed to download plugin file: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            error!(
-                "Failed to download plugin file. Status: {}. Body: {}",
-                status, body
-            );
             return Err(AtomicError::from(format!(
                 "Failed to download plugin file: Status {}",
                 status
             )));
         }
 
-        response
-            .bytes()
+        if let Some(size) = response.content_length() {
+            super::package_archive::check_package_size(size)?;
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
             .await
             .map_err(|e| AtomicError::from(format!("Failed to download plugin file: {}", e)))?
-            .to_vec()
+        {
+            super::package_archive::check_package_size(bytes.len() as u64 + chunk.len() as u64)?;
+            bytes.extend_from_slice(&chunk);
+        }
+        bytes
     };
 
     info!("Plugin file size: {} bytes", bytes.len());
