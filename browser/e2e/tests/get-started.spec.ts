@@ -6,6 +6,7 @@ import {
   openNewSubjectWindow,
   editableTitle,
   sideBarDriveSwitcher,
+  waitForSynced,
 } from './test-utils';
 
 /**
@@ -292,6 +293,12 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   const hint = page.getByTestId('ui-hint-new-row');
 
   // Hovering shows the hint itself, and moving off hides it again.
+  // The starter document is inserted above this step as the drive is seeded.
+  // Hover the row once the sidebar has reached its final layout.
+  const sidebar = page.getByTestId('sidebar');
+  await expect(sidebar.getByRole('button', { name: 'Start here', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'New Document' })).toBeVisible();
+  await waitForSynced(page);
   await step.hover();
   await expect(hint).toHaveText('Make a document or table here');
   await page.mouse.move(600, 400);
