@@ -553,11 +553,17 @@ async fn an_invite_accepted_at_the_server_grants_its_target() {
     assert!(!http_get(&client, &guest, &claim).await);
 
     let expires = atomic_lib::utils::now() + 60_000;
-    let token =
-        atomic_lib::invite_token::InviteToken::new(claim.clone(), true, expires, &owner, Some(1))
-            .unwrap()
-            .encode()
-            .unwrap();
+    let token = atomic_lib::invite_token::InviteToken::new_for_server(
+        claim.clone(),
+        true,
+        expires,
+        &owner,
+        Some(1),
+        Some(&server_url),
+    )
+    .unwrap()
+    .encode()
+    .unwrap();
     atomic_lib::client::helpers::accept_invite_at_server(&server_url, &token, &guest)
         .await
         .expect("the server accepts the invite");

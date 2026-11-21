@@ -555,7 +555,8 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let (store, dir) = open_with_agent("invite_http_refusal").await;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let port = listener.local_addr().unwrap().port();
+        let origin = format!("http://atomic.localhost:{port}");
         let task = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
