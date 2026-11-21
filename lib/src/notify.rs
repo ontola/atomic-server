@@ -51,7 +51,6 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Db, Resource, Storelike, Subject, Value,
     agents::ForAgent,
     db::{drive_events::DriveEvent, trees::Tree},
     errors::AtomicResult,
@@ -60,7 +59,7 @@ use crate::{
         ACTOR, INBOX, NOTIFICATION, NOTIFICATION_KIND, NOTIFICATION_SOURCE, OCCURRED_AT, READ_AT,
     },
     storelike::Query,
-    urls,
+    urls, Db, Resource, Storelike, Subject, Value,
 };
 
 pub const INBOX_CLASS: &str = "https://atomicdata.dev/classes/Inbox";
@@ -347,7 +346,9 @@ impl Notifier {
             if let (Some(owner), Some(endpoint)) =
                 (out.get_mut(&pure(&parent)), text(&reg, PUSH_ENDPOINT))
             {
-                if self.private_destination(reg.get_subject(), &owner.agent) && !owner.prefs.push_endpoints.contains(&endpoint) {
+                if self.private_destination(reg.get_subject(), &owner.agent)
+                    && !owner.prefs.push_endpoints.contains(&endpoint)
+                {
                     owner.prefs.push_endpoints.push(endpoint);
                 }
             }
@@ -1073,9 +1074,12 @@ impl Notifier {
                 let Ok(r) = self.store.get_resource(&Subject::from(n.clone())).await else {
                     continue;
                 };
-                if r.get(READ_AT).is_ok() || !seen.insert(n) ||
-                    text(&r, urls::PARENT).map(|p| pure(&p)).as_deref() != Some(owner.inbox.as_str()) ||
-                    !self.private_destination(r.get_subject(), &owner.agent) {
+                if r.get(READ_AT).is_ok()
+                    || !seen.insert(n)
+                    || text(&r, urls::PARENT).map(|p| pure(&p)).as_deref()
+                        != Some(owner.inbox.as_str())
+                    || !self.private_destination(r.get_subject(), &owner.agent)
+                {
                     continue;
                 }
                 lines.push(format!(

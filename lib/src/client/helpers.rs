@@ -249,7 +249,9 @@ fn untrusted_http_client_builder() -> reqwest::ClientBuilder {
 
     http_client_builder()
         .redirect(redirect_policy)
-        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver { allow_private: ssrf_guard::allow_private_fetch() }))
+        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver {
+            allow_private: ssrf_guard::allow_private_fetch(),
+        }))
 }
 
 /// A device supplies its push URL. Private network access is granted only to

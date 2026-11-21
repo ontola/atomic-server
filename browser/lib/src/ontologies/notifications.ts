@@ -33,7 +33,8 @@ export const notifications = {
     changedProperties: 'https://atomicdata.dev/properties/changedProperties',
     notifyEmail: 'https://atomicdata.dev/properties/notifyEmail',
     emailFrequency: 'https://atomicdata.dev/properties/emailFrequency',
-    mutedNotificationKinds: 'https://atomicdata.dev/properties/mutedNotificationKinds',
+    mutedNotificationKinds:
+      'https://atomicdata.dev/properties/mutedNotificationKinds',
     notifyLanguage: 'https://atomicdata.dev/properties/notifyLanguage',
     pushEndpoint: 'https://atomicdata.dev/properties/pushEndpoint',
   },

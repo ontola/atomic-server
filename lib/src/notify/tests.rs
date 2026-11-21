@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Commit, agents::Agent, commit::CommitBuilder};
+use crate::{agents::Agent, commit::CommitBuilder, Commit};
 
 const MEETING: &str = "https://example.test/classes/Meeting";
 const START: &str = "https://example.test/properties/start";
