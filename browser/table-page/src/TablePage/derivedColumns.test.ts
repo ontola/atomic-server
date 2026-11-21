@@ -1,4 +1,4 @@
-import { beforeAll, describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect, vi } from 'vitest';
 import type { JSONValue } from '@tomic/react';
 import {
   bindFormula,
@@ -115,9 +115,16 @@ describe('computing a formula over a row', () => {
     // 00:30 local on the stamped day, which east of UTC is still the day before in UTC.
     const justAfterMidnight = new Date(2026, 6, 30, 0, 30).getTime();
 
-    expect(
-      computeDerived(sinceDate, { [LAST_DONE]: stamped }, justAfterMidnight),
-    ).toBe(0);
+    // Use the same civil day for the browser's current offset and the formula.
+    vi.useFakeTimers({ now: justAfterMidnight, toFake: ['Date'] });
+
+    try {
+      expect(
+        computeDerived(sinceDate, { [LAST_DONE]: stamped }, Date.now()),
+      ).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows a date a formula moved on the day it lands, in any season', () => {
