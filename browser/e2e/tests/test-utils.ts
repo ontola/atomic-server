@@ -1,3 +1,4 @@
+import { Agent, enableLoro, Store } from '@tomic/lib';
 import {
   Page,
   expect,
@@ -1569,6 +1570,47 @@ export async function waitForClientDbFlush(
 
     await db.flush();
   }, opts.required === true);
+}
+
+/** Wait for a chat log to round-trip before a reload discards the optimistic UI. */
+export async function waitForStoredChatMessages(
+  page: Page,
+  entry: Locator,
+  texts: string[],
+) {
+  const id = await entry.getAttribute('about');
+  if (!id?.includes('#')) throw new Error('Chat entry has no log page');
+  const [subject] = id.split('#');
+  const agent = await Agent.fromSecret(await getDevDriveSecret(page));
+  const serverUrl = await page.evaluate(() => window.store.getServerUrl());
+  await enableLoro();
+  // The browser's own socket merges GET replies into its optimistic resource.
+  // A separate reader has no copy of the log and cannot prime the browser.
+  const reader = new Store({ serverUrl, agent });
+  const socket = reader.getDefaultWebSocket();
+  if (!socket) throw new Error('Missing WebSocket for the chat log reader');
+
+  try {
+    expect(await reader.waitForServerConnected(15_000)).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          try {
+            const log = await socket.fetch(subject);
+
+            return log.listChatLogEntries().map(message => message.entry.t);
+          } catch (err) {
+            return String(err);
+          }
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual(texts);
+  } finally {
+    socket.close();
+  }
+
+  await waitForSynced(page);
 }
 
 /**
