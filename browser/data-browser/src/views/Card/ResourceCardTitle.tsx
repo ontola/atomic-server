@@ -26,7 +26,9 @@ export const ResourceCardTitle: FC<
       <Row center gap='1ch'>
         <Icon />
         <AtomicLink subject={resource.subject}>
-          <Title subject={resource.subject}>{alternateTitle ?? resource.title}</Title>
+          <Title subject={resource.subject}>
+            {alternateTitle ?? resource.title}
+          </Title>
         </AtomicLink>
       </Row>
       {children}
