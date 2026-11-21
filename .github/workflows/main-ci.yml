@@ -92,18 +92,19 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          # `--publish-docs` only from a stable `v*` tag (no hyphen), matching
-          # production. This pipeline previously ran on every push, and
-          # netlifyDeploy used to pass `--prod` unconditionally — so a feature
-          # branch republished the public docs and typedoc. `master` used to own live
-          # docs while the app shipped from tags; both now follow the tag.
+          # `--publish-docs` only from `develop`, the branch production
+          # follows (see deploy_staging.yml), so the live docs describe what
+          # runs in production. This pipeline previously ran on every push, and
+          # netlifyDeploy used to pass `--prod` unconditionally, so a feature
+          # branch republished the public docs and typedoc. Tags no longer
+          # publish docs: the develop push of the same commit already did.
           # Every other ref gets a preview URL. `--host-profile` selects
           # parallelism (mancave hot / hosted quiet). main.yml's `pick` job
           # chooses the mode: full for develop, tags and trekmeester/combined-*
           # branches, light for other dispatched branches unless overridden.
           # Not `--e2e-mode`: Dagger maps that kebab to `e2EMode` and misses
           # the argument.
-          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} --results-key ${{ github.run_id }}-${{ github.run_attempt }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} --results-key ${{ github.run_id }}-${{ github.run_attempt }} ${{ github.ref == 'refs/heads/develop' && '--publish-docs' || '' }}
       # Traces, screenshots and page snapshots of failed e2e tests. The `ci`
       # call keeps them in a Dagger cache volume under this run's key (it
       # fails, so it cannot return them); this second call hands them back.

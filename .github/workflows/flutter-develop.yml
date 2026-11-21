@@ -1,0 +1,57 @@
+name: Apps from green develop
+
+# Every green `develop` goes to TestFlight and Google Play internal testing, so
+# regressions in the apps surface as fast as they do on the web. Store releases
+# (App Store, Play production) stay manual. A newer green develop supersedes an
+# older one that has not started yet.
+on:
+  workflow_run:
+    workflows: ["Main pipeline: build, lint, test"]
+    branches: [develop]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-from-develop
+  cancel-in-progress: true
+
+jobs:
+  check-current-tip:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.tip.outputs.current }}
+    steps:
+      - name: Check that the successful run tested the current develop tip
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          tip=$(gh api "repos/$REPO/branches/develop" --jq .commit.sha)
+          if [ "$RUN_SHA" = "$tip" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping apps: successful run $RUN_SHA was superseded by $tip"
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  ios:
+    needs: check-current-tip
+    if: needs.check-current-tip.outputs.current == 'true'
+    uses: ./.github/workflows/flutter-testflight.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
+
+  android:
+    needs: check-current-tip
+    if: needs.check-current-tip.outputs.current == 'true'
+    uses: ./.github/workflows/flutter-play.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit

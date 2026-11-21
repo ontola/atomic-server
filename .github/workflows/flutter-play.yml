@@ -5,11 +5,24 @@ on:
     paths:
       - '.github/workflows/flutter-play.yml'
       - 'flutter/android/**'
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build (default: the triggering ref)"
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit or branch to build (default: the selected ref)"
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: atomic-flutter-android-${{ github.ref }}
+  group: atomic-flutter-android-${{ inputs.ref || github.ref }}
   cancel-in-progress: false
 jobs:
   android:
@@ -17,8 +30,19 @@ jobs:
     timeout-minutes: 60
     env:
       ATOMIC_CARGO_TARGET_DIR: ${{ github.workspace }}/packages/atomic_store_flutter/rust/target
+      HAS_PLAY_SERVICE_ACCOUNT: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - name: Compute build number
+        id: build
+        # Minutes since the Unix epoch: always increases and beats every earlier
+        # run_number, on both platforms, so stores never see a lower number.
+        run: |
+          n=$(( $(date +%s) / 60 ))
+          echo "build_number=$n" >> "$GITHUB_OUTPUT"
+          echo "Build number $n (minutes since the Unix epoch)." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -70,7 +94,7 @@ jobs:
           PY
       - name: Build signed Play bundle
         working-directory: flutter
-        run: flutter build appbundle --release -Patomic.storeRelease=true --target-platform android-arm64 --build-number=${{ github.run_number }}
+        run: flutter build appbundle --release -Patomic.storeRelease=true --target-platform android-arm64 --build-number=${{ steps.build.outputs.build_number }}
       - name: Verify signature and native page alignment
         run: |
           jarsigner -verify flutter/build/app/outputs/bundle/release/app-release.aab
@@ -80,6 +104,19 @@ jobs:
           name: atomic-place-aab
           path: flutter/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+      - name: Upload to Play internal testing
+        if: env.HAS_PLAY_SERVICE_ACCOUNT == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: io.ontola.atomic
+          releaseFiles: flutter/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+      - name: Note skipped Play upload
+        if: env.HAS_PLAY_SERVICE_ACCOUNT != 'true'
+        run: |
+          echo "Play upload skipped, because the PLAY_SERVICE_ACCOUNT_JSON secret is not set. The signed .aab is only attached as an artifact." >> "$GITHUB_STEP_SUMMARY"
       - name: Clean up signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/atomic-upload.p12" flutter/android/key.properties

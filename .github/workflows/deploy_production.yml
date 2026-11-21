@@ -1,26 +1,21 @@
 name: Deployment Production
 
-# Production runs a tagged release, not whatever a branch currently points at.
+# Production normally deploys from deploy_staging.yml: every green `develop`
+# commit goes to staging first and, once staging is healthy, to production. This
+# workflow is the manual path: redeploy or ROLL BACK production by dispatching it
+# with the commit (sha, branch or tag) you want live. Release tags no longer
+# trigger it; a tag deploy would roll production back to an older commit.
 #
-# A branch pointer answers "what was merged most recently"; a tag answers "which
-# release is this", which is the question you are actually asking when something
-# is wrong in production. It also means the deployed thing has a name that
-# appears in the changelog and on crates.io, and that redeploying it later gets
-# you the same bytes.
+# Remember that the next green `develop` run will deploy over a manual rollback.
+# Revert the offending change on develop to make a rollback stick.
 #
-# Pre-release tags (v0.41.0-beta.2 and friends) deliberately do NOT deploy: they
-# exist to be published and tested, not to land on the live site. Deploy one on
-# purpose with the `workflow_dispatch` below if you want it there.
-#
-# Deploys are still gated on a green pipeline — see the `verify` job. That check
-# used to come free from `workflow_run`, which cannot filter tags, so it is done
-# explicitly against the tagged commit instead. It waits for a pipeline that is
-# still running, because pushing the tag starts one.
+# Deploys are still gated on a green pipeline: see the `verify` job. It checks
+# the commit being deployed and waits for a pipeline that is still running.
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Stable tag to deploy (e.g. v0.40.3). No default — do not pass a branch."
+        description: "Commit, branch or tag to deploy (e.g. a sha to roll back to)"
         required: true
         type: string
       skip_ci_check:
@@ -28,10 +23,6 @@ on:
         required: false
         default: false
         type: boolean
-  push:
-    tags:
-      - "v*"
-      - "!v*-*"
 
 jobs:
   # Nothing reaches a live host without a pipeline having passed on this exact
@@ -40,17 +31,13 @@ jobs:
   verify:
     name: Require a green pipeline for this commit
     runs-on: ubuntu-latest
-    # Skip the whole deploy for pre-release tags.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      !contains(github.ref_name, '-')
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Resolve the commit being deployed
         id: resolve
@@ -58,11 +45,9 @@ jobs:
 
       # Wait for the pipeline rather than demanding one that already finished.
       #
-      # `main.yml` includes `v*` tag pushes — so
-      # pushing `v1.2.3` starts the main pipeline and this job simultaneously.
-      # Asking only for `status=completed` runs then reads a pipeline that is
-      # seconds old as "none" and blocks a release that was about to go green.
-      # Tagging a commit whose branch pipeline is still running fails the same
+      # Asking only for `status=completed` runs reads a pipeline that is
+      # seconds old as "none" and blocks a deploy that was about to go green.
+      # Deploying a commit whose branch pipeline is still running fails the same
       # way. Neither is a real failure, and both are easy to hit.
       #
       # Any *completed successful* run for the commit passes immediately — the
@@ -124,6 +109,9 @@ jobs:
 
   deploy-production:
     needs: verify
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     uses: "./.github/workflows/deployment.yml"
     with:
       environment: production
