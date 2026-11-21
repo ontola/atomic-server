@@ -103,6 +103,7 @@ export class RPCServer {
 
   private handleEvent(event: MessageEvent): void {
     if (event.source !== this.iFrame.contentWindow) return;
+    if (event.data?.type === '__atomic_plugin_ready') return;
 
     const message = event.data as RPCMessage;
     this.handleMessage(message);

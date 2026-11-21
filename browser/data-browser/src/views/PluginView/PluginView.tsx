@@ -3,12 +3,13 @@ import { useStore } from '@tomic/react';
 import { useSettings } from '@helpers/AppSettings';
 import { usePluginRPC } from '@views/PluginView/pluginRPC';
 import styled from 'styled-components';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
-import resetCss from '../../reset.css?url';
+import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars } from './useCreateThemeVars';
 import { useCustomViews } from '@components/CustomViewProvider';
-import { generateNonce } from '@helpers/randomString';
+import { ErrorBlock } from '@components/ErrorLook';
+import { pluginRequest } from './pluginRequest';
 
 export enum ViewType {
   Page = 'page',
@@ -19,31 +20,6 @@ export enum ViewType {
 export interface PluginViewProps extends ResourcePageProps {
   plugin: string;
 }
-
-type HTMLProps = {
-  scriptSrc: string;
-  cssSrc?: string;
-  stylesheet: string;
-  nonce: string;
-};
-const html = ({ scriptSrc, cssSrc, stylesheet, nonce }: HTMLProps) => `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src * data:; connect-src *; font-src *; base-uri 'none'; object-src 'none';">
-    <title>Document</title>
-    <link rel="stylesheet" href="${resetCss}" nonce="${nonce}" />
-    ${cssSrc ? `<link rel="stylesheet" href="${cssSrc}" nonce="${nonce}" />` : ''}
-    <style nonce="${nonce}">${stylesheet}</style>
-    <script type="module" src="${scriptSrc}" nonce="${nonce}"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-  </html>
-`;
 
 /**
  * Renders a ResourcePage view provided by the plugin.
@@ -56,22 +32,80 @@ export const PluginView: React.FC<PluginViewProps> = ({ plugin }) => {
   const pluginData = getUIPluginData(plugin);
   const [frameRef, resourcePickerDialog] = usePluginRPC(pluginData);
   const stylesheet = useCreateThemeVars();
-  const pluginUrl = `${store.getServerUrl()}/plugin-ui?drive=${drive}&plugin=${plugin}`;
-  const scriptSrc = `${pluginUrl}&format=js`;
-  const cssSrc = pluginData.uiManifest.css
-    ? `${pluginUrl}&format=css`
-    : undefined;
+  const params = new URLSearchParams({ drive, plugin });
+  const pluginUrl = `${store.getServerUrl()}/plugin-ui?${params}`;
+  const hasCss = pluginData.uiManifest.css;
+  const [error, setError] = useState<Error>();
+  const applyTheme = useCallback(() => {
+    frameRef.current?.contentWindow?.postMessage(
+      { type: '__atomic_style', reset: resetCss, css: stylesheet },
+      '*',
+    );
+  }, [frameRef, stylesheet]);
 
-  const nonce = useMemo(() => generateNonce(), []);
+  useEffect(applyTheme, [applyTheme]);
+
+  useLayoutEffect(() => {
+    const controller = new AbortController();
+
+    const fetchAsset = async (format: string) => {
+      const response = await pluginRequest(
+        store,
+        `${pluginUrl}&format=${format}`,
+        controller.signal,
+      );
+
+      return response.text();
+    };
+
+    const onReady = (event: MessageEvent) => {
+      if (
+        event.source !== frameRef.current?.contentWindow ||
+        event.origin !== 'null' ||
+        event.data?.type !== '__atomic_plugin_ready' ||
+        event.ports.length !== 1
+      )
+        return;
+
+      // This port belongs to the requesting document, even if the iframe
+      // navigates elsewhere while its assets are being fetched.
+      const port = event.ports[0];
+
+      void Promise.all([
+        fetchAsset('js'),
+        hasCss ? fetchAsset('css') : Promise.resolve(''),
+      ])
+        .then(([js, css]) => {
+          if (controller.signal.aborted) return;
+          setError(undefined);
+          port.postMessage({ js, css });
+        })
+        .catch(cause => {
+          if (!controller.signal.aborted) {
+            setError(cause instanceof Error ? cause : new Error(String(cause)));
+          }
+        })
+        .finally(() => port.close());
+    };
+
+    window.addEventListener('message', onReady);
+
+    return () => {
+      controller.abort();
+      window.removeEventListener('message', onReady);
+    };
+  }, [frameRef, hasCss, pluginUrl, store]);
 
   return (
     <>
+      {error && <ErrorBlock error={error} />}
       <StyledIframe
         title='plugin-view'
         id='custom-view'
         referrerPolicy='no-referrer'
         ref={frameRef}
-        srcDoc={html({ scriptSrc, cssSrc, stylesheet, nonce })}
+        src={`${pluginUrl}&format=html`}
+        onLoad={applyTheme}
         sandbox='allow-scripts allow-downloads allow-pointer-lock allow-presentation'
       />
       {resourcePickerDialog}

@@ -1,11 +1,14 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
-import { useStore } from '@tomic/react';
+import { useCurrentAgent, useStore, type Store } from '@tomic/react';
+import { pluginRequest } from '@views/PluginView/pluginRequest';
 import { useSettings } from '@helpers/AppSettings';
 
 interface UIPluginManifest {
@@ -64,10 +67,14 @@ function parsePluginList(data: UIPluginListItem[]): PluginListResult {
 }
 
 const fetchPluginList = async (
+  store: Store,
   serverUrl: string,
   drive: string,
+  signal: AbortSignal,
 ): Promise<PluginListResult> => {
-  const response = await fetch(`${serverUrl}/plugin-list?drive=${drive}`);
+  if (!drive) return [new Map(), new Map()];
+  const url = `${serverUrl}/plugin-list?drive=${encodeURIComponent(drive)}`;
+  const response = await pluginRequest(store, url, signal);
   const data = await response.json();
 
   return parsePluginList(data);
@@ -84,13 +91,28 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   >(new Map());
 
   const [loading, setLoading] = useState(true);
+  const [agent] = useCurrentAgent();
   const serverUrl = store.getServerUrl();
 
-  const refresh = async () => {
-    const [list, newManifests] = await fetchPluginList(serverUrl, drive);
-    setCustomViews(list);
-    setUIPluginDataMap(newManifests);
-  };
+  const request = useRef<AbortController | null>(null);
+  const refresh = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    await fetchPluginList(store, serverUrl, drive, controller.signal)
+      .then(([list, manifests]) => {
+        if (controller.signal.aborted) return;
+        setCustomViews(list);
+        setUIPluginDataMap(manifests);
+        setLoading(false);
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          throw error;
+        }
+      });
+  }, [store, serverUrl, drive]);
 
   const getPluginForClass = (classSubject: string) => {
     return customViews.get(classSubject);
@@ -101,12 +123,14 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    fetchPluginList(serverUrl, drive).then(([views, manifests]) => {
-      setCustomViews(views);
-      setUIPluginDataMap(manifests);
-      setLoading(false);
-    });
-  }, [serverUrl, drive]);
+    setLoading(true);
+    setCustomViews(new Map());
+    setUIPluginDataMap(new Map());
+    // Automatic discovery is optional. An explicit refresh still reports its error.
+    void refresh().catch(() => {});
+
+    return () => request.current?.abort();
+  }, [refresh, agent?.subject]);
 
   return (
     <CustomViewContext

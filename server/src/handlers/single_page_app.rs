@@ -169,7 +169,7 @@ fn escape_html(s: &str) -> String {
         .replace('/', "&#x2F;")
 }
 
-fn generate_nonce() -> Result<String, ring::error::Unspecified> {
+pub(super) fn generate_nonce() -> Result<String, ring::error::Unspecified> {
     use base64::{engine::general_purpose, Engine as _};
     use ring::rand::{SecureRandom, SystemRandom};
 

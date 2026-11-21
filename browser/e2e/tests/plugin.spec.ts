@@ -102,9 +102,6 @@ test.describe('Plugins', () => {
     {
       const frame = page.frameLocator('#custom-view');
 
-      expect(frame).not.toBeNull();
-      if (!frame) throw new Error('Frame not found');
-
       await expect(frame.getByRole('heading', { name: 'Duck' })).toBeVisible();
       await expect(
         frame.getByText('This is a custom view for the Bird class.'),
@@ -140,10 +137,7 @@ test.describe('Plugins', () => {
     {
       const frame = page.frameLocator('#custom-view');
 
-      expect(frame).not.toBeNull();
-      if (!frame) throw new Error('Frame not found');
-
-      expect(frame.getByText('Not My Problem')).toBeVisible();
+      await expect(frame.getByText('Not My Problem')).toBeVisible();
     }
 
     // Navigate back to the plugin

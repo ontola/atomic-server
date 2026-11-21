@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plugin</title>
+  <style id="reset" nonce="ATOMIC_FRAME_NONCE"></style>
+  <style id="plugin-css" nonce="ATOMIC_FRAME_NONCE"></style>
+  <style id="theme" nonce="ATOMIC_FRAME_NONCE"></style>
+</head>
+<body>
+  <div id="root"></div>
+  <script nonce="ATOMIC_FRAME_NONCE">
+    if (window.parent !== window) {
+      const nonce = document.currentScript.nonce;
+      const channel = new MessageChannel();
+      channel.port1.onmessage = ({ data }) => {
+        channel.port1.close();
+        document.getElementById('plugin-css').textContent = data.css;
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.nonce = nonce;
+        script.textContent = data.js;
+        document.head.appendChild(script);
+      };
+      window.addEventListener('message', event => {
+        if (event.source === window.parent && event.data?.type === '__atomic_style') {
+          document.getElementById('reset').textContent = event.data.reset;
+          document.getElementById('theme').textContent = event.data.css;
+        }
+      });
+      window.parent.postMessage({ type: '__atomic_plugin_ready' }, '*', [channel.port2]);
+    }
+  </script>
+</body>
+</html>
