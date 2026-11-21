@@ -82,6 +82,11 @@ rows. Missing fields do not erase richer stored values. User fields are retained
 Moving a row within the same drive retains its identity; rows moved outside the
 worker's collection are protected from refresh rather than duplicated.
 
+A read is bounded to 128 requests, 4,000 records and five minutes, including
+validation and storage of supplied linked records. Reaching a limit keeps the
+accepted data and marks the result incomplete; narrow the saved filter to finish
+a smaller read.
+
 Catalog-declared foreign keys appear as links to Atomic resources. When an API
 supplies an embedded record, its known fields seed the linked resource in the
 same import without another provider request. For example, repository owners

@@ -1345,6 +1345,67 @@ describe('shared entity tables and independent saved filters', () => {
       if (pages > 128) expect(result.error).toContain('128 requests');
     },
   );
+  it.each([
+    { pages: 25, processingMs: 6_000, accepted: 25, incomplete: false },
+    { pages: 40, processingMs: 11_000, accepted: 28, incomplete: true },
+  ])(
+    'budgets elapsed bridge processing while retaining accepted pages ($pages pages, $processingMs ms per response)',
+    async ({ pages, processingMs, accepted, incomplete }) => {
+      const set = await ready();
+      const table = tableFor(set, 'workspace'),
+        rule = ruleFor(set, table);
+      set.request.mockClear();
+      const started = Date.now();
+      let now = started;
+      const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+
+      try {
+        set.request.mockImplementation(async request => {
+          const page = Number(request.query?.page ?? '1');
+          const headers: Record<string, string> =
+            page < pages
+              ? {
+                  link: `<https://api.example/v2/me/workspaces?page=${page + 1}>; rel="next"`,
+                }
+              : {};
+          // A bridge response includes host-side observation validation and
+          // linked-record storage before the reader can request the next page.
+          now += processingMs;
+
+          return {
+            status: 200,
+            headers,
+            body: [
+              { ...workspace, id: 1000 + page, name: `Workspace ${page}` },
+            ],
+          };
+        });
+        const result = await worker(set, table, rule).refresh();
+        expect(result).toMatchObject({ rows: accepted, incomplete });
+        expect(set.request.mock.calls).toHaveLength(accepted);
+        const records = nodes(set.data, 'record').filter(
+          ([, props]) => config(props).resource === 'workspace',
+        );
+        expect(records).toHaveLength(accepted);
+        expect(
+          records.every(([, row]) =>
+            (row[prop('rule-memberships')] as string[]).includes(rule),
+          ),
+        ).toBe(true);
+
+        if (incomplete) {
+          expect(now - started).toBeGreaterThan(300_000);
+          expect(result.error).toContain('Read timed out');
+        } else {
+          expect(now - started).toBeGreaterThan(120_000);
+          expect(now - started).toBeLessThan(300_000);
+          expect(result.error).toBeNull();
+        }
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
   it('retains old memberships and accepted partial observations when a later page fails', async () => {
     const set = await ready();
     const table = tableFor(set, 'workspace'),

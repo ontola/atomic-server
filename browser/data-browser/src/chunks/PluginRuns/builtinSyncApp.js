@@ -1418,7 +1418,9 @@ export function createSyncApp(store, context) {
           limits: {
             maxRequests: 128,
             maxRecords: 4000,
-            timeoutMs: 120000,
+            // Responses include native journal validation and linked-record
+            // storage, so this bounds that work as well as provider latency.
+            timeoutMs: 300000,
             maxRetries: 0,
           },
         },

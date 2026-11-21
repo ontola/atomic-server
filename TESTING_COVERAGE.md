@@ -1327,6 +1327,8 @@ This does not yet prove restoration of the user's private staging workspace.
   versus null fields and later partial-record enrichment without new identities.
   Authenticated pagination covers reads beyond the old 20-request limit and
   confirms the 128-request bound still retains only the accepted prefix.
+  Timed bridge responses cover valid reads beyond two minutes and five-minute
+  exhaustion retaining accepted observations and memberships.
   Native response-journal callbacks are covered by `builtinSyncablesProfile.test.ts`.
 - `syncableApiSchema.test.ts` and `syncableApiSchemaViews.test.ts` cover resource-
   specific link datatypes, retained immutable JSON properties, optional unresolved
