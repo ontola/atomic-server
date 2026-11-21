@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@tomic/react';
-import {
-  managedFetch,
-  getRememberedManagedPortalUrl,
-} from '../helpers/managed/api';
-import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
+import { hasManagedApi, managedFetch } from '../helpers/managed/api';
 import type { ManagedEnrollmentSummary } from '../helpers/managed/enrollmentApi';
 import {
   listVaultDrives,
@@ -26,7 +22,7 @@ export function useDriveHostingStates() {
   const [services, setServices] = useState<Services | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const generation = useRef(0);
-  const offered = !!(getManagedPortalUrl() || getRememberedManagedPortalUrl());
+  const offered = hasManagedApi();
   const refresh = useCallback(async () => {
     if (!offered) return;
 

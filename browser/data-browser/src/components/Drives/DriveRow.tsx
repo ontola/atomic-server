@@ -1,9 +1,9 @@
 import { styled } from 'styled-components';
 
 import { FaRegCircle, FaSquareCheck, FaXmark } from 'react-icons/fa6';
-import { ResourceInline } from '../../views/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { FavoriteButton } from './FavoriteButton';
-import { IconButton } from '../../components/IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { PrivateDriveBadge } from './PrivateDriveBadge';
 
 export interface DriveRowProps {

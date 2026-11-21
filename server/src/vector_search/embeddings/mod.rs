@@ -1,6 +1,6 @@
 //! Pluggable embedding backends: local fastembed vs OpenRouter HTTP API.
 
-mod local;
+pub(crate) mod local;
 mod openrouter;
 mod stub;
 

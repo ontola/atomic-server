@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Row } from '@components/Row';
+import { Row } from '@tomic/ui/components/Row';
 
 interface GeneratingIndicatorProps {
   text: string;

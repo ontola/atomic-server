@@ -140,7 +140,13 @@ describe('WSClient handshake', () => {
     const failed = vi.spyOn(store, 'failDriveSync');
     const message = `SYNC_PUSH rejected for drive ${drive}: not enrolled`;
     socket.receive(encodeError(0, ErrorCode.SYNC_REJECTED, message));
-    await vi.waitFor(() => assert(failed).toHaveBeenCalledWith(drive, message));
+    await vi.waitFor(() =>
+      assert(failed).toHaveBeenCalledWith(
+        drive,
+        message,
+        ErrorCode.SYNC_REJECTED,
+      ),
+    );
     client.close();
   });
 

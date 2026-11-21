@@ -35,7 +35,7 @@ import {
   FaTurnUp,
   FaWindowMaximize,
 } from 'react-icons/fa6';
-import { atomicArgu } from '../ontologies/atomic-argu';
+import { atomicArgu } from '@tomic/resource-ui/ontologies/atomic-argu';
 import { getOrCreateForksFolder } from '../helpers/forksFolder';
 import {
   constructOpenURL,
@@ -53,7 +53,7 @@ import { leaveConversation } from '../helpers/conversations/hiddenConversations'
 import { moveToTrash } from '../helpers/trash';
 import { removeRecentResource } from '../helpers/recentResources';
 import { openSearchOverlay } from '../components/overlayState';
-import { AIIcon } from '../components/AI/AIIcon';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
 import { openShareDialog } from '../components/Share/shareDialogState';
 
 /** Asks the resource bar to open its tag picker for `detail` (a subject). */
@@ -136,8 +136,8 @@ export const resourceActions: ActionDefinition[] = [
     section: 'action',
     label: () => 'Run',
     helper: () =>
-      'Run this plugin and review what it proposes before anything is written.',
-    keywords: ['plugin', 'execute', 'automation', 'import'],
+      'Run this app and review what it proposes before anything is written.',
+    keywords: ['plugin', 'app', 'execute', 'automation', 'import'],
     icon: () => <FaPlay />,
     available: ctx =>
       ctx.openPluginRun !== undefined &&
@@ -568,7 +568,11 @@ export const resourceActions: ActionDefinition[] = [
         await ctx.resource.destroy();
 
         if (ctx.drive) {
-          removeRecentResource(ctx.drive, ctx.subject);
+          removeRecentResource(
+            ctx.store.getAgent()?.subject,
+            ctx.drive,
+            ctx.subject,
+          );
         }
 
         ctx.onAfterDelete?.();

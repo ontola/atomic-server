@@ -10,8 +10,8 @@ import {
 import { useSettings } from '../helpers/AppSettings';
 import { useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { isContentAddressed } from '../helpers/propertyIdentity';
-import { sortSubjectList } from '../views/OntologyPage/sortSubjectList';
+import { isContentAddressed } from '@tomic/resource-ui/helpers/propertyIdentity';
+import { sortSubjectList } from '@tomic/resource-ui/views/OntologyPage/sortSubjectList';
 
 export function useAddToOntology(ontologySubject?: string) {
   const store = useStore();

@@ -266,7 +266,8 @@ describe('reading', () => {
     page.entries.set('3-bbbbbbbb', {
       ...messageToEntry(user('y', 'first'), AGENT, 10),
     });
-    const { rememberPage, scopeKey } = await import('@helpers/chatLog');
+    const { rememberPage, scopeKey } =
+      await import('@tomic/resource-ui/helpers/chatLog');
     rememberPage(
       store,
       scopeKey('https://atomicdata.dev/properties/parent', chat.subject),
@@ -291,7 +292,8 @@ describe('reading', () => {
       'ff-00000000',
       messageToEntry(user('n', 'new'), AGENT, 100),
     );
-    const { rememberPage, scopeKey } = await import('@helpers/chatLog');
+    const { rememberPage, scopeKey } =
+      await import('@tomic/resource-ui/helpers/chatLog');
     rememberPage(
       store,
       scopeKey('https://atomicdata.dev/properties/parent', chat.subject),

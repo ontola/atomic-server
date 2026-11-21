@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
-import { Column, Row } from './Row';
-import { RadioGroup, RadioInput } from './forms/RadioInput';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { RadioGroup, RadioInput } from '@tomic/ui/components/forms/RadioInput';
 import {
   getLockPolicy,
   LOCK_POLICY_LABELS,

@@ -62,7 +62,7 @@ import {
   setCrumbHint,
   type CrumbHint,
 } from '../components/BreadCrumbs';
-import { CalculatedPageHeight } from '../globalCssVars';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';

@@ -5,9 +5,9 @@ import {
   infoBoxStyle,
   type InfoBoxStyle,
 } from '@tomic/form-renderer';
-import Field from '@components/forms/Field';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import InputSwitcher from '@components/forms/InputSwitcher';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { Divider } from './Divider';
 
 /** The style names, capitalized. The stored values stay lowercase. */

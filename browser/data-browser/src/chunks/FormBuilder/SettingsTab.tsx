@@ -11,22 +11,22 @@ import { styled } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { HexColorPicker } from 'react-colorful';
 import { FaXmark } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { FilePicker } from '@components/forms/FilePicker/FilePicker';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import { FilePicker } from '@tomic/resource-ui/components/forms/FilePicker/FilePicker';
 import {
   InputStyled,
   InputWrapper,
   TextAreaStyled,
-} from '@components/forms/InputStyles';
-import { Button } from '@components/Button';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Column, Row } from '@components/Row';
-import { Popover } from '@components/Popover';
+} from '@tomic/ui/components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Popover } from '@tomic/ui/components/Popover';
 import { SettingsGroup, SettingsSection } from '@components/Settings';
 import { CSSEditor } from '@components/CSSEditor';
 import { ExternalLink } from '@components/ExternalLink';
-import { useDebounce } from '@helpers/useDebounce';
+import { useDebounce } from '@tomic/resource-ui/helpers/useDebounce';
 import { FormAccessSection } from './FormAccessSection';
 import { FormScheduleSection } from './FormScheduleSection';
 

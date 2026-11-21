@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import { styled } from 'styled-components';
-import { Column } from '../components/Row';
-import { EditableTitle } from '../components/EditableTitle';
-import { ResourceCoverImage } from '../components/ResourceDecorations';
+import { Column } from '@tomic/ui/components/Row';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { ResourceCoverImage } from '@tomic/resource-ui/components/ResourceDecorations';
 import { ResourcePageProps } from './ResourcePage';
 import { ChatRoomView } from './ChatRoom/ChatRoomView';
 

@@ -1,13 +1,13 @@
 import { styled } from 'styled-components';
 import { FaChevronDown } from 'react-icons/fa6';
-import { Collapse } from '../Collapse';
+import { Collapse } from '@tomic/ui/components/Collapse';
 import { useRef, useState, type JSX } from 'react';
-import { useResizable } from '@hooks/useResizable';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useResizable } from '@tomic/ui/hooks/useResizable';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { useLongPress } from '@hooks/useLongPress';
 import { FaCheck } from 'react-icons/fa6';
-import { DropdownMenu } from '../Dropdown';
-import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
+import { DropdownMenu } from '@tomic/resource-ui/components/Dropdown/index';
+import { AutoOpenTrigger } from '@tomic/ui/components/Dropdown/AutoOpenTrigger';
 import { Panel, panelTitle, usePanelList } from './usePanelList';
 import { SIDEBAR_BAR_HEIGHT, SIDEBAR_BAR_HEIGHT_TOUCH } from './SidebarCSSVars';
 
@@ -30,6 +30,12 @@ export interface SideBarPanelProps {
   defaultOpen?: boolean;
   /** When set, a context menu on the header lists the panels to show or hide. */
   panel?: Panel;
+  /**
+   * Controlled open state, for a panel whose fold state is stored elsewhere
+   * (the user's settings). Without these it lives in localStorage.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Tighter padding when nested inside the drive tree (e.g. Shared with me) */
   embedded?: boolean;
   'data-testid'?: string;
@@ -44,12 +50,16 @@ export function SideBarPanel({
   defaultOpen = true,
   embedded = false,
   panel,
+  open: controlledOpen,
+  onOpenChange,
   'data-testid': dataTestId,
 }: React.PropsWithChildren<SideBarPanelProps>): JSX.Element {
-  const [open, setOpen] = useLocalStorage(
+  const [localOpen, setLocalOpen] = useLocalStorage(
     `${heightStorageKey}.open`,
     defaultOpen,
   );
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const contentRef = useRef<HTMLDivElement>(null);
   // The last height a drag ended at that showed at least one row. Ending a
   // drag below that is a request to close the section; opening it again comes

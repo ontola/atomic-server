@@ -3,18 +3,21 @@ import SpeechSettings from './SpeechSettings';
 import { AIProvider } from './aiContstants';
 import { LocalOllamaDiscovery } from '@components/AI/LocalOllamaDiscovery';
 import * as React from 'react';
-import { Column, Row } from '@components/Row';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import { Column, Row } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import styled, { useTheme } from 'styled-components';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
-import { transition } from '@helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 import { useAISettings } from './AISettingsContext';
 import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
 import { LocalNetworkNotice } from './LocalNetworkNotice';
 import { SettingCheckbox, SettingsSection } from '@components/Settings';
-import { WarningBlock } from '@components/WarningBlock';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 import { settingsKeywords } from '@components/Settings/settingsKeywords';
 

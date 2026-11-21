@@ -205,8 +205,9 @@ pub struct VectorSearchState {
 }
 
 fn init_rerank_model(config: &Config) -> AtomicServerResult<TextRerank> {
-    let mut rerank_options =
-        RerankInitOptions::new(RerankerModel::BGERerankerBase).with_show_download_progress(true);
+    let mut rerank_options = RerankInitOptions::new(RerankerModel::BGERerankerBase)
+        .with_cache_dir(crate::vector_search::embeddings::local::model_cache_dir())
+        .with_show_download_progress(true);
 
     if config.gpu_indexing {
         tracing::info!("Enabling GPU execution providers for fastembed reranker");

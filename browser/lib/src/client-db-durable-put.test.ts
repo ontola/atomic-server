@@ -3,6 +3,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({
   putResource: vi.fn(),
   putResourceWithSnapshot: vi.fn(),
+  putLoroSnapshot: vi.fn(),
+  putLoroSnapshots: vi.fn(),
   outboxWrite: vi.fn(),
   flush: vi.fn(),
 }));
@@ -141,4 +143,65 @@ it('writes an outbox row with its snapshot under the same flush', async () => {
   order.length = 0;
   await send({ type: 'outboxWrite', ...outbox, durable: true });
   expect(order.at(-1)).toBe('flush');
+});
+
+it('writes Loro bytes with their outbox row under one flush, and rejects a snapshot that does not import', async () => {
+  vi.useFakeTimers();
+  const responses = new Map<number, (value: Record<string, unknown>) => void>();
+  const worker = {
+    onmessage: null as unknown as (event: unknown) => void,
+    postMessage: (value: Record<string, unknown>) => {
+      responses.get(value.id as number)?.(value);
+    },
+  };
+  vi.stubGlobal('self', worker);
+  await import('./client-db.worker.js');
+  let nextId = 0;
+
+  const send = (request: object) => {
+    const id = ++nextId;
+    const response = new Promise<Record<string, unknown>>(resolve => {
+      responses.set(id, resolve);
+    });
+    worker.onmessage({ data: { ...request, id } });
+
+    return response;
+  };
+
+  await send({
+    type: 'init',
+    wasmUrl: 'data:text/javascript,export default async function() {}',
+  });
+  const order: string[] = [];
+  db.putLoroSnapshot.mockImplementation(async (subject, snapshot, last) => {
+    order.push(`put ${subject} ${snapshot.length} ${last}`);
+  });
+  db.outboxWrite.mockImplementation(agent => order.push(`outbox ${agent}`));
+  db.flush.mockImplementation(() => order.push('flush'));
+  const outbox = { agent: 'did:ad:agent:a', puts: [], deletes: [] };
+
+  const ok = await send({
+    type: 'putLoroSnapshot',
+    subject: 'did:ad:test',
+    snapshot: new Uint8Array([1, 2]),
+    lastCommit: 'did:ad:commit:c',
+    outbox,
+  });
+  expect(ok.type).toBe('ok');
+  expect(order).toEqual([
+    'put did:ad:test 2 did:ad:commit:c',
+    'outbox did:ad:agent:a',
+    'flush',
+  ]);
+  expect(db.putResourceWithSnapshot).not.toHaveBeenCalled();
+  expect(db.putResource).not.toHaveBeenCalled();
+
+  db.putLoroSnapshot.mockRejectedValue(new Error('does not import'));
+  const bad = await send({
+    type: 'putLoroSnapshot',
+    subject: 'did:ad:test',
+    snapshot: new Uint8Array([9]),
+  });
+  expect(bad.type).toBe('error');
+  expect(bad.message).toBe('does not import');
 });

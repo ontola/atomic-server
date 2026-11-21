@@ -8,6 +8,7 @@ import {
   expectPkarrLookupMiss,
   setTitle,
   smoke,
+  waitForClientDbReady,
 } from './test-utils';
 
 test.beforeEach(async ({ page }) => {
@@ -273,6 +274,7 @@ test('Sync does not claim an unreadable drive is cached or on another device', a
   );
   await page.evaluate(drive => window.store.setDrive(drive), missing);
   await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
+  await waitForClientDbReady(page);
   await expect(page.getByText('Sync & devices', { exact: true })).toBeVisible();
   await expect
     .poll(() =>

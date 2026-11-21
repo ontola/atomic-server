@@ -1,6 +1,6 @@
 import { styled } from 'styled-components';
-import { ResourceLinkNavigationContext } from '@components/ResourceLinkNavigationContext';
-import { useMediaQuery } from '@hooks/useMediaQuery';
+import { ResourceLinkNavigationContext } from '@tomic/resource-ui/components/ResourceLinkNavigationContext';
+import { useMediaQuery } from '@tomic/resource-ui/hooks/useMediaQuery';
 import React, {
   useCallback,
   useEffect,
@@ -12,8 +12,8 @@ import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import { AIAtomicResourceMessageContext, type AtomicUIMessage } from './types';
 import { useCurrentSubject } from '@helpers/useCurrentSubject';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Row } from '@components/Row';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Row } from '@tomic/ui/components/Row';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import {
   ai,

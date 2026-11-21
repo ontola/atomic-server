@@ -1,6 +1,6 @@
-import { Button } from '../Button';
-import { Column } from '../Row';
-import { WarningBlock } from '../WarningBlock';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
 import {
   useLocalNetworkBlocked,
   useLocalNetworkExplained,

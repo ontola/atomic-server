@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { type PickFileArgs } from '@tomic/plugin';
-import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { FilePickerDialog } from '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog';
 
 export type PickFileFn = (args?: PickFileArgs) => Promise<string | undefined>;
 

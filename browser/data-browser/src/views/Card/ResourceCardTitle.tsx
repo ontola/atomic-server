@@ -1,14 +1,14 @@
 import { Resource } from '@tomic/react';
 import { FC, PropsWithChildren } from 'react';
 import { styled } from 'styled-components';
-import { AtomicLink } from '../../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { type ViewTransitionProps } from '../../helpers/ViewTransitionProps';
 import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
 } from '../../helpers/transitionName';
 import { ResourceGlyph } from '../../components/ResourceGlyph';
-import { Row } from '../../components/Row';
+import { Row } from '@tomic/ui/components/Row';
 
 interface ResourceCardTitleProps {
   resource: Resource;

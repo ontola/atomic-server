@@ -8,9 +8,9 @@ import {
   type AgentGrant,
 } from '@tomic/react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
-import { Card } from './Card';
-import { ErrorLook } from './ErrorLook';
+import { Button } from '@tomic/ui/components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import {
   forgetConnectedApp,
   listConnectedApps,

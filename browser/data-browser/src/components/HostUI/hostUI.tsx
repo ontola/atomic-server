@@ -4,16 +4,19 @@ import { isViewKeyEvent } from '@tomic/plugin';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
-import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
-import { AutoOpenTrigger } from '@components/Dropdown/AutoOpenTrigger';
-import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { AutoOpenTrigger } from '@tomic/ui/components/Dropdown/AutoOpenTrigger';
+import { useResourceContextMenu } from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 import { OpenShareDialog } from '@components/Share/ShareDialog';
 import { useLocale } from '@components/LocaleContext';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useStore } from '@tomic/react';
-import { FilePickerDialog } from '@components/forms/FilePicker/FilePickerDialog';
+import { FilePickerDialog } from '@tomic/resource-ui/components/forms/FilePicker/FilePickerDialog';
 import type { HostReply } from '@chunks/AppPage/hostStore';
 import { AppFormDialog, AskedBy, PickResourceDialog } from './hostUIDialogs';
 import {

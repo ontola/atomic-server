@@ -158,6 +158,23 @@ describe('SaveStatusCoordinator', () => {
     expect(idle.kind).toBe('idle');
   });
 
+  it('shows a local save failure over a queued transport retry until recovery', () => {
+    const { coordinator, entries } = setup();
+    const resource = new Resource('did:ad:save-failure');
+    entries.set(resource.subject, { lastAttemptError: 'Failed to fetch' });
+    resource.commitError = new Error('Disk full');
+    expect(coordinator.getState(resource)).toMatchObject({
+      kind: 'error',
+      error: 'Disk full',
+      reason: undefined,
+    });
+
+    resource.commitError = undefined;
+    expect(coordinator.getState(resource)).toMatchObject({ kind: 'queued' });
+    resource.commitError = new SaveQueuedError();
+    expect(coordinator.getState(resource)).toMatchObject({ kind: 'queued' });
+  });
+
   it('settles accounting on failure and delegates error handling without retrying persistence', async () => {
     vi.useFakeTimers();
     const { coordinator, pending, onError } = setup();

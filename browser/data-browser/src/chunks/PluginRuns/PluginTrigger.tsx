@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { signRequest, useStore } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { Card } from '@components/Card';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Card } from '@tomic/ui/components/Card';
 interface TriggerInfo {
   queuedEvents: number;
   query: { filters: Array<{ property: string; value: string | null }> };

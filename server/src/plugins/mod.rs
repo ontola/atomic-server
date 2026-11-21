@@ -66,6 +66,8 @@ pub mod js_runtime;
 pub mod lease;
 #[cfg(feature = "wasm-plugins")]
 pub mod manifest;
+#[cfg(feature = "wasm-plugins")]
+mod package_archive;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]
 pub mod plan;

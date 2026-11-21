@@ -20,9 +20,9 @@ import { DocumentGridItem } from './DocumentGridItem';
 import { DocumentV2GridItem } from './DocumentV2GridItem';
 import { ErrorBoundary } from '../../ErrorPage';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
-import { LoaderBlock } from '../../../components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { ArticleGridItem } from './ArticleGridItem';
-import { FilePreviewThumbnail } from '../../File/FilePreviewThumbnail';
+import { FilePreviewThumbnail } from '@tomic/resource-ui/views/File/FilePreviewThumbnail';
 import { CommentCountBadge } from '../../../components/CommentCountBadge';
 
 export interface ResourceGridItemProps {

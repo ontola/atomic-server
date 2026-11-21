@@ -1,7 +1,7 @@
 import { FaEllipsisVertical } from 'react-icons/fa6';
-import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
+import { DropdownTriggerComponent } from '@tomic/ui/components/Dropdown/DropdownTrigger';
 import { shortcuts } from '../HotKeyWrapper';
-import { IconButton } from '../IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 
 export const MenuBarDropdownTrigger: DropdownTriggerComponent = ({
   onClick,

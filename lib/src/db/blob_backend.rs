@@ -130,7 +130,14 @@ impl BlobBackend for RedbBlobBackend {
     }
 
     async fn size(&self, key: &[u8]) -> AtomicResult<Option<u64>> {
-        Ok(self.kv.get(Tree::Blobs, key)?.map(|b| b.len() as u64))
+        // [key, key + NUL) contains exactly this key, including for variable-length keys.
+        let mut end = key.to_vec();
+        end.push(0);
+        Ok(self
+            .kv
+            .range_value_sizes(Tree::Blobs, key.to_vec(), end, 1)?
+            .pop()
+            .map(|(_, size)| size))
     }
 
     async fn list(&self) -> AtomicResult<Vec<BlobInfo>> {
@@ -220,10 +227,7 @@ impl Db {
     }
 
     pub async fn blob_size(&self, key: &[u8]) -> AtomicResult<Option<u64>> {
-        match &self.blob_backend {
-            Some(backend) => backend.size(key).await,
-            None => Ok(self.kv.get(Tree::Blobs, key)?.map(|b| b.len() as u64)),
-        }
+        self.blob_store().size(key).await
     }
 
     pub async fn has_blob(&self, key: &[u8]) -> AtomicResult<bool> {

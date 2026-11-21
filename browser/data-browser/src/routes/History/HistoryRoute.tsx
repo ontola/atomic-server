@@ -17,7 +17,7 @@ import { Main } from '../../components/Main';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { createRoute } from '@tanstack/react-router';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 
 export const HistoryRoute = createRoute({
   path: pathNames.history,

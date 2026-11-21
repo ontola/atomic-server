@@ -1,8 +1,8 @@
 import { useEffectiveConstraint, type Constraint } from '@tomic/react';
 import { styled } from 'styled-components';
-import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { ResourceInline } from '../../ResourceInline';
-import { optionSubjects } from '../../../helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 
 import type { JSX } from 'react';
 

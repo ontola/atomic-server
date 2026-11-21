@@ -7,7 +7,7 @@ import {
   InternalDialogProps,
 } from '../../../components/Dialog';
 import { styled } from 'styled-components';
-import InputSwitcher from '../../../components/forms/InputSwitcher';
+import InputSwitcher from '@tomic/resource-ui/components/forms/InputSwitcher';
 import { PropertyFormCommon } from './PropertyFormCommon';
 import { isContentAddressed } from '../../../helpers/propertyIdentity';
 

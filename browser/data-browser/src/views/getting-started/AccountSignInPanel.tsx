@@ -9,6 +9,9 @@ import {
   type AccountProviders,
   type SignInProvider,
 } from '../../helpers/managed/accountProviders';
+import { engageAccountService } from '../../helpers/managed/api';
+import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
+import { Agent } from '@tomic/lib';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import {
   getManagedAccount,
@@ -93,12 +96,14 @@ export function AccountSignInPanel({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     return () => {
       live = false;
     };
-  }, []);
+  }, [portalUrl]);
 
   // The email link opens on the portal, in another tab or on the phone that
   // got the mail. The shared cookie is how this page hears about it.
@@ -131,6 +136,34 @@ export function AccountSignInPanel({
 
     if (outcome instanceof Error) setError(outcome.message);
     else if (outcome) onSignedIn();
+  }
+
+  async function handleSecret(secret: string) {
+    setBusy(true);
+    setError(null);
+
+    let ok = false;
+
+    try {
+      const agent = await Agent.fromSecret(secret.trim());
+
+      ok = await signInAccountWithAgent(agent, { proven: true, retry: true });
+    } catch {
+      setBusy(false);
+      setError(
+        'That is not an Atomic secret. Copy the whole secret and try again.',
+      );
+
+      return;
+    }
+
+    setBusy(false);
+
+    if (ok) onSignedIn();
+    else
+      setError(
+        'This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in.',
+      );
   }
 
   async function handleEmail(event: FormEvent<HTMLFormElement>) {
@@ -175,6 +208,7 @@ export function AccountSignInPanel({
         appleHref={href('apple')}
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
+        onSecret={secret => void handleSecret(secret)}
         passkeySupported={passkeys === true}
         email={email}
         onEmailChange={setEmail}
@@ -252,6 +286,8 @@ export function AccountSignInViaBrowser({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     // Signed in in the browser, which sent the handoff back through

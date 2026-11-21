@@ -1,6 +1,6 @@
 import { describe, it, vi, expect as assert } from 'vitest';
 import { server } from './ontologies/server.js';
-import { testStore } from './test-store.js';
+import { mockLocalPersistence, testStore } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
 import { canonicalizeScheme, isAtomicIdentifier } from './subject.js';
 
@@ -19,6 +19,7 @@ describe('offline create drain', () => {
     const { store } = await testStore();
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
+    mockLocalPersistence(store);
 
     const extra = await store.createDrive('Offline-Created Drive', {
       personal: false,
@@ -41,6 +42,7 @@ describe('offline create drain', () => {
     const { store } = await testStore();
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
+    mockLocalPersistence(store);
 
     const extra = await store.createDrive('Offline-Created Drive', {
       personal: false,
@@ -62,6 +64,7 @@ describe('offline create drain', () => {
     const { store } = await testStore();
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
+    mockLocalPersistence(store);
 
     const extra = await store.createDrive('Offline-Created Drive', {
       personal: false,

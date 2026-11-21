@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defaultConfig, Hub, type Config } from 'wuchale';
-import appConfig from '../wuchale.config.js';
+import appConfig from '../../resource-ui/wuchale.config.js';
 
 const roots: string[] = [];
 
@@ -16,6 +16,10 @@ async function transform(source: string) {
   const root = await mkdtemp(join(tmpdir(), 'atomic-wuchale-runtime-'));
   roots.push(root);
   await mkdir(join(root, 'src/locales'), { recursive: true });
+  await writeFile(
+    join(root, 'src/locales/main.loader.js'),
+    "export { getRuntime, getRuntimeRx } from '@tomic/resource-ui/locale-runtime';",
+  );
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
   const file = join(root, 'src/example.tsx');
   await writeFile(file, source);

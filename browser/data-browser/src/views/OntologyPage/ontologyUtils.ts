@@ -1,5 +1,5 @@
 import { Datatype, Resource, Store, core, type Core } from '@tomic/react';
-import { sortSubjectList } from './sortSubjectList';
+import { sortSubjectList } from '@tomic/resource-ui/views/OntologyPage/sortSubjectList';
 
 const DEFAULT_DESCRIPTION = 'Change me';
 

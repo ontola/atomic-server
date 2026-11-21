@@ -294,12 +294,12 @@ test('Assistant creates and redesigns a website using existing table content', a
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(subject)}`,
   );
-  // The authoring assistant is still open after navigation; close it before
-  // exercising the menu so its delayed input autofocus cannot take menu focus.
-  await page.getByRole('button', { name: 'AI', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Publish site', exact: true }),
   ).toBeEnabled({ timeout: 30000 });
+  await expect(
+    page.getByRole('button', { name: 'Close AI Sidebar', exact: true }),
+  ).toBeHidden();
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(page.getByTestId('menu-item-website-prepare')).toBeEnabled({
     timeout: 30000,

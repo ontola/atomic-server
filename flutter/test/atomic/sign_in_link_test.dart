@@ -57,25 +57,69 @@ void main() {
       final seen = <http.Request>[];
       final ok = await AccountStore.redeemSignInLink(
         'https://atomic.place/signin?token=link-token',
+        confirmAccount: (address) async {
+          expect(address, 'alice@example.test');
+          expect(await store.read(), isNull);
+          return true;
+        },
         client: MockClient((request) async {
           seen.add(request);
+          if (request.url.path == '/api/me') {
+            expect(request.headers['cookie'], contains('s1'));
+            return http.Response('{"address":"alice@example.test"}', 200);
+          }
           return http.Response('{"email":"a@b.c"}', 200,
               headers: {'set-cookie': 'session_token=s1; Path=/; HttpOnly'});
         }),
       );
       expect(ok, isTrue);
-      expect(seen.single.url.toString(), 'https://atomic.place/api/login');
-      expect(jsonDecode(seen.single.body), {'token': 'link-token'});
+      expect(seen.first.url.toString(), 'https://atomic.place/api/login');
+      expect(jsonDecode(seen.first.body), {'token': 'link-token'});
       final saved = await store.read();
       expect(saved, isNotNull);
       expect(jsonDecode(saved!), {'origin': 'https://atomic.place', 'cookie': 's1'});
       expect(AtomicAccountClient.sessionOrigin(saved).host, 'atomic.place');
     });
 
+    test('declining a link keeps the existing account session', () async {
+      await store.save('existing');
+      final ok = await AccountStore.redeemSignInLink(
+        'https://atomic.place/signin?token=t',
+        confirmAccount: (address) async {
+          expect(address, 'another@example.test');
+          return false;
+        },
+        client: MockClient((r) async => r.url.path == '/api/me'
+            ? http.Response('{"address":"another@example.test"}', 200)
+            : http.Response('{}', 200,
+                headers: {'set-cookie': 'session_token=new'})),
+      );
+      expect(ok, isFalse);
+      expect(await store.read(), 'existing');
+    });
+
+    test('a new session selected during confirmation takes precedence',
+        () async {
+      final ok = await AccountStore.redeemSignInLink(
+        'https://atomic.place/signin?token=t',
+        confirmAccount: (_) async {
+          await store.save('newer selection');
+          return true;
+        },
+        client: MockClient((r) async => r.url.path == '/api/me'
+            ? http.Response('{"address":"alice@example.test"}', 200)
+            : http.Response('{}', 200,
+                headers: {'set-cookie': 'session_token=link'})),
+      );
+      expect(ok, isFalse);
+      expect(await store.read(), 'newer selection');
+    });
+
     test('a link for another host sends nothing and saves nothing', () async {
       var called = false;
       final ok = await AccountStore.redeemSignInLink(
         'https://evil.example/signin?token=t',
+        confirmAccount: (_) => fail('unexpected prompt'),
         client: MockClient((_) async {
           called = true;
           return http.Response('{}', 200);
@@ -90,6 +134,7 @@ void main() {
       await expectLater(
         AccountStore.redeemSignInLink(
           'https://atomic.place/signin?token=old',
+          confirmAccount: (_) => fail('unexpected prompt'),
           client: MockClient((_) async => http.Response('{}', 401)),
         ),
         throwsA(isA<StateError>().having(

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
-import { plural } from '@helpers/plural';
+import { plural } from '@tomic/resource-ui/helpers/plural';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
 import { displayShortcut, shortcuts } from '../actions/shortcuts';
@@ -9,7 +9,11 @@ import {
   PALETTE_MIN_QUERY_LENGTH,
 } from '../actions/matchActions';
 import { useAppMenuItems } from '../actions/appMenuItems';
-import { isItem, matchesQuery, type MenuItemMinimial } from './Dropdown';
+import {
+  isItem,
+  matchesQuery,
+  type MenuItemMinimial,
+} from '@tomic/resource-ui/components/Dropdown/index';
 import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
@@ -20,9 +24,9 @@ import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from './ConfirmationDialog';
-import { ResourceInline } from '../views/ResourceInline';
-import { ResourceUsage } from './ResourceUsage';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { ResourceUsage } from '@tomic/resource-ui/components/ResourceUsage/index';
 import {
   useServerSearch,
   useStore,
@@ -43,14 +47,14 @@ import {
 import { useSettings } from '../helpers/AppSettings';
 import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
-import { Column, Row } from './Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ErrorBoundary } from '../views/ErrorPage';
 import { ErrorLook } from './ErrorLook';
 
-import { InlineFormattedResourceList } from './InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { FaMagnifyingGlass, FaComments } from 'react-icons/fa6';
 import ResourceCard from '../views/Card/ResourceCard';
-import ResourceRow from '@views/ResourceRow';
+import ResourceRow from '@tomic/resource-ui/views/ResourceRow';
 import { ChatMatchRow } from '../routes/Search/ChatMatchRow';
 import { useChatMatches } from '../routes/Search/useChatMatches';
 import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
@@ -68,8 +72,8 @@ import {
 import {
   getRecentResources,
   removeRecentResource,
-} from '../helpers/recentResources';
-import { withoutUnavailable } from '../helpers/unavailableResources';
+} from '@tomic/resource-ui/helpers/recentResources';
+import { withoutUnavailable } from '@tomic/resource-ui/helpers/unavailableResources';
 import { useDocumentText } from '../hooks/useDocumentText';
 import { getSearchResultHint } from '../helpers/searchResultHint';
 
@@ -430,7 +434,9 @@ function SearchOverlay(): JSX.Element {
   const chatMatches = useChatMatches(searchQuery, !scope && filterIsEmpty);
   const chatSubjects = new Set(chatMatches.map(match => match.subject));
   const candidates = showRecent
-    ? getRecentResources(drive).filter(subject => subject !== currentSubject)
+    ? getRecentResources(store.getAgent()?.subject, drive).filter(
+        subject => subject !== currentSubject,
+      )
     : results.filter(subject => !chatSubjects.has(subject));
   // Deleted or trashed resources (possibly from an earlier session or another
   // device) are hidden, and forgotten when they were only a recent.
@@ -449,9 +455,11 @@ function SearchOverlay(): JSX.Element {
     if (goneKey) {
       goneKey
         .split('\n')
-        .forEach(subject => removeRecentResource(drive, subject));
+        .forEach(subject =>
+          removeRecentResource(store.getAgent()?.subject, drive, subject),
+        );
     }
-  }, [drive, goneKey]);
+  }, [store, drive, goneKey]);
 
   const actionHits = currentSubject
     ? matchActionsForPalette(query, resourceActions, actionCtx)

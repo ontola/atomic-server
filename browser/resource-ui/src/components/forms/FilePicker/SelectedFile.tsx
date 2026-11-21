@@ -1,0 +1,81 @@
+import { resourceTheme } from '../../../theme.js';
+import { Server, useResource } from '@tomic/react';
+import { SelectedFileLayout } from './SelectedFileLayout.js';
+import { styled } from 'styled-components';
+import { FilePreviewThumbnail } from '../../../views/File/FilePreviewThumbnail.js';
+import { isImageFile } from '../../../views/File/fileTypeUtils.js';
+
+interface SelectedFileResourceProps {
+  subject: string;
+  onClear: () => void;
+  disabled?: boolean;
+}
+
+export function SelectedFileResource({
+  subject,
+  disabled,
+  onClear,
+}: SelectedFileResourceProps): React.JSX.Element {
+  const resource = useResource<Server.File>(subject);
+
+  return (
+    <SelectedFileLayout
+      title={resource.title}
+      onClear={onClear}
+      disabled={disabled}
+    >
+      <Section aria-label={`${resource.title} preview`}>
+        <FilePreviewThumbnail resource={resource} />
+      </Section>
+    </SelectedFileLayout>
+  );
+}
+
+interface SelectedFileBlobProps {
+  file: File;
+  disabled?: boolean;
+  onClear: () => void;
+}
+
+export function SelectedFileBlob({
+  file,
+  disabled,
+  onClear,
+}: SelectedFileBlobProps): React.JSX.Element {
+  return (
+    <SelectedFileLayout
+      title={file.name}
+      helperText='Will be uploaded when resource is saved'
+      onClear={onClear}
+      disabled={disabled}
+    >
+      <Section aria-label={`${file.name} preview`}>
+        {isImageFile(file.type) ? (
+          <Image src={URL.createObjectURL(file)} alt={file.name} />
+        ) : (
+          <NoPreview>File preview not available at this time</NoPreview>
+        )}
+      </Section>
+    </SelectedFileLayout>
+  );
+}
+
+const Image = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
+const NoPreview = styled.div`
+  background-color: ${({ theme }) => resourceTheme(theme).colors.bg1};
+  display: grid;
+  padding: ${({ theme }) => resourceTheme(theme).margin}rem;
+  place-items: center;
+  color: ${({ theme }) => resourceTheme(theme).colors.textLight};
+  text-wrap: balance;
+  text-align: center;
+`;
+
+const Section = styled.section`
+  display: contents;
+`;

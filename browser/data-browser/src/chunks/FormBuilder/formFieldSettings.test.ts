@@ -5,7 +5,7 @@ import {
   getEffectiveConstraint,
   setClassConstraint,
 } from '@tomic/react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 import { validateFieldValue, type FieldOptions } from '@tomic/form-renderer';
 import { formSpecSchema, buildFormFromSpec } from './createFormFromSpec';
 import {

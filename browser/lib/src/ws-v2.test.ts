@@ -226,6 +226,18 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     ).toBe(toHex(vectors.sync_push_last));
   });
 
+  it('rejects oversized entry counts and incomplete chunks', ({ expect }) => {
+    const entry = { subject: 'x', loroBytes: new Uint8Array([1]) };
+    const chunk = encodeSyncPush('d', Array(100).fill(entry), true);
+    expect(decodeSyncPush(chunk.subarray(1))?.entries.length).toBe(100);
+    expect(decodeSyncPush(chunk.subarray(1, -1))).toBeUndefined();
+    expect(
+      decodeSyncPush(
+        encodeSyncPush('d', Array(101).fill(entry), true).subarray(1),
+      ),
+    ).toBeUndefined();
+  });
+
   it('carries SYNC_PUSH envelopes in a trailer old decoders never read', ({
     expect,
   }) => {

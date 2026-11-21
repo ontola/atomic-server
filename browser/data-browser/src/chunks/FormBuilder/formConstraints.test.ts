@@ -4,7 +4,7 @@ import {
   narrowFieldOptions,
   narrowedConstraintKeywords,
   normalizeFieldOptions,
-} from './formConstraints';
+} from '@tomic/resource-ui/chunks/FormBuilder/formConstraints';
 
 /** Twin of the `narrow_options` / `normalize_option_keys` tests in
  * `server/src/forms.rs`. */

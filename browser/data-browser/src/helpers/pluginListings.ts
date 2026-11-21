@@ -31,7 +31,7 @@ function strings(value: unknown): string[] {
  */
 export function parseListings(body: unknown): Listing[] {
   if (!Array.isArray(body)) {
-    throw new Error('The plugin catalog did not return a list of plugins.');
+    throw new Error('The app catalog did not return a list of apps.');
   }
 
   return body

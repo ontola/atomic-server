@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
 import { SettingCheckbox } from './SettingCheckbox';
 import {
   osNotificationState,

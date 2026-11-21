@@ -1,6 +1,6 @@
 import { ServiceGroup, ServiceSection } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
-import { Checkbox } from '../../components/forms/Checkbox';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 import {
   readKnownPeers,
   writeKnownPeers,
@@ -24,6 +24,7 @@ import {
   type NodeStatus,
 } from '../../helpers/driveSyncStatus';
 import { BrowserPeerPanel } from '../../components/BrowserPeerPanel';
+import { HostingHint } from '../../components/HostingHint';
 import { HostingPaymentRequiredError } from '../../helpers/managed/enrollment';
 import { DiscoverWorkspace } from '../../views/getting-started/DiscoverWorkspace';
 import {
@@ -73,7 +74,7 @@ import {
   FaCloudArrowUp,
   FaKey,
 } from 'react-icons/fa6';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { VaultPanel } from '../../components/Vault/VaultPanel';
 import {
   ServiceRow,
@@ -90,14 +91,11 @@ import {
 } from '../../helpers/sentry';
 import { SyncProviderAccount } from '../../components/Cloud/SyncProviderAccount';
 import {
+  accountAddress,
   getManagedAccount,
   type ManagedAccount,
 } from '../../helpers/managed/session';
-import {
-  managedFetch,
-  getRememberedManagedPortalUrl,
-  safePortalUrl,
-} from '../../helpers/managed/api';
+import { hasManagedApi, managedFetch } from '../../helpers/managed/api';
 import {
   envelopeWrapperKinds,
   getRecoverySecret,
@@ -118,9 +116,9 @@ import {
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import { getDriveUsage } from '../../helpers/managedUsage';
 import { sameOrigin, serverLabel } from '../../helpers/serverUrl';
-import { ResourceInline } from '../../views/ResourceInline';
-import { AtomicLink } from '../../components/AtomicLink';
-import { formatTimeAgo } from '../../helpers/formatTimeAgo';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { formatTimeAgo } from '@tomic/resource-ui/helpers/formatTimeAgo';
 import { getLocalServerOrigin, isRunningInTauri } from '../../helpers/tauri';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import {
@@ -143,11 +141,14 @@ import {
   enableCloudSyncForDrive,
   ensureManagedSession,
   driveHasCloudEnrollment,
-  isCloudSyncAvailable,
   getManagedPortalUrl,
+  getAccountServiceUrl,
 } from '../../helpers/managed/cloudSync';
 import { paths } from '../../routes/paths';
 import { useSettings } from '../../helpers/AppSettings';
+import { useConnectDeviceProps } from '../../hooks/useConnectDeviceProps';
+import { useAccountAddress } from '../SideBar/useAccountAddress';
+import { pickAccountAddress } from '../SideBar/accountRowName';
 import { serverURLStorage } from '../../helpers/serverURLStorage';
 
 function nodeDidToRaw(nodeDid: string): string | undefined {
@@ -291,8 +292,7 @@ function ServerCard({
     isSelectedServer &&
     !isRunningInTauri() &&
     !isOriginWithoutNode(server) &&
-    (refusedByServer ||
-      (isCloudSyncAvailable(managedInfo) && cloudEnrolled === false));
+    (refusedByServer || cloudEnrolled === false);
   const isCloud = isActive && cloudHosted;
   // Any drive on the provider's node is the provider's, paid or not: an account
   // always has its personal drive hosted there. It reads blue like the rest of
@@ -1163,7 +1163,8 @@ export function SyncSettings({
   useEffect(() => {
     const drive = status.drive;
 
-    if (!drive || !isCloudSyncAvailable(managedInfo)) {
+    // Only with a session to ask: the default service is not contacted here.
+    if (!drive || !hasManagedApi()) {
       setCloudEnrollment(null);
 
       return;
@@ -1243,6 +1244,11 @@ export function SyncSettings({
     store.isLiveSyncedDrive(status.drive) &&
     !embeddedActive &&
     !isOriginWithoutNode(status.serverUrl);
+  const connectDeviceProps = useConnectDeviceProps({
+    serverNodeId,
+    serverUrl: status.serverUrl ?? '',
+    serverPairingAllowed: showServerConn && cloudEnrolled !== false,
+  });
   const pairedPeers = isNode ? knownPeers : [];
   // A browser is not a node, so it cannot pair with a device itself. But the
   // server it reads from can — and reports who, over `/server`. So a phone
@@ -1272,11 +1278,12 @@ export function SyncSettings({
     }
   });
 
+  const accountPortalUrl = getAccountServiceUrl(managedInfo);
+  // A portal is configured, rather than only the default service known.
+  const hostedBuild = getManagedPortalUrl(managedInfo) !== null;
+
   // The source server copies remote drives in full; enrollment alone is not sync.
-  const showCloudBackup =
-    isCloudSyncAvailable(managedInfo) &&
-    cloudEnrolled !== null &&
-    !driveMissing;
+  const showCloudBackup = cloudEnrolled !== null && !driveMissing;
 
   /**
    * Why Cloud Server can't be switched on from here, or null when it can.
@@ -1300,7 +1307,7 @@ export function SyncSettings({
       return 'This device doesn’t have this drive yet. Pair the device that does, and you can host it from here.';
     }
 
-    if (!isCloudSyncAvailable(managedInfo)) {
+    if (!accountPortalUrl) {
       return `${serverHostname ?? 'This server'} doesn’t offer hosting, so it can’t be switched on from here.`;
     }
 
@@ -1328,7 +1335,7 @@ export function SyncSettings({
       local: hasWorkingLocalStore,
       serverSync: showServerConn,
       hosting: cloudEnrolled,
-      managed: isCloudSyncAvailable(managedInfo),
+      managed: hostedBuild,
       vaultOn: vault.status.state === 'on' || vault.status.state === 'other',
     });
   }
@@ -1384,10 +1391,12 @@ export function SyncSettings({
    * its own embedded node, say — without inventing a URL for a node that has
    * never heard of a portal.
    */
-  const accountPortalUrl =
-    safePortalUrl(
-      getManagedPortalUrl(managedInfo) ?? getRememberedManagedPortalUrl(),
-    ) ?? null;
+  // Never the opaque `acct_` id: the address, else a generic label.
+  const knownAddress = useAccountAddress();
+  const accountAddressLabel = pickAccountAddress(
+    managedAccount ? accountAddress(managedAccount) : undefined,
+    knownAddress,
+  );
 
   async function promoteDrive() {
     if (!status.drive || promoting) return;
@@ -2018,7 +2027,7 @@ export function SyncSettings({
       <SyncProviderAccount
         key={accountPortalUrl}
         portalUrl={accountPortalUrl}
-        email={managedAccount?.email ?? null}
+        email={managedAccount ? (accountAddressLabel ?? 'Your account') : null}
         emailRecoveryOn={recoveryBackup === 'stored'}
         onLinked={() => window.location.reload()}
       />
@@ -2047,16 +2056,16 @@ export function SyncSettings({
               {!managedAccount
                 ? `Sign in to your ${PRODUCT_NAME} account to check email recovery. Signing in to this drive with a passkey or secret does not by itself connect your cloud account.`
                 : recoveryBackup === null
-                  ? `Signed in as ${managedAccount.email}.`
+                  ? `Signed in as ${accountAddressLabel ?? 'your account'}.`
                   : recoveryBackup === 'stored'
-                    ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                    ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, so this email gets you back in on a new device.`
                     : recoveryBackup === 'sign-in-not-on'
-                      ? `${managedAccount.email}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
+                      ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but signing in does not open it yet. Confirm once with your passkey or recovery code to turn that on.`
                       : recoveryBackup === 'passkey-only'
-                        ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                        ? `${accountAddressLabel ?? 'Your account'}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
                         : recoveryBackup === 'device-only'
-                          ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                          : `${managedAccount.email}. No recovery backup stored, so losing every device loses this drive.`}
+                          ? `${accountAddressLabel ?? 'Your account'}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                          : `${accountAddressLabel ?? 'Your account'}. No recovery backup stored, so losing every device loses this drive.`}
             </ConnSub>
             {/* Signed out, use the account header's sign-in action.
                       Signed in with nothing stored, the flow is in settings,
@@ -2281,6 +2290,10 @@ export function SyncSettings({
                   ? 'Pair another device to sync directly, or connect an always-on one to reach your data from anywhere.'
                   : 'Connect an always-on device to back up your data and reach it from anywhere.'}
               </p>
+              <HostingHint
+                reason='no-always-on-device'
+                drive={status.drive ?? undefined}
+              />
             </EmptyConnections>
           )}
 
@@ -2293,7 +2306,7 @@ export function SyncSettings({
             server =>
               isManagedServer(server) ||
               showSavedServer({
-                managed: isCloudSyncAvailable(managedInfo),
+                managed: hostedBuild,
                 activeForDrive:
                   (showServerConn ||
                     (localOnlyDrive && cloudEnrolled === false)) &&
@@ -2426,18 +2439,7 @@ export function SyncSettings({
             only, and safe to leave on screen. The section itself always
             renders, in the same place, because adding a device is always
             possible; only the "show this device" half is gated. */}
-      <ConnectDevice
-        pairNodeDid={pairNodeId ? rawToNodeDid(pairNodeId) : null}
-        showPairing={
-          !!pairNodeId &&
-          (isNode ||
-            (showServerConn &&
-              (!isCloudSyncAvailable(managedInfo) || cloudEnrolled === true)))
-        }
-        canTakeCode={isNode}
-        serverName={serverLabel(status.serverUrl ?? '')}
-        onAddServer={setServer}
-      />
+      <ConnectDevice {...connectDeviceProps} />
 
       {/* Developer: diagnostics + advanced toggles, tucked away. */}
       <DevDetails>

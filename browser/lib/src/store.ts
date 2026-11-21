@@ -7,6 +7,7 @@ import {
   encodeEphemeral as encodePeerEphemeral,
   decodeEphemeral as decodePeerEphemeral,
   EphemeralKind as PeerEphemeralKind,
+  ErrorCode,
 } from './ws-v2.js';
 import { serializeDeterministically as serializePeerCommit } from './commit.js';
 import { taskSchema } from './task-schema.js';
@@ -46,6 +47,7 @@ import {
   RequestCancelledError,
   ErrorType,
   isTransportError,
+  isUnreachableLoopbackSubject,
   LOCAL_ONLY_NOT_FOUND_MESSAGE,
   notInHostStoreMessage,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
@@ -79,7 +81,6 @@ import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { LoroLoader } from './loro-loader.js';
-import { loroCall } from './loro-context.js';
 import { withDeadline } from './withDeadline.js';
 
 /** How long a connected store waits on its local database before asking the server. */
@@ -126,6 +127,7 @@ import {
 import type {
   ClientDbWorker,
   ClientDbOutboxWrite,
+  ClientDbRow,
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
@@ -137,14 +139,15 @@ import {
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
-  isPendingDepsCommitErrorMessage,
+  isPendingDepsRefusal,
+  refusalCode,
   isOutboxDatabase,
-  isSettledDestroyErrorMessage,
+  isSettledDestroyRefusal,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
-  isMissingParentMessage,
-  isNotEnrolledMessage,
+  isMissingParentRefusal,
+  isNotEnrolledRefusal,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -340,6 +343,7 @@ export interface StoreSyncStatus {
   lastDriveSyncError?: {
     drive: string;
     message: string;
+    code?: number;
     timestamp: number;
   };
 }
@@ -914,6 +918,7 @@ export class Store {
   private _lastDriveSyncError?: {
     drive: string;
     message: string;
+    code?: number;
     timestamp: number;
   };
   private _lastDriveSync?: {
@@ -1255,7 +1260,10 @@ export class Store {
 
     if (
       this._lastDriveSyncError?.drive === drive &&
-      isNotEnrolledMessage(this._lastDriveSyncError.message)
+      isNotEnrolledRefusal(
+        this._lastDriveSyncError.message,
+        this._lastDriveSyncError.code,
+      )
     ) {
       return true;
     }
@@ -1266,7 +1274,7 @@ export class Store {
       .pending()
       .some(
         entry =>
-          isNotEnrolledMessage(entry.lastAttemptError) &&
+          isNotEnrolledRefusal(entry.lastAttemptError, entry.lastAttemptCode) &&
           this.driveOf(this.normalizeSubject(entry.subject)) === normalized,
       );
   }
@@ -1480,6 +1488,60 @@ export class Store {
   }
 
   /**
+   * Put the signed-in agent's profile (name, picture) on the server that hosts
+   * their personal drive.
+   *
+   * Onboarding without a node keeps the agent resource local-only next to the
+   * drive. When that drive is later hosted, only the drive is promoted, so the
+   * agent stayed behind: the node held a bare agent it made itself, and other
+   * devices and collaborators saw no name. Once the personal drive is no
+   * longer local-only the agent resource is lifted too, merged with whatever
+   * the node holds (Loro merges the two documents; neither replaces the
+   * other) and pushed. Safe to call repeatedly: it does nothing unless the
+   * agent is still registered local-only while its drive is hosted.
+   */
+  public async publishAgentProfile(): Promise<void> {
+    const agent = this.getAgent();
+    if (!agent?.subject || this.noServer || !this._serverConnected) return;
+
+    const subject = this.normalizeSubject(agent.subject);
+    if (!this.localOnlyDrives.has(subject)) return;
+
+    const personal = await this.resolvePrivateDriveSubject(agent);
+    if (this.isLocalOnlyDrive(personal)) return;
+    if (this.getAgent()?.subject !== agent.subject) return;
+
+    // Lifted for the duration of the push only: `save()` skips the server for
+    // a local-only subject. Registered again unless the push went through, so
+    // a profile that was not loaded yet, or a node that could not be reached,
+    // is tried again on the next connection instead of being given up on.
+    this.unregisterLocalOnlyDrive(subject);
+    let published = false;
+
+    try {
+      if (this.resources.get(subject)?.isReady()) {
+        // Merge in the node's copy first, so the push builds on its history.
+        await this.fetchResourceFromServer(subject, { noWebSocket: true });
+        const profile = this.resources.get(subject);
+
+        if (profile?.isReady() && this.getAgent()?.subject === agent.subject) {
+          // A commit carrying the whole document: everything signed so far
+          // stayed on this device, and the node's own bare agent has none of
+          // those ops.
+          profile.clearLoroSaveCursor();
+          profile.markDirty();
+          await profile.save();
+          published = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[Store] could not publish the agent profile:', e);
+    }
+
+    if (!published) this.registerLocalOnlyDrive(subject);
+  }
+
+  /**
    * Reconcile `drive` with the connected server and wait until that server's
    * inventory covers everything held locally (the drive root included).
    * Unlike `promoteLocalDrive`, which only kicks the reconcile off, this
@@ -1509,6 +1571,7 @@ export class Store {
 
     this.unregisterLocalOnlyDrive(normalized);
     this.subscribeWebSocket(normalized);
+    void this.publishAgentProfile();
 
     const deadline = Date.now() + timeoutMs;
     let lastProblem = 'The server has not received this drive yet.';
@@ -1721,7 +1784,10 @@ export class Store {
               isGenesis: entry.signedGenesis !== undefined,
               rearmedAfterResync: entry.rearmedAfterResync === true,
             });
-          const refused = this.refusedDriveOf(error.message);
+          const refused = this.refusedDriveOf(
+            error.message,
+            e instanceof AtomicError ? e.code : undefined,
+          );
 
           // A refusal the app resolves (the drive moves to browser-only) is
           // not a failure worth reporting: nothing keeps failing afterwards.
@@ -1736,10 +1802,16 @@ export class Store {
           report();
         },
         onBlocked: (entry, e) => {
-          this.notifyBlockedSync(
+          const announced = this.notifyBlockedSync(
             entry.subject,
             e instanceof Error ? e.message : String(e),
+            entry.blockedNotified === true,
+            e instanceof AtomicError ? e.code : undefined,
           );
+
+          // Remembered across reloads (persisted with the entry), so a write
+          // that stays blocked is announced once, not on every page load.
+          if (announced) entry.blockedNotified = true;
         },
       });
 
@@ -2188,7 +2260,13 @@ export class Store {
       // drain attempt (scheduled by the outbox backoff) exports a
       // self-contained snapshot, which the server can always merge; that
       // re-delivers the lost range too.
-      if (e instanceof Error && isPendingDepsCommitErrorMessage(e.message)) {
+      if (
+        e instanceof Error &&
+        isPendingDepsRefusal(
+          e.message,
+          e instanceof AtomicError ? e.code : undefined,
+        )
+      ) {
         resource.clearLoroSaveCursor();
       }
 
@@ -2257,7 +2335,7 @@ export class Store {
    * drop the entry, make sure the local copy is gone.
    *
    * A server answer that says the resource is already gone (see
-   * {@link isSettledDestroyErrorMessage}) counts as an ack: the goal of the
+   * {@link isSettledDestroyRefusal}) counts as an ack: the goal of the
    * delete is met. Every other failure is rethrown so the outbox applies
    * its usual backoff / terminal / blocking classification and
    * `Resource.destroy()` can surface it to the caller.
@@ -2282,7 +2360,14 @@ export class Store {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
 
-        if (!isSettledDestroyErrorMessage(msg)) throw e;
+        if (
+          !isSettledDestroyRefusal(
+            msg,
+            e instanceof AtomicError ? e.code : undefined,
+          )
+        ) {
+          throw e;
+        }
 
         console.debug(
           `[Outbox] destroy of ${subject} already settled on the server: ${msg}`,
@@ -2993,7 +3078,16 @@ export class Store {
       !!change.replaceLoroDocsFromRemote &&
       !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
-      !this.outbox.mayHavePending(subject);
+      !this.outbox.mayHavePending(subject) &&
+      // A doc with real history of its own is merged into, never swapped for
+      // the sender's document. A node answers for an agent it made itself (a
+      // bare stub under its own peer) with a full snapshot; replacing the
+      // local profile with it threw away the name and its history, and the
+      // two documents could no longer be merged afterwards. Replacing is for
+      // a placeholder or a doc rebuilt without history (see
+      // `replayOnLocalBase`, which makes the same call).
+      (this._withoutLoroHistory.has(subject) ||
+        !this.hasRenderableContent(resource));
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
     // Full state: the doc holds the real history now, merged or replaced.
@@ -3255,33 +3349,23 @@ export class Store {
     const clientDb = this.clientDb;
 
     try {
-      const jsonAd = resource.toClientDbJsonAd();
+      const row = resource.toClientDbRow();
 
-      if (!jsonAd) return;
-
-      const doc = resource.getLoroDoc?.();
-      // A snapshot export commits pending ops, untagged; keep a mid-edit
-      // persist from stripping the edit's history token.
-      resource.sealPendingEdits();
-      const snapshot = doc
-        ? loroCall('export', doc, () => doc.export({ mode: 'snapshot' }))
-        : undefined;
+      if (!row) return;
 
       // Skipped when this exact state is already written there: a table
       // built from a template used to do 64 writes for 15 resources.
-      this.persistState(clientDb, resource.subject, jsonAd, snapshot).catch(
-        e => {
-          // A follower's in-flight write is deliberately cancelled on leader
-          // handoff; the next attempt retries it. That is not a storage fault
-          // to report as an error.
-          if (!(e instanceof RequestCancelledError)) {
-            console.error(
-              `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
-              e,
-            );
-          }
-        },
-      );
+      this.persistState(clientDb, resource.subject, row).catch(e => {
+        // A follower's in-flight write is deliberately cancelled on leader
+        // handoff; the next attempt retries it. That is not a storage fault
+        // to report as an error.
+        if (!(e instanceof RequestCancelledError)) {
+          console.error(
+            `[ClientDb] put failed for ${resource.subject.slice(0, 60)}:`,
+            e,
+          );
+        }
+      });
     } catch (e) {
       console.error(
         `[ClientDb] put serialization threw for ${resource.subject.slice(0, 60)}:`,
@@ -4798,6 +4882,14 @@ export class Store {
     return resource.getPropVals();
   }
 
+  private isUnreachableLoopback(subject: string): boolean {
+    return isUnreachableLoopbackSubject(
+      subject,
+      globalThis.location?.hostname,
+      this.serverUrl,
+    );
+  }
+
   public async fetchResourceFromServer<C extends OptionalClass = UnknownClass>(
     /** The resource URL to be fetched */
     subject: string,
@@ -4924,6 +5016,15 @@ export class Store {
       this.addResource(local, { skipCommitCompare: true });
 
       return local;
+    }
+
+    // Never ask the network for a loopback subject a hosted page cannot reach:
+    // it only triggers a local-network prompt and a CORS error.
+    if (this.isUnreachableLoopback(normalizedSubject)) {
+      throw new AtomicError(
+        `Not fetched: ${normalizedSubject} is on this device's loopback address, which a hosted page cannot reach.`,
+        ErrorType.Transport,
+      );
     }
 
     if (opts.setLoading) {
@@ -5668,8 +5769,8 @@ export class Store {
   /** The drive a "not enrolled" refusal names, if `message` is one. The
    *  refusal names the drive it refuses; that is the same for every resource
    *  in it, where a resource's own drive may not be known yet. */
-  private refusedDriveOf(message: string): string | undefined {
-    if (!isNotEnrolledMessage(message)) return undefined;
+  private refusedDriveOf(message: string, code?: number): string | undefined {
+    if (!isNotEnrolledRefusal(message, code)) return undefined;
 
     return /Drive (\S+) is not enrolled/.exec(message)?.[1];
   }
@@ -5720,9 +5821,14 @@ export class Store {
    * resources they never see. Say it once per drive, in terms of the drive,
    * and say what happens to their edits.
    */
-  private notifyBlockedSync(subject: string, message: string): void {
-    if (isNotEnrolledMessage(message)) {
-      const named = this.refusedDriveOf(message);
+  private notifyBlockedSync(
+    subject: string,
+    message: string,
+    alreadyAnnounced = false,
+    code?: number,
+  ): boolean {
+    if (isNotEnrolledRefusal(message, code)) {
+      const named = this.refusedDriveOf(message, code);
       const drive =
         named ?? this.driveOf(this.normalizeSubject(subject)) ?? subject;
 
@@ -5735,7 +5841,7 @@ export class Store {
           );
         }
 
-        return;
+        return false;
       }
 
       this._notifiedRefusedDrives.add(drive);
@@ -5759,21 +5865,21 @@ export class Store {
           })
           .catch(e => console.warn('[Store] could not report refusal:', e));
 
-        return;
+        return false;
       }
 
       toast();
 
-      return;
+      return false;
     }
 
-    if (isMissingParentMessage(message)) {
+    if (isMissingParentRefusal(message, code)) {
       // Every write under a workspace the server does not hold is refused the
       // same way, and each one used to toast on every page load. Say it once
       // per workspace, in terms of the workspace, and say what to do.
       const drive = this.driveOf(this.normalizeSubject(subject)) ?? subject;
 
-      if (this._notifiedMissingParentDrives.has(drive)) return;
+      if (this._notifiedMissingParentDrives.has(drive)) return false;
 
       this._notifiedMissingParentDrives.add(drive);
       this.notifyError(
@@ -5786,17 +5892,15 @@ export class Store {
         ),
       );
 
-      return;
+      return false;
     }
 
-    const missingRight = /\/properties\/(\w+) right has been found/.exec(
-      message,
-    )?.[1];
-
-    if (missingRight) {
+    if (refusalCode(message, code) === ErrorCode.UNAUTHORIZED_WRITE) {
       // Say what happened in the person's terms: which item, what they may
       // not do, that their work is safe, and what resolves it.
-      if (this._notifiedNoRightSubjects.has(subject)) return;
+      if (alreadyAnnounced || this._notifiedNoRightSubjects.has(subject)) {
+        return false;
+      }
 
       this._notifiedNoRightSubjects.add(subject);
 
@@ -5804,23 +5908,24 @@ export class Store {
       const title =
         local && local.title !== local.subject ? local.title : undefined;
       const what = title ? `"${title}"` : 'a change';
-      const action =
-        missingRight === 'append'
-          ? 'add this here'
-          : missingRight === 'read'
-            ? 'view this'
-            : 'edit this';
+      // Only the wording differs: a create (`append`) or an edit (`write`).
+      const action = message.includes('/properties/append right')
+        ? 'add this here'
+        : 'edit this';
 
       this.notifyError(
         new Error(
           `You are not allowed to ${action}, so ${what} was not synced. ` +
             `It is kept on this device. Ask the owner of the drive for ` +
-            `access, or move it somewhere you can edit.`,
+            `access, or move it somewhere you can edit. Review it on the ` +
+            `Sync page, where you can discard it.`,
         ),
       );
 
-      return;
+      return true;
     }
+
+    if (alreadyAnnounced) return false;
 
     this.notifyError(
       new Error(
@@ -5828,6 +5933,8 @@ export class Store {
           `Not retrying; edit again once you have access.`,
       ),
     );
+
+    return true;
   }
 
   /**
@@ -5915,6 +6022,8 @@ export class Store {
     }
 
     console.info(`[Store] Server ${connected ? 'connected' : 'disconnected'}`);
+
+    if (connected) void this.publishAgentProfile();
     this.eventManager.emit(StoreEvents.ConnectionChanged, connected);
     this.emitSyncStatus();
 
@@ -5983,6 +6092,17 @@ export class Store {
       const erroredOffline = isTransportError(resource.error);
       const stuckLoading = resource.loading && !resource.new;
       if (!erroredOffline && !stuckLoading) continue;
+      // Reconnecting our own server does not bring back a loopback subject
+      // of another machine, nor a foreign origin that already failed.
+      if (this.isUnreachableLoopback(subject)) continue;
+
+      if (
+        erroredOffline &&
+        this.foreignHttpOrigin(subject) &&
+        !isEmbeddedVocabulary(subject)
+      ) {
+        continue;
+      }
 
       resource.error = undefined;
       resource.loading = true;
@@ -6116,10 +6236,10 @@ export class Store {
    * Distinct from `finishDriveSync` so a UI can show "your changes were
    * refused" instead of a green check.
    */
-  public failDriveSync(drive: string, message: string): void {
+  public failDriveSync(drive: string, message: string, code?: number): void {
     this._driveSyncInProgress = false;
     this._driveSyncPulling = false;
-    this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
+    this._lastDriveSyncError = { drive, message, code, timestamp: Date.now() };
 
     if (drive) {
       this._syncedDrives.delete(drive);
@@ -6131,9 +6251,9 @@ export class Store {
     // whether it is an unhosted drive it can keep browser-only, the same as
     // for a refused outbox write. Moving it local clears the error again
     // (`makeDriveLocal`), so the Sync page stops showing the refusal.
-    if (isNotEnrolledMessage(message) && this.refusedDriveHandler) {
+    if (isNotEnrolledRefusal(message, code) && this.refusedDriveHandler) {
       void this.healRefusedDrive(
-        this.refusedDriveOf(message) ?? drive,
+        this.refusedDriveOf(message, code) ?? drive,
         message,
       ).catch(e => console.warn('[Store] refused drive handler failed:', e));
     }
@@ -8284,11 +8404,11 @@ export class Store {
   private lastPersisted = new Map<string, PersistedState>();
 
   /**
-   * Write `jsonAd` + `snapshot` for `subject` to `db`, unless that state is
-   * already written or being written there, in which case this returns that
-   * write. `addResource` and `Resource.persistToClientDb` both go through
-   * here, so an online save that the drain already persisted does not write
-   * the same row (an index rebuild plus an fsync, ~9ms) a second time.
+   * Write `row` for `subject` to `db`, unless that state is already written or
+   * being written there, in which case this returns that write.
+   * `addResource` and `Resource.persistToClientDb` both go through here, so an
+   * online save that the drain already persisted does not write the same row
+   * (an index rebuild plus an fsync, ~9ms) a second time.
    *
    * Deliberately a content stamp rather than `lastCommit`: local edits and
    * merges change state without advancing it, and the stamp covers the Loro
@@ -8302,8 +8422,7 @@ export class Store {
   public persistState(
     db: ClientDbWorker,
     subject: string,
-    jsonAd: string,
-    snapshot?: Uint8Array,
+    row: ClientDbRow,
     {
       exact = false,
       outbox,
@@ -8314,17 +8433,13 @@ export class Store {
       outbox?: ClientDbOutboxWrite;
     } = {},
   ): Promise<void> {
-    const stamp = hashPersistedState(jsonAd, snapshot);
+    const stamp = hashPersistedState(row);
     const last = this.lastPersisted.get(subject);
 
     if (!outbox && last && last.db === db && last.stamp === stamp) {
       if (!exact) return last.done;
 
-      if (
-        last.inFlight &&
-        last.inFlight.jsonAd === jsonAd &&
-        bytesEqual(last.inFlight.snapshot, snapshot)
-      ) {
+      if (last.inFlight && sameRow(last.inFlight, row)) {
         return last.done;
       }
     }
@@ -8333,24 +8448,26 @@ export class Store {
       db,
       stamp,
       done: Promise.resolve(),
-      inFlight: { jsonAd, snapshot },
+      inFlight: row,
     };
-    entry.done = db
-      .putResourceWithSnapshot(subject, jsonAd, snapshot, outbox)
-      .then(
-        () => {
-          entry.inFlight = undefined;
-        },
-        e => {
-          // Failed write: forget it so the next attempt is not skipped as a
-          // duplicate of a write that never landed.
-          if (this.lastPersisted.get(subject) === entry) {
-            this.lastPersisted.delete(subject);
-          }
+    entry.done = (
+      row.kind === 'loro'
+        ? db.putLoroSnapshot(subject, row.snapshot, row.lastCommit, outbox)
+        : db.putResourceWithSnapshot(subject, row.jsonAd, row.snapshot, outbox)
+    ).then(
+      () => {
+        entry.inFlight = undefined;
+      },
+      e => {
+        // Failed write: forget it so the next attempt is not skipped as a
+        // duplicate of a write that never landed.
+        if (this.lastPersisted.get(subject) === entry) {
+          this.lastPersisted.delete(subject);
+        }
 
-          throw e;
-        },
-      );
+        throw e;
+      },
+    );
     this.lastPersisted.set(subject, entry);
 
     return entry.done;
@@ -8617,7 +8734,15 @@ interface PersistedState {
   db: ClientDbWorker;
   stamp: number;
   done: Promise<void>;
-  inFlight?: { jsonAd: string; snapshot?: Uint8Array };
+  inFlight?: ClientDbRow;
+}
+
+function sameRow(a: ClientDbRow, b: ClientDbRow): boolean {
+  if (a.kind !== b.kind || !bytesEqual(a.snapshot, b.snapshot)) return false;
+
+  return a.kind === 'loro'
+    ? a.lastCommit === (b as typeof a).lastCommit
+    : a.jsonAd === (b as typeof a).jsonAd;
 }
 
 function bytesEqual(a?: Uint8Array, b?: Uint8Array): boolean {
@@ -8655,20 +8780,24 @@ function isPersistableState(resource: Resource): boolean {
 
 /**
  * Cheap 53-bit content stamp over exactly what a local-DB write persists: the
- * JSON-AD and the Loro snapshot. Used only to skip re-writing state identical
- * to the last write for that subject (see `addResource`), so the cost has to
+ * row (its JSON-AD or `lastCommit`) and the Loro snapshot. Used only to skip
+ * re-writing state identical to the last write for that subject (see `addResource`), so the cost has to
  * stay far below the ~9ms write it saves — this is two xor-multiply passes over
  * a few KB, i.e. microseconds.
  *
  * Not a security hash. The failure mode of a collision is one skipped cache
  * write, repaired by the next real change or by re-fetching from the server.
  */
-function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
-  let h1 = 0xdeadbeef;
+function hashPersistedState(row: ClientDbRow): number {
+  const { snapshot } = row;
+  // The text the stamp covers besides the snapshot: the whole row for a
+  // JSON-AD write, the one side value for a Loro write.
+  const text = row.kind === 'jsonAd' ? row.jsonAd : (row.lastCommit ?? '');
+  let h1 = row.kind === 'jsonAd' ? 0xdeadbeef : 0x5bd1e995;
   let h2 = 0x41c6ce57;
 
-  for (let i = 0; i < jsonAd.length; i++) {
-    const ch = jsonAd.charCodeAt(i);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
     h1 = Math.imul(h1 ^ ch, 2654435761);
     h2 = Math.imul(h2 ^ ch, 1597334677);
   }

@@ -529,6 +529,7 @@ mod tests {
             store: store.clone(),
             for_agent: ForAgent::AgentSubject(author.into()),
             signing_as: None,
+            refusal_code: Default::default(),
         };
         assert!(planner.read_resource(&hidden).await.is_none());
         // The account may read its plugin, but attaching an app identity must

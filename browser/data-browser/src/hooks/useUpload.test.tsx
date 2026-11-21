@@ -1,22 +1,24 @@
 // @vitest-environment jsdom
 import { renderHook, act } from '@testing-library/react';
-import { createElement, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { expect, it, vi } from 'vitest';
 import { StoreContext } from '@tomic/react';
-import { useUpload } from './useUpload';
-
-const errorHandler = vi.fn();
-
-vi.mock('../handlers/errorHandler', () => ({
-  errorHandler: (e: unknown) => errorHandler(e),
-}));
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
+import { buildTheme, ThemeProvider } from '../../../resource-ui/test/providers';
 
 it('shows a failed upload and passes the optimistic option to the store', async () => {
   const failure = new Error('upload refused');
+  const errorHandler = vi.fn();
   const uploadFiles = vi.fn().mockRejectedValue(failure);
   const store = { uploadFiles } as never;
-  const wrapper = ({ children }: { children: ReactNode }) =>
-    createElement(StoreContext.Provider, { value: store }, children);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <ThemeProvider
+      theme={buildTheme()}
+      hostOverrides={{ reportError: errorHandler }}
+    >
+      <StoreContext.Provider value={store}>{children}</StoreContext.Provider>
+    </ThemeProvider>
+  );
   const { result } = renderHook(
     () => useUpload({ subject: 'did:ad:drive' } as never, { optimistic: true }),
     { wrapper },

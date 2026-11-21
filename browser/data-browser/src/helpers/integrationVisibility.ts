@@ -12,44 +12,6 @@ export const visibilityProperties: Record<IntegrationVisibilityKey, string> = {
     preferencesSchema.properties.showExperimentalPlugins,
 };
 
-/** Only an explicit boolean opt-in enables discovery, including during loading. */
-export function integrationVisibility(resource: {
-  get(property: string): unknown;
-}) {
-  return {
-    showApiPlugins:
-      resource.get(visibilityProperties['show-api-plugins']) === true,
-    showExperimentalPlugins:
-      resource.get(visibilityProperties['show-experimental-plugins']) === true,
-  };
-}
-
-export type IntegrationVisibilityValues = Partial<
-  Record<IntegrationVisibilityKey, boolean>
->;
-
-const visibilityKeys: IntegrationVisibilityKey[] = [
-  'show-api-plugins',
-  'show-experimental-plugins',
-];
-
-/**
- * Preferences are cached per agent so a toggle shows up instantly on the next
- * visit, before (or without) the private drive being readable.
- */
-function cacheKey(actor: string | undefined): string {
-  return `integration-visibility:${actor ?? 'anonymous'}`;
-}
-
-/**
- * Toggles not yet confirmed as saved to the private drive. They outlive the
- * page, so a reload or navigation right after a toggle resumes the write
- * instead of letting the drive's older value win.
- */
-function pendingKey(actor: string | undefined): string {
-  return `integration-visibility-pending:${actor ?? 'anonymous'}`;
-}
-
 function defaultStorage(): Storage | undefined {
   try {
     return globalThis.localStorage;
@@ -58,74 +20,40 @@ function defaultStorage(): Storage | undefined {
   }
 }
 
-/** Reads the last known preferences for an agent. Never throws. */
-export function readVisibilityCache(
+/** Where `useUserSetting` keeps this agent's local copy of a preference. */
+export function visibilityLocalKey(
   actor: string | undefined,
-  storage: Storage | undefined = defaultStorage(),
-): IntegrationVisibilityValues {
-  return readValues(cacheKey(actor), storage);
+  key: IntegrationVisibilityKey,
+): string {
+  return `integration-visibility:${actor ?? 'anonymous'}:${key}`;
 }
 
-/** Reads the toggles still waiting to be saved for an agent. Never throws. */
-export function readPendingVisibility(
+/**
+ * Before these preferences had fixed properties, one object per agent cached
+ * both choices under `integration-visibility:<agent>`. Copies an opt-in from
+ * it into the per-preference key, unless that already holds a value, so
+ * `useUserSetting` moves it onto the drive. Only `true` is carried: `false` is
+ * the default. Never throws.
+ */
+export function carryOverLegacyOptIn(
   actor: string | undefined,
-  storage: Storage | undefined = defaultStorage(),
-): IntegrationVisibilityValues {
-  return readValues(pendingKey(actor), storage);
-}
-
-/** Replaces the agent's pending toggles; empty clears them. Never throws. */
-export function writePendingVisibility(
-  actor: string | undefined,
-  values: IntegrationVisibilityValues,
+  key: IntegrationVisibilityKey,
   storage: Storage | undefined = defaultStorage(),
 ): void {
   try {
-    if (Object.keys(values).length === 0)
-      storage?.removeItem(pendingKey(actor));
-    else storage?.setItem(pendingKey(actor), JSON.stringify(values));
+    const target = visibilityLocalKey(actor, key);
+
+    if (!storage || storage.getItem(target) !== null) return;
+
+    const legacy = JSON.parse(
+      storage.getItem(`integration-visibility:${actor ?? 'anonymous'}`) ??
+        'null',
+    );
+
+    if (legacy?.[key] === true) storage.setItem(target, 'true');
   } catch {
-    // Without storage a reload can still lose an unsaved toggle, as before.
+    // Without storage the opt-in is simply not carried.
   }
-}
-
-function readValues(
-  storageKey: string,
-  storage: Storage | undefined,
-): IntegrationVisibilityValues {
-  try {
-    const raw = storage?.getItem(storageKey);
-    const parsed = raw ? JSON.parse(raw) : undefined;
-
-    if (!parsed || typeof parsed !== 'object') return {};
-
-    const values: IntegrationVisibilityValues = {};
-
-    for (const key of visibilityKeys) {
-      if (typeof parsed[key] === 'boolean') values[key] = parsed[key];
-    }
-
-    return values;
-  } catch {
-    return {};
-  }
-}
-
-/** Merges preferences into the agent's cache. Never throws. */
-export function writeVisibilityCache(
-  actor: string | undefined,
-  values: IntegrationVisibilityValues,
-  storage: Storage | undefined = defaultStorage(),
-): IntegrationVisibilityValues {
-  const merged = { ...readVisibilityCache(actor, storage), ...values };
-
-  try {
-    storage?.setItem(cacheKey(actor), JSON.stringify(merged));
-  } catch {
-    // A full or blocked storage only costs us the head start, not the setting.
-  }
-
-  return merged;
 }
 
 /**

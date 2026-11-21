@@ -1,6 +1,29 @@
+Grid extraction and shared helpers: `browser/table/src` retains the existing grid,
+keyboard, selection and primitive-editor tests. The SDK's EventManager and civil
+calendar tests move with their implementations to `browser/utils/src` (nine
+cases). Both SDK and UI builds include the private helper modules' declarations;
+packed-consumer checks verify the grid uses the host's UI module instance.
+TableCell's local fixture seeds createdAt metadata to avoid external HTTP reads
+while asserting cell commits. These changes do not introduce new state policies.
+
+Shared UI extraction: `browser/data-browser/src/components/sharedUI.test.tsx`
+checks that compatibility paths and the extracted package share keyboard locks,
+the dialog tree and generated background CSS variables. Existing spinner,
+dropdown positioning/trigger, resize, Back-to-close, expanded-row and column-filter
+tests exercise the same implementation through host entry points.
+`browser/ui/scripts/check-package.mjs` mounts compiled controls in a clean packed
+consumer and verifies NodeNext declarations without application source aliases.
+`browser/data-browser/src/oxc-styled-components.test.ts` runs the canonical shared
+Button source through the React Compiler and styled-components transforms,
+retaining display-name coverage after the host file becomes a compatibility export.
+
+Cloud Vault backup download (#2560): `browser/data-browser/src/helpers/managed/vaultFile.test.ts` exercises the save picker with File System Access suffix validation, preserves the suggested `.atomic-vault` filename, parses the streamed bytes to verify their contents, and checks cancellation and picker-error propagation. This is a simulated picker contract test; the physical macOS Save dialog is not covered.
+
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
 
 Chat log entries (2026-10-09, `planning/chat-log.md`): `lib/tests/chat_log.rs` applies signed commits through the real rights path for a `ChatLog` page: an author adds, edits and deletes own entries; a member cannot touch another's entry, claim or forge one, or change page properties; a writer on the chat moderates; page genesis grants no `write` and refuses a self-granted one; entries more than ten minutes ahead of the server clock are rejected. `lib/src/db/test.rs` checks entries reach no propval, index or search row, and `measure_chat_log_entry_bytes` (ignored) prints bytes per message. `browser/lib/src/chat-log.test.ts` covers the TS helpers and that entry changes ride in a saved commit's `loroUpdate`. Step 2 (group chat and comments in the log): `browser/lib/tests/chat-log.integration.test.ts` runs two agents against a real server (an appender adds, edits and removes own entries, is refused on another's, a writer moderates). `helpers/chatLog.test.ts` covers entry ids, the merge and window of old messages and entries, and the page choice; `messageNotification.test.ts` covers entry notifications. Playwright: `chat-log.spec.ts` (entry, edit, reply, copy link, delete, reload, a second member seeing entries and edits live and no edit buttons on another's), `e2e.spec.ts` chatroom, `offline-chatroom.spec.ts`, `chat-mention.spec.ts`, `table-row-comments.spec.ts` (comment and count as entries) and `notifications.spec.ts` (chat, reply and comment toasts for entries, unseen badge). Migration of existing messages (`planning/chat-log.md`, "Existing messages"): `lib/src/db/chat_migration_test.rs` checks grouping by chat and by commented item, the split at 256 with the oldest on the first page, authors and times kept, deterministic keys, replies mapped across pages and left alone for an outside target, follow events keeping their kind, an edited message getting `e`, the old resource and its genesis commit row, snapshot, envelopes and indexes gone, a re-run being a no-op, a run that stopped after the pages and a straggler arriving meanwhile, the slices resuming from the stored state, a member editing own migrated entry and not another's while the chat owner can, a cache of a hosted drive only dropping rows that have their entry, opening a store migrating it, and the bytes per message before and after (`migrating_a_chat_shrinks_the_store`). `client-db.worker.migration.test.ts` covers the worker running the message slices after the index rebuild with progress and the local-only drives; `migratedEntryKey` has one test vector in Rust and TS; `helpers/chatLog.test.ts` covers hiding migrated old messages. Playwright: `chat-log-migration.spec.ts` shows old Message resources, then the same chat once their entries exist (stale copies hidden, one without an entry still listed, order kept); `meetings.spec.ts` covers follow events as entries. Not covered: the browser worker migrating a local-only drive end to end (WASM and OPFS), a real server restart with old messages in an e2e run, and an edited message's genesis commit row (kept). Not covered: concurrent edits of one entry by two members, a chat past one page (256 entries) in the browser, scrolling to a linked entry (not built), and DMs (later step).
+
+Tab writes to the local database as Loro bytes only (2026-11-17): `lib/src/db/test.rs` `loro_only_put_matches_json_ad_plus_snapshot_put` checks `persist_replicated_loro_snapshot` stores the row, the snapshot and the name/parent/resource-array query results of the JSON-AD + snapshot put for strings, an integer, a resource array, nested JSON and an atomicUrl, and `loro_only_put_rejects_a_snapshot_that_does_not_import` that a bad snapshot is an error. `browser/lib/src/persist-state.test.ts`, `client-db-durable-put.test.ts` (worker `putLoroSnapshot`: outbox rows and one flush) and `client-db.native.test.ts` cover the tab side. Not covered: the WASM binding `putLoroSnapshot(s)` itself (the wasm crate is wasm32-only; no Playwright run of a reload against it yet), and rows from old builds read back after a new-path write over them.
 
 AI chat in the log (`planning/chat-log.md`, "Step 3: AI chat"): `lib/src/db/ai_chat_migration_test.rs` checks the order coming from the `messages` list and not `createdAt`, parts (reasoning, text, tool calls with input and output) inlined, authors, the old messages and every part resource gone and `messages` cleared, a re-run being a no-op, a run that stopped before the removal resuming without duplicates, a cache of a hosted drive writing nothing, and the bytes before and after for a 20-message chat with tool calls. `client-db.worker.migration.test.ts` covers the AI step after the message step. `chunks/AI/aiChatLog.test.ts` covers message <-> entry (parts, tool calls, context, errors, summary), a re-save keeping key and time, draft chats not saving, the page rollover at 256, removing one and all-following, entries sorted by `c`, and old messages merged in front and hidden once their entry exists. Playwright: `ai-chat-log-migration.spec.ts` (old chat shows once with and without entries; a new chat stores one page and no message resources) next to `ai.spec.ts`, `ai-chat-discovery.spec.ts`, `ai-sidebar-navigation.spec.ts` and `ai-mobile.spec.ts`. Not covered: the browser worker migrating a local-only AI chat end to end, tool outputs large enough to matter for a page's size, and a chat past 256 messages in the browser.
 
@@ -209,6 +232,13 @@ The runner must use Vite's worker bundling: copying only its entry with `?url`
 left shared library imports missing in production. The publish-button assertion
 also catches an obsolete English catalog entry rendering an empty label.
 
+Queued child saves (#2538): `browser/lib/src/commit.test.ts` checks that saving a
+child before its parent returns `queued` without posting or requesting local
+persistence, retains its edits, and later posts parent then child and clears
+pending work. `renderWebsite.test.ts` checks that website publication rejects
+both `offline` and `queued` results. These unit checks establish save-result
+handling, not OPFS crash durability or independent replica coverage.
+
 Save acknowledgement: `browser/lib/src/save-acknowledgement.test.ts` reproduces
 an online genesis POST failure reported as persisted. It verifies pending/backoff
 saves return offline and a later acknowledged retry preserves the subject.
@@ -220,6 +250,24 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
+checks the existing date radio choices/previews and uncontrolled precision input,
+including host change/blur callbacks, bounds and error rendering.
+Quick-add presentation: `browser/table/src/QuickAddBar.test.tsx` checks the
+existing local serial queue, preservation of newly typed text, and reporting a
+failed request while continuing already accepted submissions.
+Stored table-view configuration: `browser/table/src/views/configuration.test.ts`
+covers backend-free legacy formula decoding, permissive saved formats, raw
+action values, quick-add JSON, aggregate specs and column/filter identities.
+The existing Atomic parser/row-action suites exercise compatibility re-exports;
+formula execution still needs the real WASM evaluator.
+
+Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
+covers host value/operator/removal callbacks and the existing numeric/date/now
+input policy. Actual-component Chromium checks cover edit/readback, operator
+selection, Escape/reopen/removal and desktop/mobile layout; these are component
+fixtures, not a claim of full backend-integrated TablePage coverage.
+
 Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
 plugin catalog, which entries unlock "Show experimental plugins" (entries
 that need API plugins don't), and a remounted hook rendering the cached catalog
@@ -227,9 +275,22 @@ on its first render without fetching again; `helpers/integrationVisibility.test.
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
-The data-browser no longer connects or syncs LocalThought platforms: that code
-was removed, and plugins will run in their own iframe and make proxy calls
-through the host (#1624). Nothing in this repo tests a LocalThought connection.
+Drive apps call the integration proxy through the host. `proxyConnections.test.ts`
+covers PKCE, signed redemption and delegation, one-time handoff consumption,
+and frame-bound capabilities. `hostStore.test.ts` checks that the host relays
+requests only to the configured proxy origin and proxy routes.
+
+The generic snapshot mapper and shared integration proxy mock are tested in
+the [Atomic Plugins repository](https://github.com/ontola/atomic-plugins/tree/main/integrations/localthought).
+The mapper tests cover import proposals and stable identities. The mock tests
+cover signed requests and frame capabilities with synthetic data.
+Run them from an Atomic Plugins checkout.
+
+```sh
+node integrations/tooling/link-atomic-server.mjs
+node integrations/tooling/run-lane.mjs localthought --tier unit
+node --test integrations/localthought/mock-proxy.test.mjs
+```
 
 Finding another table (#1807): `TablePage/ColumnFilterDropdown.test.tsx`
 (jsdom) checks the table's column-filter menu names its input "Find a column…"
@@ -264,23 +325,8 @@ The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
 authentication, installation recovery and arbitrary authored setup execution
 are not covered here.
 
-`integrations/localthought/settings.test.ts` verifies that reconnects cannot reuse
-legacy installation identities, while repeated imports on one connection remain
-stable. The LocalThought Vitest config has an explicit root so all six suites
-also execute when invoked from outside the repository (including `/`).
-
-LocalThought browser migration: `integrations/localthought/browser.test.ts`
-covers secret-free selected-platform redirects, S256 PKCE, one-time redemption,
-actor/drive/platform ownership, cancellation, expiry, rotation before dispatch,
-pagination, uncertain-response refusal and cross-origin pagination refusal.
-`browser-smoke.mjs` exercised the complete mock consent/import/review/OPFS/reload
-journey through the WASM engine, which was removed in #1618; it fails until
-the proxy calls move into the plugin iframe. Local installation/schema lookup tests reject missing or
-incomplete local databases rather than inferring permission to create duplicates.
-The proxy redirect work has 60 passing Rust tests including PostgreSQL-backed
-consent/replay, optional credential grants, callback binding and redemption expiry.
-CORS was verified with the earlier live browser flow; the new secret-free flow
-still requires matching proxy/frontend deployments and live verification.
+`runtimeIntegrationConfig.test.ts` covers the integration-proxy setting, the
+deployment default and rejection of invalid proxy origins.
 
 The standalone browser-only Devonian demo (`chunks/DevonianDemo/`, the
 `/app/devonian-demo` route, and `browser/e2e/tests/devonian-issue-sync.spec.mts`)
@@ -615,7 +661,6 @@ Two things worth knowing about the runners:
 | Iroh accept side refuses any frame before `AUTH` (ERROR + closed stream), binds `AUTH.requestedSubject` to the handshake drive | `peer.rs` (`accept_gate_tests`, raw QUIC stream) |
 | Rejected `SYNC_PUSH` answers `ERROR SYNC_REJECTED`, never `SYNC_OK` | `peer.rs` (`accept_gate_tests`), `server/tests/it/ws_auth_gate.rs` |
 | WS: writes and identity-bearing subscriptions need `AUTH`; anonymous `SUB` on a public drive still works; unreadable subscriptions answer `ERROR UNAUTHORIZED_READ` | `server/tests/it/ws_auth_gate.rs` |
-| One drive per audience on a real server: for five agents and four drives with different `read` lists, HTTP `GET` (resource, drive, commit), `/search`, WS `SUB`, live fan-out and the drive inventory a device syncs from (`drive_items_for`) all follow the list; moving a resource to a narrower drive narrows it; taking an agent off `read` ends access. Also pinned: a folder is never narrower than its drive (rights add up), a folder grant inside an unreadable drive does not sync, and `append` lets each agent create and edit only its own child. Not covered: blobs of a `File` in a narrower drive, Iroh peer sync of the same layout | `server/tests/it/drive_audiences.rs` |
 | Write-load signal (2026-10): `pace_ms` rides on `COMMIT_OK` only for a client listing `commit-ok-slim` + `commit-pace` (legacy and slim forms stay byte-identical), `BUSY (12)` above the hard limit before any work, HTTP `503` + `Retry-After` and `X-Atomic-Pace-Ms`, the WS rate limit answers `BUSY` not `UNKNOWN`, `--commit-hard-limit 0` switches it off; the TS outbox paces a subject to `max(debounce, pace_ms)`, waits out `BUSY`/429/503 without counting a failure or falling back to HTTP, and never drops an edit. Not covered: the real browser under load (no e2e), pace decay over a long quiet period in a live app, and `atomic-loadtest commit --edit-rate` is a manual measurement, not a test | `write_load.rs` (unit: pace formula, retry-after, guard), `lib/src/sync/protocol.rs` (`wire_vectors`), `server/tests/it/commit_pacing.rs`, `browser/lib/src/local-outbox.test.ts`, `store-commit-fallback.test.ts`, `client-commit-pace.test.ts`, `websockets.test.ts`, `ws-v2.test.ts` |
 | Rejected cross-drive sync entry leaves no snapshot; later valid import cannot inherit rejected properties | `engine.rs` (`rejected_sync_entry_does_not_persist_snapshot`) |
 | Legacy `set`/`push`/`remove` commit rejection is on the parsed commit's properties: a signed commit carrying `set` is refused under hub and peer policy, a value quoting the deprecated URLs applies, a commit *on* the `set` Property reaches the ownership gate | `lib/src/sync/tests.rs` (`ingest_commit_rejects_legacy_field_commits`, `ingest_commit_accepts_values_that_mention_legacy_fields`) |
@@ -1097,6 +1142,16 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `local-save-persistence.test.ts` checks required offline/local-only save
+  persistence through the real Resource/signing/outbox path with a stubbed worker
+  boundary: missing, unsupported and failing storage reject; edits and signed
+  local-only genesis/history remain retryable; recovery clears the save error;
+  saved notifications and peer publication wait for the write to finish.
+  Snapshot-only persistence retains the internal outbox-written boolean meaning.
+  `save-status-coordinator.test.ts` distinguishes failed local writes from normal
+  queued remote work. Existing save-acknowledgement tests retain optional online
+  mirror failure/timeout coverage. These tests validate completion/error handling,
+  not a new OPFS crash guarantee or independent replica receipt (#2538).
 - `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
   outbox with a stubbed commit transport: server refusals (including terminal
   drops), backoff, blocked entries and cancellation cannot report persistence.
@@ -2093,13 +2148,6 @@ cancelled on teardown. Old plugin-name grants are deliberately not migrated.
 `store_host::destroy_identity_tests` checks the signer of the persisted destroy
 commit. It failed with the server signer before `Resource::destroy_as` was used;
 installation deletion must use the same selected identity as create/update.
-LocalThought: the browser and fixture tests cover selected-platform consent,
-PKCE redemption, one-time handoff consumption, rotating proxy credentials,
-duplicate-page rejection, typed paginated previews, and Calendar UTC date-range
-validation. The new redirect flow uses a synthetic fixture identity. These
-automated checks do not certify live LocalThought login, consent, redemption or
-provider writes; matching deployment evidence is tracked separately in PR and
-release verification.
 
 Google Calendar one-way projection and its E2E (`google-calendar-import.spec.mts`)
 were removed with the Calendar lens; there is no Calendar import coverage here.
@@ -2120,9 +2168,8 @@ were removed with the Calendar lens; there is no Calendar import coverage here.
 The bundled Google Calendar (Devonian) lens and its end-to-end coverage
 (`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
 `devonian-google-calendar` card) were removed along with the `devonian`
-dependency. LocalThought imports (including Google Calendar) are currently
-broken (see the gap under Plugin discovery), so there is no e2e coverage of a
-recurring-series import.
+dependency. The Calendar drive app and its provider integration tests live in
+[Atomic Plugins](https://github.com/ontola/atomic-plugins/tree/main/integrations/calendar).
 
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
@@ -2135,7 +2182,7 @@ number by keyboard, or a click on the day's empty space) shows every event and
 opens each row on top of it. How many chips fit is measured, so it needs a
 real browser; jsdom can't cover it.
 
-All-day ranges: `browser/lib/src/calendar-date.test.ts` covers civil-date
+All-day ranges: `browser/utils/src/calendar-date.test.ts` covers civil-date
 validation, exclusive single/multi-day ends, leap days, DST dates and year
 boundaries; run under UTC, America/Los_Angeles and Pacific/Kiritimati.
 
@@ -2145,17 +2192,8 @@ History: this section documented the Rust tests of the vendored Syncables
 crate and its WASM bridge. Both were removed in #1618, together with the
 browser-side OpenAPI-driven import they backed.
 
-`integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
-Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence.
-
 GitHub and Clockify implementations, fixture suites and
 certification live in atomic-plugins.
-
-`integrations/localthought/settings.test.ts` covers runtime proxy selection,
-deployment-default fallback, URL validation without losing the previous setting,
-origin-separated connection keys and migration of legacy connections only for
-the matching proxy and owner.
 
 
 
@@ -2332,13 +2370,6 @@ and no community catalog fetch while disabled. Existing plugin browser tests exp
 through Settings. Cross-device preference sync uses normal private-drive sync;
 a dedicated multi-device preference test is not yet present.
 
-## Local Thought browser refresh
-
-- `integrations/localthought/browser.test.ts`: one provider request for validation,
-  no pagination/retry or import, credential rotation, and denied/throttled/failed
-  access checks.
-- No app-side coverage: the data-browser's LocalThought sync was removed; it
-  returns as plugins running in their own iframe.
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
 JSON fixture through the shared importer, planner and apply engine with in-memory
 storage. It verifies nested placement, native localId, repeat import, conflicting
@@ -2894,6 +2925,21 @@ Sync probe hash cache: Rust unit tests in `lib/src/db/write_log.rs` check that a
 
 ## Batched SYNC_PUSH persistence
 
+Search body extraction: `body_text_reuses_live_state_and_preserves_snapshot_fallback`
+checks loaded and snapshot-only state, live edits ahead of the saved snapshot,
+properties-only legacy docs, corrupt fallback bytes and empty resources.
+`body_text_preserves_prosemirror_precedence_in_loaded_state` checks rich-text
+precedence over the legacy body container. The ignored
+`measure_body_text_state_reuse` compares extraction with the previous
+export/reload path; it is a microbenchmark, not an initial-sync latency claim.
+`lib/benches/sync_import_bench.rs` exercises the full native reconcile/import
+pipeline with signed envelopes and a file-backed receiver, through LAST flush
+and complete title/body searches. After timing it checks projections, document
+state, version vectors, history metadata and envelope equality against the
+sender, then repeats validation after reopening. It excludes network/TLS and
+browser/OPFS; a normal reopen does not establish crash durability. See the
+adjacent benchmark notes and per-run measurements for the comparison limits.
+
 `db::test::sync_push_batches_local_ids_and_flushes_only_at_last` uses a counting
 KV adapter to verify that localId resources share one projection transaction,
 non-final chunks do not flush, and LAST flushes once. The test-only copy fails
@@ -2931,6 +2977,20 @@ this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
 
+Table format extraction (#2539): `browser/table/src/schema/PropertyChoiceField.test.tsx`
+checks controlled radio selection; `browser/table/src/chunks/TablePage/EditorCells/FloatCell.test.tsx`
+checks decimal, exponent and comma input commit without truncation or writes while typing.
+`browser/data-browser/src/chunks/TablePage/PropertyForm/NumberPropertyForm.test.tsx`
+uses real Atomic Resources to preserve number-draft initialization without saving and
+text-format changes with the clean host's explicit save. These are compatibility
+checks for code moves, not new schema-validation or persistence semantics.
+### Create-button field extraction
+
+- `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
+- `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.
+
 Rust and browser tests cover issuer-signed invitation origins, peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
+
+Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
 
 The native bridge test `the_issuing_servers_refusal_is_final` checks an unrelated configured origin and a refused invitation at the verified origin. The Dart sharing tests check that the host chosen for a link reaches the signer.

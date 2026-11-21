@@ -7,7 +7,7 @@ import {
 } from './creationCatalog';
 import { FaAtom } from 'react-icons/fa6';
 import { getIconForClass } from '../../helpers/iconMap';
-import { TABLE_TEMPLATES } from '../../chunks/TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import { creationAssistantAsk } from './creationAssistant';
 it('offers every configured table template and searches multiple words across its content', () => {
   expect(CREATION_TABLE_TEMPLATES.map(t => t.id)).toEqual(

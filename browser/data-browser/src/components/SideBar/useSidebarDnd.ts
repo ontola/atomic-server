@@ -29,7 +29,7 @@ import { HoldMoveTouchSensor } from './holdMoveTouchSensor';
 import {
   computeSortOrder,
   readSortKey,
-} from '../../helpers/fractionalSortOrder';
+} from '@tomic/resource-ui/helpers/fractionalSortOrder';
 
 /**
  * Data attached to a sidebar drop target.

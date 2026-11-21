@@ -1,6 +1,6 @@
 import { dataBrowser, useArray, type Resource } from '@tomic/react';
-import { Row } from '../Row';
-import { ResourceInline } from '../../views/ResourceInline';
+import { Row } from '@tomic/ui/components/Row';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 
 interface SimpleTagBarProps {
   resource: Resource;

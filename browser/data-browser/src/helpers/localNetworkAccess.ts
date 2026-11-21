@@ -1,4 +1,4 @@
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { isRunningInTauri } from './tauri';
 import { isLoopbackHost } from '@tomic/lib';
 

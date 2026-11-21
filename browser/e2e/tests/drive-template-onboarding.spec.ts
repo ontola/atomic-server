@@ -6,7 +6,7 @@ test.beforeEach(async ({ context }) => {
   await installEmptyDiscoveryRoom(context);
 });
 
-test('a new drive asks for a name and opens empty, with ways to start', async ({
+test('a new drive is made without asking and opens empty, with ways to start', async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -14,47 +14,18 @@ test('a new drive asks for a name and opens empty, with ways to start', async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/new-drive`);
 
-  // Only a name: no gallery, no preview, no blank-drive choice.
-  const name = page.getByLabel('Drive name');
-  await expect(name).toBeVisible();
+  // No form: the drive is made on load, and no gallery or preview is offered.
+  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
+  await expect(page.getByLabel('Drive name')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Preview template' }),
   ).toHaveCount(0);
   await expect(page.getByLabel('Include example content')).toHaveCount(0);
-  expect(
-    await name.evaluate((input: HTMLInputElement) => [
-      input.selectionStart,
-      input.selectionEnd,
-    ]),
-  ).toEqual([0, 'My drive'.length]);
-
-  // The fixed Feedback control must not cover the only way forward.
-  const create = page.getByRole('button', {
-    name: 'Create drive',
-    exact: true,
-  });
-  const feedback = page.getByRole('button', { name: 'Feedback', exact: true });
-  await expect
-    .poll(async () => {
-      await create.scrollIntoViewIfNeeded();
-      const createBox = await create.boundingBox();
-      const feedbackBox = await feedback.boundingBox();
-
-      if (!createBox || !feedbackBox) return -1;
-
-      return feedbackBox.y - (createBox.y + createBox.height);
-    })
-    .toBeGreaterThanOrEqual(0);
-
-  await name.fill('My study workspace');
-  await create.click();
-  await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
 
   // The drive is empty, and says what can go in it.
-  await expect(page.getByTestId('current-drive-title')).toHaveText(
-    'My study workspace',
-    { timeout: 30000 },
-  );
+  await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
+    timeout: 30000,
+  });
   const start = page.getByLabel('Start this drive');
   await expect(start).toBeVisible({ timeout: 30000 });
 
@@ -75,8 +46,6 @@ test('a starter fills the empty drive it is chosen in, with checklists', async (
   test.setTimeout(120000);
   await devDrive(page);
   await page.goto(`${FRONTEND_URL}/app/new-drive`);
-  await page.getByLabel('Drive name').fill('Starter target');
-  await page.getByRole('button', { name: 'Create drive', exact: true }).click();
   await expect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
   const drive = await page.evaluate(() => window.store.getDrive()!);
 
@@ -127,25 +96,16 @@ test('a starter fills the empty drive it is chosen in, with checklists', async (
   ).toHaveCount(3, { timeout: 30000 });
 });
 
-test('the drive switcher opens the same name-only step in a dialog', async ({
+test('the drive switcher makes a drive straight away, without a dialog', async ({
   page,
 }) => {
   await devDrive(page);
   await sideBarDriveSwitcher(page).click();
   await page.getByTestId('menu-item-new-drive').click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('Drive name')).toBeVisible();
-  await expect(
-    dialog.getByRole('button', { name: 'Preview template' }),
-  ).toHaveCount(0);
-  await dialog.getByLabel('Drive name').fill('From the switcher');
-  await dialog
-    .getByRole('button', { name: 'Create drive', exact: true })
-    .click();
-  await expect(page.getByTestId('current-drive-title')).toHaveText(
-    'From the switcher',
-    { timeout: 30000 },
-  );
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByTestId('current-drive-title')).toHaveText('My drive', {
+    timeout: 30000,
+  });
   await expect(page.getByLabel('Start this drive')).toBeVisible({
     timeout: 30000,
   });

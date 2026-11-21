@@ -4,18 +4,18 @@ import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { Datatype, urls, type Property } from '@tomic/react';
-import ValueComp from '../../components/ValueComp';
+import ValueComp from '@tomic/resource-ui/components/ValueComp';
 import {
   formatAggregateValue,
   formatGroupKey,
-} from '../../chunks/TablePage/tableAggregates';
-import { toDisplayData } from '../../chunks/TablePage/EditorCells/DateCell';
-import { formatDiffDate } from '../../chunks/ResourceDiff/ResourceDiff';
+} from '@tomic/table-page/TablePage/tableAggregates';
+import { toDisplayData } from '@tomic/table-page/TablePage/EditorCells/DateCell';
+import { formatDiffDate } from '@tomic/resource-ui/chunks/ResourceDiff/ResourceDiff';
 import {
   calendarDateToLocalDate,
   formatCalendarDate,
   localCalendarDate,
-} from './calendarDate';
+} from '@tomic/ui/helpers/dates/calendarDate';
 
 // A civil date has no zone, so it must read the same everywhere. Run each case
 // east and west of Greenwich: east is where `new Date('2026-10-02')` grows a

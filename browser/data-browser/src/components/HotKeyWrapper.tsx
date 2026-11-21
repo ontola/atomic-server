@@ -9,7 +9,10 @@ import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
 import { shortcuts } from '../actions/shortcuts';
-import { openSearchOverlay, openShortcutsOverlay } from './overlayState';
+import {
+  openSearchOverlay,
+  openShortcutsOverlay,
+} from '@tomic/resource-ui/components/overlayState';
 
 import type { JSX } from 'react';
 

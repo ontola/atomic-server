@@ -1,7 +1,10 @@
 import { Resource, type Constraint } from '@tomic/react';
 import type { JSX } from 'react';
-import Field from '@components/forms/Field';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useFieldOptions, type FieldOptionsBag } from './useFieldOptions';
 import { FieldPair } from './FieldPair';
 import { BoundField } from './BoundField';

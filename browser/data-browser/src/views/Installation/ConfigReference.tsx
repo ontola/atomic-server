@@ -1,8 +1,8 @@
 import type { JSONSchema7 } from 'ai';
 import styled from 'styled-components';
-import { Column, Row } from '@components/Row';
-import Markdown from '@components/datatypes/Markdown';
-import { Details } from '@components/Details';
+import { Column, Row } from '@tomic/ui/components/Row';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
+import { Details } from '@tomic/ui/components/Details';
 
 interface ConfigReferenceProps {
   schema: JSONSchema7;

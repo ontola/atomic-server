@@ -6,15 +6,18 @@ import {
   ensureSchema,
   pluginSchema,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled, TextAreaStyled } from '@components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  TextAreaStyled,
+} from '@tomic/ui/components/forms/InputStyles';
 import { useAISidebar } from '@components/AI/AISidebarContext';
 import { automationAssistantAsk } from './automationAssistant';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { createPlugin } from './runScript';
 import {
   eventAutomationSource,

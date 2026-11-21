@@ -25,7 +25,9 @@
 #   ./scripts/e2e-server.sh --fresh      # wipe the e2e store first, always
 #   ./scripts/e2e-server.sh --keep-store # keep an oversized store (warns instead)
 #   ./scripts/e2e-server.sh --stale-ok   # start even if the binary predates its sources
-#   ./scripts/e2e-server.sh --mock-proxy # also run the mock integration proxy
+#   ./scripts/e2e-server.sh --mock-proxy # run the mock from a sibling atomic-plugins checkout
+#
+# Set ATOMIC_PLUGINS_CHECKOUT to use a checkout elsewhere.
 #
 # Safe to wipe: this directory only ever holds test data.
 #
@@ -132,7 +134,7 @@ for arg in "$@"; do
     --stale-ok) STALE_OK=true ;;
     --mock-proxy) MOCK_PROXY=true ;;
     -h|--help)
-      sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -142,6 +144,17 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "$MOCK_PROXY" == true ]]; then
+  PLUGINS_CHECKOUT="${ATOMIC_PLUGINS_CHECKOUT:-$REPO_ROOT/../atomic-plugins}"
+  MOCK_PROXY_SCRIPT="$PLUGINS_CHECKOUT/integrations/localthought/mock-proxy.mjs"
+  if [[ ! -f "$MOCK_PROXY_SCRIPT" ]]; then
+    echo "No mock proxy at $MOCK_PROXY_SCRIPT" >&2
+    echo "Set ATOMIC_PLUGINS_CHECKOUT to a local checkout of ontola/atomic-plugins." >&2
+    exit 1
+  fi
+  MOCK_PROXY_SCRIPT="$(cd "$PLUGINS_CHECKOUT" && pwd -P)/integrations/localthought/mock-proxy.mjs"
+fi
 
 # Checked before anything is wiped. This used to sit further down, after the
 # `--fresh` wipe had already run: an older server still holding the port then
@@ -338,8 +351,7 @@ export ATOMIC_WEBSITE_ORIGIN="${ATOMIC_WEBSITE_ORIGIN:-http://sites.localhost:$P
 # looks nothing like the cause.
 # No spec in this repo needs an integration proxy any more: the provider
 # integrations and their specs moved to atomic-plugins, and CI no longer runs
-# one. `--mock-proxy` still starts `mock-proxy.mjs` beside the server for
-# manual LocalThought testing against a local proxy.
+# one. The optional mock uses the selected atomic-plugins checkout.
 if [[ "$MOCK_PROXY" == true ]]; then
   PROXY_URL="http://127.0.0.1:$MOCK_PROXY_PORT"
 
@@ -354,7 +366,8 @@ if [[ "$MOCK_PROXY" == true ]]; then
   MOCK_FRONTEND_ORIGIN="${MOCK_FRONTEND_ORIGIN:-$SERVER_URL}" \
   MOCK_PROXY_HOST="${MOCK_PROXY_HOST:-127.0.0.1}" \
   MOCK_PROXY_PORT="$MOCK_PROXY_PORT" \
-    node "$REPO_ROOT/integrations/localthought/mock-proxy.mjs" &
+  MOCK_PROXY_BASE_URL="$PROXY_URL" \
+    node "$MOCK_PROXY_SCRIPT" &
   MOCK_PROXY_PID=$!
   trap 'kill "$MOCK_PROXY_PID" 2>/dev/null || true' EXIT
 

@@ -9,6 +9,29 @@
 
 const BINDING_KEY = 'atomic-managed-account-binding';
 
+const listeners = new Set<() => void>();
+
+/** Runs when this tab writes or clears the binding, so a screen can follow it. */
+export function onManagedBindingChanged(listener: () => void): () => void {
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const notify = () => listeners.forEach(listener => listener());
+
+// The email link opens in another tab, and that tab's identity gate is the one
+// that writes the binding. localStorage tells the other tabs with a `storage`
+// event (never the writing tab), so follow it: without this a tab that waited
+// for the sign-in kept showing "Only saved on this device".
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === null || event.key === BINDING_KEY) notify();
+  });
+}
+
 export type ManagedAccountBinding = {
   owner_email: string;
   expected_agent_subject: string;
@@ -29,6 +52,7 @@ export function writeManagedAccountBinding(
         expected_agent_subject: expectedAgentSubject,
       } satisfies ManagedAccountBinding),
     );
+    notify();
   } catch {
     // Ignore quota / private-mode failures — the binding is an optimization.
   }
@@ -65,6 +89,7 @@ export function clearManagedAccountBinding(): void {
 
   try {
     localStorage.removeItem(BINDING_KEY);
+    notify();
   } catch {
     // ignore
   }

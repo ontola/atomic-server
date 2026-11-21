@@ -8,8 +8,8 @@ import {
   type Resource,
 } from '@tomic/react';
 import { FaCodeBranch } from 'react-icons/fa6';
-import { ResourceInline } from '../views/ResourceInline/ResourceInline';
-import { Row } from './Row';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
+import { Row } from '@tomic/ui/components/Row';
 
 interface PendingForksProps {
   resource: Resource;

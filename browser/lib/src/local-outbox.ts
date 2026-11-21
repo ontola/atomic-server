@@ -88,6 +88,8 @@ export interface OutboxEntry {
   baseVersion?: string;
   lastAttemptAt?: number;
   lastAttemptError?: string;
+  /** The server's refusal code for `lastAttemptError`, when it sent one. */
+  lastAttemptCode?: number;
   /** In-memory cause, retained on this entry even if a terminal failure drops
    * it from the queue. Explicit saves hold the entry across a drain. */
   lastAttemptFailure?: { cause: unknown };
@@ -102,6 +104,12 @@ export interface OutboxEntry {
    *  scheduler stops waking for it. Cleared by `markDirty` — a fresh local edit
    *  is a new signal worth re-attempting (rights may have since been granted). */
   blocked?: boolean;
+  /** Set once the person was told this entry could not sync. Persisted, unlike
+   *  `blocked`: a reload retries the entry, it blocks again for the same
+   *  reason, and without this it was announced again on every page load. The
+   *  entry still retries each session; only the announcement is once. Cleared
+   *  by a fresh edit (`markDirty`), so a new failed attempt is announced. */
+  blockedNotified?: boolean;
   /** Set once a finished drive resync has re-armed this entry after the server
    *  refused it for a missing parent. One automatic re-arm per entry: if the
    *  resync did not deliver the parent, a second block is final until the next
@@ -227,226 +235,166 @@ export interface OutboxDrainContext {
  */
 export { isCommitSubject } from './commit.js';
 
-export function isTerminalCommitErrorMessage(message: string): boolean {
-  // Server emits "Commits cannot be edited." (`commit.rs`) when the commit's
-  // subject is itself a Commit. Found in the field as a queue of three
-  // `/commits/<sig>` entries refused on every reload, forever.
-  if (message.includes('Commits cannot be edited')) {
-    return true;
-  }
-
-  // Genesis collision: client tried to (re-)create a resource that
-  // already exists. Happens when local state lost `lastCommit` and a
-  // follow-up save built a genesis commit. The resource is fine on the
-  // server; the only loss is the never-applied diff in this commit.
-  // See `planning/sync.md (test coverage gaps, ws_get)`.
-  if (message.includes('is_genesis: true, but the resource already exists')) {
-    return true;
-  }
-
-  // Required-property validation failure: the commit produces a resource that
-  // is missing a property its class `requires`, so the server rejects it on
-  // EVERY attempt — the commit is structurally invalid, not transiently
-  // unsyncable. Retrying floods the ingest pipeline forever (this is the
-  // ai-message `content`-missing loop that peaked our ingest API). Dropping it
-  // is correct: no retry can ever satisfy the constraint. The server emits
-  // "Property <p> missing. Is required in class <c> " (resources.rs).
-  if (message.includes('missing. Is required in class')) {
-    return true;
-  }
-
-  // A Commit was queued as if it were an editable resource. Commits are
-  // immutable by definition, so the server refuses the write on every attempt
-  // (`hierarchy.rs`: "Commits cannot be edited.") and the entry retries on
-  // backoff forever. Nothing is lost by dropping it: a Commit's content is
-  // whatever was signed, and no local edit to it could ever have applied.
-  // Seen in the field on resources imported from another server, whose
-  // `<server>/commits/<sig>` subjects slip past the `did:ad:commit:` guard
-  // that keeps client-minted commits out of the outbox.
-  if (message.includes('Commits cannot be edited')) {
-    return true;
-  }
-
-  return false;
-}
+/**
+ * Codes this client acts on. `decodeError` (ws-v2.ts) cannot tell a pre-F5
+ * server's `[requestId][message]` frame from a post-F5 `[requestId][code]
+ * [message]` one: read under the new layout, the message's first two bytes
+ * become an arbitrary nonzero `code`. Only members of this set are trusted;
+ * anything else (including `UNKNOWN`) is read as text by
+ * {@link legacyRefusalCode}. Mirrors `commit-refusals.json`.
+ */
+const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set(
+  Object.values(ErrorCode).filter(code => code !== ErrorCode.UNKNOWN),
+);
 
 /**
- * Pattern-match the server's pending-deps rejection: "your Loro delta
- * depends on ops I never received". Retrying the same delta can never
- * succeed (the missing base ops won't materialize server-side), but the
- * write is fully recoverable — the drain reacts by clearing the resource's
- * save cursor so the next attempt exports a self-contained snapshot, which
- * the server can always merge. So: not terminal (don't drop), not blocking
- * (don't park); the caller resets the cursor and lets backoff retry.
+ * The ONLY place that reads a refusal's wording: for servers that predate the
+ * code of a refusal, which sent `UNKNOWN` (or, for not-enrolled,
+ * `SYNC_REJECTED`). A server that sends the code never reaches it. Mirrors
+ * what the server's raise sites now set (`lib/src/sync/protocol.rs`).
  */
-export function isPendingDepsCommitErrorMessage(message: string): boolean {
-  // Server emits: "Commit's Loro update depends on ops the server does not
-  // have — the update was parked as pending ..." (lib/src/commit.rs).
-  return message.includes('parked as pending');
-}
+export function legacyRefusalCode(message: string): number {
+  const has = (text: string) => message.includes(text);
 
-/** A managed node's refusal of a drive it does not host ("not enrolled"). */
-export function isNotEnrolledMessage(message: string | undefined): boolean {
-  return !!message?.includes('is not enrolled for sync on this node');
-}
+  if (has('Commits cannot be edited')) return ErrorCode.IMMUTABLE_COMMIT;
 
-/** The server refused a commit because it does not hold the commit's parent. */
-export function isMissingParentMessage(message: string): boolean {
-  return /Parent of .+ not found/.test(message);
-}
-
-/**
- * Pattern-match server errors that mean "this drain cannot succeed by
- * retrying, but the user write is not necessarily lost." Unlike
- * {@link isTerminalCommitErrorMessage} (which drops the entry), a match here
- * *blocks* the entry: it stays in the outbox, visible as "could not sync", and
- * stops being retried until a fresh local edit (`markDirty`) re-arms it.
- *
- * Authorization rejections are the canonical case: a commit POSTed under a
- * parent the agent has no `write` right on will be `401`-rejected forever.
- * Retrying spins the server (see the 401-flood); the only resolutions are a
- * rights change or the user abandoning the edit — neither helped by hammering.
- */
-export function isUnrecoverableCommitErrorMessage(message: string): boolean {
-  // A causality rejection is deterministic for the same Loro update. Keep the
-  // local edit visible, but stop sending it once the bounded retry window ends.
-  if (message.includes("Commit's Loro update produced no state changes")) {
-    return true;
+  if (has('is_genesis: true, but the resource already exists')) {
+    return ErrorCode.GENESIS_COLLISION;
   }
 
-  // Managed nodes refuse writes until enrollment/quota changes. Keep the edit,
-  // but park it after bounded retries rather than flooding the node forever.
+  if (has('missing. Is required in class')) {
+    return ErrorCode.MISSING_REQUIRED_PROPERTY;
+  }
+
+  if (has("Commit's Loro update produced no state changes")) {
+    return ErrorCode.CAUSALITY_CONFLICT;
+  }
+
+  if (has('parked as pending')) return ErrorCode.PENDING_DEPS;
+
   if (
-    isNotEnrolledMessage(message) ||
-    message.includes('has reached its storage quota on this node')
+    has('is not enrolled for sync on this node') ||
+    has('has reached its storage quota on this node')
   ) {
-    return true;
+    return ErrorCode.SYNC_REJECTED;
   }
 
-  // Server emits: "No https://atomicdata.dev/properties/write right has been found..."
-  if (message.includes('/properties/write right has been found')) {
-    return true;
+  if (has('Incorrect signature for Commit') || has('No signature set')) {
+    return ErrorCode.INVALID_SIGNATURE;
   }
 
-  // Server emits: "Failed getting class <subject>. Resource not found..."
-  // (`storelike.rs`). The commit names a class this server does not hold, so
-  // validation cannot run and every retry fails identically.
-  //
-  // Blocking, not terminal. The row itself is fine — this fires when a table's
-  // class never reached the server the row is being written to — so the entry
-  // has to stay. Found in the field as two people adding table rows that
-  // rendered locally, were refused one at a time, and were reported nowhere.
-  if (message.includes('Failed getting class')) {
-    return true;
+  if (
+    has('/properties/write right has been found') ||
+    has('/properties/append right has been found')
+  ) {
+    return ErrorCode.UNAUTHORIZED_WRITE;
   }
 
-  // Server emits: "Parent of <subject> (<parent>) not found: ..."
-  // (`resources.rs` get_parent). The node does not hold the commit's parent,
-  // e.g. a drive that was switched to a node without its root ever being
-  // copied. Every retry fails identically, so park the entry (keep the edit)
-  // instead of spinning; a finished resync of the drive re-arms it
-  // (`LocalOutbox.rearmParentBlocked`).
-  if (isMissingParentMessage(message)) {
-    return true;
+  if (has('Failed getting class')) return ErrorCode.MISSING_CLASS;
+
+  if (/Parent of .+ not found/.test(message)) return ErrorCode.MISSING_PARENT;
+
+  if (
+    has('was already applied here; refusing replay') ||
+    has("predates the resource's genesis") ||
+    has('is_genesis: false, but the resource does not exist yet') ||
+    has('has no such resource to destroy')
+  ) {
+    return ErrorCode.DESTROY_SETTLED;
   }
 
-  return false;
+  return ErrorCode.UNKNOWN;
 }
 
 /**
- * Codes this client actually knows how to interpret. `decodeError` (ws-v2.ts)
- * has no way to tell "a pre-F5 server's [requestId][message] frame" apart
- * from "a post-F5 [requestId][code][message] frame" — reading an old
- * server's frame under the new layout misreads the message's first 2 UTF-8
- * bytes as `code`, producing an arbitrary *nonzero* value that happens not
- * to collide with `ErrorCode.UNKNOWN` (0). Without this allowlist, that
- * garbage value would be treated as a recognized-but-unmatched code below —
- * "trust the code, and it says not terminal/not blocking" — permanently
- * skipping the string fallback and retrying a genuinely terminal error
- * forever. Only members of this set are trusted; anything else (including
- * `UNKNOWN` itself) falls back to string matching.
+ * What a refusal is: the server's `code` when this client knows it, else the
+ * wording read by {@link legacyRefusalCode}.
  */
-const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
-  ErrorCode.GENESIS_COLLISION,
-  ErrorCode.MISSING_REQUIRED_PROPERTY,
-  ErrorCode.UNAUTHORIZED_WRITE,
-  ErrorCode.MISSING_CLASS,
-  ErrorCode.SYNC_REJECTED,
-  ErrorCode.IMMUTABLE_COMMIT,
-  ErrorCode.CAUSALITY_CONFLICT,
-]);
+export function refusalCode(message: string, code?: number): number {
+  if (code === undefined || !KNOWN_ERROR_CODES.has(code)) {
+    return legacyRefusalCode(message);
+  }
 
-/**
- * Terminal-error check the outbox should actually call (F5,
- * planning/unified-sync.md). Prefers the server's structured `code` when
- * present and recognized — immune to server wording changes — and falls
- * back to {@link isTerminalCommitErrorMessage}'s string matching for a
- * `code` that's absent or unrecognized (older server, or a genuinely
- * unclassified error).
- */
+  return code;
+}
+
+/** The write can never succeed, however often it is retried: drop it. A false
+ *  positive silently discards a user write, so only codes that are certain. */
 export function isTerminalCommitError(message: string, code?: number): boolean {
-  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
-    return (
-      code === ErrorCode.GENESIS_COLLISION ||
-      code === ErrorCode.MISSING_REQUIRED_PROPERTY ||
-      code === ErrorCode.IMMUTABLE_COMMIT
-    );
+  switch (refusalCode(message, code)) {
+    case ErrorCode.GENESIS_COLLISION:
+    case ErrorCode.MISSING_REQUIRED_PROPERTY:
+    case ErrorCode.IMMUTABLE_COMMIT:
+      return true;
+    default:
+      return false;
   }
-
-  return isTerminalCommitErrorMessage(message);
 }
 
 /**
- * Whether a terminal refusal is bookkeeping rather than a lost write: the
- * user's data is already where it should be, so the drop should be logged,
- * not surfaced as an error toast.
- *
- * - A redundant genesis (`GENESIS_COLLISION`): the resource already exists on
- *   the server; only the never-applied diff in this one commit is gone. These
- *   arrive in bulk when local state lost its `lastCommit` chain (e.g. after
- *   switching servers), so a toast per commit is pure noise.
- * - A write aimed at a Commit (`IMMUTABLE_COMMIT`): a Commit is whatever was
- *   signed; no local edit to it could ever have applied.
- *
- * Same code-first / string-fallback shape as {@link isTerminalCommitError}:
- * a recognized `code` is authoritative (so a server wording change cannot
- * turn a benign drop into a scary one, or vice versa), and only an absent or
- * unrecognized code falls back to the legacy message text.
+ * Whether a terminal refusal is bookkeeping rather than a lost write, so the
+ * drop is logged, not toasted: a redundant genesis (the resource exists) or a
+ * write aimed at a Commit (whatever was signed, no edit could apply).
  */
 export function isBenignTerminalCommitError(
   message: string,
   code?: number,
 ): boolean {
-  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
-    return (
-      code === ErrorCode.GENESIS_COLLISION ||
-      code === ErrorCode.IMMUTABLE_COMMIT
-    );
-  }
+  const c = refusalCode(message, code);
 
-  return (
-    message.includes('is_genesis: true, but the resource already exists') ||
-    message.includes('Commits cannot be edited')
-  );
+  return c === ErrorCode.GENESIS_COLLISION || c === ErrorCode.IMMUTABLE_COMMIT;
 }
 
-/** Blocking-error check the outbox should actually call — see
- *  {@link isTerminalCommitError} for the code-first/string-fallback shape. */
+/**
+ * Retrying cannot succeed but the write is not necessarily lost: the entry is
+ * parked (visible as "could not sync") until a fresh edit re-arms it.
+ */
 export function isUnrecoverableCommitError(
   message: string,
   code?: number,
 ): boolean {
-  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
-    return (
-      code === ErrorCode.UNAUTHORIZED_WRITE ||
-      code === ErrorCode.MISSING_CLASS ||
-      code === ErrorCode.SYNC_REJECTED ||
-      code === ErrorCode.CAUSALITY_CONFLICT
-    );
+  switch (refusalCode(message, code)) {
+    case ErrorCode.UNAUTHORIZED_WRITE:
+    case ErrorCode.MISSING_CLASS:
+    case ErrorCode.SYNC_REJECTED:
+    case ErrorCode.MISSING_PARENT:
+    case ErrorCode.INVALID_SIGNATURE:
+    case ErrorCode.CAUSALITY_CONFLICT:
+      return true;
+    default:
+      return false;
   }
-
-  return isUnrecoverableCommitErrorMessage(message);
 }
+
+/** The delta depends on ops the server never got: the drain clears the save
+ *  cursor so the next attempt sends a self-contained snapshot. */
+export const isPendingDepsRefusal = (message: string, code?: number) =>
+  refusalCode(message, code) === ErrorCode.PENDING_DEPS;
+
+/** The node does not host the drive. It has no code of its own: it is a
+ *  `SYNC_REJECTED` (quota is the other) told apart by its text, so a client
+ *  that predates any change here reads it alike. */
+export const isNotEnrolledRefusal = (
+  message: string | undefined,
+  code?: number,
+) =>
+  !!message?.includes('is not enrolled for sync on this node') &&
+  refusalCode(message, code) === ErrorCode.SYNC_REJECTED;
+
+/** Whether a thrown error is a not-enrolled refusal (reads its `code`). */
+export const isNotEnrolledError = (error: unknown) =>
+  isNotEnrolledRefusal(
+    error instanceof Error ? error.message : String(error),
+    error instanceof AtomicError ? error.code : undefined,
+  );
+
+/** The server does not hold the commit's parent. */
+export const isMissingParentRefusal = (message: string, code?: number) =>
+  refusalCode(message, code) === ErrorCode.MISSING_PARENT;
+
+/** A destroy refusal that means the resource is already gone: an ack. */
+export const isSettledDestroyRefusal = (message: string, code?: number) =>
+  refusalCode(message, code) === ErrorCode.DESTROY_SETTLED;
 
 /** Prefix for per-agent outbox namespaces: `atomic.outbox.<agentSubject>`. */
 const STORAGE_KEY_PREFIX = 'atomic.outbox';
@@ -502,6 +450,7 @@ interface PersistedEntry {
   signedGenesis?: unknown;
   signedDestroy?: unknown;
   baseVersion?: string;
+  blockedNotified?: boolean;
 }
 
 export class LocalOutbox {
@@ -826,6 +775,8 @@ export class LocalOutbox {
         existing.rearmedAfterResync = false;
       }
 
+      existing.blockedNotified = undefined;
+
       this.changed(subject);
 
       return;
@@ -853,7 +804,10 @@ export class LocalOutbox {
       if (
         !entry.blocked ||
         entry.rearmedAfterResync ||
-        !isMissingParentMessage(entry.lastAttemptError ?? '') ||
+        !isMissingParentRefusal(
+          entry.lastAttemptError ?? '',
+          entry.lastAttemptCode,
+        ) ||
         !inDrive(entry.subject)
       ) {
         continue;
@@ -936,6 +890,8 @@ export class LocalOutbox {
       entry.blocked = false;
       entry.failures = 0;
     }
+
+    entry.blockedNotified = undefined;
 
     this.entries.set(subject, entry);
     this.changed(subject);
@@ -1228,6 +1184,7 @@ export class LocalOutbox {
         await ctx.drainSubject(live.subject);
         live.lastAttemptFailure = undefined;
         live.lastAttemptError = undefined;
+        live.lastAttemptCode = undefined;
         // Success — clear the failure counter. The entry itself is usually
         // already removed by `drainSubject`; this handles the genesis-acked-
         // but-still-dirty leftover case.
@@ -1256,6 +1213,7 @@ export class LocalOutbox {
         // Keep it queued for reconnect without escalating retry failures.
         if (e instanceof RequestCancelledError) return;
         live.lastAttemptError = e instanceof Error ? e.message : String(e);
+        live.lastAttemptCode = e instanceof AtomicError ? e.code : undefined;
         console.warn(
           '[Outbox] drain failed for subject:',
           live.subject,
@@ -1533,6 +1491,7 @@ function toPersisted(e: OutboxEntry): PersistedEntry {
       ? commitToJsonADObject(e.signedDestroy)
       : undefined,
     baseVersion: e.baseVersion,
+    blockedNotified: e.blockedNotified ? true : undefined,
   };
 }
 
@@ -1588,6 +1547,7 @@ function parseEntry(p: unknown): OutboxEntry | undefined {
     signedDestroy,
     baseVersion:
       typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
+    blockedNotified: obj.blockedNotified === true ? true : undefined,
   };
 }
 
@@ -1609,38 +1569,6 @@ function removeLocalStorage(key: string): void {
   } catch {
     // Private mode or blocked storage: nothing was stored there either.
   }
-}
-
-/**
- * Server refusals of a destroy commit that mean "the resource you are
- * deleting is not there to delete (any more)". The delete's goal is met, so
- * the drain treats a match as an acknowledgement: it drops the entry and
- * keeps the local removal, instead of retrying forever or surfacing a
- * "dropped stuck commit" toast for a resource the user deliberately removed.
- *
- * - `Db::apply_commit` (`lib/src/db.rs`): "Destroy commit for {} was already
- *   applied here; refusing replay" — this exact envelope already landed
- *   (a reconnect re-POST after the ack was lost).
- * - `Commit::reject_destroy_older_than_genesis` (`lib/src/commit.rs`):
- *   "Destroy commit for {} (created {}) predates the resource's genesis
- *   ({}); refusing replay" — the subject was re-created after our delete;
- *   this destroy is about a resource that no longer exists.
- * - `validate_and_build_response` (`lib/src/commit.rs`): "Commit for {} has
- *   is_genesis: false, but the resource does not exist yet." — someone else
- *   deleted it first.
- *
- * Anything else (401, transport, unknown) goes through the ordinary
- * terminal / blocking / backoff classification like every other entry.
- */
-export function isSettledDestroyErrorMessage(message: string): boolean {
-  return (
-    message.includes('was already applied here; refusing replay') ||
-    message.includes("predates the resource's genesis") ||
-    message.includes(
-      'is_genesis: false, but the resource does not exist yet',
-    ) ||
-    message.includes('has no such resource to destroy')
-  );
 }
 
 /** Split sorted entries into runs of equal `tierOf` key. Without `tierOf`

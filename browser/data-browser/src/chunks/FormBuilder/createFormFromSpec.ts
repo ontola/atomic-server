@@ -14,8 +14,8 @@ import {
 import {
   createRowClass,
   resolveOntologyParent,
-} from '../TablePage/createTableFromSpec';
-import { columnConstraint } from './formConstraints';
+} from '@tomic/table-page/TablePage/createTableFromSpec';
+import { columnConstraint } from '@tomic/resource-ui/chunks/FormBuilder/formConstraints';
 import { createFormField } from './useFormFieldPropertySync';
 import {
   FIELD_TYPE_DEFAULT_OPTIONS,
@@ -23,12 +23,12 @@ import {
   FORM_LAYOUT_TYPES,
   isChoiceFieldType,
   isLayoutType,
-} from './fieldTypes';
+} from '@tomic/resource-ui/chunks/FormBuilder/fieldTypes';
 import {
   classColumns,
   columnLabel,
   compatibleFieldTypes,
-} from './tableColumns';
+} from '@tomic/resource-ui/chunks/FormBuilder/tableColumns';
 
 export const formSpecSchema = z.object({
   name: z.string().trim().min(1),

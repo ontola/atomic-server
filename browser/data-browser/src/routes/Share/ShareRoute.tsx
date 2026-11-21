@@ -7,12 +7,12 @@ import {
 } from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
 import { Card, CardInsideFull } from '../../components/Card';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import toast from 'react-hot-toast';
-import { Title } from '../../components/Title';
+import { Title } from '@tomic/resource-ui/components/Title';
 import { constructOpenURL } from '../../helpers/navigation';
 import { ErrorLook } from '../../components/ErrorLook';
-import { Column } from '../../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { Main } from '../../components/Main';
 import { useRights } from './useRights';
 import { AgentRights } from './AgentRights';

@@ -1,13 +1,13 @@
 import { styled } from 'styled-components';
 import { useState } from 'react';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   InputStyled,
   InputWrapper,
   ErrMessage,
-} from '@components/forms/InputStyles';
-import { Button } from '@components/Button';
+} from '@tomic/ui/components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
 import { FaRotateLeft, FaTrash } from 'react-icons/fa6';
 import { SettingsSection } from './SettingsSection';
 import { SettingCheckbox } from './SettingCheckbox';
@@ -20,15 +20,13 @@ import {
   addMarketplace,
   defaultPluginCatalogUrl,
   removeMarketplace,
-  setPluginCatalogUrl,
-  useExtraMarketplaces,
-  usePluginCatalogUrl,
+  resetMarketplaces,
+  useMarketplaceUrls,
 } from '@helpers/pluginCatalogUrl';
 import { settingsKeywords } from './settingsKeywords';
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
-  const catalogUrl = usePluginCatalogUrl();
   const {
     showExperimentalPlugins,
     experimentalToggleVisible,
@@ -58,7 +56,7 @@ export function IntegrationSettings() {
                 setVisibility('show-experimental-plugins', value)
               }
             >
-              Show experimental plugins
+              Show experimental apps
             </SettingCheckbox>
             <Description>
               These preferences are saved in your private Atomic drive. Existing
@@ -68,7 +66,6 @@ export function IntegrationSettings() {
         )}
         {error && <ErrMessage role='alert'>{error}</ErrMessage>}
         <ProxyForm key={proxy} proxy={proxy} />
-        <CatalogUrlForm key={catalogUrl} catalogUrl={catalogUrl} />
         <MarketplacesForm />
       </Column>
     </SettingsSection>
@@ -97,7 +94,7 @@ function ProxyForm({ proxy }: { proxy: string }) {
       <Column gap='0.5rem'>
         <SectionTitle>Integration proxy</SectionTitle>
         <Description>
-          The integration-proxy server that API plugins call through. This
+          The integration-proxy server that integrations call through. This
           setting is saved in this browser.
         </Description>
         <Row center gap='1ch'>
@@ -138,71 +135,10 @@ function ProxyForm({ proxy }: { proxy: string }) {
   );
 }
 
-function CatalogUrlForm({ catalogUrl }: { catalogUrl: string }) {
-  const [value, setValue] = useState(catalogUrl);
-  const [error, setError] = useState('');
-
-  return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-
-        try {
-          setPluginCatalogUrl(value);
-          setError('');
-        } catch {
-          setError(
-            'Enter an HTTPS URL or a localhost HTTP URL pointing at a catalog.json file.',
-          );
-        }
-      }}
-    >
-      <Column gap='0.5rem'>
-        <SectionTitle>Plugin catalog URL</SectionTitle>
-        <Description>
-          Discover integrations from this catalog.json. This setting is saved in
-          this browser.
-        </Description>
-        <Row center gap='1ch'>
-          <label htmlFor='plugin-catalog-url'>Plugin catalog URL</label>
-        </Row>
-        <InputWrapper>
-          <InputStyled
-            id='plugin-catalog-url'
-            type='url'
-            value={value}
-            placeholder={defaultPluginCatalogUrl}
-            onChange={event => setValue(event.target.value)}
-            aria-invalid={!!error}
-            aria-describedby={error ? 'plugin-catalog-url-error' : undefined}
-          />
-          {value !== defaultPluginCatalogUrl && (
-            <ResetButton
-              onClick={() => {
-                setPluginCatalogUrl('');
-                setValue(defaultPluginCatalogUrl);
-                setError('');
-              }}
-            />
-          )}
-        </InputWrapper>
-        {error && (
-          <ErrMessage id='plugin-catalog-url-error' role='alert'>
-            {error}
-          </ErrMessage>
-        )}
-        <Row>
-          <Button type='submit' disabled={value === catalogUrl}>
-            Save
-          </Button>
-        </Row>
-      </Column>
-    </form>
-  );
-}
-
 function MarketplacesForm() {
-  const marketplaces = useExtraMarketplaces();
+  const marketplaces = useMarketplaceUrls();
+  const isDefault =
+    marketplaces.length === 1 && marketplaces[0] === defaultPluginCatalogUrl;
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
 
@@ -225,9 +161,9 @@ function MarketplacesForm() {
       <Column gap='0.5rem'>
         <SectionTitle>Marketplaces</SectionTitle>
         <Description>
-          Apps from these catalogs are offered next to the one above. When two
-          have an app with the same name, the one listed first wins. This
-          setting is saved in this browser.
+          Apps are offered from these catalogs, in this order. When two have an
+          app with the same name, the one listed first wins. Saved in this
+          browser.
         </Description>
         {marketplaces.length > 0 && (
           <MarketplaceList aria-label='Marketplaces'>
@@ -246,6 +182,11 @@ function MarketplacesForm() {
               </li>
             ))}
           </MarketplaceList>
+        )}
+        {!isDefault && (
+          <Row>
+            <ResetButton onClick={resetMarketplaces} />
+          </Row>
         )}
         <label htmlFor='marketplace-url'>Add marketplace URL</label>
         <InputWrapper>

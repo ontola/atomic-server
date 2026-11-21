@@ -5,10 +5,10 @@ import {
   abandonIntegrationConsumer,
   type ActionConsumer,
 } from '@tomic/lib';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled } from '@components/forms/InputStyles';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
 
 export function ActionConsumers({
   drive,

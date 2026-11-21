@@ -9,7 +9,7 @@ import {
   type Resource,
 } from '@tomic/react';
 import { createContext, useCallback, useContext } from 'react';
-import { optionSubjects } from '@helpers/withConstraint';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 
 /**
  * The data class of the form being built. Every column's options and limits

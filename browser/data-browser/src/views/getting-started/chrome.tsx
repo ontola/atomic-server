@@ -11,7 +11,7 @@ import {
 } from '../../helpers/onboardingStorage';
 import { getLocalServerOrigin, isRunningInTauri } from '../../helpers/tauri';
 import { styled, css } from 'styled-components';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { isEmbedded } from '../../helpers/embedMode';
 import '@tomic/service-ui/background.css';
 
