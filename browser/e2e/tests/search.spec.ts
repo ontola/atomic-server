@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import {
   before,
+  SERVER_URL,
   editTitle,
   setTitle,
   contextMenu,
@@ -317,6 +318,7 @@ test.describe('search', async () => {
   test('search works offline against the local index', async ({
     page,
     context,
+    browserDiagnostics,
   }) => {
     test.slow();
 
@@ -377,6 +379,18 @@ test.describe('search', async () => {
       await document.fonts.ready;
     });
     // Go offline: block the network and close the WebSocket.
+    const metadataUrl = new URL('/server', SERVER_URL).href.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&',
+    );
+    browserDiagnostics.expect(
+      'error',
+      /^Failed to load resource: net::ERR_INTERNET_DISCONNECTED$/,
+      'Disconnecting the browser can interrupt the server metadata refresh.',
+      1,
+      new RegExp(`^${metadataUrl}$`),
+      { optional: true },
+    );
     await context.setOffline(true);
     await page.evaluate(() => {
       (
