@@ -2,12 +2,29 @@ import {
   managedDriveTest,
   expect as managedExpect,
 } from './deployment-fixtures';
-import { FRONTEND_URL } from './test-utils';
+import {
+  FRONTEND_URL,
+  waitForClientDbReady,
+  waitForClientDbFlush,
+  waitForDriveSettled,
+} from './test-utils';
 import { mockManagedNode } from './managed-test-utils';
 
 managedDriveTest(
   'an unenrolled home can create a local drive',
   async ({ page }) => {
+    // The dev fixture creates a server-backed workspace. Give this device
+    // a complete copy of its private home before simulating an unenrollment.
+    await waitForClientDbReady(page);
+    await waitForDriveSettled(page);
+    await page.evaluate(async () => {
+      const store = window.store;
+      const home = await store.getAgent()!.privateDriveSubject();
+      store.setDrive(home);
+      await store.getDefaultWebSocket()!.resyncDrive(home);
+    });
+    await waitForDriveSettled(page);
+    await waitForClientDbFlush(page, { required: true });
     await mockManagedNode(page);
     await page.route('**/api/me', route =>
       route.fulfill({ json: { email: 'template@example.com' } }),
