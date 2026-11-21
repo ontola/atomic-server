@@ -473,7 +473,11 @@ server's results, and a pasted URL is still selected directly. The server search
 is mocked. There is no E2E. A class the store has not fetched (after a reload,
 say) is only reachable by its URL.
 
-## Trash (Rust)
+## Trash
+
+`browser/data-browser/src/actions/trashActions.test.ts` checks which actions
+are available as the resource parent and the drive's Trash folder load or
+change. The Chromium `delete resource` test checks the menu after a reload.
 
 `lib/src/trash/tests.rs` (`cargo test -p atomic_lib --features db-redb --lib -- trash::`)
 covers `trash` / `restore` / `is_trashed` against a real `Db`: reparent plus
