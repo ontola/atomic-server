@@ -43,8 +43,8 @@ extension RegisterApp on Store {
       }
     }
 
-    final app = existing ??
-        newResource(parent: drive, isA: [Classes.externalApp]);
+    final app =
+        existing ?? newResource(parent: drive, isA: [Classes.externalApp]);
 
     void sync(String property, String? wanted) {
       if (wanted == null) {
@@ -79,4 +79,5 @@ extension RegisterApp on Store {
 String _homepageKey(String url) => url.trim().replaceFirst(RegExp(r'/+$'), '');
 
 bool _sameList(List<String> a, List<String> b) =>
-    a.length == b.length && Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
+    a.length == b.length &&
+    Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);

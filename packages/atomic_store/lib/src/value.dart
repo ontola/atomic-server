@@ -32,8 +32,8 @@ sealed class Value {
             for (final e in m.entries)
               if (e.value != null) e.key: Value.of(e.value!)
           }),
-        _ => throw StoreException(StoreErrorKind.invalid,
-            'No Atomic value for a ${raw.runtimeType}'),
+        _ => throw StoreException(
+            StoreErrorKind.invalid, 'No Atomic value for a ${raw.runtimeType}'),
       };
 }
 
@@ -41,7 +41,8 @@ final class StringValue extends Value {
   const StringValue(this.value);
   final String value;
   @override
-  bool operator ==(Object other) => other is StringValue && other.value == value;
+  bool operator ==(Object other) =>
+      other is StringValue && other.value == value;
   @override
   int get hashCode => Object.hash(StringValue, value);
   @override
@@ -163,8 +164,10 @@ final class ArrayValue extends Value {
   final List<Value> items;
 
   /// The subjects of the links in the list.
-  List<String> get links =>
-      [for (final i in items) if (i is LinkValue) i.subject];
+  List<String> get links => [
+        for (final i in items)
+          if (i is LinkValue) i.subject
+      ];
 
   @override
   bool operator ==(Object other) =>
@@ -186,7 +189,8 @@ final class NestedValue extends Value {
   int get hashCode => Object.hashAllUnordered(
       props.entries.map((e) => Object.hash(e.key, e.value)));
   @override
-  String toString() => '{${props.entries.map((e) => '${e.key}: ${e.value}').join(', ')}}';
+  String toString() =>
+      '{${props.entries.map((e) => '${e.key}: ${e.value}').join(', ')}}';
 }
 
 /// JSON text. The way to store what other datatypes cannot: a list of plain

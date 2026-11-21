@@ -2993,3 +2993,5 @@ checks for code moves, not new schema-validation or persistence semantics.
 Rust and browser tests cover issuer-signed invitation origins, peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
 
 Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
+
+Notification tests in `lib/src/notify/tests.rs` cover direct and inherited grants, changes after queueing, independently shared unread items, and the delivery channels. The native client helper tests cover the exact private push origin, including port matching. Server-side push requests use the filtered DNS resolver and disable redirects and proxies.
