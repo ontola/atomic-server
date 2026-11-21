@@ -770,9 +770,19 @@ pub async fn accept_invite_at_server(origin: &str, token: &str, agent: &Agent) -
     let mut url = url::Url::parse(&origin).map_err(|_| "Invalid invitation server")?;
     url.set_path("/invites");
     url.query_pairs_mut().append_pair("token", token);
-    let client = http_client_builder()
+    let mut client = http_client_builder()
         .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
+        .no_proxy();
+    // HTTP is allowed only on loopback. Keep localhost names on the device
+    // even if its system resolver would send the name to an external DNS server.
+    if let ("http", Some(url::Host::Domain(name))) = (url.scheme(), url.host()) {
+        let loopbacks = [
+            std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
+            std::net::SocketAddr::from((std::net::Ipv6Addr::LOCALHOST, 0)),
+        ];
+        client = client.resolve_to_addrs(name, &loopbacks);
+    }
+    let client = client
         .build()
         .map_err(|_| "Could not initialize invite redemption")?;
     let mut req = client
