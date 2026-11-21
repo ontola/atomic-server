@@ -1,16 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use atomic_lib::{
-    AtomicError, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
-    db::plugin_meta::{PluginMetaKey, validate_plugin_identifier, validate_plugin_identifiers},
+    db::plugin_meta::{validate_plugin_identifier, validate_plugin_identifiers, PluginMetaKey},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls::{self, DOWNLOAD_URL, MIMETYPE},
+    AtomicError, Db, Resource, Storelike, Value,
 };
 use tracing::{error, info};
-use zip::ZipArchive;
 
 use crate::plugins::wasm::{install_or_update_plugin, uninstall_plugin};
 
@@ -195,8 +194,7 @@ async fn do_install_plugin(
         error!("Downloaded file is too small to be a zip file");
     }
 
-    let mut zip_file = ZipArchive::new(std::io::Cursor::new(bytes))
-        .map_err(|e| AtomicError::from(format!("Failed to create zip archive: {}", e)))?;
+    let mut zip_file = super::package_archive::open(bytes)?;
 
     install_or_update_plugin(
         &mut zip_file,

@@ -54,15 +54,16 @@ ureq = "2"
 urlencoding = "2"
 ring = "0.17.14"
 yrs = "0.24.0"
-wasmtime = { version = "39.0.1", optional = true, features = [
+wasmtime = { version = "48.0.10", optional = true, features = [
     "component-model",
 ] }
-wasmtime-wasi = { version = "39.0.1", optional = true, features = ["p2"] }
-wasmtime-wasi-http = { version = "39.0.1", optional = true }
+wasmtime-wasi = { version = "48.0.10", optional = true, features = ["p2"] }
+wasmtime-wasi-http = { version = "48.0.10", optional = true }
 url = "2.5.7"
 html2md = { version = "0.2.14" }
 kuchikiki = { version = "0.8.2" }
 lol_html = { version = "1" }
+memchr = { version = "2", optional = true }
 zip = { version = "7.1.0", optional = true }
 reqwest = { version = "0.13.1" }
 
@@ -157,7 +158,7 @@ telemetry = [
 ]
 img = ["webp", "image"]
 https = ["rustls", "instant-acme", "rcgen", "rustls-pemfile"]
-wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip"]
+wasm-plugins = ["wasmtime", "wasmtime-wasi", "wasmtime-wasi-http", "zip", "dep:memchr"]
 
 [lib]
 name = "atomic_server_lib"

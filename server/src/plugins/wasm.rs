@@ -12,29 +12,28 @@ use std::{
 };
 
 use atomic_lib::{
-    AtomicErrorType,
-    class_extender::{self, ClassExtenderScope},
-};
-use atomic_lib::{
-    Commit, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
     commit::{CommitBuilder, CommitBuilderJSON, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta, validate_plugin_identifiers},
+    db::plugin_meta::{validate_plugin_identifiers, PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
-    parse::{ParseOpts, SaveOpts, parse_json_ad_resource},
+    parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
-    urls,
+    urls, Commit, Db, Resource, Storelike, Value,
 };
-use base64::{Engine as _, engine::general_purpose};
-use ring::digest::{SHA256, digest};
+use atomic_lib::{
+    class_extender::{self, ClassExtenderScope},
+    AtomicErrorType,
+};
+use base64::{engine::general_purpose, Engine as _};
+use ring::digest::{digest, SHA256};
 use tracing::{error, info, warn};
 use wasmtime::{
-    Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
     component::{Component, Linker, ResourceTable},
+    Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
-use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi::{p2, FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
 
@@ -488,7 +487,7 @@ impl WasmPlugin {
             self.inner.manifest.as_ref(),
             PermissionType::Network,
         ) {
-            wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
+            wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
                 .map_err(|err| AtomicError::from(err.to_string()))?;
         }
 
@@ -606,20 +605,10 @@ impl PluginHostState {
             let has_storage =
                 PluginManifest::option_has_permission(manifest.as_ref(), PermissionType::Storage);
 
-            let dir_perms = if has_storage {
-                DirPerms::READ | DirPerms::MUTATE
-            } else {
-                DirPerms::READ
-            };
-
-            let file_perms = if has_storage {
-                FilePerms::READ | FilePerms::WRITE
-            } else {
-                FilePerms::READ
-            };
+            let perms = if has_storage { FsPerms::ReadWrite } else { FsPerms::ReadOnly };
 
             builder
-                .preopened_dir(owned_folder_path.clone(), "/", dir_perms, file_perms)
+                .preopened_dir(owned_folder_path, "/", perms)
                 .map_err(|e| AtomicError::from(format!("Failed to preopen directory: {}", e)))?;
         }
 
@@ -681,12 +670,12 @@ impl WasiView for PluginHostState {
 }
 
 impl WasiHttpView for PluginHostState {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: Default::default(),
+        }
     }
 }
 
@@ -836,6 +825,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
 fn validate_plugin_zip(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
 ) -> AtomicResult<PluginManifest> {
+    super::package_archive::check_sizes(zip)?;
     // Check for plugin.wasm
     if zip.by_name("plugin.wasm").is_err() {
         return Err(AtomicError::from("Missing plugin.wasm"));
@@ -846,7 +836,9 @@ fn validate_plugin_zip(
         .by_name("plugin.json")
         .map_err(|_| AtomicError::from("Missing plugin.json"))?;
 
-    let manifest = PluginManifest::from_reader(file)?;
+    let size = file.size();
+    let bytes = super::package_archive::read_file(file, size)?;
+    let manifest = PluginManifest::from_reader(bytes.as_slice())?;
 
     let mut has_ui_js = false;
 
@@ -903,8 +895,9 @@ fn extract_plugin_to_disk(
     std::fs::create_dir_all(&target_dir)
         .map_err(|e| AtomicError::from(format!("Failed to create plugin directory: {}", e)))?;
 
+    super::package_archive::check_sizes(zip)?;
     for i in 0..zip.len() {
-        let mut file = zip
+        let file = zip
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
         let file_name = file.name().to_string();
@@ -957,14 +950,9 @@ fn extract_plugin_to_disk(
                     ))
                 })?;
             }
-            let mut outfile = std::fs::File::create(&target_path).map_err(|e| {
-                AtomicError::from(format!(
-                    "Failed to create file {}: {}",
-                    target_path.display(),
-                    e
-                ))
-            })?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| {
+            let size = file.size();
+            let content = super::package_archive::read_file(file, size)?;
+            std::fs::write(&target_path, content).map_err(|e| {
                 AtomicError::from(format!(
                     "Failed to write file {}: {}",
                     target_path.display(),

@@ -60,6 +60,9 @@ Alternatively you can specify the `full-drive-access` permission in the plugin m
 
 ## The plugin package
 
+Use a ZIP32 archive with stored or deflated entries. The package may contain up to 4096 entries and 128 MiB in total, both before and after expansion. Individual files may expand to 64 MiB and `plugin.json` to 1 MiB.
+
+
 A plugin should be packaged as a zip file containing the following files:
 
 - `plugin.wasm`: The compiled Wasm binary of the plugin.
