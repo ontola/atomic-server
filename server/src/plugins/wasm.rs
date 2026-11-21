@@ -242,7 +242,6 @@ pub async fn load_wasm_class_extenders(
 fn build_engine() -> AtomicResult<Engine> {
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.async_support(true);
     config.consume_fuel(true);
 
     Engine::new(&config).map_err(to_atomic_error)
