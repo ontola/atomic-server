@@ -6,16 +6,20 @@ import {
   ALL_MEMBERS_CAP,
   parseViewQuery,
   runViewQuery,
+  type ViewQuery,
 } from '@helpers/extensions/viewQuery';
 import { noServerHost } from './noServer';
 import { ViewChanges } from '@helpers/extensions/viewApply';
 import { parseViewSearch, runViewSearch } from '@helpers/extensions/viewSearch';
 import {
   core,
+  collections,
+  isAtomicIdentifier,
   readConnectionSubjects,
   destinationTablesFor,
   errorMessageFromResponse,
   signRequest,
+  subjectsReferToSameResource,
 } from '@tomic/react';
 import { applyHostFromStore, readSchema, schemaValue } from '@tomic/lib';
 import type { ApplyHost, JSONValue } from '@tomic/lib';
@@ -42,6 +46,166 @@ export interface HostStoreProfile {
 export function assertHostProfile(profile?: HostStoreProfile): void {
   profile?.access.signal?.throwIfAborted();
   profile?.access.assertCurrent();
+}
+
+/** Only pagination metadata is retained; every child page is read from the server. */
+const childQueryPages = new WeakMap<
+  HostStoreProfile,
+  { key: string; next: number; total?: number; seen: Set<string> }
+>();
+// Match the frame's existing 200-page, 100-member enumeration bound. Retained
+// identity queries still use readConnectionSubjects and its 10,000-member limit.
+const MAX_AUTHORITATIVE_CHILDREN = 20_000;
+
+async function readAuthoritativeChildPage(
+  store: Store,
+  drive: string,
+  query: ViewQuery,
+  profile: HostStoreProfile,
+): Promise<string[] | undefined> {
+  const authorize = profile.authorizeRead;
+  const inScope = profile.queryMemberInScope;
+  const parent = query.value;
+  const page = query.page;
+  if (
+    query.property !== core.properties.parent ||
+    parent === undefined ||
+    page === undefined ||
+    !authorize ||
+    !inScope
+  )
+    return undefined;
+
+  const key = JSON.stringify([
+    store.getServerUrl(),
+    drive,
+    store.normalizeSubject(parent),
+    query.pageSize,
+  ]);
+  const previous = childQueryPages.get(profile);
+  // Arbitrary direct page requests retain the complete-query behavior. Only
+  // sequential child enumeration can prove that preceding pages were seen.
+  if (page !== 0 && (previous?.key !== key || previous.next !== page))
+    return undefined;
+  const series =
+    page === 0 ? { key, next: 0, seen: new Set<string>() } : previous!;
+  childQueryPages.set(profile, series);
+
+  const current = () => {
+    assertHostProfile(profile);
+    if (childQueryPages.get(profile) !== series || series.next !== page)
+      throw new Error('The child query changed during pagination');
+  };
+
+  const authorizeParent = async () => {
+    current();
+    await authorize(parent);
+    current();
+    if ((await inScope(parent)) !== true)
+      throw new Error('The query parent Drive could not be proven');
+    current();
+  };
+
+  try {
+    await authorizeParent();
+    const url = new URL('/query', store.getServerUrl());
+    for (const [name, value] of Object.entries({
+      drive,
+      property: core.properties.parent,
+      value: parent,
+      page_size: String(query.pageSize),
+      current_page: String(page),
+      include_nested: 'false',
+    }))
+      url.searchParams.set(name, value);
+    const result = await store.fetchResourceFromServer(url.href, {
+      noWebSocket: true,
+      forceOverride: true,
+    });
+    current();
+    if (result.error) throw result.error;
+    result.getLoroDoc();
+    const total = result.get(collections.properties.totalMembers);
+    const members = result.get(collections.properties.members);
+    if (
+      typeof total !== 'number' ||
+      !Number.isSafeInteger(total) ||
+      total < 0 ||
+      total > MAX_AUTHORITATIVE_CHILDREN ||
+      !Array.isArray(members) ||
+      members.some(subject => typeof subject !== 'string') ||
+      members.length !==
+        Math.max(0, Math.min(query.pageSize, total - page * query.pageSize))
+    )
+      throw new Error('Invalid or incomplete authoritative child query page');
+    if (series.total !== undefined && series.total !== total)
+      throw new Error('Child query membership changed during pagination');
+    const normalized = new Set<string>();
+
+    for (const subject of members as string[]) {
+      if (!isAtomicIdentifier(subject)) {
+        const member = new URL(subject);
+        if (
+          member.origin !== new URL(store.getServerUrl()).origin ||
+          member.username ||
+          member.password ||
+          member.hash
+        )
+          throw new Error('The child query returned another server resource');
+      }
+
+      const canonical = store.normalizeSubject(subject);
+      if (normalized.has(canonical) || series.seen.has(canonical))
+        throw new Error('The child query returned duplicate members');
+      normalized.add(canonical);
+    }
+
+    const rows = await store.getResources(members as string[]);
+    current();
+    if (rows.length !== members.length)
+      throw new Error('The child query resources could not be loaded');
+
+    const assertParents = () => {
+      for (const [index, row] of rows.entries()) {
+        if (row.error) throw row.error;
+        const actual = row.get(core.properties.parent);
+        const stampedDrive = row.get('https://atomicdata.dev/properties/drive');
+        if (
+          !subjectsReferToSameResource(row.subject, members[index] as string) ||
+          typeof actual !== 'string' ||
+          !subjectsReferToSameResource(actual, parent) ||
+          (stampedDrive !== undefined &&
+            (typeof stampedDrive !== 'string' ||
+              !subjectsReferToSameResource(stampedDrive, drive)))
+        )
+          throw new Error(
+            'A query member moved outside the requested parent or Drive',
+          );
+      }
+    };
+
+    assertParents();
+
+    for (const subject of members as string[]) {
+      if ((await inScope(subject)) !== true)
+        throw new Error('The query member Drive could not be proven');
+      current();
+      await authorize(subject);
+      current();
+    }
+
+    await authorizeParent();
+    assertParents();
+    for (const subject of normalized) series.seen.add(subject);
+    series.total = total;
+    series.next = page + 1;
+
+    return members as string[];
+  } catch (error) {
+    if (childQueryPages.get(profile) === series)
+      childQueryPages.delete(profile);
+    throw error;
+  }
 }
 
 /** Pin the actor and server in addition to the host's source validation. */
@@ -313,6 +477,13 @@ async function handleOperation(
           throw new Error(
             'This hosted identity query requires an unsorted property and value',
           );
+        const children = await readAuthoritativeChildPage(
+          store,
+          drive,
+          query,
+          profile,
+        );
+        if (children !== undefined) return children;
         const subjects = await readConnectionSubjects(
           {
             getServerUrl: () => store.getServerUrl(),

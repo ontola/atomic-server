@@ -72,6 +72,9 @@ function setup() {
     getResource: vi.fn(
       async (subject: string) => resources.get(subject) ?? wrap(subject),
     ),
+    getResources: vi.fn(async (subjects: string[]) =>
+      subjects.map(subject => resources.get(subject) ?? wrap(subject)),
+    ),
     newResource: vi.fn(async ({ parent, isA, propVals }) => {
       const subject = 'https://node.test/new';
       rows.set(subject, {
@@ -356,6 +359,244 @@ describe('host-selected view authority', () => {
       forceOverride: true,
     });
   });
+
+  it.each([5_518, 10_734])(
+    'reads %i authoritative children with one signed page and one cold hydration batch per frame page',
+    async count => {
+      const ctx = setup();
+      Object.assign(ctx.profile, {
+        authoritativeQueries: true,
+        authorizeRead: vi.fn(async () => {}),
+        queryMemberInScope: vi.fn(async () => true),
+      });
+      const members = Array.from(
+        { length: count },
+        (_, index) => 'https://node.test/ledger-' + index,
+      );
+      for (const subject of members)
+        ctx.rows.set(subject, { [core.properties.parent]: ROOT });
+      vi.mocked(ctx.store.getResource).mockImplementation(async () => {
+        throw new Error('A cold child needs batched hydration');
+      });
+      const fetch = vi.fn(async (subject: string, options?: unknown) => {
+        const url = new URL(subject);
+        const page = Number(url.searchParams.get('current_page'));
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+          drive: DRIVE,
+          property: core.properties.parent,
+          value: ROOT,
+          page_size: '100',
+          current_page: String(page),
+          include_nested: 'false',
+        });
+        expect(options).toEqual({ noWebSocket: true, forceOverride: true });
+
+        return {
+          getLoroDoc: () => {},
+          get: (property: string) =>
+            property === collections.properties.totalMembers
+              ? members.length
+              : members.slice(page * 100, page * 100 + 100),
+        };
+      });
+      ctx.store.fetchResourceFromServer = fetch as never;
+      const found: string[] = [];
+
+      for (let page = 0; page < Math.ceil(count / 100); page++) {
+        const result = await ctx.request('query', {
+          property: core.properties.parent,
+          value: ROOT,
+          page,
+          pageSize: 100,
+        });
+        found.push(...(result as string[]));
+        expect(fetch).toHaveBeenCalledTimes(page + 1);
+      }
+
+      expect(found).toEqual(members);
+      expect(ctx.store.getResources).toHaveBeenCalledTimes(
+        Math.ceil(count / 100),
+      );
+      expect(ctx.store.getResource).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    'truncated',
+    'foreign',
+    'unproven',
+    'moved',
+    'late move',
+    'late Drive change',
+    'cancel',
+    'excessive',
+  ])(
+    'refuses an authoritative child page after %s instead of returning an incomplete prefix',
+    async failure => {
+      const ctx = setup();
+      Object.assign(ctx.profile, {
+        authoritativeQueries: true,
+        authorizeRead: vi.fn(async () => {}),
+        queryMemberInScope: vi.fn(async (subject: string) => {
+          if (subject === CHILD && failure === 'unproven')
+            throw new Error('Ancestry unavailable');
+          if (subject === CHILD && failure === 'late move')
+            ctx.rows.get(CHILD)![core.properties.parent] = OUTSIDE;
+          if (subject === CHILD && failure === 'late Drive change')
+            ctx.rows.get(CHILD)!['https://atomicdata.dev/properties/drive'] =
+              OUTSIDE;
+
+          return subject !== CHILD || failure !== 'foreign';
+        }),
+      });
+      ctx.store.fetchResourceFromServer = vi.fn(async () => {
+        if (failure === 'cancel') ctx.controller.abort();
+        if (failure === 'moved')
+          ctx.rows.get(CHILD)![core.properties.parent] = OUTSIDE;
+
+        return {
+          getLoroDoc: () => {},
+          get: (property: string) =>
+            property === collections.properties.totalMembers
+              ? failure === 'truncated'
+                ? 101
+                : failure === 'excessive'
+                  ? 20_001
+                  : 1
+              : [CHILD],
+        };
+      }) as never;
+      await expect(
+        ctx.request('query', {
+          property: core.properties.parent,
+          value: ROOT,
+          page: 0,
+        }),
+      ).rejects.toThrow();
+      expect(ctx.store.newResource).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    'https://foreign.test/child',
+    'https://person:secret@node.test/child',
+    'https://node.test/child#fragment',
+  ])('rejects unsafe child subject %s before hydration', async subject => {
+    const ctx = setup();
+    Object.assign(ctx.profile, {
+      authoritativeQueries: true,
+      authorizeRead: vi.fn(async () => {}),
+      queryMemberInScope: vi.fn(async () => true),
+    });
+    ctx.store.fetchResourceFromServer = vi.fn(async () => ({
+      getLoroDoc: () => {},
+      get: (property: string) =>
+        property === collections.properties.totalMembers ? 1 : [subject],
+    })) as never;
+    await expect(
+      ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        page: 0,
+      }),
+    ).rejects.toThrow();
+    expect(ctx.store.getResources).not.toHaveBeenCalled();
+  });
+
+  it('retains complete direct-page compatibility and starts fresh child metadata at page zero', async () => {
+    const ctx = setup();
+    Object.assign(ctx.profile, {
+      authoritativeQueries: true,
+      authorizeRead: vi.fn(async () => {}),
+      queryMemberInScope: vi.fn(async () => true),
+    });
+    const members = Array.from(
+      { length: 101 },
+      (_, index) => 'https://node.test/ledger-' + index,
+    );
+    for (const subject of members)
+      ctx.rows.set(subject, { [core.properties.parent]: ROOT });
+    let total = members.length;
+    ctx.store.fetchResourceFromServer = vi.fn(async (subject: string) => {
+      const page = Number(new URL(subject).searchParams.get('current_page'));
+
+      return {
+        getLoroDoc: () => {},
+        get: (property: string) =>
+          property === collections.properties.totalMembers
+            ? total
+            : members.slice(page * 100, Math.min(total, page * 100 + 100)),
+      };
+    }) as never;
+    expect(
+      await ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        page: 1,
+      }),
+    ).toEqual([members[100]]);
+    expect(ctx.store.fetchResourceFromServer).toHaveBeenCalledTimes(2);
+    expect(ctx.store.getResources).not.toHaveBeenCalled();
+    await ctx.request('query', {
+      property: core.properties.parent,
+      value: ROOT,
+      page: 0,
+    });
+    total = 1;
+    expect(
+      await ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        page: 0,
+      }),
+    ).toEqual([members[0]]);
+    expect(ctx.store.getResources).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['changed total', 'repeated member'])(
+    'rejects %s across sequential signed child pages',
+    async failure => {
+      const ctx = setup();
+      Object.assign(ctx.profile, {
+        authoritativeQueries: true,
+        authorizeRead: vi.fn(async () => {}),
+        queryMemberInScope: vi.fn(async () => true),
+      });
+      const members = Array.from(
+        { length: 102 },
+        (_, index) => 'https://node.test/ledger-' + index,
+      );
+      for (const subject of members)
+        ctx.rows.set(subject, { [core.properties.parent]: ROOT });
+      ctx.store.fetchResourceFromServer = vi.fn(async (subject: string) => {
+        const page = Number(new URL(subject).searchParams.get('current_page'));
+        const total = failure === 'changed total' && page === 1 ? 102 : 101;
+
+        return {
+          getLoroDoc: () => {},
+          get: (property: string) =>
+            property === collections.properties.totalMembers
+              ? total
+              : page === 1 && failure === 'repeated member'
+                ? [members[0]]
+                : members.slice(page * 100, Math.min(total, page * 100 + 100)),
+        };
+      }) as never;
+      await ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        page: 0,
+      });
+      await expect(
+        ctx.request('query', {
+          property: core.properties.parent,
+          value: ROOT,
+          page: 1,
+        }),
+      ).rejects.toThrow();
+      expect(ctx.store.fetchResourceFromServer).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('checks retained identities without granting a frame control over Trash queries', async () => {
     const ctx = setup();

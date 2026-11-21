@@ -1330,6 +1330,11 @@ This does not yet prove restoration of the user's private staging workspace.
   Timed bridge responses cover valid reads beyond two minutes and five-minute
   exhaustion retaining accepted observations and memberships.
   Native response-journal callbacks are covered by `builtinSyncablesProfile.test.ts`.
+- `hostStoreProfile.test.ts` covers signed child paging through the existing
+  bridge, including 5,518- and 10,734-record journals, bulk cold hydration,
+  current parent/Drive checks and bounded pagination metadata. Truncated pages,
+  duplicate IDs, changed totals, scope changes and cancellation fail closed.
+  Complete identity scans and retained Trash matches keep their existing path.
 - `syncableApiSchema.test.ts` and `syncableApiSchemaViews.test.ts` cover resource-
   specific link datatypes, retained immutable JSON properties, optional unresolved
   links, custom class requirements, and positional column/order migration without
