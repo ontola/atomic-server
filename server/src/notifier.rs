@@ -60,17 +60,21 @@ fn link_for(template: Option<&str>, subject: &str) -> Option<String> {
 async fn send(client: &reqwest::Client, appstate: &AppState, d: &Delivery) {
     let link = link_for(appstate.config.opts.notify_link.as_deref(), &d.about);
     for endpoint in &d.push_endpoints {
-        if !endpoint.starts_with("https://") && !endpoint.starts_with("http://") {
+        let request = atomic_lib::client::helpers::notification_post(
+            endpoint,
+            appstate.config.opts.notify_private_push_origin.as_ref(),
+        );
+        let Ok(request) = request else {
+            tracing::warn!("notifier: rejected a push endpoint");
             continue;
-        }
-        let res = client
-            .post(endpoint)
+        };
+        let response = request
             .header("content-type", "application/json")
             .body(push_body(d, appstate.config.opts.notify_push_content).to_string())
             .send()
             .await;
-        if let Err(e) = res {
-            tracing::warn!("notifier: push to an endpoint failed: {e}");
+        if !response.is_ok_and(|r| r.status().is_success()) {
+            tracing::warn!("notifier: push delivery failed");
         }
     }
     if d.email.is_none() {

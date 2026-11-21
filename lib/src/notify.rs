@@ -347,7 +347,7 @@ impl Notifier {
             if let (Some(owner), Some(endpoint)) =
                 (out.get_mut(&pure(&parent)), text(&reg, PUSH_ENDPOINT))
             {
-                if !owner.prefs.push_endpoints.contains(&endpoint) {
+                if self.private_destination(reg.get_subject(), &owner.agent) && !owner.prefs.push_endpoints.contains(&endpoint) {
                     owner.prefs.push_endpoints.push(endpoint);
                 }
             }
@@ -359,20 +359,76 @@ impl Notifier {
     /// that others read or write is not anyone's private drive.
     async fn owner_of(&self, inbox: &Resource) -> Option<String> {
         let drive = drive_of(&self.store, inbox).await?;
-        let drive = self.store.get_resource(&Subject::from(drive)).await.ok()?;
-        let writers = subjects(&drive, urls::WRITE);
-        let readers = subjects(&drive, urls::READ);
-        match writers.as_slice() {
-            // Private: nobody else reads it either, or they would read the
-            // Notifications (titles of what this person can open).
-            [one]
-                if (Subject::from(one.clone()).is_agent_did() || one.contains("/agents/"))
-                    && readers.iter().all(|r| r == one) =>
-            {
-                Some(one.clone())
-            }
-            _ => None,
+        let drive = self
+            .store
+            .get_resource_shallow(&Subject::from(drive))
+            .ok()?;
+        let writers = drive.get(urls::WRITE).ok()?.to_subjects(None).ok()?;
+        let [owner] = writers.as_slice() else {
+            return None;
+        };
+        let agent = crate::agents::migrate_legacy_agent_subject(owner);
+        if !crate::identifiers::is_agent_id(&agent)
+            || !self.private_destination(inbox.get_subject(), &agent)
+        {
+            return None;
         }
+        Some(
+            self.store
+                .normalize_subject(&Subject::from(agent))
+                .to_string(),
+        )
+    }
+
+    /// Rights are additive through both parent and drive. Every reachable ACL
+    /// must be local and readable, including intermediate folders and the leaf.
+    fn private_destination(&self, destination: &Subject, owner: &str) -> bool {
+        let identity = |s: &str| {
+            self.store.normalize_subject(&Subject::from(
+                crate::agents::migrate_legacy_agent_subject(s),
+            ))
+        };
+        let owner = identity(owner);
+        let mut saw_owner_write = false;
+        let mut pending = vec![destination.clone()];
+        let mut seen = HashSet::new();
+        while let Some(subject) = pending.pop() {
+            let subject = self.store.normalize_subject(&subject);
+            if !seen.insert(subject.pure_id()) {
+                continue;
+            }
+            if seen.len() > 256 {
+                return false;
+            }
+            let Ok(row) = self.store.get_resource_shallow(&subject) else {
+                return false;
+            };
+            if crate::identifiers::is_agent_id(identity(subject.as_str()).as_str())
+                || subject.as_str() == urls::PUBLIC_AGENT
+                || row.get(urls::SUBJECT).is_ok()
+            {
+                return false;
+            }
+            for prop in [urls::READ, urls::WRITE, urls::APPEND] {
+                if let Ok(value) = row.get(prop) {
+                    let Ok(grants) = value.to_subjects(None) else {
+                        return false;
+                    };
+                    if grants.iter().any(|g| identity(g) != owner) {
+                        return false;
+                    }
+                    if prop == urls::WRITE && !grants.is_empty() {
+                        saw_owner_write = true;
+                    }
+                }
+            }
+            for prop in [urls::PARENT, urls::DRIVE_PROP] {
+                if let Ok(value) = row.get(prop) {
+                    pending.push(Subject::from(value.to_string()));
+                }
+            }
+        }
+        saw_owner_write
     }
 
     async fn follows(&self, owners: &HashMap<String, Owner>) -> Vec<FollowRow> {
@@ -906,6 +962,14 @@ impl Notifier {
                 Value::ResourceArray(changed.iter().map(|p| p.clone().into()).collect()),
             ));
         }
+        let inbox = Subject::from(owner.inbox.clone());
+        if !self.private_destination(&inbox, &owner.agent)
+            || existing
+                .as_ref()
+                .is_some_and(|n| !self.private_destination(n.get_subject(), &owner.agent))
+        {
+            return Ok(None);
+        }
         let subject = match existing {
             Some(mut n) => {
                 n.set_unsafe(urls::NAME.into(), Value::String(title.clone()))?;
@@ -1009,7 +1073,9 @@ impl Notifier {
                 let Ok(r) = self.store.get_resource(&Subject::from(n.clone())).await else {
                     continue;
                 };
-                if r.get(READ_AT).is_ok() || !seen.insert(n) {
+                if r.get(READ_AT).is_ok() || !seen.insert(n) ||
+                    text(&r, urls::PARENT).map(|p| pure(&p)).as_deref() != Some(owner.inbox.as_str()) ||
+                    !self.private_destination(r.get_subject(), &owner.agent) {
                     continue;
                 }
                 lines.push(format!(

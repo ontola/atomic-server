@@ -191,6 +191,10 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_NOTIFY_WEBHOOK")]
     pub notify_webhook: Option<String>,
 
+    /// Exact origin of a private push service that devices may register.
+    #[clap(long, env = "ATOMIC_NOTIFY_PRIVATE_PUSH_ORIGIN")]
+    pub notify_private_push_origin: Option<url::Url>,
+
     /// Put titles and text in push messages. Off by default, because the push
     /// service between this server and the device (for example a public ntfy)
     /// would read them; turn it on when you run that service yourself.

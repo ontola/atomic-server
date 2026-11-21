@@ -157,6 +157,84 @@ fn later() -> i64 {
 }
 
 #[tokio::test]
+async fn notifier_requires_private_inbox_and_intermediate_folders() {
+    let w = World::new().await;
+    let folder = create_as(
+        &w.store,
+        &w.anna,
+        urls::FOLDER,
+        Some(&w.anna_drive),
+        "Personal",
+        vec![],
+    )
+    .await;
+    let nested = create_as(
+        &w.store,
+        &w.anna,
+        INBOX_CLASS,
+        Some(&folder),
+        "Inbox",
+        vec![],
+    )
+    .await;
+    let notifier = w.notifier();
+    assert!(notifier.owners().await.contains_key(&pure(&nested)));
+    edit_as(&w.store, &w.anna, &folder, urls::READ, agents(&[&w.bert])).await;
+    edit_as(&w.store, &w.anna, &w.inbox, urls::WRITE, agents(&[&w.bert])).await;
+    assert!(notifier.owners().await.is_empty());
+}
+
+#[tokio::test]
+async fn pending_delivery_rechecks_the_inbox_and_the_existing_notification() {
+    let w = World::new().await;
+    let notifier = w.notifier();
+    let owner = notifier.owners().await.remove(&pure(&w.inbox)).unwrap();
+    let q = Queued {
+        agent: owner.agent.clone(),
+        about: pure(&w.anna_drive),
+        kind: "updated".into(),
+        first_at: 1,
+        last_at: 1,
+        count: 1,
+        actors: vec![],
+        props: Default::default(),
+        source: None,
+        action_required: false,
+        title: None,
+        body: None,
+    };
+    let accepted = notifier
+        .write_notification(&owner, &q, later())
+        .await
+        .unwrap()
+        .unwrap();
+    edit_as(
+        &w.store,
+        &w.anna,
+        &accepted.notification,
+        urls::READ,
+        agents(&[&w.bert]),
+    )
+    .await;
+    assert!(notifier
+        .write_notification(&owner, &q, later())
+        .await
+        .unwrap()
+        .is_none());
+    edit_as(&w.store, &w.anna, &w.inbox, urls::READ, agents(&[&w.bert])).await;
+    let other = Queued {
+        kind: "created".into(),
+        ..q
+    };
+    assert!(notifier
+        .write_notification(&owner, &other, later())
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(w.inbox_items().await.len(), 1);
+}
+
+#[tokio::test]
 async fn the_inbox_owner_is_the_only_writer_of_its_drive() {
     let w = World::new().await;
     let owners = w.notifier().owners().await;

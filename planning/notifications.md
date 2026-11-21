@@ -21,12 +21,12 @@ on #1859 (toasts, OS notifications, Inbox in the private drive).
   `daily`, `off`), `mutedNotificationKinds`, `notifyLanguage`.
 - [x] Push: `PushRegistration` children of the Inbox with a `pushEndpoint`;
   the server POSTs JSON there (UnifiedPush / ntfy). No FCM or Web Push
-  encryption yet.
+  encryption yet. Device endpoints use public addresses. An operator may configure one private push origin with `--notify-private-push-origin`.
 - [x] Mail: no mailer in the server. An embedder installs a sink
   (`notifier::set_sink`); otherwise `--notify-webhook` receives each delivery
   as JSON. Daily digests are computed here.
 - Owner rule: the server only delivers to an Inbox in a drive that exactly one
-  agent reads and writes. So the private drive has to live on (sync to) the
+  agent reads and writes. The destination and every parent or drive granting access must also be private to that agent. So the private drive has to live on (sync to) the
   server; that is the "only Inboxes this server hosts" decision below.
 - Not yet: auto-follows, the client listening to the Inbox instead of
   recording, access and meeting kinds, server Inbox `append` right (the
