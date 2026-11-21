@@ -319,6 +319,8 @@ export class Collection {
   private _totalMembers = 0;
   /** Full local query membership, including rows outside cached pages. */
   private _queriedMembers = new Set<string>();
+  /** A server page's count includes members whose identities we have not read. */
+  private _serverMembershipIncomplete = false;
 
   /** Statistics from the last loaded page. The store computes them over every
    *  matching resource, so any page carries the same numbers. */
@@ -502,6 +504,7 @@ export class Collection {
   /** Stamp an empty page so callers see `pages.has(page) === true`
    * + `totalMembers === 0` as the authoritative "no children" state. */
   private setEmptyPage(page: number): void {
+    this._serverMembershipIncomplete = false;
     const empty = new Resource<Collections.Collection>(this.buildSubject(page));
     this.writePageMembers(empty, [], 0);
     this.setPage(page, empty);
@@ -724,7 +727,8 @@ export class Collection {
     // don't track had a property change that doesn't make it a member.
     // Bail before the more expensive add/remove logic below.
     if (!matches && !currentlyMember) {
-      return this._queriedMembers.has(subject)
+      return this._queriedMembers.has(subject) ||
+        (!resource && this._serverMembershipIncomplete)
         ? 'membership-stale'
         : 'unchanged';
     }
@@ -750,6 +754,12 @@ export class Collection {
       // Keep this *off* during `queryLocalDb()` itself so a resource the
       // user creates while the query is in flight still appears.
       if (this._assemblingPage) return 'unchanged';
+
+      // A matching UPDATE outside the loaded server page might already be
+      // included in its total. It proves membership, not a new member. Ask
+      // again for both old-row updates and genuine additions instead of
+      // optimistically counting every off-page update a second time.
+      if (this._serverMembershipIncomplete) return 'membership-stale';
 
       // No page loaded yet — either the constructor's initial
       // `fetchPage(0)` hasn't completed, or `refresh()`'s active loop
@@ -863,6 +873,7 @@ export class Collection {
     // so they should observe the same membership.
     collection._memberIndex = this._memberIndex;
     collection._queriedMembers = this._queriedMembers;
+    collection._serverMembershipIncomplete = this._serverMembershipIncomplete;
 
     return collection;
   }
@@ -1175,6 +1186,9 @@ export class Collection {
     const fetched = this.pages.get(page);
 
     if (!fetched) return;
+    // A local member absent from this server page may be on another page and
+    // already counted. Only a complete server answer proves it is local-only.
+    if (this._serverMembershipIncomplete) return;
 
     const members = fetched.props.members ?? [];
     const localOnly = local.filter(s => !members.includes(s));
@@ -1400,6 +1414,7 @@ export class Collection {
     this._queriedMembers = new Set(
       filterIndexLeakage(result.subjects).filter(s => !this.isDestroyed(s)),
     );
+    this._serverMembershipIncomplete = false;
 
     // Notifications may have arrived while the local query was pending.
     // Its full result already accounts for them, even outside page zero.
@@ -1743,6 +1758,15 @@ export class Collection {
 
     if (!isNumber(answeredTotal)) {
       throw new Error('Invalid collection: total-members is not a number');
+    }
+
+    this._serverMembershipIncomplete = answeredTotal > filteredMembers.length;
+    this._queriedMembers.clear();
+
+    if (this._serverMembershipIncomplete) {
+      // Absence from one page cannot prove an optimistic row is absent from
+      // the server's whole result. Let its authoritative count/page win.
+      this._optimisticAdds.clear();
     }
 
     // The answer is the store's copy of the query resource, shared by every

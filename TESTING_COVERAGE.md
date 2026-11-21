@@ -1297,6 +1297,11 @@ This does not yet prove restoration of the user's private staging workspace.
   responses and independent Loro documents to verify query pages refresh from
   empty to additions to removals and back to empty. Generated query snapshots
   replace previous pages; ordinary user documents still merge their CRDT fields.
+  Seven pagination regressions also cover existing off-page updates, genuine
+  additions, removals and moves, optimistic rows racing partial server answers,
+  stale empty answers, partial local caches and a complete local query replacing
+  server paging. Unknown identities in a partial page trigger revalidation
+  instead of inflating its authoritative total.
 - Flat collection regressions in `builtinSyncFlatState.test.ts`,
   `syncableRules.test.ts`, `syncableFlatNavigation.test.ts` and
   `useSyncableFilters.test.tsx` cover typed canonical identities, shared rows,
