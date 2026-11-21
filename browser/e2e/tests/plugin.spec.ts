@@ -4,6 +4,7 @@ import {
   SERVER_URL,
   currentDialog,
   fillSearchBox,
+  goOffline,
   inDialog,
   newResource,
   openDriveSettings,
@@ -24,7 +25,7 @@ test.describe('Plugins', () => {
     await before({ page }, testInfo);
   });
 
-  test('install a plugin', async ({ page, context }) => {
+  test('install a plugin', async ({ page, context, browserDiagnostics }) => {
     // Two upload + commit + plugin-install chains, a full bird-creation
     // form, an iframe-driven picker, plus a reload-and-verify. The test
     // routinely needs 40-50s on a dev machine even when nothing is wrong.
@@ -259,7 +260,7 @@ test.describe('Plugins', () => {
         page.evaluate(() => window.store.getSyncStatus().serverConnected),
       )
       .toBe(false);
-    await context.setOffline(true);
+    await goOffline(context, browserDiagnostics);
     await prefix.fill('Offline');
     await expect(saveConfig).toBeEnabled();
     await saveConfig.click();

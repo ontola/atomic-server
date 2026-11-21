@@ -1,19 +1,11 @@
 import { test, expect } from './fixtures';
-import { before, FRONTEND_URL, waitForSynced } from './test-utils';
+import { before, FRONTEND_URL, goOffline, waitForSynced } from './test-utils';
 
 test('data inspector reacts to an unsaved edit without replacing its resource', async ({
   page,
   context,
   browserDiagnostics,
 }) => {
-  browserDiagnostics.expect(
-    'error',
-    /Failed to load resource: net::ERR_INTERNET_DISCONNECTED/,
-    'The app asks for the server resource (/server) while the test is offline.',
-    1,
-    /\/server$/,
-    { optional: true },
-  );
   await before({ page });
   const subject = await page.evaluate(async () => {
     const resource = await window.store.newResource({
@@ -33,7 +25,7 @@ test('data inspector reacts to an unsaved edit without replacing its resource', 
   await expect(
     page.getByRole('heading', { name: /Save-state inspection/ }).first(),
   ).toBeVisible();
-  await context.setOffline(true);
+  await goOffline(context, browserDiagnostics);
   await page.evaluate(async rowSubject => {
     const resource = window.store.getResourceLoading(rowSubject);
     await resource.set(
