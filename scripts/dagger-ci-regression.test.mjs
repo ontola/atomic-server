@@ -255,3 +255,163 @@ test('Rust checks use the same musl headers while glibc and WASM keep their own 
     );
   }
 });
+
+const staticChecks = ['jsLint', 'jsTypecheck', 'rustFmt'];
+const heavyChecks = [
+  'docsPublish',
+  'typedocPublish',
+  'endToEnd',
+  'jsTest',
+  'jsTestIntegration',
+  'flutterTest',
+  'rustClippy',
+  'rustTest',
+];
+
+function stubCi(pipeline) {
+  for (const name of [...staticChecks, ...heavyChecks]) {
+    pipeline[name] = async () => '';
+  }
+}
+
+test('build-job limits reject invalid counts before any work', () => {
+  for (const limit of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(
+      () => new AtomicServer(source(), '', limit),
+      /max-build-jobs must be an integer >= 0/,
+    );
+  }
+});
+
+test('focused Rust tests apply the constructor cap to Cargo and nextest compilation', async () => {
+  const pipeline = new AtomicServer(source(), 'test-runner', 1);
+  resetCalls();
+  await pipeline.rustTest();
+  const calls = recordedCalls();
+  assert.deepEqual(
+    calls.filter(
+      ([name, variable]) =>
+        name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+    ),
+    [['withEnvVariable', 'CARGO_BUILD_JOBS', '1']],
+  );
+  const nextest = calls.find(
+    ([name, args]) =>
+      name === 'withExec' && args[2]?.includes('cargo nextest run'),
+  );
+  assert.match(nextest?.[1][2], /--build-jobs 1 /);
+  assert.match(nextest?.[1][2], /--test-threads 2 /);
+});
+
+test('CI caps both host profiles without raising limits or changing uncapped defaults', async () => {
+  for (const [profile, limit, cargo, nextest] of [
+    ['hosted', 0, '4', '4'],
+    ['hosted', 1, '1', '1'],
+    ['hosted', 8, '4', '4'],
+    ['mancave', 0, '12', '8'],
+    ['mancave', 1, '1', '1'],
+    ['mancave', 10, '10', '8'],
+  ]) {
+    const pipeline = new AtomicServer(source(), '', limit);
+    stubCi(pipeline);
+    await pipeline.ci('token', false, profile);
+
+    resetCalls();
+    await AtomicServer.prototype.rustTest.call(pipeline);
+    const rustCalls = recordedCalls();
+    assert.deepEqual(
+      rustCalls.filter(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+      ),
+      [['withEnvVariable', 'CARGO_BUILD_JOBS', cargo]],
+    );
+    const command = rustCalls.find(
+      ([name, args]) =>
+        name === 'withExec' && args[2]?.includes('cargo nextest run'),
+    );
+    assert.match(command?.[1][2], new RegExp(`--build-jobs ${nextest} `));
+
+    resetCalls();
+    await AtomicServer.prototype.flutterTest.call(pipeline);
+    assert.deepEqual(
+      recordedCalls().filter(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+      ),
+      [['withEnvVariable', 'CARGO_BUILD_JOBS', cargo]],
+    );
+  }
+});
+
+for (const sequential of [false, true]) {
+  test(`CI ${sequential ? 'sequential' : 'default parallel'} scheduling retains every check`, async () => {
+    const pipeline = new AtomicServer(source());
+    const seenStatic = [];
+    const starts = [];
+    const events = [];
+    let active = 0;
+    let peak = 0;
+    for (const name of staticChecks) {
+      pipeline[name] = async () => seenStatic.push(name);
+    }
+    for (const name of heavyChecks) {
+      pipeline[name] = async () => {
+        starts.push(name);
+        events.push(`start ${name}`);
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise(resolve => setImmediate(resolve));
+        active--;
+        events.push(`end ${name}`);
+      };
+    }
+
+    const args = ['token', false, 'hosted', 'full', 0, 0, -1, false, 'run'];
+    // Omitting the final argument also checks that existing callers stay parallel.
+    const result = sequential
+      ? await pipeline.ci(...args, true)
+      : await pipeline.ci(...args);
+    assert.equal(result, 'CI pipeline completed successfully');
+    assert.deepEqual(seenStatic.sort(), [...staticChecks].sort());
+    assert.deepEqual([...starts].sort(), [...heavyChecks].sort());
+    assert.equal(active, 0);
+    if (sequential) {
+      assert.equal(peak, 1);
+      assert.deepEqual(starts, [
+        'rustTest',
+        'rustClippy',
+        'jsTest',
+        'jsTestIntegration',
+        'endToEnd',
+        'flutterTest',
+        'docsPublish',
+        'typedocPublish',
+      ]);
+    } else {
+      assert.equal(peak, 7);
+      assert.deepEqual(starts, heavyChecks);
+      assert.ok(
+        events.indexOf('start rustTest') > events.indexOf('end rustClippy'),
+      );
+    }
+  });
+}
+
+test('sequential CI propagates a failed lane before starting the next one', async () => {
+  const pipeline = new AtomicServer(source());
+  stubCi(pipeline);
+  const calls = [];
+  for (const name of heavyChecks) {
+    pipeline[name] = async () => {
+      calls.push(name);
+      if (name === 'rustTest') throw new Error('Rust tests failed');
+    };
+  }
+  await assert.rejects(
+    () =>
+      pipeline.ci('token', false, 'hosted', 'full', 0, 0, -1, false, '', true),
+    /Rust tests failed/,
+  );
+  assert.deepEqual(calls, ['rustTest']);
+});

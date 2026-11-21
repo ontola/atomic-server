@@ -368,6 +368,7 @@ export class AtomicServer {
   private e2eCloneSessions = false;
   /** Suffix for the Rust `target/` cache volumes, one per CI runner. */
   private targetCacheSuffix = '';
+  private maxBuildJobs = 0;
 
   constructor(
     @argument({
@@ -417,13 +418,26 @@ export class AtomicServer {
      * warm caches survive.
      */
     @argument() cacheNamespace: string = '',
+    /** Maximum Cargo compile jobs per container; 0 keeps the host profile. */
+    @argument() maxBuildJobs: number = 0,
   ) {
+    if (!Number.isSafeInteger(maxBuildJobs) || maxBuildJobs < 0) {
+      throw new Error('max-build-jobs must be an integer >= 0');
+    }
+    this.maxBuildJobs = maxBuildJobs;
     this.source = source;
     const namespace = cacheNamespace.trim();
     this.targetCacheSuffix =
       namespace === '' || namespace === 'Mancave'
         ? ''
         : `-${namespace.replace(/[^A-Za-z0-9_.-]/g, '-')}`;
+  }
+
+  /** Apply a local memory limit without increasing the named host budget. */
+  private cappedBuildJobs(configured: string): string {
+    return this.maxBuildJobs === 0
+      ? configured
+      : String(Math.min(Number(configured), this.maxBuildJobs));
   }
 
   /** A Rust `target/` cache volume, private to this CI runner. */
@@ -481,7 +495,10 @@ export class AtomicServer {
           'registry/.package-cache-mutate',
           `${cargoHome}/.package-cache-mutate`,
         ])
-        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
+        .withEnvVariable(
+          'CARGO_BUILD_JOBS',
+          this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
+        )
     );
   }
 
@@ -611,6 +628,8 @@ export class AtomicServer {
      * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
      */
     @argument() resultsKey: string = '',
+    /** Run heavy lanes one at a time, starting with Rust tests, on small hosts. */
+    @argument() sequential: boolean = false,
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -625,30 +644,52 @@ export class AtomicServer {
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
     await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
-    // Rust clippy/test still share the `rust-target` cache mount — keep
-    // them serialized (parallel cargo contended the target lock for
-    // ~16 minutes and exited 101). Everything else is independent.
-    await Promise.all([
-      this.docsPublish(netlifyAuthToken, publishDocs),
-      this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(
-        netlifyAuthToken,
-        playwrightMode,
-        playwrightWorkers,
-        playwrightShards,
-        playwrightRetries,
-        '',
-        playwrightCloneSessions,
-        resultsKey,
-      ),
-      this.jsTest(),
-      this.jsTestIntegration(),
-      this.flutterTest(),
-      (async () => {
-        await this.rustClippy();
-        await this.rustTest();
-      })(),
-    ]);
+    // Defer each lane until scheduled so sequential mode never starts the
+    // next build while another lane still holds memory.
+    const jobs = {
+      docsPublish: () => this.docsPublish(netlifyAuthToken, publishDocs),
+      typedocPublish: () => this.typedocPublish(netlifyAuthToken, publishDocs),
+      endToEnd: () =>
+        this.endToEnd(
+          netlifyAuthToken,
+          playwrightMode,
+          playwrightWorkers,
+          playwrightShards,
+          playwrightRetries,
+          '',
+          playwrightCloneSessions,
+          resultsKey,
+        ),
+      jsTest: () => this.jsTest(),
+      jsTestIntegration: () => this.jsTestIntegration(),
+      flutterTest: () => this.flutterTest(),
+    };
+
+    if (sequential) {
+      // Give the largest Rust compilation first use of a constrained host.
+      for (const job of [
+        () => this.rustTest(),
+        () => this.rustClippy(),
+        jobs.jsTest,
+        jobs.jsTestIntegration,
+        jobs.endToEnd,
+        jobs.flutterTest,
+        jobs.docsPublish,
+        jobs.typedocPublish,
+      ]) {
+        await job();
+      }
+    } else {
+      // Clippy and tests share a target cache and must remain serialized;
+      // every other lane retains its existing parallel scheduling.
+      await Promise.all([
+        ...Object.values(jobs).map(job => job()),
+        (async () => {
+          await this.rustClippy();
+          await this.rustTest();
+        })(),
+      ]);
+    }
 
     return 'CI pipeline completed successfully';
   }
@@ -766,7 +807,10 @@ export class AtomicServer {
         .withEnvVariable('CI', 'true')
         // Same pin as withCargoHomeCache — flutter's cargokit build would
         // otherwise see all host CPUs.
-        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
+        .withEnvVariable(
+          'CARGO_BUILD_JOBS',
+          this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
+        )
         // Persist hosted Dart packages across CI runs.
         .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
         .withMountedCache('/root/.pub-cache', flutterPubCache)
@@ -1912,7 +1956,7 @@ export class AtomicServer {
             'rm -rf "$STAGE"; fi && ' +
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
-            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
+            `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
         ])
@@ -2420,7 +2464,7 @@ export class AtomicServer {
         grep: playwrightGrep,
       };
     console.info(
-      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
+      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs)}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
     );
     const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();
