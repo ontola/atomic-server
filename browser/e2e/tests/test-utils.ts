@@ -2,6 +2,7 @@ import {
   Page,
   expect,
   Browser,
+  type BrowserContext,
   ConsoleMessage,
   Request,
   Locator,
@@ -80,6 +81,27 @@ export const clickPageEdit = (page: Page) =>
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
+
+/** Take this test offline while allowing one interrupted server metadata refresh. */
+export function goOffline(
+  context: BrowserContext,
+  browserDiagnostics: Pick<DiagnosticCollector, 'expect'>,
+): Promise<void> {
+  const metadataUrl = new URL('/server', SERVER_URL).href.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&',
+  );
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: net::ERR_INTERNET_DISCONNECTED$/,
+    'Disconnecting the browser can interrupt the server metadata refresh.',
+    1,
+    new RegExp(`^${metadataUrl}$`),
+    { optional: true },
+  );
+
+  return context.setOffline(true);
+}
 
 /**
  * Rewrite a server-origin URL onto the SPA origin Playwright drives.

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import {
   before,
-  SERVER_URL,
+  goOffline,
   editTitle,
   setTitle,
   contextMenu,
@@ -379,19 +379,7 @@ test.describe('search', async () => {
       await document.fonts.ready;
     });
     // Go offline: block the network and close the WebSocket.
-    const metadataUrl = new URL('/server', SERVER_URL).href.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      '\\$&',
-    );
-    browserDiagnostics.expect(
-      'error',
-      /^Failed to load resource: net::ERR_INTERNET_DISCONNECTED$/,
-      'Disconnecting the browser can interrupt the server metadata refresh.',
-      1,
-      new RegExp(`^${metadataUrl}$`),
-      { optional: true },
-    );
-    await context.setOffline(true);
+    await goOffline(context, browserDiagnostics);
     await page.evaluate(() => {
       (
         window as unknown as {
