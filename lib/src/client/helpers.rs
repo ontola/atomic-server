@@ -712,29 +712,41 @@ pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> Atom
 /// inviter's device (`sync::invite`).
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn accept_invite_at_server(origin: &str, token: &str, agent: &Agent) -> AtomicResult<()> {
-    let url = format!(
-        "{}/invites?token={}",
-        origin.trim().trim_end_matches('/'),
-        url::form_urlencoded::byte_serialize(token.trim().as_bytes()).collect::<String>()
-    );
+    let parsed = crate::invite_token::InviteToken::decode(token)?;
+    parsed.check_expiry(crate::utils::now())?;
+    let key = parsed
+        .signer_public_key()
+        .ok_or("This invite has no verifiable issuer.")?;
+    parsed
+        .verify_signature(key)
+        .map_err(|_| "Invalid invitation signature")?;
+    let origin = parsed.check_redemption_server(origin)?;
+    let mut url = url::Url::parse(&origin).map_err(|_| "Invalid invitation server")?;
+    url.set_path("/invites");
+    url.query_pairs_mut().append_pair("token", token);
     let client = http_client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
-        .map_err(|e| format!("Could not build HTTP client: {}", e))?;
+        .map_err(|_| "Could not initialize invite redemption")?;
     let mut req = client
-        .post(&url)
+        .post(url.clone())
         .header("Accept", crate::parse::JSON_AD_MIME);
-    for (k, v) in get_authentication_headers(&url, agent)? {
+    for (k, v) in get_authentication_headers_v2("POST", url.as_str(), b"", agent)? {
         req = req.header(k, v);
     }
-    let resp = req.send().await.map_err(|e| {
-        crate::errors::AtomicError::upstream_unreachable(format!("Could not reach {}: {}", origin, e))
+    let response = req.send().await.map_err(|_| {
+        crate::errors::AtomicError::upstream_unreachable(format!("Could not reach {origin}"))
     })?;
-    let status = resp.status().as_u16();
-    if (200..300).contains(&status) {
+    let status = response.status();
+    if status.is_success() {
         return Ok(());
     }
-    let body = resp.text().await.unwrap_or_default();
-    Err(format!("The server refused the invite (status {}): {}", status, body).into())
+    Err(format!(
+        "The issuing server refused this invitation (HTTP {}).",
+        status.as_u16()
+    )
+    .into())
 }
 
 /// Posts a Commit to an endpoint

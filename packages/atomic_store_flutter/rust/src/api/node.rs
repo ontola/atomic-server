@@ -326,6 +326,7 @@ impl AtomicStore {
         write: bool,
         expires_at: Option<i64>,
         max_usages: Option<i64>,
+        server_origin: Option<String>,
     ) -> Result<String, AtomicError> {
         if matches!(max_usages, Some(n) if n < 1) {
             return Err(AtomicError::invalid(
@@ -335,9 +336,21 @@ impl AtomicStore {
         let agent = self.db.get_default_agent().map_err(other)?;
         let expires = expires_at
             .unwrap_or_else(|| atomic_lib::utils::now() + 30 * 24 * 60 * 60 * 1000);
-        atomic_lib::invite_token::InviteToken::new(target, write, expires, &agent, max_usages)
-            .and_then(|token| token.encode())
-            .map_err(other)
+        atomic_lib::invite_token::InviteToken::new_for_server(
+            target,
+            write,
+            expires,
+            &agent,
+            max_usages,
+            server_origin.as_deref(),
+        )
+        .and_then(|token| {
+            if max_usages.is_some() && token.redemption_origin()?.is_none() {
+                return Err("Choose the issuing server for a limited-use invitation.".into());
+            }
+            token.encode()
+        })
+        .map_err(other)
     }
 
     /// Open an invite that needs no server. `token` is the token of a link
@@ -355,45 +368,42 @@ impl AtomicStore {
             .map_err(|_| AtomicError::invalid(invite::EXPIRED))?;
         let target = parsed.target.to_string();
 
-        // Connected to a server: accept it there. The server adds this agent
-        // to the target's rights, so nothing waits on the inviter's devices.
-        if let Some(origin) = self.sync.origin() {
-            use atomic_lib::Storelike;
-            if let Ok(agent) = self.db.get_default_agent() {
-                match atomic_lib::client::helpers::accept_invite_at_server(
-                    &origin,
-                    token.trim(),
-                    &agent,
-                )
+        parsed
+            .verify_signature(
+                parsed
+                    .signer_public_key()
+                    .ok_or_else(|| AtomicError::invalid("This invite has no verifiable issuer."))?,
+            )
+            .map_err(|_| AtomicError::invalid("Invalid invitation signature."))?;
+        if let Some(authority) = parsed.redemption_origin().map_err(other)? {
+            let configured = self.sync.origin().ok_or_else(|| {
+                AtomicError::invalid(format!("Connect to {authority} to open this invitation."))
+            })?;
+            let agent = self.db.get_default_agent().map_err(other)?;
+            // This is the only authority for this token. A refusal is final.
+            atomic_lib::client::helpers::accept_invite_at_server(&configured, token.trim(), &agent)
                 .await
-                {
-                    Ok(()) => {
-                        let sync_pending = self.sync.follow_drive(&self.db, &target).await.is_err();
-                        let is_drive = self
-                            .db
-                            .get_resource(&target.as_str().into())
-                            .await
-                            .ok()
-                            .and_then(|r| r.get(atomic_lib::urls::IS_A).ok().map(|v| v.to_string()))
-                            .is_some_and(|classes| classes.contains(atomic_lib::urls::DRIVE));
-                        if is_drive {
-                            let _ = self.db.list_drive_in_home(&target).await;
-                            let _ = self.switch_drive(target.clone());
-                        }
-                        return Ok(AcceptedInvite {
-                            drive: target,
-                            write: parsed.write,
-                            imported: 0,
-                            sync_pending,
-                        });
-                    }
-                    Err(e) => {
-                        tracing::info!("{origin} did not accept the invite, asking devices: {e}");
-                    }
-                }
+                .map_err(other)?;
+            let sync_pending = self.sync.origin().as_deref() != Some(&configured)
+                || self.sync.follow_drive(&self.db, &target).await.is_err();
+            let is_drive = self
+                .db
+                .get_resource_shallow(&target.as_str().into())
+                .ok()
+                .and_then(|r| r.get(atomic_lib::urls::IS_A).ok()?.to_subjects(None).ok())
+                .is_some_and(|classes| classes.iter().any(|c| c == atomic_lib::urls::DRIVE));
+            if is_drive {
+                let _ = self.db.list_drive_in_home(&target).await;
+                let _ = self.switch_drive(target.clone());
             }
+            return Ok(AcceptedInvite {
+                drive: target,
+                write: parsed.write,
+                imported: 0,
+                sync_pending,
+            });
         }
-
+        parsed.check_peer_redemption().map_err(other)?;
         let mine = self.start_peer().await?;
         let endpoint = atomic_lib::sync::peer::endpoint()
             .ok_or_else(|| AtomicError::network("Peer not started."))?;
@@ -541,11 +551,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_issuing_servers_refusal_is_final() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (store, dir) = open_with_agent("invite_http_refusal").await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            loop {
+                let byte = socket.read_u8().await.unwrap();
+                request.push(byte);
+                if request.ends_with(b"\r\n\r\n") {
+                    break;
+                }
+                assert!(request.len() < 16384);
+            }
+            assert!(request.starts_with(b"POST /invites?token="));
+            socket
+                .write_all(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        });
+        let token = store
+            .create_invite_token(
+                store.drive().unwrap(),
+                false,
+                None,
+                None,
+                Some(origin.clone()),
+            )
+            .unwrap();
+        store.sync.set_origin("https://other.example");
+        assert!(store
+            .accept_invite(token.clone())
+            .await
+            .unwrap_err()
+            .message
+            .contains("Connect to"));
+        store.sync.set_origin(&origin);
+        assert!(store
+            .accept_invite(token)
+            .await
+            .unwrap_err()
+            .message
+            .contains("HTTP 403"));
+        task.await.unwrap();
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[tokio::test]
     async fn an_invite_token_is_what_the_server_verifies() {
         let (store, dir) = open_with_agent("inviter").await;
         let drive = store.drive().unwrap();
         let token = store
-            .create_invite_token(drive.clone(), true, Some(4_102_444_800_000), Some(3))
+            .create_invite_token(
+                drive.clone(),
+                true,
+                Some(4_102_444_800_000),
+                Some(3),
+                Some("https://team.example".into()),
+            )
             .unwrap();
         let bytes = base64_decode_standard(&token);
         let json: serde_json::Map<String, serde_json::Value> =
@@ -562,11 +631,14 @@ mod tests {
         decoded.verify_signature(&agent.public_key).unwrap();
 
         assert!(store
-            .create_invite_token(drive.clone(), false, None, Some(0))
+            .create_invite_token(drive.clone(), false, None, Some(0), None)
             .is_err());
         // Default expiry is in the future, and unlimited tokens carry no limit.
-        let open = store.create_invite_token(drive, false, None, None).unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&base64_decode_standard(&open)).unwrap();
+        let open = store
+            .create_invite_token(drive, false, None, None, None)
+            .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&base64_decode_standard(&open)).unwrap();
         assert!(json[urls::EXPIRES_AT].as_i64().unwrap() > atomic_lib::utils::now());
         assert!(json.get(urls::USAGES_LEFT).is_none());
         std::fs::remove_dir_all(dir).ok();

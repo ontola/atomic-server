@@ -1,7 +1,8 @@
+import { verifiedInviteServer } from '@tomic/lib';
 import { PeerInvitePage } from '../views/PeerInvitePage';
 import { createRoute, useNavigate } from '@tanstack/react-router';
 import { server, useServerURL, useResource, useStore } from '@tomic/react';
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useMemo, useState, type JSX } from 'react';
 import {
   alreadyHasInviteAccess,
   readInviteGrant,
@@ -38,10 +39,12 @@ function InviteRouteComponent() {
     return <p>No invite token provided.</p>;
   }
 
+  let authority: string | undefined;
   let browserInvite = false;
   let invalid = false;
 
   try {
+    authority = verifiedInviteServer(token);
     const data = JSON.parse(atob(token));
     browserInvite =
       data['https://atomicdata.dev/properties/invite/transport'] === 'webrtc';
@@ -56,7 +59,7 @@ function InviteRouteComponent() {
       {browserInvite ? (
         <PeerInvitePage token={token} />
       ) : (
-        <NodeInvite token={token} />
+        <NodeInvite key={token} token={token} authority={authority} />
       )}
     </OpenIfAlreadyShared>
   );
@@ -143,16 +146,28 @@ function OpenIfAlreadyShared({
  * path, so asking it for the invite gave "Could not parse JSON ... Unrecognized
  * token '<'". When no node can be found the person is told, instead.
  */
-function NodeInvite({ token }: { token: string }) {
+function NodeInvite({
+  token,
+  authority,
+}: {
+  token: string;
+  authority?: string;
+}) {
   const store = useStore();
   const [, setServerUrl] = useServerURL();
-  const candidates = inviteNodeCandidates({
-    serverParam: new URLSearchParams(window.location.search).get('server'),
-    locationOrigin: window.location.origin,
-    storedServer: store.getServerUrl(),
-    dev: isDev(),
-  });
-  const candidatesKey = candidates.join(' ');
+  const serverParam = new URLSearchParams(window.location.search).get('server');
+  const locationOrigin = window.location.origin;
+  const storedServer = store.getServerUrl();
+  const candidates = useMemo(
+    () =>
+      inviteNodeCandidates({
+        serverParam,
+        locationOrigin,
+        storedServer,
+        dev: isDev(),
+      }).filter(origin => !authority || origin === authority),
+    [serverParam, locationOrigin, storedServer, authority],
+  );
   const [node, setNode] = useState<string | null | undefined>();
 
   useEffect(() => {
@@ -178,17 +193,16 @@ function NodeInvite({ token }: { token: string }) {
     return () => {
       active = false;
     };
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `candidatesKey` stands for `candidates`
-  }, [candidatesKey, store, setServerUrl]);
+  }, [candidates, store, setServerUrl]);
 
   if (node === undefined) return <Spinner centered />;
 
   if (node === null || isOriginWithoutNode(node)) {
     return (
       <p>
-        This invitation cannot be opened here: {candidates[0]} does not run a
-        server that holds the drive. Ask the person who invited you for a new
-        link.
+        This invitation cannot be opened here: {authority ?? candidates[0]} does
+        not run a server that holds the drive. Ask the person who invited you
+        for a new link.
       </p>
     );
   }

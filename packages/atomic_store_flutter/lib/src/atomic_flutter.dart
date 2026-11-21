@@ -190,18 +190,26 @@ class AtomicNode implements AtomicParts {
             target: target,
             write: write,
             expiresAt: expiresAt,
-            maxUsages: maxUsages), acceptor: (token) async {
-      try {
-        final r = await handle.acceptInvite(token: token);
-        return AcceptedInvite(
-            drive: r.drive,
-            write: r.write,
-            imported: r.imported,
-            syncPending: r.syncPending);
-      } on bridge.AtomicError catch (e) {
-        throw storeExceptionFromBridge(e);
-      }
-    });
+            maxUsages: maxUsages),
+        serverSigner: (target, write, expiresAt, maxUsages, origin) =>
+            handle.createInviteToken(
+                target: target,
+                write: write,
+                expiresAt: expiresAt,
+                maxUsages: maxUsages,
+                serverOrigin: origin),
+        acceptor: (token) async {
+          try {
+            final r = await handle.acceptInvite(token: token);
+            return AcceptedInvite(
+                drive: r.drive,
+                write: r.write,
+                imported: r.imported,
+                syncPending: r.syncPending);
+          } on bridge.AtomicError catch (e) {
+            throw storeExceptionFromBridge(e);
+          }
+        });
   }
 
   @override

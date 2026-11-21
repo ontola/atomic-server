@@ -29,10 +29,34 @@ pub struct InviteToken {
     /// How the invite travels when not through a server (`webrtc` for a
     /// browser-peer invite). Signed by `@tomic/lib` when set.
     pub transport: Option<String>,
+    /// The issuing server for a hosted invitation to a location-independent subject.
+    pub redeem_at: Option<String>,
 }
 
 /// Signed by `@tomic/lib` for invites between browsers.
+pub const REDEEM_AT: &str = "https://atomicdata.dev/properties/invite/redeemAt";
 const TRANSPORT: &str = "https://atomicdata.dev/properties/invite/transport";
+
+pub fn server_origin(raw: &str) -> AtomicResult<String> {
+    let url = url::Url::parse(raw).map_err(|_| "Invalid invitation server origin")?;
+    let loopback = match url.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Domain(name)) => name == "localhost",
+        None => false,
+    };
+    if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
+        || url.host().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("Use an HTTPS server origin, or HTTP on localhost.".into());
+    }
+    Ok(url.origin().ascii_serialization())
+}
 
 impl InviteToken {
     /// Creates a new signed InviteToken.
@@ -42,6 +66,17 @@ impl InviteToken {
         expires_at: i64,
         signer_agent: &Agent,
         max_usages: Option<i64>,
+    ) -> AtomicResult<Self> {
+        Self::new_for_server(target, write, expires_at, signer_agent, max_usages, None)
+    }
+
+    pub fn new_for_server(
+        target: String,
+        write: bool,
+        expires_at: i64,
+        signer_agent: &Agent,
+        max_usages: Option<i64>,
+        server: Option<&str>,
     ) -> AtomicResult<Self> {
         // Normalize the target through Subject parsing so the signed string
         // matches what encode()/verify() will produce via self.target.as_str().
@@ -54,8 +89,12 @@ impl InviteToken {
             max_usages,
             description: None,
             transport: None,
+            redeem_at: server.map(server_origin).transpose()?,
         };
 
+        if token.redeem_at.is_some() {
+            token.redemption_origin()?;
+        }
         token.signature = crate::commit::sign_message(
             &token.signable_string()?,
             signer_agent
@@ -101,6 +140,9 @@ impl InviteToken {
         }
         if let Some(t) = &self.transport {
             map.insert(TRANSPORT.into(), serde_json::Value::String(t.clone()));
+        }
+        if let Some(origin) = &self.redeem_at {
+            map.insert(REDEEM_AT.into(), serde_json::Value::String(origin.clone()));
         }
         map
     }
@@ -200,6 +242,7 @@ impl InviteToken {
             max_usages,
             description,
             transport,
+            redeem_at: text(REDEEM_AT)?,
         })
     }
 
@@ -256,6 +299,57 @@ impl InviteToken {
         Ok(())
     }
 
+    /// A URL target names its own authority. A DID carries no network authority
+    /// unless the inviter explicitly signed one.
+    pub fn redemption_origin(&self) -> AtomicResult<Option<String>> {
+        let target = url::Url::parse(self.target.as_str())
+            .ok()
+            .filter(|url| matches!(url.scheme(), "http" | "https"));
+        let target = target
+            .map(|url| server_origin(&url.origin().ascii_serialization()))
+            .transpose()?;
+        let signed = self.redeem_at.as_deref().map(server_origin).transpose()?;
+        if let (Some(target), Some(signed)) = (&target, &signed) {
+            if target != signed {
+                return Err("The invitation names conflicting servers".into());
+            }
+        }
+        Ok(signed.or(target))
+    }
+
+    /// Match the independently configured destination before releasing credentials.
+    pub fn check_redemption_server(&self, candidate: &str) -> AtomicResult<String> {
+        let origin = self
+            .redemption_origin()?
+            .ok_or("This invitation has no signed server.")?;
+        if server_origin(candidate)? != origin {
+            return Err(format!("Connect to {origin} to open this invitation.").into());
+        }
+        Ok(origin)
+    }
+
+    /// A global usage limit requires one durable ledger. Old limited DID
+    /// tokens do not identify one and must be reissued.
+    pub fn check_http_redemption(&self, server: &str) -> AtomicResult<()> {
+        if self.redeem_at.is_some() || self.max_usages.is_some() {
+            self.check_redemption_server(server)?;
+        }
+        Ok(())
+    }
+
+    /// Only the issuing server has an atomic ledger of distinct acceptances.
+    pub fn check_peer_redemption(&self) -> AtomicResult<()> {
+        if self.redeem_at.is_some() {
+            return Err("Open this invitation on its issuing server.".into());
+        }
+        if self.max_usages.is_some() {
+            return Err(
+                "Open this invitation on its issuing server to apply the usage limit.".into(),
+            );
+        }
+        Ok(())
+    }
+
     /// Errors when the token has expired at `now` (Unix milliseconds).
     pub fn check_expiry(&self, now: i64) -> AtomicResult<()> {
         if self.expires_at < now {
@@ -266,21 +360,14 @@ impl InviteToken {
 
     /// The signer's public key as embedded in a `did:ad:agent:` subject, if it is one.
     pub fn signer_public_key(&self) -> Option<&str> {
-        self.signer
-            .as_str()
-            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
+        self.signer.agent_public_key()
     }
 
     /// Verifies the signature against the signer's base64 public key.
     pub fn verify_signature(&self, public_key: &str) -> AtomicResult<()> {
         use ed25519_dalek::{Signature, Verifier, VerifyingKey};
         let serialized = self.signable_string()?;
-        let invalid = || {
-            format!(
-                "Invalid signature in invite token. signer={}, public_key={}, signature={}, serialized_data={}",
-                self.signer, public_key, self.signature, serialized
-            )
-        };
+        let invalid = || "Invalid signature in invite token";
         let key_bytes: [u8; 32] = crate::agents::decode_base64(public_key)?
             .try_into()
             .map_err(|_| invalid())?;
@@ -366,7 +453,62 @@ mod test {
             .is_err());
     }
 
-    /// Builds a token the way `generateInviteToken` of `@tomic/lib` does:
+    #[test]
+    fn only_unlimited_invites_may_be_redeemed_by_a_peer() {
+        let issuer = agent();
+        for (limit, allowed) in [(None, true), (Some(1), false), (Some(3), false)] {
+            let token = InviteToken::new("did:ad:drive".into(), false, 10, &issuer, limit).unwrap();
+            assert_eq!(token.check_peer_redemption().is_ok(), allowed);
+        }
+    }
+
+    #[test]
+    fn the_inviter_binds_the_redemption_authority() {
+        let issuer = agent();
+        let token = InviteToken::new_for_server(
+            "did:ad:drive".into(),
+            false,
+            10,
+            &issuer,
+            Some(1),
+            Some("https://team.example:443/"),
+        )
+        .unwrap();
+        let mut parsed = InviteToken::decode(&token.encode().unwrap()).unwrap();
+        assert_eq!(
+            parsed.redemption_origin().unwrap().as_deref(),
+            Some("https://team.example")
+        );
+        parsed
+            .verify_signature(parsed.signer_public_key().unwrap())
+            .unwrap();
+        assert!(parsed.check_peer_redemption().is_err());
+        assert!(parsed
+            .check_redemption_server("https://team.example:443/")
+            .is_ok());
+        assert!(parsed
+            .check_redemption_server("https://team.example:8443")
+            .is_err());
+        assert!(parsed
+            .check_redemption_server("https://other.example")
+            .is_err());
+        parsed.redeem_at = Some("https://other.example".into());
+        assert!(parsed.verify_signature(&issuer.public_key).is_err());
+        assert!(InviteToken::new_for_server(
+            "https://team.example/drive".into(),
+            false,
+            10,
+            &issuer,
+            None,
+            Some("https://other.example")
+        )
+        .is_err());
+        let legacy = InviteToken::new("did:ad:drive".into(), false, 10, &issuer, None).unwrap();
+        assert_eq!(legacy.redemption_origin().unwrap(), None);
+        assert!(server_origin("https://example.test/path").is_err());
+    }
+
+/// Builds a token the way `generateInviteToken` of `@tomic/lib` does:
     /// `fast-json-stable-stringify` of the signable object (keys sorted, no
     /// whitespace), signed, then `btoa(JSON.stringify({...signable, signature}))`
     /// (insertion order: target, write, expiresAt, signer, [usagesLeft], signature).

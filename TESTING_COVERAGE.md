@@ -2930,3 +2930,7 @@ Existing installs whose secret was already discarded require reinstalling;
 this does not rotate an app identity or repair provider delegations. New online
 installations still work with older nodes; automatic replay requires a node
 that advertises the initialization-only protocol.
+
+Rust and browser tests cover issuer-signed invitation origins, peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
+
+The native bridge test `the_issuing_servers_refusal_is_final` checks an unrelated configured origin and a refused invitation at the verified origin. The Dart sharing tests check that the host chosen for a link reaches the signer.

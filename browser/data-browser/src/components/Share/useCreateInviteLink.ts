@@ -73,6 +73,7 @@ export function useCreateInviteLink(
         'Wait for this drive to be saved on this device before sharing.',
       );
     const signalingUrl = browserPeer ? requirePeerSignalingUrl() : undefined;
+    const serverUrl = store.getServerUrl();
     const tokenBase64 = await generateInviteToken(
       target.subject,
       agent,
@@ -81,6 +82,7 @@ export function useCreateInviteLink(
       undefined,
       browserPeer,
       maxUsages,
+      browserPeer ? undefined : serverUrl,
     );
     markInvited(true);
 
@@ -92,8 +94,6 @@ export function useCreateInviteLink(
       });
       resumePeerLinks(store);
     }
-
-    const serverUrl = store.getServerUrl();
 
     if (browserPeer) {
       return `${window.location.origin}/app/invite?token=${encodeURIComponent(tokenBase64)}`;

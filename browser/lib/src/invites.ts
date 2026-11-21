@@ -1,8 +1,56 @@
 import stringify from 'fast-json-stable-stringify';
+import { verify } from '@noble/ed25519';
+import { decodeB64 } from './base64.js';
+import { currentAgentSubject, agentPublicKey } from './subject.js';
 import { Agent } from './agent.js';
 import { server } from './ontologies/server.js';
 import { core } from './ontologies/core.js';
 import { properties } from './urls.js';
+
+const REDEEM_AT = 'https://atomicdata.dev/properties/invite/redeemAt';
+
+function invitationOrigin(raw: string): string {
+  const url = new URL(raw);
+  const local =
+    ['localhost', '[::1]'].includes(url.hostname) ||
+    /^127(?:\.\d+){3}$/.test(url.hostname);
+  if (
+    !(url.protocol === 'https:' || (local && url.protocol === 'http:')) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== '/'
+  )
+    throw new Error('Invalid invitation server origin');
+
+  return url.origin;
+}
+
+/** Verify the signed destination before giving a node the bearer credential. */
+export function verifiedInviteServer(token: string): string | undefined {
+  const data = JSON.parse(atob(token));
+  const raw = data[REDEEM_AT];
+  if (raw === undefined) return undefined;
+  const key = agentPublicKey(
+    currentAgentSubject(data[properties.commit.signer]),
+  );
+  const signature = data[properties.commit.signature];
+  delete data[properties.commit.signature];
+  if (
+    !key ||
+    typeof raw !== 'string' ||
+    typeof signature !== 'string' ||
+    !verify(
+      decodeB64(signature),
+      new TextEncoder().encode(stringify(data)),
+      decodeB64(key),
+    )
+  )
+    throw new Error('Invalid invitation signature');
+
+  return invitationOrigin(raw);
+}
 
 /**
  * Generates a signed, stateless invite token.
@@ -24,6 +72,7 @@ export async function generateInviteToken(
   description?: string,
   browserPeer = false,
   maxUsages?: number,
+  serverOrigin?: string,
 ): Promise<string> {
   if (
     maxUsages !== undefined &&
@@ -55,6 +104,16 @@ export async function generateInviteToken(
 
   if (maxUsages !== undefined)
     signable[server.properties.usagesLeft] = maxUsages;
+
+  if (serverOrigin) {
+    const origin = invitationOrigin(serverOrigin);
+    if (
+      browserPeer ||
+      (/^https?:/i.test(target) && new URL(target).origin !== origin)
+    )
+      throw new Error('Open this resource on its own server before sharing it');
+    signable[REDEEM_AT] = origin;
+  }
 
   if (browserPeer)
     signable['https://atomicdata.dev/properties/invite/transport'] = 'webrtc';
