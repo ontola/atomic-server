@@ -5,6 +5,7 @@ import {
   DEMO_INVITE_NAME,
   FRONTEND_URL,
   INITIAL_TEST,
+  testStorageState,
   SERVER_URL,
   before,
   changeDrive,
@@ -47,11 +48,14 @@ test.describe('data-browser', async () => {
   });
 
   test('switch Server URL', async ({ page }) => {
-    await expect(page.locator(`text=${DEMO_INVITE_NAME}`)).not.toBeVisible();
-    await changeDrive('https://atomicdata.dev', page);
-    await expect(
-      page.locator(`text=${DEMO_INVITE_NAME}`).first(),
-    ).toBeVisible();
+    await signIn(page);
+    const { driveURL, driveTitle } = await newDrive(page);
+    await changeDrive(SERVER_URL, page);
+    await expect(currentDriveTitle(page)).toContainText(
+      new URL(SERVER_URL).hostname,
+    );
+    await changeDrive(driveURL, page, false);
+    await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   });
 
   test('sign in with secret, edit prole, sign out', async ({ page }) => {
@@ -172,7 +176,9 @@ test.describe('data-browser', async () => {
     expect(publicReadRightLocator(page)).not.toBeChecked();
 
     // Initialize unauthorized page for reader
-    const context2 = await browser.newContext();
+    const context2 = await browser.newContext({
+      storageState: testStorageState,
+    });
     const page2 = await context2.newPage();
     await page2.setViewportSize({ width: 1000, height: 400 });
     await page2.goto(FRONTEND_URL);
@@ -228,13 +234,8 @@ test.describe('data-browser', async () => {
       'Chat message not appearing directly after sending',
     ).toBeVisible();
 
-    const page2 = await openNewSubjectWindow(browser, chatRoomUrl);
-    // Second user
-    await signIn(page2);
-
-    // TODO: TEMP FIX, NO LONGER NEEDED IF #686 IS FIXED
-    page2.reload();
-
+    const page2 = await openNewSubjectWindow(browser, chatRoomUrl, true);
+    await page2.getByRole('button', { name: 'Set Drive' }).click();
     await expect(page2.locator(`text=${teststring}`)).toBeVisible();
     const teststring2 = `My reply: ${timestamp()}`;
     await inputLocator(page2).fill(teststring2);
@@ -251,15 +252,24 @@ test.describe('data-browser', async () => {
     // Create a new bookmark
     await newResource('bookmark', page);
 
-    // Fetch `example.com
-    const input = page.locator('[placeholder="https\\:\\/\\/example\\.com"]');
-    await input.click();
-    await input.fill('https://ontola.io');
+    const url = 'https://bookmarks.example/article';
+    await page.route('**/fetch-bookmark?*', route => {
+      expect(new URL(route.request().url()).searchParams.get('url')).toBe(url);
+      return route.fulfill({
+        json: {
+          name: 'Local bookmark fixture',
+          description: 'Saved article',
+          preview: 'A paragraph from the bookmarked article.',
+        },
+      });
+    });
+    const input = page.getByPlaceholder('https://example.com');
+    await input.fill(url);
     await page.locator(currentDialogOkButton).click();
-
     await expect(
-      page.locator(':text-is("Full-service")'),
-      'Page contents not properly imported',
+      page.getByText('A paragraph from the bookmarked article.', {
+        exact: true,
+      }),
     ).toBeVisible();
   });
 
@@ -338,23 +348,20 @@ test.describe('data-browser', async () => {
 
   test('configure drive page', async ({ page }) => {
     await signIn(page);
+    const { driveURL, driveTitle } = await newDrive(page);
+    await changeDrive(SERVER_URL, page);
     await openConfigureDrive(page);
-    const expectedTitle = new URL(SERVER_URL);
-    await expect(currentDriveTitle(page)).toContainText(expectedTitle.hostname);
-
-    // temp disable this, because of trailing slash in base URL
-    // await page.click(':text("https://atomicdata.dev") + button:text("Select")');
-    // await expect(currentDriveTitle(page)).toHaveText('Atomic Data');
-
+    await expect(page.getByLabel('Current Drive')).toHaveValue(
+      new RegExp(new URL(SERVER_URL).host),
+    );
+    await page
+      .getByText(driveURL, { exact: true })
+      .locator('..')
+      .getByRole('button', { name: 'Select' })
+      .click();
+    await expect(currentDriveTitle(page)).toHaveText(driveTitle);
     await openConfigureDrive(page);
-    await changeDrive('https://example.com', page, false);
-
-    await expect(currentDriveTitle(page)).toHaveText('example.com');
-
-    await openConfigureDrive(page);
-    await page.click(':text("https://atomicdata.dev") + button:text("Select")');
-    await expect(currentDriveTitle(page)).toHaveText('Atomic Data');
-    await openConfigureDrive(page);
+    await expect(page.getByLabel('Current Drive')).toHaveValue(driveURL);
   });
 
   test('form validation', async ({ page }) => {

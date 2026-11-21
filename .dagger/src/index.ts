@@ -14,7 +14,7 @@ import {
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
-const PLAYWRIGHT_VERSION = 'v1.49.1-noble';
+const PLAYWRIGHT_VERSION = 'v1.58.2-noble';
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -406,6 +406,7 @@ export class AtomicServer {
     // Setup e2e test environment
     const e2eContainer = playwrightContainer
       .withEnvVariable('CI', 'true')
+      .withDirectory('/app', browserContainer.directory('/app'))
       .withDirectory(
         '/app/e2e',
         this.source
@@ -416,24 +417,13 @@ export class AtomicServer {
           .withoutDirectory('test-results'),
       )
       .withWorkdir('/app/e2e')
-      .withExec(['pnpm', 'install'])
-      .withExec(['pnpm', 'exec', 'playwright', 'install'])
-      .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
-      .withDirectory('/app/react', browserContainer.directory('/app/react'))
-      .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
-      .withDirectory(
-        '/app/create-template',
-        browserContainer.directory('/app/create-template'),
-      )
-      .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
-      .withDirectory(
-        '/app/node_modules',
-        browserContainer.directory('/app/node_modules'),
-      )
+      .withExec(['pnpm', '--filter', '@tomic/e2e', 'install', '--frozen-lockfile'])
+      .withExec(['pnpm', 'exec', 'playwright', 'install', 'chromium'])
       .withEnvVariable('LANGUAGE', 'en_GB')
       .withEnvVariable('DELETE_PREVIOUS_TEST_DRIVES', 'false')
       .withEnvVariable('FRONTEND_URL', `http://${ATOMIC_DOMAIN}:9883`)
       .withEnvVariable('SERVER_URL', `http://${ATOMIC_DOMAIN}:9883`)
+      .withEnvVariable('ATOMIC_E2E_SETUP_INVITE', `http://${ATOMIC_DOMAIN}:9883/setup`)
       .withServiceBinding('atomic', this.atomicService())
       .withDirectory(
         '/app/e2e/tests',

@@ -17,20 +17,21 @@ test.describe('search', async () => {
   test.beforeEach(before);
 
   test('text search', async ({ page }) => {
-    const navigateToSearchPromise = page.waitForURL(
-      '**/app/search?query=welcome',
-      {
-        timeout: 10000,
-      },
-    );
-    await addressBar(page).pressSequentially('welcome');
-    await navigateToSearchPromise;
-    await expect(page.locator('text=Welcome to your')).toBeVisible();
-    const navigateToOntologyPromise = page.waitForNavigation();
-    await page.keyboard.press('Enter');
-    await navigateToOntologyPromise;
+    await signIn(page);
+    await newDrive(page);
+    const title = `Searchable${Date.now()}`;
+    await newResource('folder', page);
+    await setTitle(page, title);
+    await waitForSearchIndex(page);
+    await addressBar(page).fill(title);
+    await expect(page).toHaveURL(new RegExp('query=' + title));
     await expect(
-      page.getByRole('heading', { name: 'Default Ontology' }),
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toBeVisible();
+    await addressBar(page).press('Enter');
+    await expect(page).not.toHaveURL(/app\/search/);
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
     ).toBeVisible();
   });
 

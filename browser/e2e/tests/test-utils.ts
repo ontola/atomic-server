@@ -1,4 +1,15 @@
 import { Page, expect, Browser, Locator } from '@playwright/test';
+import {
+  SERVER_URL,
+  FRONTEND_URL,
+  testStorageState,
+} from '../test-environment';
+export {
+  SERVER_URL,
+  FRONTEND_URL,
+  testStorageState,
+} from '../test-environment';
+import { testAgentSecret } from '../test-agent';
 
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
@@ -8,10 +19,8 @@ export const PROPERTIES = {
 } as const;
 
 export const DELETE_PREVIOUS_TEST_DRIVES =
-  process.env.DELETE_PREVIOUS_TEST_DRIVES === 'false' ? false : true;
+  process.env.DELETE_PREVIOUS_TEST_DRIVES === 'true';
 
-export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
-export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const startDriveName = new URL(FRONTEND_URL).hostname;
 
 // TODO: Should use an env var so the CI can test the setup test.
@@ -74,15 +83,13 @@ export async function setTitle(page: Page, title: string) {
   await waiter;
 }
 
-/** Signs in using an AtomicData.dev test user */
+/** Sign in with this test's local agent. */
 export async function signIn(page: Page) {
   await page.click('text=Login');
   await expect(page.locator('text=edit data and sign Commits')).toBeVisible();
-  // If there are any issues with this agent, try creating a new one https://atomicdata.dev/invites/1
-  const test_agent =
-    'eyJzdWJqZWN0IjoiaHR0cHM6Ly9hdG9taWNkYXRhLmRldi9hZ2VudHMvaElNWHFoR3VLSDRkM0QrV1BjYzAwUHVFbldFMEtlY21GWStWbWNVR2tEWT0iLCJwcml2YXRlS2V5IjoiZkx0SDAvY29VY1BleFluNC95NGxFemFKbUJmZTYxQ3lEekUwODJyMmdRQT0ifQ==';
+  const secret = await testAgentSecret();
   await page.click('#current-password');
-  await page.fill('#current-password', test_agent);
+  await page.fill('#current-password', secret);
   await expect(page.locator('text=Edit profile')).toBeVisible();
   await expect(page.getByRole('main').getByText('Test User')).toBeVisible();
   await page.goBack();
@@ -233,9 +240,11 @@ export async function editProfileAndCommit(page: Page) {
   await page.getByLabel('Name').fill(username);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.locator('text=Resource saved')).toBeVisible();
-  await page.waitForURL(/\/app\/show/);
   await page.reload();
-  await expect(page.locator(`text=${username}`).first()).toBeVisible();
+  await openAgentPage(page);
+  await expect(
+    page.getByRole('main').getByText(username, { exact: true }),
+  ).toBeVisible();
 }
 
 export async function fillSearchBox(
@@ -289,7 +298,7 @@ export async function openNewSubjectWindow(
   url: string,
   doSignIn: boolean = false,
 ) {
-  const context2 = await browser.newContext();
+  const context2 = await browser.newContext({ storageState: testStorageState });
   const page = await context2.newPage();
   await page.goto(FRONTEND_URL);
 
@@ -346,7 +355,7 @@ export async function changeDrive(
 
     if ((await currentDriveInput.inputValue()) === subject) {
       // We are already on the correct drive, do nothing.
-      driveLink.click();
+      await driveLink.click();
 
       if (validate) {
         await expect(

@@ -12,10 +12,10 @@
     "url": "https://github.com/atomicdata-dev/atomic-server/"
   },
   "devDependencies": {
-    "@playwright/test": "1.58.2",
-    "@types/kill-port": "^2.0.3",
     "@axe-core/playwright": "^4.10.1",
-    "kill-port": "^2.0.1"
+    "@emoji-mart/data": "1.2.1",
+    "@playwright/test": "1.58.2",
+    "@tomic/lib": "workspace:*"
   },
   "scripts": {
     "playwright-install": "playwright install chromium",
@@ -26,6 +26,5 @@
     "test-new": "playwright codegen http://localhost:5173",
     "test-query": "DELETE_PREVIOUS_TEST_DRIVES=false playwright test -g",
     "test-ui": "playwright test --ui"
-  },
-  "dependencies": {}
+  }
 }

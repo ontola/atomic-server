@@ -41,7 +41,11 @@ export async function readZip(file: File): Promise<PluginMetadata> {
 
   for (const entry of entries) {
     if (!entry.directory && entry.filename === 'plugin.json') {
-      const metadata = await entry.getData(new TextWriter());
+      // The app's worker policy permits same-origin scripts. Read this small
+      // manifest directly so zip.js does not launch a data-URL worker.
+      const metadata = await entry.getData(new TextWriter(), {
+        useWebWorkers: false,
+      });
 
       return JSON.parse(metadata) as PluginMetadata;
     }

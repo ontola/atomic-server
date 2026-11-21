@@ -1,6 +1,10 @@
 # Atomic Data Browser E2E tests
 
-We use `playwright` to run end-to-end tests in the browser.
+We use `playwright` to run end-to-end tests in the browser. Each test signs in with a new agent on the server under test.
+Set `SERVER_URL` and `FRONTEND_URL` to the test instance. Set
+`ATOMIC_E2E_AGENT_INVITE` to a reusable local invite. For a freshly initialized,
+disposable server, set `ATOMIC_E2E_SETUP_INVITE` to its setup invite instead.
+The setup step uses it once to create a read-only invite for ordinary test agents.
 
 ```sh
 # install deps

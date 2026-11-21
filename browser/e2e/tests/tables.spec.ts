@@ -21,6 +21,12 @@ test.describe('tables', async () => {
 
   test('create and fill', async ({ page }) => {
     test.slow();
+    await page.route('https://cdn.jsdelivr.net/npm/@emoji-mart/data', route =>
+      route.fulfill({
+        contentType: 'application/json',
+        path: require.resolve('@emoji-mart/data'),
+      }),
+    );
 
     const newColumn = async (type: string) => {
       await page.getByRole('button', { name: 'Add column' }).click();

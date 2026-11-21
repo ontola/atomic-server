@@ -1,7 +1,10 @@
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { devices } from '@playwright/test';
 
+import { testStorageState } from './test-environment';
+
 const config: PlaywrightTestConfig = {
+  globalSetup: './test-agent',
   use: {
     screenshot: 'only-on-failure',
     viewport: { width: 1200, height: 800 },
@@ -9,23 +12,7 @@ const config: PlaywrightTestConfig = {
     timezoneId: 'Europe/Amsterdam',
     actionTimeout: 5000,
     trace: 'retain-on-failure',
-    storageState: {
-      cookies: [],
-      origins: [
-        {
-          origin: 'http://localhost:5173',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-        {
-          origin: 'http://localhost:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-        {
-          origin: 'http://atomic:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
-        },
-      ],
-    },
+    storageState: testStorageState,
   },
   reporter: [
     [

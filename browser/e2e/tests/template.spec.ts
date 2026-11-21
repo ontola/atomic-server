@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { exec } from 'child_process';
+import { promisify } from 'node:util';
 import {
   before,
   makeDrivePublic,
@@ -10,85 +10,74 @@ import {
   inDialog,
 } from './test-utils';
 import fs from 'node:fs';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
-import kill from 'kill-port';
-import { log } from 'node:console';
 import os from 'node:os';
 
-const EXEC_DIR = path.join(os.tmpdir(), 'atomic-data-template-tests');
-
-const pathToPackage = (
-  libName: 'lib' | 'cli' | 'react' | 'svelte' | 'create-template',
-) => {
-  return path.join(__dirname, '..', '..', libName);
-};
-
-const execAsync = async (command: Parameters<typeof exec>[0], cwd?: string) => {
-  return new Promise((resolve, reject) => {
-    const options = {
-      cwd: cwd ? path.join(EXEC_DIR, cwd) : EXEC_DIR,
-    };
-
-    exec(command, options, (err, stdout, stderr) => {
-      // eslint-disable-next-line no-console
-      console.log(stdout, stderr);
-
-      if (err) {
-        // eslint-disable-next-line no-console
-        console.log(
-          `Encountered error while excecuting ${command} in ${options.cwd}`,
-        );
-        reject(new Error(err.message));
-      }
-
-      if (stderr) {
-        reject(new Error(stderr.toString()));
-      }
-
-      resolve(stdout.toString());
-    });
-  });
-};
-
-// test.describe.configure({ mode: 'serial' });
+const run = promisify(execFile);
+let workspace: string;
 
 async function setupTemplateSite(serverUrl: string, siteType: string) {
-  if (!fs.existsSync(EXEC_DIR)) {
-    fs.mkdirSync(EXEC_DIR);
-    await execAsync('pnpm init');
-    await execAsync(`pnpm link ${pathToPackage('create-template')}`);
-  }
-
-  await execAsync(
-    `pnpm exec create-template ${siteType} --template ${siteType} --server-url ${serverUrl}`,
+  const packages = path.resolve(__dirname, '../..');
+  const cwd = path.join(workspace, siteType);
+  await run(
+    process.execPath,
+    [
+      path.join(packages, 'create-template/bin/src/index.js'),
+      siteType,
+      '--template',
+      siteType,
+      '--server-url',
+      serverUrl,
+    ],
+    { cwd: workspace },
   );
 
-  // We don't want a frozen lockfile because it would cause issues in the ci.
-  await execAsync('pnpm install --no-frozen-lockfile', siteType);
-  await execAsync(`pnpm link ${pathToPackage('cli')}`, siteType);
-  await execAsync(`pnpm link ${pathToPackage('lib')}`, siteType);
-
-  if (siteType === 'nextjs-site') {
-    await execAsync(`pnpm link ${pathToPackage('react')}`, siteType);
-  } else if (siteType === 'sveltekit-site') {
-    await execAsync(`pnpm link ${pathToPackage('svelte')}`, siteType);
+  // Install the same workspace libraries that produced the AtomicServer under test.
+  const manifest = path.join(cwd, 'package.json');
+  const pkg = JSON.parse(await fs.promises.readFile(manifest, 'utf8'));
+  const rootManifest = path.join(packages, 'package.json');
+  pkg.packageManager = JSON.parse(
+    await fs.promises.readFile(rootManifest, 'utf8'),
+  ).packageManager;
+  const bindings = siteType === 'nextjs-site' ? 'react' : 'svelte';
+  for (const name of ['cli', 'lib', bindings]) {
+    const deps = name === 'cli' ? pkg.devDependencies : pkg.dependencies;
+    deps['@tomic/' + name] = 'link:' + path.join(packages, name);
   }
-
-  await execAsync('pnpm update-ontologies', siteType);
+  await fs.promises.writeFile(manifest, JSON.stringify(pkg));
+  for (const args of [
+    ['install', '--no-frozen-lockfile'],
+    ['run', 'update-ontologies'],
+    ['run', 'build'],
+  ]) {
+    try {
+      await run('pnpm', args, { cwd });
+    } catch (error) {
+      const { stdout, stderr } = error as { stdout?: string; stderr?: string };
+      throw new Error(`pnpm ${args.join(' ')} failed:\n${stdout}\n${stderr}`);
+    }
+  }
 }
 
 function startServer(siteType: string) {
-  // Adjust runtime commands per template
-  const command =
+  const cwd = path.join(workspace, siteType);
+  const args =
     siteType === 'nextjs-site'
-      ? 'pnpm build && pnpm start'
-      : 'pnpm run build && NO_COLOR=1 pnpm preview';
-
-  return spawn(command, {
-    cwd: path.join(EXEC_DIR, siteType),
-    shell: true,
-  });
+      ? ['next/dist/bin/next', 'start', '--hostname']
+      : ['vite/bin/vite.js', 'preview', '--host'];
+  return spawn(
+    process.execPath,
+    [
+      path.join(cwd, 'node_modules', args[0]),
+      args[1],
+      args[2],
+      '127.0.0.1',
+      '--port',
+      process.env.ATOMIC_E2E_PREVIEW_PORT ?? '0',
+    ],
+    { cwd, env: { ...process.env, NO_COLOR: '1' } },
+  );
 }
 
 const waitForServer = (
@@ -104,7 +93,7 @@ const waitForServer = (
     childProcess.stdout?.on('data', data => {
       const message = data.toString();
 
-      const match = message.match(/http:\/\/localhost:\d+/);
+      const match = message.match(/http:\/\/(?:localhost|127\.0\.0\.1):\d+/);
 
       if (match) {
         clearTimeout(timeoutId); // Clear the timeout when resolved
@@ -133,6 +122,11 @@ const waitForServer = (
 };
 
 test.describe('Test create-template package', () => {
+  test.beforeAll(async () => {
+    workspace = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), 'atomic-template-'),
+    );
+  });
   test.beforeEach(before);
 
   test('apply next-js template', async ({ page }) => {
@@ -140,7 +134,7 @@ test.describe('Test create-template package', () => {
       true,
       'Template needs to be updated to Next.js 16 because we require React 19.2.0 or above.',
     );
-    test.slow();
+    test.setTimeout(300_000);
     await signIn(page);
     const drive = await newDrive(page);
     await makeDrivePublic(page);
@@ -165,9 +159,8 @@ test.describe('Test create-template package', () => {
 
     await setupTemplateSite(drive.driveURL, 'nextjs-site');
 
+    const child = startServer('nextjs-site');
     try {
-      //start server
-      const child = startServer('nextjs-site');
       const url = await waitForServer(child);
 
       // check if the server is running
@@ -187,18 +180,12 @@ test.describe('Test create-template package', () => {
       await expect(page.locator('body')).toContainText('Balloon');
       await expect(page.locator('body')).not.toContainText('coffee');
     } finally {
-      try {
-        await kill(3000);
-        log('Next.js server shut down successfully');
-        expect(true).toBe(true);
-      } catch (err) {
-        console.error('Failed to shut down Next.js server:', err);
-      }
+      child.kill();
     }
   });
 
   test('apply sveltekit template', async ({ page }) => {
-    test.slow();
+    test.setTimeout(300_000);
     await signIn(page);
     const drive = await newDrive(page);
     await makeDrivePublic(page);
@@ -217,8 +204,8 @@ test.describe('Test create-template package', () => {
 
     await setupTemplateSite(drive.driveURL, 'sveltekit-site');
 
+    const child = startServer('sveltekit-site');
     try {
-      const child = startServer('sveltekit-site');
       //start server
       const url = await waitForServer(child);
 
@@ -233,36 +220,24 @@ test.describe('Test create-template package', () => {
       await page.goto(`${url}/blog`);
 
       // Search for a blogpost
-      const searchInput = page.getByRole('searchbox');
-      await searchInput.fill('balloon');
-      await expect(page.locator('body')).toContainText('Balloon');
-      await expect(page.locator('body')).not.toContainText('coffee');
+      const coffee = page.getByRole('link', {
+        name: /Can You Really Survive on Coffee Alone/,
+      });
+      const balloon = page.getByRole('link', {
+        name: /The Biology of Balloon Animals/,
+      });
+      await expect(coffee).toBeVisible();
+      await expect(balloon).toBeVisible();
+      await page.getByRole('searchbox').fill('balloon');
+      await expect(coffee).toHaveCount(0);
+      await expect(balloon).toBeVisible();
     } finally {
-      try {
-        await kill(4174);
-        log('SvelteKit server shut down successfully');
-        // We need to wait for the process to be killed and playwright does not wait unless there is another expect coming.
-        expect(true).toBe(true);
-      } catch (err) {
-        console.error('Failed to shut down SvelteKit server:', err);
-      }
+      child.kill();
     }
   });
 
   test.afterAll(async () => {
-    if (!fs.existsSync(EXEC_DIR)) {
-      // eslint-disable-next-line no-console
-      console.log('No EXEC_DIR to delete, skipping...');
-
-      return;
-    }
-
-    try {
-      await fs.promises.rm(EXEC_DIR, { recursive: true, force: true });
-      // eslint-disable-next-line no-console
-      console.log('Cleared EXEC_DIR');
-    } catch (error) {
-      console.error(`Failed to delete ${EXEC_DIR}:`, error);
-    }
+    if (workspace)
+      await fs.promises.rm(workspace, { recursive: true, force: true });
   });
 });

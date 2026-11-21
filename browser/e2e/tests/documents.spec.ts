@@ -73,14 +73,24 @@ test.describe('documents', async () => {
 
     // Test if page1 can see the cursor of page2
     await expect(
-      page.getByLabel('Rich Text Editor').getByText('Test user edited'),
+      page
+        .getByLabel('Rich Text Editor')
+        .getByText('Test User', { exact: true }),
     ).toBeVisible();
 
-    // Delete the word paragraph.
-    await page2.keyboard.press('ArrowRight');
-    await page2.keyboard.down('Alt');
-    await page2.keyboard.press('Backspace');
-    await page2.keyboard.up('Alt');
+    // Replace the selected paragraph through the editor on the second device.
+    // Selection is explicit because word-deletion shortcuts differ by platform.
+    await page2
+      .getByLabel('Rich Text Editor')
+      .getByText(syncText, { exact: true })
+      .selectText();
+    await page2.keyboard.type('New');
+    await expect(
+      page
+        .getByLabel('Rich Text Editor')
+        .locator('p')
+        .filter({ hasText: /^New/ }),
+    ).toBeVisible();
 
     await expect(
       page.locator(`text=${syncText}`),
