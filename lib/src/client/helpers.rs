@@ -80,10 +80,12 @@ mod ssrf_guard {
         let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL '{url}': {e}"))?;
         match parsed.scheme() {
             "http" | "https" => {}
-            other => return Err(format!(
+            other => {
+                return Err(format!(
                 "Refusing to fetch '{url}': unsupported scheme '{other}' (only http/https allowed)"
             )
-            .into()),
+                .into())
+            }
         }
         if allow_private {
             return Ok(());

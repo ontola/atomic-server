@@ -605,7 +605,11 @@ impl PluginHostState {
             let has_storage =
                 PluginManifest::option_has_permission(manifest.as_ref(), PermissionType::Storage);
 
-            let perms = if has_storage { FsPerms::ReadWrite } else { FsPerms::ReadOnly };
+            let perms = if has_storage {
+                FsPerms::ReadWrite
+            } else {
+                FsPerms::ReadOnly
+            };
 
             builder
                 .preopened_dir(owned_folder_path, "/", perms)
@@ -1734,9 +1738,12 @@ mod path_safety_tests {
             let mut writer = zip::ZipWriter::new(cursor);
             let opts = zip::write::SimpleFileOptions::default();
             writer
-                .start_file(// assets_dir is <plugins_dir>/class-extenders/scoped/<subject>/<namespace>,
+                .start_file(
+                    // assets_dir is <plugins_dir>/class-extenders/scoped/<subject>/<namespace>,
                     // so five `..` escape plugins_dir entirely and land in the temp dir.
-                    "assets/../../../../../atomic_zipslip_proof.txt", opts)
+                    "assets/../../../../../atomic_zipslip_proof.txt",
+                    opts,
+                )
                 .unwrap();
             writer.write_all(b"PWNED BY ZIP-SLIP POC").unwrap();
             writer.finish().unwrap();
