@@ -642,6 +642,48 @@ describe('host-selected view authority', () => {
     ).toBe(false);
   });
 
+  it('preserves native retained-parent identity semantics for an explicit child page', async () => {
+    const ctx = setup();
+    Object.assign(ctx.profile, {
+      authoritativeQueries: true,
+      retainedIdentityProperties: [core.properties.parent],
+      authorizeRead: vi.fn(async () => {}),
+      queryMemberInScope: vi.fn(async (subject: string) => {
+        if (subject === CHILD)
+          throw new Error('This retained child is in Trash; restore it first');
+
+        return true;
+      }),
+    });
+    const fetch = vi.fn(async (subject: string) => {
+      const members =
+        new URL(subject).searchParams.get('include_trashed') === 'true'
+          ? [CHILD]
+          : [];
+
+      return {
+        getLoroDoc: () => {},
+        get: (property: string) =>
+          property === collections.properties.totalMembers
+            ? members.length
+            : members,
+      };
+    });
+    ctx.store.fetchResourceFromServer = fetch as never;
+    await expect(
+      ctx.request('query', {
+        property: core.properties.parent,
+        value: ROOT,
+        page: 0,
+        includeTrashed: false,
+      }),
+    ).rejects.toThrow('restore it first');
+    expect(
+      new URL(fetch.mock.calls[0][0]).searchParams.get('include_trashed'),
+    ).toBe('true');
+    expect(ctx.store.getResources).not.toHaveBeenCalled();
+  });
+
   it.each([
     { page: 1, pageSize: 100, start: 100, end: 200 },
     { page: 2, pageSize: 3, start: 6, end: 9 },

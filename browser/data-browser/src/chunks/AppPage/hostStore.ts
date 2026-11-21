@@ -69,6 +69,7 @@ async function readAuthoritativeChildPage(
   const page = query.page;
   if (
     query.property !== core.properties.parent ||
+    profile.retainedIdentityProperties?.includes(core.properties.parent) ||
     parent === undefined ||
     page === undefined ||
     !authorize ||
