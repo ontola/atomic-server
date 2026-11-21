@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
   commits,
   ResourceEvents,
@@ -97,26 +97,32 @@ export function useChatLogPages(
   };
 }
 
-/**
- * A number that changes whenever one of the pages changes: a commit from
- * another tab or agent, or an entry added here. Entries are not properties, so
- * the property hooks do not see them change.
- */
-export function useChatLogRevision(pages: string[]): number {
+/** Observe the Loro versions of the pages, including edits made between render and subscription. */
+export function useChatLogRevision(pages: string[]): string {
   const store = useStore();
-  const [revision, setRevision] = useState(0);
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const off = pages.flatMap(page => [
+        store.subscribe(page, notify),
+        store.getResourceLoading(page).on(ResourceEvents.LocalChange, notify),
+      ]);
 
-  useEffect(() => {
-    const bump = () => setRevision(r => r + 1);
-    const off = pages.flatMap(page => [
-      store.subscribe(page, bump),
-      store.getResourceLoading(page).on(ResourceEvents.LocalChange, bump),
-    ]);
+      return () => off.forEach(unsubscribe => unsubscribe());
+    },
+    [store, pages],
+  );
+  const getSnapshot = useCallback(
+    () =>
+      JSON.stringify(
+        pages.map(page => [
+          page,
+          store.getResourceLoading(page).getLoroDoc()?.frontiers(),
+        ]),
+      ),
+    [store, pages],
+  );
 
-    return () => off.forEach(unsubscribe => unsubscribe());
-  }, [store, pages]);
-
-  return revision;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** The entry behind an entry id (and its page changing under it), if loaded. */
@@ -128,9 +134,7 @@ export function useChatLogEntry(id: string): {
   const store = useStore();
   const parsed = parseEntryId(id);
   const page = parsed?.page;
-  const revision = useChatLogRevision(page ? [page] : NO_PAGES);
-  // Loaded pages are read by revision: an edit replaces the whole value.
-  void revision;
+  useChatLogRevision(page ? [page] : NO_PAGES);
   const entry = parsed
     ? store.getResourceLoading(parsed.page).getChatLogEntry(parsed.key)
     : undefined;

@@ -69,6 +69,7 @@ function storeWith(json: string, local: Uint8Array) {
 
   store.setClientDb({
     isReady: true,
+    isInitialized: true,
     waitForReady: async () => true,
     waitForInit: async () => true,
     flush: async () => undefined,
@@ -91,6 +92,30 @@ function storeWith(json: string, local: Uint8Array) {
 const settle = () => new Promise(resolve => setTimeout(resolve, 20));
 
 describe('a sync delta for a resource with no local Loro history', () => {
+  it('keeps the causal history when a collection returns the same row as JSON', async ({
+    expect,
+  }) => {
+    const { json, local } = history();
+    const { store } = storeWith(json, local);
+    store.applyIncoming({ subject: SUBJECT, loroBytes: local, source: 'ws-sync-push' });
+    const resource = await store.getResource(SUBJECT);
+    const version = resource.getLoroDoc()!.oplogVersion().encode();
+    store.hydrateResourceFromJsonAd(SUBJECT, json);
+    expect(resource.getLoroDoc()!.oplogVersion().encode()).toEqual(version);
+  });
+
+  it('reads the stored history when opening a row first seen in a collection', async ({
+    expect,
+  }) => {
+    const { json, local } = history();
+    const { store } = storeWith(json, local);
+    store.hydrateResourceFromJsonAd(SUBJECT, json);
+    const opened = await store.getResource(SUBJECT);
+    const original = new LoroLoader.Loro.LoroDoc();
+    original.import(local);
+    expect(opened.getLoroDoc()!.oplogVersion().encode()).toEqual(original.oplogVersion().encode());
+  });
+
   it('does not write a doc rebuilt from JSON-AD back to the local database', async ({
     expect,
   }) => {
