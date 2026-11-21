@@ -18,16 +18,16 @@ export function useAddToOntology(ontologySubject?: string) {
   const { drive: driveSubject } = useSettings();
   const drive = useResource<Server.Drive>(driveSubject);
 
-  const ontology = useResource<Core.Ontology>(
+  const targetSubject = useResource<Core.Ontology>(
     ontologySubject ?? drive.props.defaultOntology ?? unknownSubject,
-  );
+  ).subject;
 
   return useCallback(
     async (resource: Resource) => {
       const hasResolvedOntologySubject =
-        ontology.subject !== unknownSubject &&
-        !ontology.subject.startsWith('internal:') &&
-        !ontology.subject.includes('unknown-subject');
+        targetSubject !== unknownSubject &&
+        !targetSubject.startsWith('internal:') &&
+        !targetSubject.includes('unknown-subject');
 
       // The parent of a content-addressed property is part of its ID, so it
       // is never re-parented: it can only be listed in the ontology it
@@ -35,7 +35,7 @@ export function useAddToOntology(ontologySubject?: string) {
       const fixedParent = isContentAddressed(resource.subject);
       const currentParent = resource.get(core.properties.parent);
 
-      if (fixedParent && currentParent !== ontology.subject) {
+      if (fixedParent && currentParent !== targetSubject) {
         toast.error("A property can't be moved to another ontology.");
 
         return;
@@ -51,6 +51,11 @@ export function useAddToOntology(ontologySubject?: string) {
 
         return;
       }
+
+      // A rendered resource can still be a query projection. An edit needs
+      // the stored Loro history behind that projection before reading the list.
+      const ontology = await store.getResource<Core.Ontology>(targetSubject);
+      if (ontology.error) throw ontology.error;
 
       if (!fixedParent) {
         await resource.set(core.properties.parent, ontology.subject);
@@ -79,6 +84,6 @@ export function useAddToOntology(ontologySubject?: string) {
 
       await ontology.save();
     },
-    [store, drive, ontology],
+    [store, driveSubject, targetSubject],
   );
 }
