@@ -656,6 +656,7 @@ Two things worth knowing about the runners:
 | Stroke appended after sync propagates | `lib/src/sync/iroh_e2e.rs` |
 | Iroh initiator probes first: level drives end on `SYNC_OK` (`probe_hit`), a miss falls back to the full sparse `SYNC` and reconciles both ways; both ends reach live mode | `lib/src/sync/iroh_e2e.rs` (`e2e_probe_*`). Not covered: a responder without `sync-probe` / `sparse-sync` (no cheap way to hide a capability) |
 | A peer only receives what its agent may read | `iroh_e2e.rs`, `peer.rs` |
+| A hosted invite goes only to its verified issuer, and a refusal is final | `packages/atomic_store_flutter/rust/src/api/node.rs` (`the_issuing_servers_refusal_is_final`), `packages/atomic_store_flutter/test/node_parts_test.dart` (issuing host passed to signer) |
 | A peer cannot forge a third agent's resource | `iroh_e2e.rs` |
 | Relayed write accepted only for a drive we own and dialled | `peer.rs` |
 | Iroh accept side refuses any frame before `AUTH` (ERROR + closed stream), binds `AUTH.requestedSubject` to the handshake drive | `peer.rs` (`accept_gate_tests`, raw QUIC stream) |
@@ -2992,5 +2993,3 @@ checks for code moves, not new schema-validation or persistence semantics.
 Rust and browser tests cover issuer-signed invitation origins, peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
 
 Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
-
-The native bridge test `the_issuing_servers_refusal_is_final` checks an unrelated configured origin and a refused invitation at the verified origin. The Dart sharing tests check that the host chosen for a link reaches the signer.
