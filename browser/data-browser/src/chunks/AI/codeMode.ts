@@ -1,12 +1,20 @@
 // @wc-ignore-file
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
-import type { ToHost, ToWorker } from './codeModeSandbox';
 
 export const RUN_CODE = 'run_code';
 const TIMEOUT_MS = 30_000;
 const MAX_TOOL_CALLS = 50;
 const MAX_RESULT_CHARS = 100_000;
+
+export type ToHost =
+  | { type: 'call'; id: number; name: string; args: unknown }
+  | { type: 'done'; json: string; logs: string[] }
+  | { type: 'error'; message: string; logs: string[] };
+
+export type ToWorker =
+  | { type: 'run'; source: string; toolNames: string[] }
+  | { type: 'result'; id: number; value?: unknown; error?: string };
 
 /** The part of a `Worker` that `runCode` uses (tests pass a fake). */
 export interface CodeWorker {
@@ -20,10 +28,49 @@ export type CodeResult =
   | { result: unknown; logs?: string[] }
   | { error: string; logs?: string[] };
 
-const defaultWorker = (): CodeWorker =>
-  new Worker(new URL('./codeMode.worker.ts', import.meta.url), {
-    type: 'module',
-  }) as unknown as CodeWorker;
+/** No `allow-same-origin`: the frame cannot reach the app's storage or DOM. */
+export const FRAME_SANDBOX = 'allow-scripts';
+
+/**
+ * A hidden sandboxed iframe, behind the `Worker` surface `runCode` uses. It
+ * loads `public/code-frame.html` by URL: a `srcdoc` frame would inherit the
+ * app's CSP and block the frame's own script.
+ */
+const defaultWorker = (): CodeWorker => {
+  const iframe = document.createElement('iframe');
+  let ready = false;
+  const queue: ToWorker[] = [];
+
+  const worker: CodeWorker = {
+    onmessage: null,
+    onerror: null,
+    postMessage: m => {
+      if (ready) iframe.contentWindow?.postMessage(m, '*');
+      else queue.push(m);
+    },
+    terminate: () => {
+      window.removeEventListener('message', listener);
+      iframe.remove();
+    },
+  };
+
+  const listener = (e: MessageEvent) => {
+    if (e.source !== iframe.contentWindow) return;
+
+    if (e.data?.type === 'ready') {
+      ready = true;
+      queue.splice(0).forEach(worker.postMessage);
+    } else worker.onmessage?.({ data: e.data });
+  };
+
+  window.addEventListener('message', listener);
+  iframe.style.display = 'none';
+  iframe.setAttribute('sandbox', FRAME_SANDBOX);
+  iframe.src = `${window.location.origin}/code-frame.html`;
+  document.body.appendChild(iframe);
+
+  return worker;
+};
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

@@ -20,9 +20,6 @@ export default defineConfig(options => ({
     // reasoning as above: its own entry so hosts can point a `new Worker(...)`
     // at it without hand-maintaining a parallel copy.
     'plugin-run.worker': 'src/plugin-run.worker.ts',
-    // The sandbox's global denial, without the rest of the library, for workers
-    // that run model-written code.
-    'plugin-sandbox': 'src/plugin-sandbox.ts',
     // Kept out of `index` so the Temporal polyfill only loads for consumers
     // that expand recurring calendar events.
     'calendar-recurrence': 'src/calendar-recurrence.ts',

@@ -1,23 +1,18 @@
-// @wc-ignore-file
-/**
- * The sandbox half of `run_code`: runs the model's script and turns each
- * `tools.<name>(args)` into a message to the host. Free of Worker APIs so tests
- * can run it in-process; `codeMode.worker.ts` is the shell around it.
- */
+<!DOCTYPE html>
+<!--
+  The frame `run_code` (src/chunks/AI/codeMode.ts) runs model-written JS in.
+  Loaded by URL, not srcdoc, so it does not inherit the app's CSP; it carries
+  its own: no network, one inline script allowed by hash (not nonce: import()
+  would inherit a nonce and fetch any URL). Editing the script changes its
+  hash; codeMode.test.ts checks they agree.
+-->
+<html><head><meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Lsh205XzS7rsOCAqdbb4PRZkXjkV5ZeRgn/g/otzFTg=' 'unsafe-eval'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'" />
+<script type="module">
+const MAX_LOG_LINES = 50;
+const MAX_LOG_CHARS = 1000;
 
-export type ToHost =
-  | { type: 'call'; id: number; name: string; args: unknown }
-  | { type: 'done'; json: string; logs: string[] }
-  | { type: 'error'; message: string; logs: string[] };
-
-export type ToWorker =
-  | { type: 'run'; source: string; toolNames: string[] }
-  | { type: 'result'; id: number; value?: unknown; error?: string };
-
-export const MAX_LOG_LINES = 50;
-export const MAX_LOG_CHARS = 1000;
-
-const show = (v: unknown): string => {
+const show = v => {
   if (typeof v === 'string') return v;
 
   try {
@@ -27,14 +22,11 @@ const show = (v: unknown): string => {
   }
 };
 
-export function createSandbox(post: (m: ToHost) => void) {
-  const pending = new Map<
-    number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
-  >();
+function createSandbox(post) {
+  const pending = new Map();
   let nextId = 0;
 
-  return async (msg: ToWorker): Promise<void> => {
+  return async msg => {
     if (msg.type === 'result') {
       const p = pending.get(msg.id);
 
@@ -46,9 +38,9 @@ export function createSandbox(post: (m: ToHost) => void) {
       return;
     }
 
-    const logs: string[] = [];
+    const logs = [];
 
-    const log = (...args: unknown[]) => {
+    const log = (...args) => {
       if (logs.length < MAX_LOG_LINES)
         logs.push(args.map(show).join(' ').slice(0, MAX_LOG_CHARS));
     };
@@ -56,7 +48,7 @@ export function createSandbox(post: (m: ToHost) => void) {
     const tools = Object.fromEntries(
       msg.toolNames.map(name => [
         name,
-        (args: unknown) =>
+        args =>
           new Promise((resolve, reject) => {
             const id = nextId++;
 
@@ -83,3 +75,8 @@ export function createSandbox(post: (m: ToHost) => void) {
     }
   };
 }
+
+const handle = createSandbox(m => parent.postMessage(m, '*'));
+addEventListener('message', e => { if (e.source === parent) handle(e.data); });
+parent.postMessage({ type: 'ready' }, '*');
+</script></head><body></body></html>

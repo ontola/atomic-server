@@ -83,16 +83,6 @@
         "default": "./dist/calendar-recurrence.cjs"
       }
     },
-    "./plugin-sandbox.js": {
-      "import": {
-        "types": "./dist/src/plugin-sandbox.d.ts",
-        "default": "./dist/plugin-sandbox.js"
-      },
-      "require": {
-        "types": "./dist/src/plugin-sandbox.d.ts",
-        "default": "./dist/plugin-sandbox.cjs"
-      }
-    },
     "./client-db.worker.js": "./dist/client-db.worker.js",
     "./plugin-run.worker.js": "./dist/plugin-run.worker.js"
   },

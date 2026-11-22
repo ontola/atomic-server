@@ -1,9 +1,26 @@
 // @wc-ignore-file
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
-import { runCode, withCodeMode, type CodeWorker } from './codeMode';
-import { createSandbox, type ToHost } from './codeModeSandbox';
+import {
+  FRAME_SANDBOX,
+  runCode,
+  withCodeMode,
+  type CodeWorker,
+  type ToHost,
+} from './codeMode';
+
+const html = readFileSync(
+  new URL('../../../public/code-frame.html', import.meta.url),
+  'utf8',
+);
+const script = /<script type="module">([\s\S]*?)<\/script>/.exec(html)![1];
+/** The shipped sandbox logic: the script up to its wiring. */
+const createSandbox = new Function(
+  `${script.slice(0, script.indexOf('const handle ='))}; return createSandbox;`,
+)() as (post: (m: ToHost) => void) => (m: unknown) => Promise<void>;
 
 /** Evaluates the script in-process with the same sandbox logic as the worker. */
 class FakeWorker implements CodeWorker {
@@ -150,5 +167,22 @@ describe('withCodeMode', () => {
 
   it('does not add run_code for fewer than two tools', () => {
     expect(Object.keys(withCodeMode({ a: t(() => 1) }))).toEqual(['a']);
+  });
+});
+
+describe('code-frame.html', () => {
+  it('has no network, no ambient script sources, and a matching hash', () => {
+    const csp = /Content-Security-Policy" content="([^"]*)"/.exec(html)![1];
+    const scriptSrc = csp.split('; ').find(d => d.startsWith('script-src'))!;
+    const hash = createHash('sha256').update(script).digest('base64');
+
+    expect(csp).toContain("connect-src 'none'");
+    expect(csp).toContain("default-src 'none'");
+    expect(scriptSrc).toContain(`'sha256-${hash}'`);
+    expect(scriptSrc).not.toMatch(/https:|blob:|unsafe-inline|nonce/);
+  });
+
+  it('is loaded without same-origin access', () => {
+    expect(FRAME_SANDBOX).toBe('allow-scripts');
   });
 });
