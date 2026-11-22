@@ -43,8 +43,8 @@ describe('textToBlocks', () => {
     expect(JSON.stringify(blocks[0])).not.toContain('[ ]');
   });
 
-  it('gives every starter and the welcome document a task list', () => {
-    for (const id of ['student', 'team', 'personal', 'welcome']) {
+  it('gives every starter a task list', () => {
+    for (const id of ['student', 'team', 'personal']) {
       const plan = planTemplate(
         TEMPLATE_CATALOG.find(t => t.id === id)!,
         TEMPLATE_CATALOG,

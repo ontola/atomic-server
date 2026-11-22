@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_CATALOG } from './catalog';
+import { WELCOME_PART_COUNT, welcomeTemplate } from './welcome';
 import { planTemplate, type TemplateDefinition } from './model';
 import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 describe('shared template planning', () => {
@@ -73,7 +74,7 @@ describe('shared template planning', () => {
 });
 
 describe('welcome template', () => {
-  const welcome = TEMPLATE_CATALOG.find(t => t.id === 'welcome')!;
+  const welcome = welcomeTemplate();
 
   it('plans the Start here document, the tasks table and a canvas, in order', () => {
     const plan = planTemplate(welcome, TEMPLATE_CATALOG, true);
@@ -95,7 +96,9 @@ describe('welcome template', () => {
     );
     const links = [...doc.text.matchAll(/\{\{([\w/-]+)\}\}/g)].map(m => m[1]);
 
-    expect(lines.length).toBeLessThanOrEqual(10);
+    expect(lines.length).toBeLessThanOrEqual(6);
+    expect(doc.text).not.toContain('- [ ]');
+    expect(welcome.parts).toHaveLength(WELCOME_PART_COUNT);
     expect(links.length).toBeGreaterThan(0);
     expect(links.every(k => keys.includes(k))).toBe(true);
   });

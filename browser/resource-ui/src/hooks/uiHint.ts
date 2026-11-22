@@ -12,8 +12,7 @@ export type UiHintTarget =
   | 'new-row'
   | 'ai-button'
   | 'share-button'
-  | 'save-row'
-  | 'start-here';
+  | 'save-row';
 
 interface Active {
   target: UiHintTarget;

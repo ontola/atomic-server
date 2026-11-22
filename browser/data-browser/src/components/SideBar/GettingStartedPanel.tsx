@@ -63,7 +63,7 @@ export function GettingStartedPanel({
 }
 
 /** Targets that live in the sidebar, which is a drawer on a narrow screen. */
-const SIDEBAR_TARGETS: UiHintTarget[] = ['start-here', 'new-row'];
+const SIDEBAR_TARGETS: UiHintTarget[] = ['new-row'];
 
 function Steps({
   drive,
@@ -73,10 +73,7 @@ function Steps({
   placement: GettingStartedPlacement;
 }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, doneCount, startHere } = useOnboardingProgress(
-    drive.subject,
-    name,
-  );
+  const { steps, doneCount } = useOnboardingProgress(drive.subject, name);
   const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
     userSettingProps.onboardingPanelOpen,
     'gettingStartedPanelHeight.open',
@@ -108,21 +105,6 @@ function Steps({
       target: UiHintTarget;
     }
   > = {
-    start: {
-      title: 'Read Start here',
-      hint: 'A short tour of this drive, in its first document',
-      pointer: 'Open Start here',
-      target: 'start-here',
-      run: () => {
-        closeDrawer('start-here');
-        pointAt(
-          'start-here',
-          copy.start.pointer,
-          () => startHere && navigate(constructOpenURL(startHere)),
-          startHere,
-        );
-      },
-    },
     name: {
       title: 'Name your drive',
       hint: 'Give your drive a name: a team, company, class or household',
@@ -237,12 +219,7 @@ function Steps({
 
           showUiHint(target, pointer, {
             hover: true,
-            scope:
-              step.id === 'name'
-                ? drive.subject
-                : step.id === 'start'
-                  ? startHere
-                  : undefined,
+            scope: step.id === 'name' ? drive.subject : undefined,
           });
         };
 
@@ -314,12 +291,11 @@ function pointAt(
   target: UiHintTarget,
   text: string,
   fallback: () => void,
-  scope?: string,
 ): void {
   const deadline = Date.now() + 3000;
 
   const attempt = () => {
-    if (showUiHint(target, text, { scope, nudge: true })) return;
+    if (showUiHint(target, text, { nudge: true })) return;
     if (Date.now() < deadline) setTimeout(attempt, 100);
     else fallback();
   };
