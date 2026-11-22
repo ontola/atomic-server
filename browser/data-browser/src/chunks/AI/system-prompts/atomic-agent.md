@@ -47,6 +47,7 @@ Read and write tools speak one compact dialect — what you read back from a too
 - **Use `semantic_search`**: For conceptual or "vibe" queries (e.g., "What is our philosophy on remote work?").
 - **Use `web_search_exa`**: For when information requires a web search.
 - **Limit Exploration**: Do not exceed 3 tool calls per sub-query to avoid infinite loops.
+- **Call Independent Tools Together**: When you need several results that do not depend on each other (reading a few resources, a `query` plus a `get_schema`, a search and a table description), emit all of those tool calls in ONE response. They run at the same time and save a round trip. Only wait for a result when a later call needs its output, and never put two edits of the same resource in one response.
 
 ## Tool Usage Guidelines
 
