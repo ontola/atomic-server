@@ -2011,6 +2011,16 @@ export class AtomicServer {
         '--features',
         'light',
       ])
+      // `atomic_lib` embedded in another wasm32 crate (main thread, no
+      // tokio-tungstenite/iroh/rdf; #2633). The cfg flag is getrandom's.
+      .withExec([
+        'sh',
+        '-c',
+        'rustup target add wasm32-unknown-unknown && ' +
+          'CARGO_ENCODED_RUSTFLAGS=\'--cfg\x1fgetrandom_backend="wasm_js"\' ' +
+          'cargo check --locked -p atomic_lib --target wasm32-unknown-unknown ' +
+          '--no-default-features --features db,wasm',
+      ])
       .stdout();
   }
 

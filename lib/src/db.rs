@@ -34,6 +34,8 @@ mod query_index;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod recovery;
 pub mod redb_store;
+#[cfg(feature = "db")]
+pub mod snapshot_backend;
 pub mod website;
 pub mod write_log;
 /// The set of drives [`Db::migrate_messages_step`] may write chat log pages
@@ -1632,6 +1634,24 @@ impl Db {
         Db::from_kv(std::path::PathBuf::new(), Arc::new(redb_store), base_domain)
             .open()
             .await
+    }
+
+    /// Main-thread variant of [`Db::init_redb_opfs`]: the database lives in
+    /// memory, seeded from `bytes` (see [`snapshot_backend::snapshot_load`]).
+    /// Returns the Db and a handle to save it with
+    /// [`snapshot_backend::flush_snapshot`], which callers should invoke on
+    /// `visibilitychange` (hidden) and `pagehide`.
+    #[cfg(feature = "db")]
+    pub async fn init_redb_snapshot(
+        base_domain: Option<String>,
+        bytes: Option<Vec<u8>>,
+        encryption_key: Option<&[u8; 32]>,
+    ) -> AtomicResult<(Db, snapshot_backend::SnapshotBackend)> {
+        let (store, handle) = redb_store::RedbStore::new_snapshot(bytes, encryption_key)?;
+        let db = Db::from_kv(std::path::PathBuf::new(), Arc::new(store), base_domain)
+            .open()
+            .await?;
+        Ok((db, handle))
     }
 
     /// Creates a clone of the store with a different base_domain.
