@@ -2605,6 +2605,7 @@ export class Store {
    */
   private async fetchResourceFromClientDb(
     subject: string,
+    opts: { replace?: boolean } = {},
   ): Promise<Resource | null> {
     if (!this.clientDb) return null;
 
@@ -2624,6 +2625,7 @@ export class Store {
           subject,
           JSON.parse(jsonAd),
           snapshot ?? null,
+          opts.replace,
         ) ?? null
       );
     } catch {
@@ -2639,17 +2641,22 @@ export class Store {
    *  Returns the store's own copy, or `undefined` when the ingress refused
    *  the state (the subject was destroyed in this session). Never the
    *  Resource built here when it was refused: that one has no store, so a
-   *  caller that edits and saves it fails with "Resource has no store". */
+   *  caller that edits and saves it fails with "Resource has no store".
+   *
+   *  `replace` is an explicit re-read (a forced refresh): the JSON is newer
+   *  than the cached copy, so it is applied even when no snapshot came with
+   *  it. Without it, a ready resource with no snapshot is left alone. */
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array | null,
+    replace = false,
   ): Resource | undefined {
     const existing = this.getResolved(subject);
     const normalized = this.normalizeSubject(subject);
     const withoutHistory = this._withoutLoroHistory.has(normalized);
 
-    if (!snapshot?.length && existing?.isReady()) {
+    if (!snapshot?.length && existing?.isReady() && !replace) {
       if (snapshot === null && withoutHistory) {
         this._withoutLoroHistory.set(normalized, 'stored');
       }
@@ -4997,7 +5004,9 @@ export class Store {
       // the one from before it.
       const reread = this.noServer && opts.forceOverride;
       if (local?.isReady() && !reread) return local as Resource<C>;
-      const stored = await this.fetchResourceFromClientDb(normalizedSubject);
+      const stored = await this.fetchResourceFromClientDb(normalizedSubject, {
+        replace: reread,
+      });
       if (stored) return stored as Resource<C>;
       if (local?.isReady()) return local as Resource<C>;
       throw this.noServer
