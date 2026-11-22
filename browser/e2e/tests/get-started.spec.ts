@@ -22,11 +22,14 @@ test('Get started opens a workspace of your own, without an account', async ({
   await page.getByRole('button', { name: 'Get started' }).click();
   await expect(page).not.toHaveURL(/\/app\/welcome/, { timeout: 60_000 });
 
-  // They land on the page of the ready-made drive: the Getting started panel
-  // in the sidebar, the Welcome document as its first row.
-  await expect(page.getByTestId('current-drive-title')).toHaveText(
-    'Welcome to Atomic',
-  );
+  // They land on the Start here document of the ready-made drive, with the
+  // Getting started panel in the sidebar and the document as its first row.
+  await expect(editableTitle(page)).toHaveText('Start here', {
+    timeout: 30_000,
+  });
+  await expect(page.getByText('There is nothing you have to do')).toBeVisible();
+  // The welcome is prose: no checkboxes to tick.
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   // Arriving is not an invitation to rename: the title is not being edited.
   await expect(
     page.locator('[data-testid="editable-title"]:focus'),
@@ -34,10 +37,9 @@ test('Get started opens a workspace of your own, without an account', async ({
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel).toContainText('Getting started');
-  await expect(panel).toContainText('0 of 6');
+  await expect(panel).toContainText('0 of 5');
 
   for (const step of [
-    'Read Start here',
     'Name your drive',
     'Make something',
     'Talk to the AI',
@@ -52,7 +54,10 @@ test('Get started opens a workspace of your own, without an account', async ({
     panel.getByRole('button', { name: 'Invite someone' }),
   ).toBeEnabled();
   await expect(
-    page.getByRole('link', { name: 'Start here' }).first(),
+    page
+      .getByTestId('sidebar')
+      .getByRole('button', { name: 'Start here' })
+      .first(),
   ).toBeVisible();
   const items = page.locator('[data-sidebar-id]');
   await expect(items).toHaveText(['Start here', 'Tasks', 'Sketch']);
@@ -107,13 +112,12 @@ test('The Getting started sidebar panel is open, folds away and opens again, als
   const fold = panel.getByRole('button', { name: /Collapse Getting started/ });
   await fold.click();
   await expect(panel.getByText('Name your drive')).toBeHidden();
-  await expect(panel).toContainText('0 of 6');
+  await expect(panel).toContainText('0 of 5');
 
   await page.reload();
-  await expect(page.getByTestId('current-drive-title')).toHaveText(
-    'Welcome to Atomic',
-    { timeout: 30_000 },
-  );
+  await expect(editableTitle(page)).toHaveText('Start here', {
+    timeout: 30_000,
+  });
   // The panel needs the drive's rights and the agent's drive list before it
   // shows, so it arrives after the title. Wait for it folded, not for its
   // absence, or "hidden" passes before the panel has even rendered.
@@ -207,10 +211,13 @@ test('The sidebar drive header is split: the name opens the drive, the chevron t
   await expect(page).toHaveURL(here);
   await page.keyboard.press('Escape');
 
-  // The name goes to the drive's page.
-  await sidebar.getByRole('button', { name: 'Start here' }).first().click();
-  await expect(page).not.toHaveURL(here);
+  // The name goes to the drive's page, away from the document landed on.
   await open.click();
+  await expect(page).not.toHaveURL(here);
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'Welcome to Atomic',
+  );
+  await sidebar.getByRole('button', { name: 'Start here' }).first().click();
   await expect(page).toHaveURL(here);
 });
 
@@ -255,7 +262,7 @@ test('Name your drive renames the drive, not the document on screen', async ({
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
 
-  await page.locator('[data-sidebar-id]', { hasText: 'Start here' }).click();
+  // Landed on the document, not the drive.
   await expect(editableTitle(page)).toHaveText('Start here', {
     timeout: 30_000,
   });
@@ -330,37 +337,28 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   await expect(hint).toHaveCount(0);
 });
 
-test('Read Start here points at the Start here row and ticks once it is opened', async ({
-  page,
-}) => {
-  await page.goto(`${FRONTEND_URL}/app/welcome`);
-  await page.getByRole('button', { name: 'Get started' }).click();
-  const panel = page.getByTestId('getting-started');
-  await expect(panel).toBeVisible({ timeout: 60_000 });
-  await page.keyboard.press('Escape');
-
-  const step = panel.getByRole('button', { name: 'Read Start here' });
-  await expect(step).toHaveAttribute('data-done', 'false');
-
-  await step.click();
-  const hint = page.getByTestId('ui-hint-start-here');
-  await expect(hint).toHaveText('Open Start here');
-
-  // Using the row the hint points at opens the document and closes the hint.
-  await page.locator('[data-sidebar-id]').first().click();
-  await expect(hint).toHaveCount(0);
-  await expect(step).toHaveAttribute('data-done', 'true');
-});
-
 test('The Getting started list is on the drive page of a phone, with the sidebar closed', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${FRONTEND_URL}/app/welcome`);
   await page.getByRole('button', { name: 'Get started' }).click();
+  // They land on the Start here document; the list is on the drive's page.
+  await expect(editableTitle(page)).toHaveText('Start here', {
+    timeout: 60_000,
+  });
+  const driveSubject = await page.evaluate(async () => {
+    const subject = new URL(window.location.href).searchParams.get('subject')!;
+    const doc = await window.store.getResource(subject);
+
+    return doc.get('https://atomicdata.dev/properties/parent') as string;
+  });
+  await page.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(driveSubject)}`,
+  );
   const list = page.getByTestId('getting-started-page');
   await expect(list).toBeVisible({ timeout: 60_000 });
-  await expect(list).toContainText('0 of 6');
+  await expect(list).toContainText('0 of 5');
 
   // Sidebar closed: the page's own list is the way in.
   // (it only peeks out as a thin edge).
@@ -395,7 +393,15 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('0 of 6');
+  await expect(panel).toContainText('0 of 5');
+  // Share the drive, not the document landed on.
+  await page
+    .getByTestId('sidebar')
+    .getByRole('button', { name: 'Open Welcome to Atomic' })
+    .click();
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'Welcome to Atomic',
+  );
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   const dialog = currentDialog(page);
@@ -412,11 +418,11 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   await expect(row).toContainText('Invite link');
   await expect(row).toContainText('Copied');
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
 
   // Derived from the record, so it survives a reload and shows in the list.
   await page.reload();
-  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(
     currentDialog(page).locator('[data-test="share-invited"]'),
@@ -440,7 +446,15 @@ test('A denied clipboard still records the invite link and ticks the step', asyn
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('0 of 6');
+  await expect(panel).toContainText('0 of 5');
+  // Share the drive, not the document landed on.
+  await page
+    .getByTestId('sidebar')
+    .getByRole('button', { name: 'Open Welcome to Atomic' })
+    .click();
+  await expect(page.getByTestId('current-drive-title')).toHaveText(
+    'Welcome to Atomic',
+  );
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   const dialog = currentDialog(page);
@@ -454,5 +468,5 @@ test('A denied clipboard still records the invite link and ticks the step', asyn
   const row = dialog.locator('[data-test="share-invited"]');
   await expect(row).toContainText('Invite link', { timeout: 30_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
 });

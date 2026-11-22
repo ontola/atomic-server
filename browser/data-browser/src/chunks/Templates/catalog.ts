@@ -3,8 +3,6 @@ import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import type { TemplateDefinition, TemplatePart } from './model';
 const version = '1';
 
-/** The Welcome drive's first document; stored as written, never translated. */
-export const WELCOME_DOC_NAME = 'Start here';
 const table = (id: string, name?: string): TemplatePart => ({
   key: id,
   kind: 'template',
@@ -106,34 +104,6 @@ export const TEMPLATE_CATALOG: TemplateDefinition[] = [
           '- [ ] Save a book or article in {{reading-list/table}}',
         ].join('\n'),
       },
-    ],
-  },
-  {
-    id: 'welcome',
-    version,
-    title: 'Welcome to Atomic',
-    icon: '👋',
-    description: 'The drive a new person starts in.',
-    // Not offered as a starter: `startWelcomeDrive` builds it.
-    entryPoints: [],
-    parts: [
-      {
-        key: 'welcome',
-        kind: 'document',
-        name: WELCOME_DOC_NAME,
-        text: [
-          'Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do.',
-          '# Try it',
-          '- [ ] Open the {{project-tasks/table}} table and add a row.',
-          '- [ ] Draw something on the {{sketch}} canvas.',
-          '- [ ] Select text in this document to make it **bold**, a heading or a list.',
-          'Everything is stored on this device and only you can read it. You can edit or delete anything here, including this document.',
-          'The browser app can do everything; the mobile apps offer a focused subset that is still growing.',
-          'Keep your work safe: save your secret or connect an account or device. The **Getting started** card on the drive page shows what is left.',
-        ].join('\n'),
-      },
-      table('project-tasks', 'Tasks'),
-      { key: 'sketch', kind: 'canvas', name: 'Sketch' },
     ],
   },
 ];
