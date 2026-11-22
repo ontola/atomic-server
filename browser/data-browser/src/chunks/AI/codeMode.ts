@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { tool, type ToolSet } from 'ai';
+import { asSchema, tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
 export const RUN_CODE = 'run_code';
@@ -12,15 +12,15 @@ export type ToHost =
   | { type: 'done'; json: string; logs: string[] }
   | { type: 'error'; message: string; logs: string[] };
 
-export type ToWorker =
+export type ToFrame =
   | { type: 'run'; source: string; toolNames: string[] }
   | { type: 'result'; id: number; value?: unknown; error?: string };
 
 /** The part of a `Worker` that `runCode` uses (tests pass a fake). */
-export interface CodeWorker {
+export interface CodeFrame {
   onmessage: ((e: { data: ToHost }) => void) | null;
   onerror: ((e: { message?: string }) => void) | null;
-  postMessage(m: ToWorker): void;
+  postMessage(m: ToFrame): void;
   terminate(): void;
 }
 
@@ -36,12 +36,12 @@ export const FRAME_SANDBOX = 'allow-scripts';
  * loads `public/code-frame.html` by URL: a `srcdoc` frame would inherit the
  * app's CSP and block the frame's own script.
  */
-const defaultWorker = (): CodeWorker => {
+const defaultFrame = (): CodeFrame => {
   const iframe = document.createElement('iframe');
   let ready = false;
-  const queue: ToWorker[] = [];
+  const queue: ToFrame[] = [];
 
-  const worker: CodeWorker = {
+  const worker: CodeFrame = {
     onmessage: null,
     onerror: null,
     postMessage: m => {
@@ -54,8 +54,17 @@ const defaultWorker = (): CodeWorker => {
     },
   };
 
+  // The frame's own document loads once. A second load means the script
+  // navigated it (CSP cannot forbid that); the new page must get nothing more.
+  let loads = 0;
+
+  iframe.addEventListener('load', () => {
+    if (++loads > 1)
+      worker.onerror?.({ message: 'The script navigated its frame' });
+  });
+
   const listener = (e: MessageEvent) => {
-    if (e.source !== iframe.contentWindow) return;
+    if (e.source !== iframe.contentWindow || loads > 1) return;
 
     if (e.data?.type === 'ready') {
       ready = true;
@@ -80,11 +89,17 @@ async function callTool(
   args: unknown,
   id: number,
 ) {
-  const execute = tools[name]?.execute;
+  const { execute, inputSchema } = tools[name] ?? {};
 
   if (!execute) throw new Error(`Unknown tool: ${name}`);
 
-  let out = await execute(args as never, {
+  // The SDK validates a model's tool input before `execute`; the script's
+  // arguments get the same check (and the schema's defaults and transforms).
+  const checked = await asSchema(inputSchema).validate?.(args);
+
+  if (checked && !checked.success) throw checked.error;
+
+  let out = await execute((checked ? checked.value : args) as never, {
     toolCallId: `${RUN_CODE}-${id}`,
     messages: [],
   });
@@ -96,15 +111,15 @@ async function callTool(
   return JSON.parse(JSON.stringify(out ?? null));
 }
 
-/** Runs [source] in a fresh worker, answering its tool calls with [tools]. Never throws. */
+/** Runs [source] in a fresh frame, answering its tool calls with [tools]. Never throws. */
 export function runCode(
   source: string,
   tools: ToolSet,
-  createWorker: () => CodeWorker = defaultWorker,
+  createFrame: () => CodeFrame = defaultFrame,
   timeoutMs = TIMEOUT_MS,
 ): Promise<CodeResult> {
   return new Promise(resolve => {
-    let worker: CodeWorker;
+    let worker: CodeFrame;
     let calls = 0;
     let timer: ReturnType<typeof setTimeout>;
 
@@ -115,7 +130,7 @@ export function runCode(
     };
 
     try {
-      worker = createWorker();
+      worker = createFrame();
     } catch (e) {
       return resolve({ error: message(e) });
     }

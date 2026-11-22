@@ -8,7 +8,7 @@ import {
   FRAME_SANDBOX,
   runCode,
   withCodeMode,
-  type CodeWorker,
+  type CodeFrame,
   type ToHost,
 } from './codeMode';
 
@@ -23,15 +23,15 @@ const createSandbox = new Function(
 )() as (post: (m: ToHost) => void) => (m: unknown) => Promise<void>;
 
 /** Evaluates the script in-process with the same sandbox logic as the worker. */
-class FakeWorker implements CodeWorker {
-  onmessage: CodeWorker['onmessage'] = null;
-  onerror: CodeWorker['onerror'] = null;
+class FakeFrame implements CodeFrame {
+  onmessage: CodeFrame['onmessage'] = null;
+  onerror: CodeFrame['onerror'] = null;
   terminated = false;
   private handle = createSandbox((m: ToHost) =>
     queueMicrotask(() => this.onmessage?.({ data: m })),
   );
 
-  postMessage(m: Parameters<CodeWorker['postMessage']>[0]) {
+  postMessage(m: Parameters<CodeFrame['postMessage']>[0]) {
     void this.handle(m);
   }
 
@@ -40,7 +40,7 @@ class FakeWorker implements CodeWorker {
   }
 }
 
-const make = () => new FakeWorker();
+const make = () => new FakeFrame();
 const t = (fn: (a: never) => unknown) =>
   tool({ description: 'x', inputSchema: z.any(), execute: fn as never });
 
@@ -57,6 +57,26 @@ describe('runCode', () => {
     );
 
     expect(out).toEqual({ result: [20, 30] });
+  });
+
+  it('validates arguments against the tool schema, with its defaults', async () => {
+    const strict = tool({
+      description: 'x',
+      inputSchema: z.object({ n: z.number(), limit: z.number().default(5) }),
+      execute: (a: { n: number; limit: number }) => a.limit + a.n,
+    });
+
+    expect(
+      await runCode(`return await tools.strict({n: 1});`, { strict }, make),
+    ).toEqual({ result: 6 });
+
+    const bad = await runCode(
+      `return await tools.strict({n: 'x'});`,
+      { strict },
+      make,
+    );
+
+    expect(bad).toHaveProperty('error');
   });
 
   it('runs calls concurrently', async () => {
