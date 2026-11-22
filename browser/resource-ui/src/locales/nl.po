@@ -13742,7 +13742,7 @@ msgstr "Welkom bij Atomic"
 
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "The drive a new person starts in."
-msgstr "De schijf waarmee een nieuw persoon begint."
+msgstr "De drive waarmee iemand nieuw begint."
 
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Start here"
@@ -13750,12 +13750,12 @@ msgstr "Begin hier"
 
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do."
-msgstr "Welkom bij Atomic. Dit is een kleine schijf om in te spelen, in je eigen tempo. Je hoeft niets."
+msgstr "Welkom bij Atomic. Dit is een kleine drive om in te spelen, in je eigen tempo. Je hoeft niets te doen."
 
 #. 0: TASKS_LINK; 1: SKETCH_LINK
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "In it you will find a {0} table to keep track of things and a {1} canvas to draw on."
-msgstr "Hierin vind je een {0} tabel om dingen bij te houden en een {1} canvas om op te tekenen."
+msgstr "Hierin vind je de tabel {0} om dingen bij te houden en het canvas {1} om op te tekenen."
 
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Select text in this document to make it **bold**, a heading or a list."
