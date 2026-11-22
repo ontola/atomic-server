@@ -242,7 +242,11 @@ export interface DenyResult {
  * rather than on `globalThis` itself, so this shadows by defining an own
  * property, and looks up the original along the prototype chain to restore.
  */
-export function denyAmbientGlobals(scope: Record<string, unknown>): DenyResult {
+export function denyAmbientGlobals(
+  scope: Record<string, unknown>,
+  message: (name: string) => string = name =>
+    `run() cannot use ${name}: it has no I/O of its own. Return intents and let the host write, or declare a network capability so the host fetches for you.`,
+): DenyResult {
   const denied: string[] = [];
   const undeniable: string[] = [];
   const restores: Array<() => void> = [];
@@ -256,9 +260,7 @@ export function denyAmbientGlobals(scope: Record<string, unknown>): DenyResult {
       Object.defineProperty(scope, name, {
         configurable: true,
         get() {
-          throw new Error(
-            `run() cannot use ${name}: it has no I/O of its own. Return intents and let the host write, or declare a network capability so the host fetches for you.`,
-          );
+          throw new Error(message(name));
         },
       });
     } catch {

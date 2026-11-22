@@ -1,0 +1,154 @@
+// @wc-ignore-file
+import { describe, expect, it, vi } from 'vitest';
+import { tool, type ToolSet } from 'ai';
+import { z } from 'zod';
+import { runCode, withCodeMode, type CodeWorker } from './codeMode';
+import { createSandbox, type ToHost } from './codeModeSandbox';
+
+/** Evaluates the script in-process with the same sandbox logic as the worker. */
+class FakeWorker implements CodeWorker {
+  onmessage: CodeWorker['onmessage'] = null;
+  onerror: CodeWorker['onerror'] = null;
+  terminated = false;
+  private handle = createSandbox((m: ToHost) =>
+    queueMicrotask(() => this.onmessage?.({ data: m })),
+  );
+
+  postMessage(m: Parameters<CodeWorker['postMessage']>[0]) {
+    void this.handle(m);
+  }
+
+  terminate() {
+    this.terminated = true;
+  }
+}
+
+const make = () => new FakeWorker();
+const t = (fn: (a: never) => unknown) =>
+  tool({ description: 'x', inputSchema: z.any(), execute: fn as never });
+
+describe('runCode', () => {
+  it('chains a call, JS and a second call', async () => {
+    const tools: ToolSet = {
+      list: t(() => ({ ids: [1, 2, 3] })),
+      get: t((a: { ids: number[] }) => a.ids.map(i => i * 10)),
+    };
+    const out = await runCode(
+      `const r = await tools.list({}); return await tools.get({ids: r.ids.filter(i => i > 1)});`,
+      tools,
+      make,
+    );
+
+    expect(out).toEqual({ result: [20, 30] });
+  });
+
+  it('runs calls concurrently', async () => {
+    let active = 0;
+    let peak = 0;
+    const slow = t(async () => {
+      peak = Math.max(peak, ++active);
+      await new Promise(r => setTimeout(r, 10));
+      active--;
+
+      return 1;
+    });
+    const out = await runCode(
+      `return await Promise.all([tools.slow({}), tools.slow({}), tools.slow({})]);`,
+      { slow },
+      make,
+    );
+
+    expect(out).toEqual({ result: [1, 1, 1] });
+    expect(peak).toBe(3);
+  });
+
+  it('rejects the promise when a tool throws', async () => {
+    const tools = {
+      bad: t(() => {
+        throw new Error('nope');
+      }),
+    };
+
+    expect(
+      await runCode(
+        `try { await tools.bad({}); } catch (e) { return 'caught ' + e.message; }`,
+        tools,
+        make,
+      ),
+    ).toEqual({ result: 'caught nope' });
+    expect(await runCode(`await tools.bad({})`, tools, make)).toEqual({
+      error: 'nope',
+    });
+  });
+
+  it('takes the last value of an async iterable', async () => {
+    const tools = {
+      s: t(async function* () {
+        yield 1;
+        yield 2;
+      }),
+    };
+
+    expect(await runCode(`return await tools.s({})`, tools, make)).toEqual({
+      result: 2,
+    });
+  });
+
+  it('captures console.log and keeps it on errors', async () => {
+    expect(
+      await runCode(`console.log('a', {b: 1}); return 1`, {}, make),
+    ).toEqual({ result: 1, logs: ['a {"b":1}'] });
+    expect(
+      await runCode(`console.log('x'); throw new Error('e')`, {}, make),
+    ).toEqual({ error: 'e', logs: ['x'] });
+  });
+
+  it('times out and terminates the worker', async () => {
+    const w = make();
+    const out = await runCode(`await new Promise(() => {})`, {}, () => w, 20);
+
+    expect(out).toEqual({ error: 'Timed out after 0.02s' });
+    expect(w.terminated).toBe(true);
+  });
+
+  it('caps the number of tool calls', async () => {
+    const fn = vi.fn(() => 1);
+    const out = await runCode(
+      `for (let i = 0; i < 60; i++) await tools.a({}); return 'done'`,
+      { a: t(fn) },
+      make,
+    );
+
+    expect(out).toMatchObject({ error: expect.stringContaining('50') });
+    expect(fn).toHaveBeenCalledTimes(50);
+  });
+
+  it('errors on an oversize result instead of truncating', async () => {
+    const out = await runCode(`return 'x'.repeat(200000)`, {}, make);
+
+    expect(out).toMatchObject({ error: expect.stringContaining('limit') });
+  });
+
+  it('reports an unknown tool', async () => {
+    expect(await runCode(`await tools.ghost({})`, {}, make)).toMatchObject({
+      error: expect.stringContaining('tools.ghost'),
+    });
+  });
+});
+
+describe('withCodeMode', () => {
+  it('adds run_code listing the executable tools', async () => {
+    const tools = withCodeMode({
+      a: t(() => 1),
+      b: t(() => 2),
+      noExec: tool({ description: 'x', inputSchema: z.any() }),
+    });
+
+    expect(Object.keys(tools)).toContain('run_code');
+    expect(tools.run_code.description).toContain('a, b.');
+  });
+
+  it('does not add run_code for fewer than two tools', () => {
+    expect(Object.keys(withCodeMode({ a: t(() => 1) }))).toEqual(['a']);
+  });
+});

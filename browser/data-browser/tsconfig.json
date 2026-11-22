@@ -25,6 +25,7 @@
       "@tomic/lib/calendar-recurrence.js": [
         "../lib/src/calendar-recurrence.ts"
       ],
+      "@tomic/lib/plugin-sandbox.js": ["../lib/src/plugin-sandbox.ts"],
       "@integration-host/import-records": ["../lib/src/import-records.ts"],
       "@integration-host/plugin-connection": [
         "../lib/src/plugin-connection.ts"

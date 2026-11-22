@@ -48,6 +48,7 @@ Read and write tools speak one compact dialect — what you read back from a too
 - **Use `web_search_exa`**: For when information requires a web search.
 - **Limit Exploration**: Do not exceed 3 tool calls per sub-query to avoid infinite loops.
 - **Call Independent Tools Together**: When you need several results that do not depend on each other (reading a few resources, a `query` plus a `get_schema`, a search and a table description), emit all of those tool calls in ONE response. They run at the same time and save a round trip. Only wait for a result when a later call needs its output, and never put two edits of the same resource in one response.
+- **Use `run_code` for Multi-Step Work**: When a task needs several dependent steps (call A, transform the result with JS, feed it to call B), loops over many results, or filters or aggregates large results, write one `run_code` script so only the final answer comes back through the conversation. Use plain parallel tool calls for simple independent reads. For writes prefer the dedicated tools directly, and keep scripts small.
 
 ## Tool Usage Guidelines
 
