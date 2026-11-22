@@ -69,6 +69,7 @@ import {
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
+import { withCodeMode } from './codeMode';
 import { useConversationSummary } from './useConversationSummary';
 import { Popover } from '@tomic/ui/components/Popover';
 import { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
@@ -424,12 +425,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     additionalSystemPrompt: selectedAgent.skillsEnabled
       ? getSkillsSystemPromptPart()
       : undefined,
-    tools: {
+    tools: withCodeMode({
       ...(selectedAgent.canReadAtomicData ? atomicTools.read : {}),
       ...(selectedAgent.canWriteAtomicData ? atomicTools.write : {}),
       ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
-    },
+    }),
     resolveOutputModalities: getOutputModalities,
     resolveParameterSupport: checkORModelSupport,
     addContextToMessages,

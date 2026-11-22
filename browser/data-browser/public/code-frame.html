@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<!--
+  The frame `run_code` (src/chunks/AI/codeMode.ts) runs model-written JS in.
+  Loaded by URL, not srcdoc, so it does not inherit the app's CSP; it carries
+  its own: no network, one inline script allowed by hash (not nonce: import()
+  would inherit a nonce and fetch any URL). Editing the script changes its
+  hash; codeMode.test.ts checks they agree.
+-->
+<html><head><meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-drZW0vA1N2FKL3t7qvCfI35ZSuf4d/p1dRQgD0RwTfs=' 'unsafe-eval'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'" />
+<script type="module">
+const MAX_LOG_LINES = 50;
+const MAX_LOG_CHARS = 1000;
+
+const show = v => {
+  if (typeof v === 'string') return v;
+
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+};
+
+function createSandbox(post) {
+  const pending = new Map();
+  let nextId = 0;
+
+  return async msg => {
+    if (msg.type === 'result') {
+      const p = pending.get(msg.id);
+
+      pending.delete(msg.id);
+
+      if (msg.error !== undefined) p?.reject(new Error(msg.error));
+      else p?.resolve(msg.value);
+
+      return;
+    }
+
+    const logs = [];
+
+    const log = (...args) => {
+      if (logs.length < MAX_LOG_LINES)
+        logs.push(args.map(show).join(' ').slice(0, MAX_LOG_CHARS));
+    };
+
+    const tools = Object.fromEntries(
+      msg.toolNames.map(name => [
+        name,
+        args =>
+          new Promise((resolve, reject) => {
+            const id = nextId++;
+
+            pending.set(id, { resolve, reject });
+            post({ type: 'call', id, name, args });
+          }),
+      ]),
+    );
+
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+      const value = await new AsyncFunction('tools', 'console', msg.source)(
+        tools,
+        { log, info: log, warn: log, error: log },
+      );
+
+      post({ type: 'done', json: JSON.stringify(value) ?? 'null', logs });
+    } catch (e) {
+      post({
+        type: 'error',
+        message: e instanceof Error ? e.message : String(e),
+        logs,
+      });
+    }
+  };
+}
+
+const handle = createSandbox(m => port.postMessage(m));
+let port;
+// The parent hands over one private port; everything else travels on it, so a
+// page this frame navigates to cannot be talked to or hear from the parent.
+addEventListener('message', e => {
+  if (e.source !== parent || port || !e.ports[0]) return;
+  port = e.ports[0];
+  port.onmessage = ev => handle(ev.data);
+});
+parent.postMessage({ type: 'ready' }, '*');
+</script></head><body></body></html>

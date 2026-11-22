@@ -24,11 +24,14 @@ import { LazyMCPContext } from '../components/AI/MCP/LazyMCPProvider';
 import { LazyAIChangesContext } from '../components/AI/AIChanges/LazyAIChangesProvider';
 import { useAIChanges } from '../components/AIChangesContext';
 import { createAiReview } from './aiReview';
+import { RUN_CODE, withCodeMode } from '../chunks/AI/codeMode';
+import type { ToolSet } from 'ai';
 import atomicAgentPrompt from '../chunks/AI/system-prompts/atomic-agent.md?raw';
 import {
   fillAgentPrompt,
   registerAiTools,
   withSearchFallback,
+  EMBED_TOOL_DENYLIST,
   type EmbedAiTool,
 } from './aiTools';
 
@@ -121,6 +124,15 @@ export function AiToolsHost({ drive }: { drive?: string }): null {
           textSearch(store, query, { parents: [current], limit }),
       );
     }
+
+    // The script may only call what the app offers, not the refused tools.
+    const code = withCodeMode(
+      Object.fromEntries(
+        Object.entries(all).filter(([name]) => !(name in EMBED_TOOL_DENYLIST)),
+      ) as ToolSet,
+    )[RUN_CODE];
+
+    if (code) all[RUN_CODE] = code as EmbedAiTool;
 
     registerAiTools({
       tools: all,
