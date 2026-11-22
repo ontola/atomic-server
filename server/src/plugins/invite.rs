@@ -48,6 +48,7 @@ pub fn handle_invite_request<'a>(
         };
 
         let token = InviteToken::decode(&token_str)?;
+        token.check_http_redemption(&store.get_server_url())?;
         token.verify(store).await?;
 
         // GET is preview mode only: return a virtual Invite resource so users can review before accepting
@@ -124,6 +125,7 @@ pub fn handle_invite_post<'a>(
         };
 
         let token = InviteToken::decode(&token_str)?;
+        token.check_http_redemption(&store.get_server_url())?;
         token.verify(store).await?;
 
         let agent = match for_agent {
@@ -154,12 +156,20 @@ pub fn handle_invite_post<'a>(
             new_agent.save_locally(store).await?;
         }
 
+        // Reserve a limited place durably before the first grant. A retry by
+        // the same agent can finish a partial grant after a process failure.
+        if token.max_usages.is_some() {
+            token.record_acceptance(store, agent.as_str())?;
+            store.flush()?;
+        }
         add_rights(agent.as_str(), token.target.as_str(), token.write, store).await?;
         if token.write {
             add_rights(agent.as_str(), token.target.as_str(), false, store).await?;
         }
 
-        token.record_acceptance(store, agent.as_str())?;
+        if token.max_usages.is_none() {
+            token.record_acceptance(store, agent.as_str())?;
+        }
 
         let mut redirect = Resource::new_instance(urls::REDIRECT, store).await?;
         redirect
@@ -239,12 +249,13 @@ mod tests {
             .await
             .unwrap();
         let issuer = store.get_default_agent().unwrap();
-        let token = InviteToken::new(
+        let token = InviteToken::new_for_server(
             drive.to_string(),
             false,
             atomic_lib::utils::now() + 100_000,
             &issuer,
             Some(1),
+            Some(&store.get_server_url()),
         )
         .unwrap();
         let first = Agent::new(None).unwrap();

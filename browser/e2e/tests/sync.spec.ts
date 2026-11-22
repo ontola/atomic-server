@@ -5,6 +5,7 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getDevDriveSecret,
+  goOffline,
   waitForClientDbFlush,
   waitForClientDbReady,
   waitForSearchIndex,
@@ -199,6 +200,7 @@ test.describe('sync', () => {
     page,
     context,
     browser,
+    browserDiagnostics,
   }) => {
     test.slow();
 
@@ -261,7 +263,7 @@ test.describe('sync', () => {
     // down the open one, so the store's `serverConnected` flag won't flip
     // until something forces a close. Closing here also halts auto-retry
     // (close() sets `_closed=true`) so the backoff doesn't pile up.
-    await context.setOffline(true);
+    await goOffline(context, browserDiagnostics);
     await page.evaluate(() => {
       window.store.getDefaultWebSocket()?.close();
     });

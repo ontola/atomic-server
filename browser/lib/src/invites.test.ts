@@ -1,11 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { generateInviteToken } from './invites.js';
+import { generateInviteToken, verifiedInviteServer } from './invites.js';
 import { Agent } from './agent.js';
 import { server } from './ontologies/server.js';
 import { properties } from './urls.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 
 describe('invites', () => {
+  it.each([
+    ['https://team.example:443/', 'https://team.example'],
+    ['http://atomic.localhost:9883/', 'http://atomic.localhost:9883'],
+  ])('signs and verifies the issuing origin %s', async (input, expected) => {
+    const keys = await Agent.generateKeyPair();
+    const agent = await Agent.fromSecret(
+      Agent.buildSecret(keys.privateKey, `did:ad:agent:${keys.publicKey}`),
+    );
+    const token = await generateInviteToken(
+      'did:ad:drive',
+      agent,
+      false,
+      undefined,
+      undefined,
+      false,
+      1,
+      input,
+    );
+    expect(verifiedInviteServer(token)).toBe(expected);
+    const changed = JSON.parse(atob(token));
+    changed['https://atomicdata.dev/properties/invite/redeemAt'] =
+      'https://another.example';
+    expect(() => verifiedInviteServer(btoa(JSON.stringify(changed)))).toThrow(
+      'signature',
+    );
+    await expect(
+      generateInviteToken(
+        'https://other.example/d',
+        agent,
+        false,
+        undefined,
+        undefined,
+        false,
+        1,
+        'https://team.example',
+      ),
+    ).rejects.toThrow('own server');
+  });
+
   it('generates a valid invite token', async () => {
     const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
     const validSubject = 'https://atomicdata.dev/agents/test';

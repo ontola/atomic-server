@@ -1739,12 +1739,15 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
     let flag_bits = rest[0];
     let last = flag_bits & sync_push_flags::LAST != 0;
     let count = u16::from_be_bytes([rest[1], rest[2]]) as usize;
+    if count > SYNC_PUSH_MAX_ENTRIES || count > (rest.len() - 3) / 6 {
+        return None;
+    }
     let mut pos = 3;
     let mut entries = Vec::with_capacity(count);
 
     for _ in 0..count {
         if pos + 2 > rest.len() {
-            break;
+            return None;
         }
         let subj_len = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
         pos += 2;
@@ -1752,12 +1755,12 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
         pos += subj_len;
 
         if pos + 4 > rest.len() {
-            break;
+            return None;
         }
         let bytes_len =
             u32::from_be_bytes([rest[pos], rest[pos + 1], rest[pos + 2], rest[pos + 3]]) as usize;
         pos += 4;
-        let loro_bytes = rest.get(pos..pos + bytes_len)?.to_vec();
+        let loro_bytes = rest.get(pos..pos.checked_add(bytes_len)?)?.to_vec();
         pos += bytes_len;
 
         entries.push(SyncPushEntry {
@@ -1767,25 +1770,28 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
     }
 
     let mut envelopes = Vec::new();
-    if flag_bits & sync_push_flags::ENVELOPES != 0 && pos + 2 <= rest.len() {
+    if flag_bits & sync_push_flags::ENVELOPES != 0 {
+        if pos + 2 > rest.len() {
+            return None;
+        }
         let env_count = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
         pos += 2;
         for _ in 0..env_count {
             if pos + 2 > rest.len() {
-                break;
+                return None;
             }
             let subj_len = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
             pos += 2;
             let subject = std::str::from_utf8(rest.get(pos..pos + subj_len)?).ok()?;
             pos += subj_len;
             if pos + 4 > rest.len() {
-                break;
+                return None;
             }
             let json_len =
                 u32::from_be_bytes([rest[pos], rest[pos + 1], rest[pos + 2], rest[pos + 3]])
                     as usize;
             pos += 4;
-            let json = std::str::from_utf8(rest.get(pos..pos + json_len)?).ok()?;
+            let json = std::str::from_utf8(rest.get(pos..pos.checked_add(json_len)?)?).ok()?;
             pos += json_len;
             envelopes.push(SyncPushEnvelope {
                 subject: subject.to_string(),
@@ -2013,6 +2019,17 @@ mod tests {
         assert_eq!(decoded.drive, "did:ad:drive");
         assert_eq!(decoded.entries.len(), 2);
         assert!(decoded.last, "single-frame push must set LAST");
+    }
+
+    #[test]
+    fn sync_push_requires_complete_entries_within_the_chunk_limit() {
+        let entries = vec![("x", &b"data"[..]); SYNC_PUSH_MAX_ENTRIES];
+        let frame = encode_sync_push_with_envelopes("d", &entries, &[("x", "{}")], true);
+        assert!(decode_sync_push(&frame[1..]).is_some());
+        assert!(decode_sync_push(&frame[1..frame.len() - 1]).is_none());
+        assert!(decode_sync_push(&frame[1..7]).is_none());
+        let entries = vec![("x", &b"d"[..]); SYNC_PUSH_MAX_ENTRIES + 1];
+        assert!(decode_sync_push(&encode_sync_push("d", &entries, true)[1..]).is_none());
     }
 
     #[test]

@@ -251,6 +251,23 @@ void main() {
         (t, w, e, m) => 'tok+en/=',
         acceptor: accept);
 
+    test('passes the chosen issuing origin to the hosted token signer', () {
+      final calls = <String>[];
+      final s = Sharing(
+          Store(backend: InMemoryBackend(), drive: 'did:ad:test:home'),
+          (_, __, ___, ____) => 'peer-token',
+          serverSigner: (target, write, expires, limit, origin) {
+        calls.add('$origin/$limit');
+        return 'hosted-token';
+      });
+      expect(
+          s.inviteLink('https://team.example', 'did:ad:test:home',
+              maxUsages: 1),
+          contains('hosted-token'));
+      expect(s.inviteLink(null, 'did:ad:test:home'), contains('peer-token'));
+      expect(calls, ['https://team.example/1']);
+    });
+
     test('without a server origin the link names no server', () {
       final link = sharing().inviteLink(null, 'did:ad:test:home');
       expect(link, 'atomic:invite?token=tok%2Ben%2F%3D');

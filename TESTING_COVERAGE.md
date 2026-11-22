@@ -21,7 +21,11 @@ Cloud Vault backup download (#2560): `browser/data-browser/src/helpers/managed/v
 
 Resource.set(undefined) (#2315): `browser/lib/src/resource.set-undefined.test.ts` covers removing optional string/date values with default and known-datatype validation, avoiding unnecessary Property reads, exactly one LocalChange event, removal in an exported/reopened Loro snapshot, and rejection of invalid non-undefined values. These are library unit checks; no server is required.
 
+Browser state across reloads: `browser/lib/src/sync-delta-local-base.test.ts` verifies that local query results preserve document history and that opening a result restores its stored snapshot. `browser/resource-ui/src/hooks/useChatLog.test.tsx` covers a chat entry arriving between render and subscription. `browser/lib/src/make-drive-local.test.ts` covers waiting for an in-progress sync before verifying a drive for local use.
+
 Chat log entries (2026-10-09, `planning/chat-log.md`): `lib/tests/chat_log.rs` applies signed commits through the real rights path for a `ChatLog` page: an author adds, edits and deletes own entries; a member cannot touch another's entry, claim or forge one, or change page properties; a writer on the chat moderates; page genesis grants no `write` and refuses a self-granted one; entries more than ten minutes ahead of the server clock are rejected. `lib/src/db/test.rs` checks entries reach no propval, index or search row, and `measure_chat_log_entry_bytes` (ignored) prints bytes per message. `browser/lib/src/chat-log.test.ts` covers the TS helpers and that entry changes ride in a saved commit's `loroUpdate`. Step 2 (group chat and comments in the log): `browser/lib/tests/chat-log.integration.test.ts` runs two agents against a real server (an appender adds, edits and removes own entries, is refused on another's, a writer moderates). `helpers/chatLog.test.ts` covers entry ids, the merge and window of old messages and entries, and the page choice; `messageNotification.test.ts` covers entry notifications. Playwright: `chat-log.spec.ts` (entry, edit, reply, copy link, delete, reload, a second member seeing entries and edits live and no edit buttons on another's), `e2e.spec.ts` chatroom, `offline-chatroom.spec.ts`, `chat-mention.spec.ts`, `table-row-comments.spec.ts` (comment and count as entries) and `notifications.spec.ts` (chat, reply and comment toasts for entries, unseen badge). Migration of existing messages (`planning/chat-log.md`, "Existing messages"): `lib/src/db/chat_migration_test.rs` checks grouping by chat and by commented item, the split at 256 with the oldest on the first page, authors and times kept, deterministic keys, replies mapped across pages and left alone for an outside target, follow events keeping their kind, an edited message getting `e`, the old resource and its genesis commit row, snapshot, envelopes and indexes gone, a re-run being a no-op, a run that stopped after the pages and a straggler arriving meanwhile, the slices resuming from the stored state, a member editing own migrated entry and not another's while the chat owner can, a cache of a hosted drive only dropping rows that have their entry, opening a store migrating it, and the bytes per message before and after (`migrating_a_chat_shrinks_the_store`). `client-db.worker.migration.test.ts` covers the worker running the message slices after the index rebuild with progress and the local-only drives; `migratedEntryKey` has one test vector in Rust and TS; `helpers/chatLog.test.ts` covers hiding migrated old messages. Playwright: `chat-log-migration.spec.ts` shows old Message resources, then the same chat once their entries exist (stale copies hidden, one without an entry still listed, order kept); `meetings.spec.ts` covers follow events as entries. Not covered: the browser worker migrating a local-only drive end to end (WASM and OPFS), a real server restart with old messages in an e2e run, and an edited message's genesis commit row (kept). Not covered: concurrent edits of one entry by two members, a chat past one page (256 entries) in the browser, scrolling to a linked entry (not built), and DMs (later step).
+
+When a chat reloads, `snapshot-replace.test.ts` checks that fresh HTTP and WebSocket query snapshots replace earlier member lists. The chatroom and chat-log Playwright tests read the messages with a separate authenticated client before checking the reopened thread. The table creation hook test checks that adding a class preserves existing ontology members when its first view was incomplete.
 
 Tab writes to the local database as Loro bytes only (2026-11-17): `lib/src/db/test.rs` `loro_only_put_matches_json_ad_plus_snapshot_put` checks `persist_replicated_loro_snapshot` stores the row, the snapshot and the name/parent/resource-array query results of the JSON-AD + snapshot put for strings, an integer, a resource array, nested JSON and an atomicUrl, and `loro_only_put_rejects_a_snapshot_that_does_not_import` that a bad snapshot is an error. `browser/lib/src/persist-state.test.ts`, `client-db-durable-put.test.ts` (worker `putLoroSnapshot`: outbox rows and one flush) and `client-db.native.test.ts` cover the tab side. Not covered: the WASM binding `putLoroSnapshot(s)` itself (the wasm crate is wasm32-only; no Playwright run of a reload against it yet), and rows from old builds read back after a new-path write over them.
 
@@ -473,7 +477,11 @@ server's results, and a pasted URL is still selected directly. The server search
 is mocked. There is no E2E. A class the store has not fetched (after a reload,
 say) is only reachable by its URL.
 
-## Trash (Rust)
+## Trash
+
+`browser/data-browser/src/actions/trashActions.test.ts` checks which actions
+are available as the resource parent and the drive's Trash folder load or
+change. The Chromium `delete resource` test checks the menu after a reload.
 
 `lib/src/trash/tests.rs` (`cargo test -p atomic_lib --features db-redb --lib -- trash::`)
 covers `trash` / `restore` / `is_trashed` against a real `Db`: reparent plus
@@ -656,6 +664,7 @@ Two things worth knowing about the runners:
 | Stroke appended after sync propagates | `lib/src/sync/iroh_e2e.rs` |
 | Iroh initiator probes first: level drives end on `SYNC_OK` (`probe_hit`), a miss falls back to the full sparse `SYNC` and reconciles both ways; both ends reach live mode | `lib/src/sync/iroh_e2e.rs` (`e2e_probe_*`). Not covered: a responder without `sync-probe` / `sparse-sync` (no cheap way to hide a capability) |
 | A peer only receives what its agent may read | `iroh_e2e.rs`, `peer.rs` |
+| A hosted invite goes only to its verified issuer, and a refusal is final | `packages/atomic_store_flutter/rust/src/api/node.rs` (`the_issuing_servers_refusal_is_final`), `packages/atomic_store_flutter/test/node_parts_test.dart` (issuing host passed to signer) |
 | A peer cannot forge a third agent's resource | `iroh_e2e.rs` |
 | Relayed write accepted only for a drive we own and dialled | `peer.rs` |
 | Iroh accept side refuses any frame before `AUTH` (ERROR + closed stream), binds `AUTH.requestedSubject` to the handshake drive | `peer.rs` (`accept_gate_tests`, raw QUIC stream) |
@@ -1747,7 +1756,7 @@ setup currently fails opening OPFS before it can create its dev drive.
   retain dirty edits, and can be re-armed by a new edit; legacy messages and
   structured `SYNC_REJECTED` classification are covered.
 - `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not
-  duplicated over HTTP; a transport failure still falls back.
+  duplicated over HTTP; a transport failure still falls back. A destroy that the server already settled also reaches the outbox without a second HTTP request, with either the wire code or the legacy message.
 - `local-outbox.test.ts` ("classification is code-first") and
   `save-acknowledgement.test.ts` ("terminal drops are classified by error
   code"): a recognized `AtomicError.code` (`GENESIS_COLLISION`,
@@ -2988,3 +2997,9 @@ checks for code moves, not new schema-validation or persistence semantics.
 
 - `browser/table/src/QuickAddFields.test.tsx` preserves the existing flat draft, numeric conversion, single-preset behavior and input identity.
 - `browser/data-browser/src/chunks/TablePage/quickAdd.test.ts` retains stored-spec parsing and completeness coverage; host dialog/save lifecycle stays unchanged.
+
+Rust and browser tests cover issuer-signed invitation origins (including `atomic.localhost`), peer refusal for limited tokens, and the server's acceptance ledger. The Iroh invite integration test completes a device challenge before a peer receives the invitation.
+
+Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
+
+Notification tests in `lib/src/notify/tests.rs` cover direct and inherited grants, changes after queueing, independently shared unread items, and the delivery channels. The native client helper tests cover the exact private push origin, including port matching. Server-side push requests use the filtered DNS resolver and disable redirects and proxies.

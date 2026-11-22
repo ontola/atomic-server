@@ -839,17 +839,23 @@ export function encodeSyncPushChunks(
 }
 
 export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
+  if (data.length < 2) return undefined;
   const [drive, off1] = readStr16(data, 0);
-  if (off1 >= data.length) return undefined;
+  if (off1 + 3 > data.length) return undefined;
   const flags = data[off1];
   const last = (flags & SyncPushFlags.LAST) !== 0;
   const [count, off2] = readU16(data, off1 + 1);
+  if (count > SYNC_PUSH_MAX_ENTRIES || count * 6 > data.length - off2)
+    return undefined;
   const entries: DecodedSyncPushEntry[] = [];
   let off = off2;
 
   for (let i = 0; i < count; i++) {
+    if (off + 2 > data.length) return undefined;
     const [subject, sOff] = readStr16(data, off);
+    if (sOff + 4 > data.length) return undefined;
     const [bytesLen, bOff] = readU32(data, sOff);
+    if (bytesLen < 0 || bytesLen > data.length - bOff) return undefined;
     const loroBytes = data.subarray(bOff, bOff + bytesLen);
     entries.push({ subject, loroBytes });
     off = bOff + bytesLen;
@@ -857,15 +863,17 @@ export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
 
   const envelopes: SyncPushEnvelope[] = [];
 
-  if ((flags & SyncPushFlags.ENVELOPES) !== 0 && off + 2 <= data.length) {
+  if ((flags & SyncPushFlags.ENVELOPES) !== 0) {
+    if (off + 2 > data.length) return undefined;
     const [envCount, eOff] = readU16(data, off);
     off = eOff;
 
     for (let i = 0; i < envCount; i++) {
-      if (off + 2 > data.length) break;
+      if (off + 2 > data.length) return undefined;
       const [subject, sOff] = readStr16(data, off);
-      if (sOff + 4 > data.length) break;
+      if (sOff + 4 > data.length) return undefined;
       const [jsonLen, jOff] = readU32(data, sOff);
+      if (jsonLen < 0 || jsonLen > data.length - jOff) return undefined;
       const json = decoder.decode(data.subarray(jOff, jOff + jsonLen));
       envelopes.push({ subject, json });
       off = jOff + jsonLen;

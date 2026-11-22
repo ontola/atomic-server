@@ -1235,10 +1235,11 @@ export function useChatMessages(
   // better than the default, so leave it alone.
   const thread = useResource(subject);
   // A Conversation is a drive itself, so it carries no stamp of its own.
-  const threadDrive =
-    thread.get(DRIVE_PROP) ??
-    (thread.hasClasses(server.classes.drive) ? subject : undefined);
-  const drive = typeof threadDrive === 'string' ? threadDrive : undefined;
+  const [threadDrive] = useString(thread, DRIVE_PROP);
+  const [classes] = useArray(thread, core.properties.isA);
+  const drive =
+    threadDrive ??
+    (classes.includes(server.classes.drive) ? subject : undefined);
 
   const { collection, ready, invalidateCollection } = useCollection(
     {
@@ -1253,7 +1254,7 @@ export function useChatMessages(
   );
   const logPages = useChatLogPages(property, subject, drive, !sealed);
   // Entries are not properties: an entry from another tab or agent, or one
-  // added here, only shows up through this number changing.
+  // added here changes the page’s Loro version.
   const revision = useChatLogRevision(view.loadedPages);
   const { pages, ready: pagesReady } = logPages;
 

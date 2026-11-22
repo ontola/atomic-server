@@ -16,6 +16,7 @@ import {
   spaUrl,
   timestamp,
   topBarShareButton,
+  waitForStoredChatMessages,
   waitForSynced,
 } from './test-utils';
 
@@ -55,8 +56,7 @@ test.describe('chat log', () => {
     const second = `Second ${timestamp()}`;
     await send(page, second);
 
-    // Both are in the page of the log, in order, and survive a reload.
-    await waitForSynced(page);
+    await waitForStoredChatMessages(page, entry(page, first), [first, second]);
     await page.reload();
     await expect(entry(page, first)).toBeVisible({ timeout: 15_000 });
     await expect(entry(page, second)).toBeVisible();
@@ -109,7 +109,11 @@ test.describe('chat log', () => {
     await entry(page, second).hover();
     await entry(page, second).getByTitle('Delete message').click();
     await expect(entry(page, second)).toHaveCount(0);
-    await waitForSynced(page);
+    await waitForStoredChatMessages(page, entry(page, plain), [
+      edited,
+      reply,
+      plain,
+    ]);
     await page.reload();
     await expect(entry(page, edited).first()).toBeVisible({ timeout: 15_000 });
     await expect(entry(page, second)).toHaveCount(0);

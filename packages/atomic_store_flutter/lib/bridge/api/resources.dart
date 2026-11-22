@@ -109,7 +109,8 @@ abstract class AtomicStore implements RustOpaqueInterface {
       {required String target,
       required bool write,
       PlatformInt64? expiresAt,
-      PlatformInt64? maxUsages});
+      PlatformInt64? maxUsages,
+      String? serverOrigin});
 
   /// Create a resource of `class_url` named `name` ("Untitled" when empty)
   /// under `drive`, signed by this device's agent, and push it like every other

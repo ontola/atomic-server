@@ -65,9 +65,12 @@ pub async fn resolve(
 /// Bytes of a wasip2 package, from this node's blob store.
 pub async fn package_bytes(db: &Db, package: &str) -> AtomicResult<Vec<u8>> {
     let hash = package_hash(package)?;
-    db.get_blob(&hash)
-        .await?
-        .ok_or_else(|| AtomicError::from(format!("package blob {package} is not on this node")))
+    let missing = || AtomicError::from(format!("package blob {package} is not on this node"));
+    let size = db.blob_size(&hash).await?.ok_or_else(missing)?;
+    super::package_archive::check_package_size(size)?;
+    let bytes = db.get_blob(&hash).await?.ok_or_else(missing)?;
+    super::package_archive::check_package_size(bytes.len() as u64)?;
+    Ok(bytes)
 }
 
 /// One file of a release's package (`ui.js`, `ui.css`), when it has one.
@@ -76,15 +79,12 @@ pub async fn package_file(db: &Db, release_id: &str, name: &str) -> AtomicResult
         return Ok(None);
     };
     let bytes = package_bytes(db, &package).await?;
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-        .map_err(|e| AtomicError::from(format!("package is not a zip archive: {e}")))?;
-    let Ok(mut file) = zip.by_name(name) else {
+    let mut zip = super::package_archive::open(bytes)?;
+    let Ok(file) = zip.by_name(name) else {
         return Ok(None);
     };
-    let mut content = Vec::new();
-    std::io::Read::read_to_end(&mut file, &mut content)
-        .map_err(|e| AtomicError::from(format!("Could not read {name}: {e}")))?;
-    Ok(Some(content))
+    let size = file.size();
+    super::package_archive::read_file(file, size).map(Some)
 }
 
 fn package_hash(package: &str) -> AtomicResult<Vec<u8>> {
@@ -196,8 +196,7 @@ pub async fn publish_package(
     claimed_world: Option<&str>,
 ) -> AtomicResult<(String, PluginRelease, Manifest)> {
     use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec()))
-        .map_err(|e| AtomicError::from(format!("Body is not a zip archive: {e}")))?;
+    let mut zip = super::package_archive::open(bytes)?;
     let manifest = crate::plugins::wasm::describe_package(db, &mut zip).await?;
     expect_world(&manifest, claimed_world)?;
     let package = store_package(db, bytes).await?;

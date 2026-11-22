@@ -73,7 +73,8 @@ class Store {
     final resource = Resource.internal(this, null, {}, isNew: true);
     final classes = isA.toList();
     if (classes.isNotEmpty) {
-      resource.set(Props.isA, ArrayValue([for (final c in classes) LinkValue(c)]));
+      resource.set(
+          Props.isA, ArrayValue([for (final c in classes) LinkValue(c)]));
     }
     resource.set(Props.parent, LinkValue(parentSubject));
     props.forEach(resource.set);
@@ -180,10 +181,15 @@ class Store {
     }
 
     bool same(List<String> a, List<String> b) =>
-        a.length == b.length && Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
+        a.length == b.length &&
+        Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
-    List<Resource> only(List<Resource> all) =>
-        isA == null ? all : [for (final r in all) if (r.isA(isA)) r];
+    List<Resource> only(List<Resource> all) => isA == null
+        ? all
+        : [
+            for (final r in all)
+              if (r.isA(isA)) r
+          ];
 
     Future<void> run() async {
       try {

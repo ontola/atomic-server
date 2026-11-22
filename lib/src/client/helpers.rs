@@ -55,18 +55,22 @@ mod ssrf_guard {
             || v4.is_broadcast()  // 255.255.255.255
             || v4.is_unspecified()// 0.0.0.0
             || v4.is_documentation()
+            || o[0] == 0 || o[0] >= 224
+            || (o[0] == 198 && matches!(o[1], 18 | 19))
+            || o[..3] == [192, 0, 0] || o[..3] == [192, 88, 99]
             || (o[0] == 100 && (64..128).contains(&o[1])) // 100.64.0.0/10 CGNAT
     }
 
     fn ipv6_is_blocked(v6: Ipv6Addr) -> bool {
-        v6.is_loopback()
-            || v6.is_unspecified()
-            || v6.is_unique_local() // fc00::/7
-            || v6.is_unicast_link_local() // fe80::/10
-            || v6
-                .to_ipv4_mapped()
-                .map(ipv4_is_blocked)
-                .unwrap_or(false)
+        if let Some(v4) = v6.to_ipv4_mapped() {
+            return ipv4_is_blocked(v4);
+        }
+        let s = v6.segments();
+        // Global unicast only. Exclude documentation and transition prefixes
+        // that can route an embedded IPv4 address.
+        s[0] & 0xe000 != 0x2000
+            || s[0] == 0x2002
+            || (s[0] == 0x2001 && (s[1] == 0 || s[1] == 0xdb8))
     }
 
     pub fn ip_is_blocked(ip: IpAddr) -> bool {
@@ -141,13 +145,15 @@ mod ssrf_guard {
     }
 
     #[derive(Clone, Copy, Default)]
-    pub struct PublicOnlyResolver;
+    pub struct PublicOnlyResolver {
+        pub allow_private: bool,
+    }
 
     impl reqwest::dns::Resolve for PublicOnlyResolver {
         fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
             let host = name.as_str().to_string();
+            let allow_private = self.allow_private;
             Box::pin(async move {
-                let allow_private = allow_private_fetch();
                 let addrs =
                     tokio::task::spawn_blocking(move || resolve_public(&host, allow_private))
                         .await
@@ -243,7 +249,45 @@ fn untrusted_http_client_builder() -> reqwest::ClientBuilder {
 
     http_client_builder()
         .redirect(redirect_policy)
-        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver))
+        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver {
+            allow_private: ssrf_guard::allow_private_fetch(),
+        }))
+}
+
+/// A device supplies its push URL. Private network access is granted only to
+/// the exact origin configured by the operator. Never forward a push on redirect.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn notification_post(
+    endpoint: &str,
+    private_origin: Option<&url::Url>,
+) -> AtomicResult<reqwest::RequestBuilder> {
+    let url = url::Url::parse(endpoint).map_err(|_| "Invalid push endpoint")?;
+    if url.host().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("Invalid push endpoint".into());
+    }
+    let allow_private = private_origin.is_some_and(|o| {
+        o.origin() == url.origin()
+            && o.path() == "/"
+            && o.query().is_none()
+            && o.fragment().is_none()
+            && o.username().is_empty()
+            && o.password().is_none()
+    });
+    ssrf_guard::preflight(&url, allow_private).map_err(|_| "Push endpoint is not allowed")?;
+    let client = http_client_builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver {
+            allow_private,
+        }))
+        .build()
+        .map_err(|_| "Could not initialize push delivery")?;
+    Ok(client.post(url))
 }
 
 fn is_authentication_origin(target: &str, server: &str) -> bool {
@@ -707,6 +751,60 @@ pub async fn post_commit(commit: &crate::Commit, store: &impl Storelike) -> Atom
     post_commit_custom_endpoint(&endpoint, commit, store).await
 }
 
+/// Accepts an invite `token` at the server `origin` as `agent`: an
+/// authenticated `POST {origin}/invites?token=…`. The server checks the
+/// token and adds `agent` to the target's `read` (and `write`) list. This is
+/// the server form of an invite; the serverless one is redeemed at the
+/// inviter's device (`sync::invite`).
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn accept_invite_at_server(origin: &str, token: &str, agent: &Agent) -> AtomicResult<()> {
+    let parsed = crate::invite_token::InviteToken::decode(token)?;
+    parsed.check_expiry(crate::utils::now())?;
+    let key = parsed
+        .signer_public_key()
+        .ok_or("This invite has no verifiable issuer.")?;
+    parsed
+        .verify_signature(key)
+        .map_err(|_| "Invalid invitation signature")?;
+    let origin = parsed.check_redemption_server(origin)?;
+    let mut url = url::Url::parse(&origin).map_err(|_| "Invalid invitation server")?;
+    url.set_path("/invites");
+    url.query_pairs_mut().append_pair("token", token);
+    let mut client = http_client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy();
+    // HTTP is allowed only on loopback. Keep localhost names on the device
+    // even if its system resolver would send the name to an external DNS server.
+    if let ("http", Some(url::Host::Domain(name))) = (url.scheme(), url.host()) {
+        let loopbacks = [
+            std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
+            std::net::SocketAddr::from((std::net::Ipv6Addr::LOCALHOST, 0)),
+        ];
+        client = client.resolve_to_addrs(name, &loopbacks);
+    }
+    let client = client
+        .build()
+        .map_err(|_| "Could not initialize invite redemption")?;
+    let mut req = client
+        .post(url.clone())
+        .header("Accept", crate::parse::JSON_AD_MIME);
+    for (k, v) in get_authentication_headers_v2("POST", url.as_str(), b"", agent)? {
+        req = req.header(k, v);
+    }
+    let response = req.send().await.map_err(|_| {
+        crate::errors::AtomicError::upstream_unreachable(format!("Could not reach {origin}"))
+    })?;
+    let status = response.status();
+    if status.is_success() {
+        return Ok(());
+    }
+    Err(format!(
+        "The issuing server refused this invitation (HTTP {}).",
+        status.as_u16()
+    )
+    .into())
+}
+
 /// Posts a Commit to an endpoint
 /// Default commit endpoint is `https://example.com/commit`
 async fn post_commit_custom_endpoint(
@@ -888,6 +986,16 @@ mod ssrf_guard_tests {
             let ip: IpAddr = s.parse().unwrap();
             assert!(!ip_is_blocked(ip), "{s} must be allowed");
         }
+    }
+
+    #[test]
+    fn notification_post_allows_only_the_configured_private_origin() {
+        use super::notification_post;
+        let origin = url::Url::parse("https://127.0.0.1:7443").unwrap();
+        assert!(notification_post("https://push.example/device", None).is_ok());
+        assert!(notification_post("https://127.0.0.1/device", None).is_err());
+        assert!(notification_post("https://127.0.0.1/device", Some(&origin)).is_err());
+        assert!(notification_post("https://127.0.0.1:7443/device", Some(&origin)).is_ok());
     }
 
     #[test]

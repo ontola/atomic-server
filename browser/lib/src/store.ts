@@ -555,6 +555,9 @@ export interface IncomingChange {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+/** These endpoints build a new result document for each request. */
+const isComputedResult = (subject: string) =>
+  /^https?:\/\/[^?#]+\/(?:query|search)\?/.test(subject);
 /** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
 const GET_MANY_CHUNK = 200;
 /** Subjects per local-database read. The worker walks the list serially and a
@@ -781,10 +784,11 @@ export class Store {
    *
    * Two consequences. It must not be written back to the local database,
    * where it would replace the real history the query read the values from.
-   * And a delta that arrives for it is replayed on that local history before
-   * anything asks the server.
+   * A delta is replayed on the local history before anything asks the server.
+   * Opening a query projection reads its stored snapshot. A legacy stored row
+   * that itself has no snapshot does not need a second lookup.
    */
-  private _withoutLoroHistory: Set<string> = new Set();
+  private _withoutLoroHistory = new Map<string, 'projection' | 'stored'>();
 
   /** Agent subjects already re-checked against the server this session — see
    *  the agent branch in {@link fetchResourceWithLocalFallback}. */
@@ -1359,6 +1363,31 @@ export class Store {
         'Connect to a server before disconnecting this drive.',
         ErrorType.Server,
       );
+
+    // A drive opened during bootstrap can already have a reconciliation in
+    // flight. Let it settle before taking either inventory. A changed identity,
+    // blocked edit or new write during verification still fails the checks.
+    if (this.getSyncStatus().syncInProgress) {
+      await new Promise<void>(resolve => {
+        const finish = () => {
+          off();
+          clearTimeout(timer);
+          resolve();
+        };
+
+        const off = this.on(StoreEvents.SyncStatusChanged, status => {
+          if (
+            !status.syncInProgress ||
+            status.blockedCount ||
+            this.getAgent() !== agent ||
+            this.getClientDb() !== db ||
+            this.serverUrl !== serverUrl
+          )
+            finish();
+        });
+        const timer = setTimeout(finish, 10_000);
+      });
+    }
 
     const current = () => {
       const status = this.getSyncStatus();
@@ -2594,7 +2623,7 @@ export class Store {
         this.hydrateOfflineReplay(
           subject,
           JSON.parse(jsonAd),
-          snapshot ?? undefined,
+          snapshot ?? null,
         ) ?? null
       );
     } catch {
@@ -2614,9 +2643,30 @@ export class Store {
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
-    snapshot?: Uint8Array,
+    snapshot?: Uint8Array | null,
   ): Resource | undefined {
     const existing = this.getResolved(subject);
+    const normalized = this.normalizeSubject(subject);
+    const withoutHistory = this._withoutLoroHistory.has(normalized);
+
+    if (!snapshot?.length && existing?.isReady()) {
+      if (snapshot === null && withoutHistory) {
+        this._withoutLoroHistory.set(normalized, 'stored');
+      }
+
+      // A query's projection contains no causal history. Importing it as a new
+      // peer makes subsequent edits depend on operations the server never saw.
+      if (
+        this.clientDb?.isInitialized &&
+        existing.get(commits.properties.lastCommit) !==
+          parsed[commits.properties.lastCommit]
+      ) {
+        void this.hydrateFromLocalDb(normalized).catch(() => undefined);
+      }
+
+      return existing;
+    }
+
     const resource = new Resource(subject);
     resource.applyHydratedValues(
       Object.entries(parsed).filter(([key]) => key !== '@id') as [
@@ -2637,7 +2687,10 @@ export class Store {
       // Only when nothing with real history is here to merge into: a
       // placeholder, or nothing at all.
       if (!existing || existing.loading) {
-        this._withoutLoroHistory.add(this.normalizeSubject(subject));
+        this._withoutLoroHistory.set(
+          normalized,
+          snapshot === undefined ? 'projection' : 'stored',
+        );
       }
     }
 
@@ -2646,6 +2699,8 @@ export class Store {
       subject: resource.subject,
       resource,
       source: 'offline-replay',
+      replaceLoroDocsFromRemote:
+        !!snapshot?.length && withoutHistory && !existing?.hasUnsavedChanges(),
     });
 
     return outcome === 'applied' ? this.getResolved(subject) : undefined;
@@ -2997,7 +3052,11 @@ export class Store {
       this.addResource(change.resource, {
         skipCommitCompare: true,
         alias,
-        replaceLoroDocsFromRemote: change.replaceLoroDocsFromRemote,
+        replaceLoroDocsFromRemote:
+          change.replaceLoroDocsFromRemote ||
+          (change.source === 'http-fetch' &&
+            !change.resource.error &&
+            isComputedResult(change.resource.subject)),
       });
 
       return 'applied';
@@ -3007,6 +3066,12 @@ export class Store {
 
     const subject = this.normalizeSubject(change.subject);
     const existing = this.resources.get(this.aliases.get(subject) ?? subject);
+    // A query's definition can have the same commit on successive GETs.
+    // The answers have independent Loro histories and can contain different rows.
+    const freshResult =
+      change.source === 'ws-pending-get' &&
+      !!change.replaceLoroDocsFromRemote &&
+      isComputedResult(subject);
 
     // Echo dedup ⇒ no notify. Two ways to recognise our own commit: the
     // cached `lastCommit` matches (the ack already landed), or the id's
@@ -3032,6 +3097,7 @@ export class Store {
 
     if (
       !change.forceNotify &&
+      !freshResult &&
       existing &&
       !existing.loading &&
       !existing.error &&
@@ -3086,7 +3152,8 @@ export class Store {
       // two documents could no longer be merged afterwards. Replacing is for
       // a placeholder or a doc rebuilt without history (see
       // `replayOnLocalBase`, which makes the same call).
-      (this._withoutLoroHistory.has(subject) ||
+      (freshResult ||
+        this._withoutLoroHistory.has(subject) ||
         !this.hasRenderableContent(resource));
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
 
@@ -4508,7 +4575,7 @@ export class Store {
         hasLocalData = this.hydrateResourceFromJson(
           subject,
           JSON.parse(jsonAd),
-          snapshot ?? undefined,
+          snapshot ?? null,
         );
       } catch (e) {
         console.warn(`[ClientDb] OPFS lookup failed for "${subject}":`, e);
@@ -4806,7 +4873,7 @@ export class Store {
   private hydrateResourceFromJson(
     subject: string,
     parsed: Record<string, unknown>,
-    snapshot?: Uint8Array,
+    snapshot?: Uint8Array | null,
   ): boolean {
     // `removeResource` tombstoned this subject in OPFS, but the worker may
     // not have processed that yet when a read races the delete. Whatever is
@@ -5417,6 +5484,13 @@ export class Store {
     }
 
     if (
+      this.clientDb?.isInitialized &&
+      this._withoutLoroHistory.get(resolved) === 'projection'
+    ) {
+      void this.hydrateFromLocalDb(resolved).catch(() => undefined);
+    }
+
+    if (
       !opts.allowIncomplete &&
       resource.loading === false &&
       !resource.error &&
@@ -5612,6 +5686,13 @@ export class Store {
       await this.fetchResourceWithLocalFallback(normalized);
       found =
         (this.resources.get(resolved) as Resource<C> | undefined) ?? found;
+    }
+
+    if (
+      this.clientDb?.isInitialized &&
+      this._withoutLoroHistory.get(resolved) === 'projection'
+    ) {
+      await this.hydrateFromLocalDb(resolved);
     }
 
     if (found.isReady() || found.error) {
@@ -8160,7 +8241,8 @@ export class Store {
 
         if (
           isUnrecoverableCommitError(message, code) ||
-          isTerminalCommitError(message, code)
+          isTerminalCommitError(message, code) ||
+          (commit.destroy && isSettledDestroyRefusal(message, code))
         ) {
           throw e;
         }

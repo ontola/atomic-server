@@ -80,7 +80,9 @@ const isConversation = (ctx: ActionContext): boolean =>
 // Trash membership is the direct parent only: items nested deeper in a trashed
 // folder travel with it, so only the folder itself shows Restore.
 const inTrash = (ctx: ActionContext): boolean =>
-  ctx.store.isTrashed(ctx.resource, ctx.drive);
+  !!ctx.trashFolder &&
+  ctx.parent === ctx.trashFolder &&
+  ctx.subject !== ctx.trashFolder;
 
 /** The drive itself and its Trash folder cannot be moved to the Trash. */
 const isTrashable = (ctx: ActionContext): boolean => {
@@ -93,7 +95,7 @@ const isTrashable = (ctx: ActionContext): boolean => {
     return false;
   }
 
-  return ctx.subject !== ctx.store.peekTrashFolder(ctx.drive);
+  return ctx.subject !== ctx.trashFolder;
 };
 
 /**

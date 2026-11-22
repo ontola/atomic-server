@@ -1,7 +1,9 @@
+import { Agent, enableLoro, Store } from '@tomic/lib';
 import {
   Page,
   expect,
   Browser,
+  type BrowserContext,
   ConsoleMessage,
   Request,
   Locator,
@@ -80,6 +82,27 @@ export const clickPageEdit = (page: Page) =>
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
+
+/** Take this test offline while allowing one interrupted server metadata refresh. */
+export function goOffline(
+  context: BrowserContext,
+  browserDiagnostics: Pick<DiagnosticCollector, 'expect'>,
+): Promise<void> {
+  const metadataUrl = new URL('/server', SERVER_URL).href.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&',
+  );
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: net::ERR_INTERNET_DISCONNECTED$/,
+    'Disconnecting the browser can interrupt the server metadata refresh.',
+    1,
+    new RegExp(`^${metadataUrl}$`),
+    { optional: true },
+  );
+
+  return context.setOffline(true);
+}
 
 /**
  * Rewrite a server-origin URL onto the SPA origin Playwright drives.
@@ -1549,6 +1572,47 @@ export async function waitForClientDbFlush(
   }, opts.required === true);
 }
 
+/** Wait for a chat log to round-trip before a reload discards the optimistic UI. */
+export async function waitForStoredChatMessages(
+  page: Page,
+  entry: Locator,
+  texts: string[],
+) {
+  const id = await entry.getAttribute('about');
+  if (!id?.includes('#')) throw new Error('Chat entry has no log page');
+  const [subject] = id.split('#');
+  const agent = await Agent.fromSecret(await getDevDriveSecret(page));
+  const serverUrl = await page.evaluate(() => window.store.getServerUrl());
+  await enableLoro();
+  // The browser's own socket merges GET replies into its optimistic resource.
+  // A separate reader has no copy of the log and cannot prime the browser.
+  const reader = new Store({ serverUrl, agent });
+  const socket = reader.getDefaultWebSocket();
+  if (!socket) throw new Error('Missing WebSocket for the chat log reader');
+
+  try {
+    expect(await reader.waitForServerConnected(15_000)).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          try {
+            const log = await socket.fetch(subject);
+
+            return log.listChatLogEntries().map(message => message.entry.t);
+          } catch (err) {
+            return String(err);
+          }
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual(texts);
+  } finally {
+    socket.close();
+  }
+
+  await waitForSynced(page);
+}
+
 /**
  * Wait until nothing local is still waiting to reach the server, and what
  * reached it is also on disk here.
@@ -1666,7 +1730,8 @@ export async function waitForDriveSettled(page: Page, timeoutMs = 30_000) {
         !s.syncInProgress &&
         s.pendingDirtyCount === 0 &&
         dbOk &&
-        !!s.lastDriveSync
+        !!s.drive &&
+        s.lastDriveSync?.drive === s.drive
       );
     },
     undefined,

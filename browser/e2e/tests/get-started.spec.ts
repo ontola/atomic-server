@@ -1,11 +1,13 @@
 import { test, expect } from './fixtures';
 import {
   FRONTEND_URL,
+  currentDialog,
   devDrive,
   getDevDriveSecret,
   openNewSubjectWindow,
   editableTitle,
   sideBarDriveSwitcher,
+  waitForSynced,
 } from './test-utils';
 
 /**
@@ -169,7 +171,7 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Clicking it opens the dialog and leaves the page where it is.
   const drive = page.url();
   await row.click();
-  const dialog = page.getByRole('dialog');
+  const dialog = currentDialog(page);
   await expect(
     dialog.getByRole('heading', { name: 'Save your work' }),
   ).toBeVisible();
@@ -230,7 +232,11 @@ test('Creating a new drive leaves exactly one Getting started panel', async ({
   const hint = page.getByTestId('ui-hint-drive-switcher');
   await expect(hint).toBeVisible({ timeout: 30_000 });
   await expect(hint).toHaveText('Switch back to your previous drive here');
-  await page.getByTestId('ui-hint-close').click();
+  await page
+    .getByRole('dialog')
+    .filter({ has: hint })
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
   await expect(hint).toHaveCount(0);
 
   await expect(panels).toHaveCount(1, { timeout: 30_000 });
@@ -292,6 +298,16 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   const hint = page.getByTestId('ui-hint-new-row');
 
   // Hovering shows the hint itself, and moving off hides it again.
+  // The starter document is inserted above this step as the drive is seeded.
+  // Hover the row once the sidebar has reached its final layout.
+  const sidebar = page.getByTestId('sidebar');
+  await expect(
+    sidebar.getByRole('button', { name: 'Start here', exact: true }),
+  ).toBeVisible();
+  await expect(
+    sidebar.getByRole('button', { name: 'New Document' }),
+  ).toBeVisible();
+  await waitForSynced(page);
   await step.hover();
   await expect(hint).toHaveText('Make a document or table here');
   await page.mouse.move(600, 400);
@@ -301,7 +317,11 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   await step.click();
   await page.mouse.move(600, 400);
   await expect(hint).toHaveText('Make a document or table here');
-  await page.getByTestId('ui-hint-close').click();
+  await page
+    .getByRole('dialog')
+    .filter({ has: hint })
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
   await expect(hint).toHaveCount(0);
 
   await step.click();
@@ -378,7 +398,7 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   await expect(panel).toContainText('0 of 6');
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = currentDialog(page);
   // First share: the dialog asks who you are before it shows the invite UI.
   await dialog.getByLabel('Full name').fill('Test Person');
   await dialog.getByLabel('Full name').press('Enter');
@@ -399,7 +419,7 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   await expect(panel).toContainText('1 of 6', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(
-    page.getByRole('dialog').locator('[data-test="share-invited"]'),
+    currentDialog(page).locator('[data-test="share-invited"]'),
   ).toContainText('Invite link', { timeout: 30_000 });
 });
 
@@ -423,7 +443,7 @@ test('A denied clipboard still records the invite link and ticks the step', asyn
   await expect(panel).toContainText('0 of 6');
 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = currentDialog(page);
   await dialog.getByLabel('Full name').fill('Test Person');
   await dialog.getByLabel('Full name').press('Enter');
   await dialog.getByRole('button', { name: 'Copy invite link' }).click();

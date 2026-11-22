@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 import {
   before,
   editableTitle,
+  getCurrentSubject,
   waitForClientDbFlush,
   waitForClientDbReady,
   waitForDriveSettled,
@@ -94,8 +95,8 @@ test.describe('query GETs after refresh', () => {
    * response is pure wasted bandwidth.
    *
    * Contract: on a fresh dev-drive with at least one child resource,
-   * after a hard refresh, count the `→ GET` WS frames issued AFTER the
-   * initial drive `SUB` resolves. The expected post-fix count is 0.
+   * after a hard refresh, count per-resource GETs once sync settles and
+   * require fresh collection reads against a warm local drive to stay local.
    * Per-subject WS GETs are encoded as a single subject string per
    * frame (e.g. `did:ad:…`). `/query?` GETs are full URLs.
    */
@@ -108,6 +109,8 @@ test.describe('query GETs after refresh', () => {
       .getByRole('button', { name: 'New Document' })
       .click();
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
+
+    const documentSubject = await getCurrentSubject(page);
 
     // Wait until everything is committed and synced — including the
     // OPFS persist of the new document. If we reload before OPFS has
@@ -159,19 +162,55 @@ test.describe('query GETs after refresh', () => {
     // has attached. Require the actual worker before measuring local reads.
     await waitForClientDbReady(page);
     await waitForDriveSettled(page);
+    const firstSettledFrame = wsGetFrames.length;
 
-    // Drop frames from the bootstrap window. `Collection.fetchPage` falls
-    // through to `/query` while ClientDb isn't ready (or before this drive
-    // has completed a local sync) — those are cold-load fetches, not the
-    // redundant post-ready storm this regression guards. Clear once the
-    // drive has settled, then watch only the window where the local WASM
-    // DB must win — the sidebar showing the seeded document is that UI.
-    wsGetFrames.length = 0;
     await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+    await waitForClientDbFlush(page, { required: true });
+
+    // A query started by the cold render can fall back to the server after
+    // the sync finishes. Measure fresh requests made against the warm drive
+    // and wait for their answers, including the empty pending-forks query.
+    const firstWarmFrame = wsGetFrames.length;
+    const result = await page.evaluate(async subject => {
+      const store = window.store;
+      const { CollectionBuilder, core, forks } = window.atomicE2E!.tomicLib;
+      const drive = store.getDrive()!;
+      const children = new CollectionBuilder(store)
+        .setDrive(drive)
+        .setProperty(core.properties.parent)
+        .setValue(drive)
+        .build();
+      const pendingForks = new CollectionBuilder(store)
+        .setDrive(drive)
+        .setProperty(forks.properties.originalSubject)
+        .setValue(subject)
+        .build();
+      const [members, proposals, document] = await Promise.all([
+        children.getAllMembers(),
+        pendingForks.getAllMembers(),
+        store.getResource(subject),
+      ]);
+
+      return {
+        listsDocument: members.some(
+          member =>
+            store.normalizeSubject(member) === store.normalizeSubject(subject),
+        ),
+        loaded: document.isReady(),
+        proposals,
+      };
+    }, documentSubject);
+    expect(result).toEqual({
+      listsDocument: true,
+      loaded: true,
+      proposals: [],
+    });
 
     // No `/query?` frames should fire at all — those are exclusively
     // collection queries that the local WASM DB can serve.
-    const queryFrames = wsGetFrames.filter(f => f.includes('/query?'));
+    const queryFrames = wsGetFrames
+      .slice(firstWarmFrame)
+      .filter(f => f.includes('/query?'));
     expect(
       queryFrames,
       'After ClientDb is ready, no `/query?` WS GET should fire (collection ' +
@@ -191,7 +230,9 @@ test.describe('query GETs after refresh', () => {
     // can pull in extra agent.drives entries. Solo runs settle at ≤2; the
     // 5× headroom covers parallel contention without masking a real
     // regression — anything in the 20+ range will still fail.
-    const subjectFrames = wsGetFrames.filter(f => !f.includes('/query?'));
+    const subjectFrames = wsGetFrames
+      .slice(firstSettledFrame)
+      .filter(f => !f.includes('/query?'));
     expect(
       subjectFrames.length,
       'After ClientDb is ready, the per-subject WS GET count should be tiny — ' +

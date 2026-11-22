@@ -127,6 +127,7 @@ mod test {
             max_usages: None,
             description: None,
             transport: None,
+            redeem_at: None,
         };
 
         let encoded = token.encode().expect("Failed to encode");
@@ -226,6 +227,7 @@ mod test {
             max_usages: None,
             description: None,
             transport: None,
+            redeem_at: None,
         };
 
         let result = token.verify(&store).await;

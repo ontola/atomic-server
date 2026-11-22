@@ -1,6 +1,5 @@
 import { conversations } from '@tomic/react';
 import { describe, expect, it } from 'vitest';
-import { Store } from '@tomic/react';
 import { resourceActions } from './resourceActions';
 import type { ActionContext } from './types';
 
@@ -16,14 +15,10 @@ const make = (
     canWrite: true,
     drive: DRIVE,
     subject,
-    store: {
-      isTrashed: Store.prototype.isTrashed,
-      peekTrashFolder: Store.prototype.peekTrashFolder,
-      resources: new Map([[DRIVE, { get: () => TRASH }]]),
-    },
+    parent,
+    trashFolder: TRASH,
     resource: {
       getClasses: () => classes,
-      get: (prop: string) => (prop.endsWith('/parent') ? parent : undefined),
     },
   }) as unknown as ActionContext;
 
@@ -43,6 +38,19 @@ describe('trash and delete availability', () => {
 
     expect(available('trash', ctx)).toBe(false);
     expect(available('delete', ctx)).toBe(true);
+  });
+
+  it('updates actions as the drive and item load after a reload', () => {
+    const ctx = make('atomic:item', TRASH);
+    const loading = { ...ctx, trashFolder: undefined };
+
+    expect(available('restore', loading)).toBe(false);
+    expect(available('restore', ctx)).toBe(true);
+    expect(available('trash', ctx)).toBe(false);
+
+    const restored = { ...ctx, parent: DRIVE };
+    expect(available('restore', restored)).toBe(false);
+    expect(available('trash', restored)).toBe(true);
   });
 
   it('never moves the drive or the Trash folder into the Trash', () => {

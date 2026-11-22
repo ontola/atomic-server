@@ -2160,50 +2160,76 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
-/// A resource accepted earlier in this frame, else the stored one.
-async fn staged_or_stored(
-    store: &Db,
-    subject: &crate::Subject,
-    staged: &[(crate::Resource, Option<Vec<u8>>)],
-    by_subject: &std::collections::HashMap<String, usize>,
-) -> Option<crate::Resource> {
-    if let Some(index) = by_subject.get(&subject.pure_id()) {
-        return Some(staged[*index].0.clone());
-    }
-    store.get_resource(subject).await.ok()
-}
-
-/// Resolve a parent's drive from accepted state in this frame before storage.
-/// A `drive` stamp wins. With none, the parent's own parent is asked the same
-/// way, so an unstamped child of an unstamped child still resolves to the
-/// drive root, and a resource with neither contributes its own subject. The
-/// walk stops at the last resource we have. `None` when `parent` itself is
-/// neither staged nor stored.
-async fn staged_parent_drive(
+/// Every staged resource has already been scoped to this drive. Walking
+/// stops as soon as it reaches one, including on an unstamped parent chain.
+fn staged_parent_drive(
     store: &Db,
     parent: &crate::Subject,
-    staged: &[(crate::Resource, Option<Vec<u8>>)],
+    admitted_drive: &str,
     by_subject: &std::collections::HashMap<String, usize>,
 ) -> Option<String> {
-    let mut current = staged_or_stored(store, parent, staged, by_subject).await?;
+    let mut current = parent.clone();
+    let mut last = None;
     let mut seen = std::collections::HashSet::new();
     loop {
-        let subject = current.get_subject().to_string();
-        if !seen.insert(crate::Subject::from(subject.clone()).pure_id()) {
-            return Some(subject);
+        let key = store.normalize_subject(&current).pure_id();
+        if by_subject.contains_key(&key) {
+            return Some(admitted_drive.to_owned());
         }
-        if let Ok(drive) = current.get(crate::urls::DRIVE_PROP) {
+        if !seen.insert(key) {
+            return Some(current.to_string());
+        }
+        let Ok(resource) = store.get_resource_shallow(&current) else {
+            return last;
+        };
+        if let Ok(drive) = resource.get(crate::urls::DRIVE_PROP) {
             return Some(drive.to_string());
         }
-        let Ok(parent_val) = current.get(crate::urls::PARENT) else {
-            return Some(subject);
+        last = Some(resource.get_subject().to_string());
+        let Ok(parent) = resource.get(crate::urls::PARENT) else {
+            return last;
         };
-        let next = crate::Subject::from(parent_val.to_string());
-        match staged_or_stored(store, &next, staged, by_subject).await {
-            Some(resource) => current = resource,
-            None => return Some(subject),
-        }
+        current = crate::Subject::from(parent.to_string());
     }
+}
+
+/// Merge and materialize once. A delayed entry keeps this result until its
+/// parent is ready, and later deltas for the same subject wait behind it.
+fn prepare_sync_entry(
+    store: &Db,
+    key: &str,
+    entry: &protocol::SyncPushEntry,
+    staged_snapshot: Option<&[u8]>,
+) -> Option<(crate::Resource, Vec<u8>)> {
+    let stored;
+    let base = if let Some(snapshot) = staged_snapshot {
+        Some(AtomicLoroDoc::from_snapshot(snapshot).ok()?)
+    } else {
+        stored = store.kv.get(Tree::LoroSnapshots, key.as_bytes()).ok()?;
+        stored
+            .as_deref()
+            .and_then(|s| AtomicLoroDoc::from_snapshot(s).ok())
+    };
+    let doc = match base {
+        Some(doc) => {
+            doc.import_update(&entry.loro_bytes).ok()?;
+            doc
+        }
+        None => {
+            let doc = AtomicLoroDoc::new();
+            if doc.import_update(&entry.loro_bytes).is_ok() {
+                doc
+            } else {
+                AtomicLoroDoc::from_snapshot(&entry.loro_bytes).ok()?
+            }
+        }
+    };
+    let snapshot = doc.export_snapshot();
+    let mut resource = crate::Resource::new(key.to_owned());
+    resource
+        .apply_state_doc_with_snapshot(doc, snapshot.clone())
+        .ok()?;
+    Some((resource, snapshot))
 }
 
 /// Import resources from a SYNC_PUSH message into the local store.
@@ -2224,6 +2250,13 @@ pub async fn import_sync_push(
     for_agent: &crate::agents::ForAgent,
     trust_owned: bool,
 ) -> Result<(usize, Vec<Vec<u8>>), SyncPushRejected> {
+    use std::collections::{BTreeSet, HashMap, VecDeque};
+    if push.entries.len() > protocol::SYNC_PUSH_MAX_ENTRIES {
+        return Err(SyncPushRejected {
+            drive: push.drive.clone(),
+            reason: "Too many entries in one SYNC_PUSH".into(),
+        });
+    }
     let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
     let policy = store.sync_policy();
 
@@ -2290,8 +2323,8 @@ pub async fn import_sync_push(
     // entries and be overwritten by the stale snapshot this push started
     // from. Db takes import-identity locks afterwards, matching signed commit
     // ordering and avoiding lock inversion.
-    let mut subject_keys: Vec<String> =
-        push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    let entry_keys: Vec<_> = push.entries.iter().map(|e| normalize(&e.subject)).collect();
+    let mut subject_keys = entry_keys.clone();
     subject_keys.sort();
     subject_keys.dedup();
     let mut _subject_guards = Vec::with_capacity(subject_keys.len());
@@ -2308,34 +2341,31 @@ pub async fn import_sync_push(
     let mut staged_by_subject: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
-    // One arrival-order pass would skip a new unstamped child whose parent
-    // comes later in the same frame. Hold those back, without staging, and
-    // retry once later entries are staged. A pass that stages nothing, or
-    // `entries.len()` passes, ends it: whatever is left is decided for good,
-    // so a missing, rejected, or cyclic parent is skipped.
-    let mut pending: Vec<usize> = (0..push.entries.len()).collect();
-    let mut settled = vec![false; push.entries.len()];
+    let mut groups: HashMap<&str, VecDeque<usize>> = HashMap::new();
+    for (idx, key) in entry_keys.iter().enumerate() {
+        groups.entry(key.as_str()).or_default().push_back(idx);
+    }
+    let mut ready: BTreeSet<usize> = groups.values().map(|group| group[0]).collect();
+    let mut waiting: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut prepared = HashMap::new();
     let mut strict = false;
-    let mut passes = 0usize;
-
-    while !pending.is_empty() {
-        let batch = std::mem::take(&mut pending);
-        let mut staged_this_pass = 0usize;
-        for idx in batch {
-            let entry = &push.entries[idx];
-            settled[idx] = true;
-            if super::tombstones::is_tombstoned(store, &entry.subject) {
-                tracing::debug!(
-                    "import_sync_push: skip {:?} (tombstoned locally)",
-                    &entry.subject[..entry.subject.len().min(24)]
-                );
-                continue;
+    'schedule: loop {
+        let Some(idx) = ready.pop_first() else {
+            if waiting.is_empty() {
+                break;
             }
-
-            let snapshot_key =
-                crate::Subject::from_raw(&entry.subject, store.get_base_domain().as_deref())
-                    .pure_id();
-
+            // Only unresolved cycles remain. Apply the ordinary missing-parent
+            // rule to each once, so an unsubstantiated claim cannot enter.
+            strict = true;
+            ready.extend(waiting.drain().flat_map(|(_, entries)| entries));
+            continue;
+        };
+        let entry = &push.entries[idx];
+        let snapshot_key = entry_keys[idx].clone();
+        'entry: {
+            if super::tombstones::is_tombstoned(store, &entry.subject) {
+                break 'entry;
+            }
             // Admission above was for `push.drive` as a whole. Each entry names
             // its own subject, so an existing resource must actually live in
             // that drive, or a peer admitted for one drive could overwrite any
@@ -2367,8 +2397,7 @@ pub async fn import_sync_push(
                     drive.to_string()
                 } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
                     let parent_subject = crate::Subject::from(parent.to_string());
-                    staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
-                        .await
+                    staged_parent_drive(store, &parent_subject, &admitted_drive, &staged_by_subject)
                         .unwrap_or_else(|| existing.get_subject().to_string())
                 } else {
                     existing.get_subject().to_string()
@@ -2380,73 +2409,26 @@ pub async fn import_sync_push(
                     stored_drive,
                     push.drive
                 );
-                    continue;
+                    break 'entry;
                 }
             }
 
-            // Load existing doc or create new
-            let doc = if let Some(index) = staged_by_subject.get(&snapshot_key) {
-                let snapshot = staged[*index]
-                    .1
-                    .as_ref()
-                    .expect("sync snapshots are explicit");
-                match AtomicLoroDoc::from_snapshot(snapshot) {
-                    Ok(d) if d.import_update(&entry.loro_bytes).is_ok() => d,
-                    _ => continue,
-                }
-            } else if let Ok(Some(existing)) =
-                store.kv.get(Tree::LoroSnapshots, snapshot_key.as_bytes())
-            {
-                match AtomicLoroDoc::from_snapshot(&existing) {
-                    Ok(d) => {
-                        // A SYNC_PUSH may carry either an incremental update or a
-                        // complete snapshot; Loro accepts both and merges them.
-                        if d.import_update(&entry.loro_bytes).is_err() {
-                            tracing::warn!(
-                                "import_sync_push: delta import failed for {}",
-                                entry.subject
-                            );
-                            continue;
-                        }
-                        d
-                    }
-                    Err(_) => {
-                        // Existing snapshot corrupt, treat incoming as fresh
-                        match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                            Ok(d) => d,
-                            Err(_) => continue,
-                        }
-                    }
-                }
-            } else {
-                // New resource — import as snapshot
-                let doc = AtomicLoroDoc::new();
-                if doc.import_update(&entry.loro_bytes).is_err() {
-                    // Try as snapshot
-                    match AtomicLoroDoc::from_snapshot(&entry.loro_bytes) {
-                        Ok(d) => d,
-                        Err(_) => {
-                            tracing::warn!("import_sync_push: import failed for {}", entry.subject);
-                            continue;
-                        }
-                    }
-                } else {
-                    doc
-                }
+            let staged_snapshot = staged_by_subject
+                .get(&snapshot_key)
+                .and_then(|i| staged[*i].1.as_deref());
+            let Some((resource, snapshot)) = prepared
+                .remove(&idx)
+                .or_else(|| prepare_sync_entry(store, &snapshot_key, entry, staged_snapshot))
+            else {
+                break 'entry;
             };
-
-            // No `get_resource` — `apply_state_doc` rebuilds propvals from the
-            // merged doc, so the read would be discarded. Sync builds directly.
-            let snapshot = doc.export_snapshot();
-            let subject =
-                crate::Subject::from_raw(&snapshot_key, store.get_base_domain().as_deref());
-            let mut resource = crate::Resource::new(subject.to_string());
-
+            // A staged row is subsequently authoritative for its children. Its
+            // explicit drive stamp must agree with the drive we admitted.
             if resource
-                .apply_state_doc_with_snapshot(doc, snapshot.clone())
-                .is_err()
+                .get(crate::urls::DRIVE_PROP)
+                .is_ok_and(|v| normalize(&v.to_string()) != admitted_drive)
             {
-                continue;
+                break 'entry;
             }
 
             // A new subject: it may only enter the drive this push was admitted
@@ -2476,21 +2458,21 @@ pub async fn import_sync_push(
                     .unwrap_or_else(|_| resource.get_subject().to_string());
                 if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                     let parent_subject = crate::Subject::from(parent_val.to_string());
-                    if let Some(drive) =
-                        staged_parent_drive(store, &parent_subject, &staged, &staged_by_subject)
-                            .await
-                    {
+                    if let Some(drive) = staged_parent_drive(
+                        store,
+                        &parent_subject,
+                        &admitted_drive,
+                        &staged_by_subject,
+                    ) {
                         claimed = drive;
                     } else if !strict {
                         // The parent is not here yet, but this frame still has an
                         // entry for it that is neither staged nor finally skipped.
                         let parent_key = normalize(&parent_subject.to_string());
-                        if push.entries.iter().enumerate().any(|(i, other)| {
-                            i != idx && !settled[i] && normalize(&other.subject) == parent_key
-                        }) {
-                            settled[idx] = false;
-                            pending.push(idx);
-                            continue;
+                        if parent_key != snapshot_key && groups.contains_key(parent_key.as_str()) {
+                            prepared.insert(idx, (resource, snapshot));
+                            waiting.entry(parent_key).or_default().push(idx);
+                            continue 'schedule;
                         }
                     }
                 }
@@ -2502,7 +2484,7 @@ pub async fn import_sync_push(
                         claimed,
                         push.drive
                     );
-                    continue;
+                    break 'entry;
                 }
             }
 
@@ -2516,7 +2498,6 @@ pub async fn import_sync_push(
                 staged.push((resource.clone(), Some(snapshot)));
             }
             count += 1;
-            staged_this_pass += 1;
             imported.insert(snapshot_key.clone());
 
             // Check for missing blobs
@@ -2527,12 +2508,23 @@ pub async fn import_sync_push(
             }
         }
 
-        if pending.is_empty() || strict {
-            break;
+        let group = groups
+            .get_mut(snapshot_key.as_str())
+            .expect("scheduled subject");
+        group.pop_front();
+        if let Some(next) = group.front() {
+            ready.insert(*next);
+        } else {
+            groups.remove(snapshot_key.as_str());
         }
-        passes += 1;
-        if staged_this_pass == 0 || passes >= push.entries.len() {
-            strict = true;
+        // Wake only entries waiting for this subject, once it is usable or
+        // every candidate for it has been rejected.
+        if staged_by_subject.contains_key(&snapshot_key)
+            || !groups.contains_key(snapshot_key.as_str())
+        {
+            if let Some(children) = waiting.remove(&snapshot_key) {
+                ready.extend(children);
+            }
         }
     }
 
