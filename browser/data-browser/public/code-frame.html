@@ -7,7 +7,7 @@
   hash; codeMode.test.ts checks they agree.
 -->
 <html><head><meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Lsh205XzS7rsOCAqdbb4PRZkXjkV5ZeRgn/g/otzFTg=' 'unsafe-eval'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-drZW0vA1N2FKL3t7qvCfI35ZSuf4d/p1dRQgD0RwTfs=' 'unsafe-eval'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'" />
 <script type="module">
 const MAX_LOG_LINES = 50;
 const MAX_LOG_CHARS = 1000;
@@ -76,7 +76,14 @@ function createSandbox(post) {
   };
 }
 
-const handle = createSandbox(m => parent.postMessage(m, '*'));
-addEventListener('message', e => { if (e.source === parent) handle(e.data); });
+const handle = createSandbox(m => port.postMessage(m));
+let port;
+// The parent hands over one private port; everything else travels on it, so a
+// page this frame navigates to cannot be talked to or hear from the parent.
+addEventListener('message', e => {
+  if (e.source !== parent || port || !e.ports[0]) return;
+  port = e.ports[0];
+  port.onmessage = ev => handle(ev.data);
+});
 parent.postMessage({ type: 'ready' }, '*');
 </script></head><body></body></html>

@@ -38,6 +38,7 @@ export const FRAME_SANDBOX = 'allow-scripts';
  */
 const defaultFrame = (): CodeFrame => {
   const iframe = document.createElement('iframe');
+  const channel = new MessageChannel();
   let ready = false;
   const queue: ToFrame[] = [];
 
@@ -45,11 +46,12 @@ const defaultFrame = (): CodeFrame => {
     onmessage: null,
     onerror: null,
     postMessage: m => {
-      if (ready) iframe.contentWindow?.postMessage(m, '*');
+      if (ready) channel.port1.postMessage(m);
       else queue.push(m);
     },
     terminate: () => {
       window.removeEventListener('message', listener);
+      channel.port1.close();
       iframe.remove();
     },
   };
@@ -63,13 +65,17 @@ const defaultFrame = (): CodeFrame => {
       worker.onerror?.({ message: 'The script navigated its frame' });
   });
 
+  // The frame's first message (`ready`) is the only one taken from the window:
+  // it is answered with a private port, and everything after travels on that.
+  // A page the script navigates to cannot get the port, so it is never heard.
   const listener = (e: MessageEvent) => {
-    if (e.source !== iframe.contentWindow || loads > 1) return;
+    if (e.source !== iframe.contentWindow || e.data?.type !== 'ready') return;
 
-    if (e.data?.type === 'ready') {
-      ready = true;
-      queue.splice(0).forEach(worker.postMessage);
-    } else worker.onmessage?.({ data: e.data });
+    window.removeEventListener('message', listener);
+    channel.port1.onmessage = m => worker.onmessage?.({ data: m.data });
+    ready = true;
+    iframe.contentWindow?.postMessage({ type: 'port' }, '*', [channel.port2]);
+    queue.splice(0).forEach(worker.postMessage);
   };
 
   window.addEventListener('message', listener);
