@@ -39,6 +39,9 @@ mod tests;
 pub mod tombstones;
 #[cfg(feature = "db")]
 pub mod transport;
+/// Browser `WebSocket` transport (wasm32, no tungstenite).
+#[cfg(all(feature = "db", feature = "wasm", target_arch = "wasm32"))]
+pub mod web_socket_transport;
 #[cfg(feature = "db")]
 pub mod ws_apply;
 

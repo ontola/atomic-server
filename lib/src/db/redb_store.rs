@@ -252,6 +252,51 @@ impl RedbStore {
         })
     }
 
+    /// Create a RedbStore held in memory, seeded from `bytes` (a previous
+    /// [`super::snapshot_backend::SnapshotBackend`] export), for hosts that
+    /// cannot use OPFS sync access handles (the main thread). Persist through
+    /// the returned handle. With `encryption_key` the exported bytes are
+    /// ciphertext, as in [`Self::new_opfs`].
+    pub fn new_snapshot(
+        bytes: Option<Vec<u8>>,
+        encryption_key: Option<&[u8; 32]>,
+    ) -> AtomicResult<(Self, super::snapshot_backend::SnapshotBackend)> {
+        let handle = super::snapshot_backend::SnapshotBackend::new(bytes.as_deref())
+            .map_err(|e| format!("Failed to load snapshot: {e}"))?;
+        let builder = Database::builder();
+        let db = match encryption_key {
+            Some(key) => {
+                let enc = super::encrypted_backend::EncryptedBackend::new(handle.clone(), key)
+                    .map_err(|e| format!("Failed to open encrypted snapshot: {e}"))?;
+                builder.create_with_backend(enc)
+            }
+            None => builder.create_with_backend(handle.clone()),
+        }
+        .map_err(|e| format!("Failed to create redb from snapshot: {e}"))?;
+
+        {
+            let mut tx = db
+                .begin_write()
+                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            tx.set_quick_repair(true);
+            create_all_tables(&tx);
+            tx.commit()
+                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
+        }
+
+        Ok((
+            RedbStore {
+                db: Arc::new(db),
+                batch_buffer: std::sync::Mutex::new(None),
+                dirty: AtomicBool::new(false),
+                flush_lock: std::sync::Mutex::new(()),
+                #[cfg(not(target_arch = "wasm32"))]
+                _open_guard: None,
+            },
+            handle,
+        ))
+    }
+
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.
     /// The file is created/opened in the Origin Private File System.
     ///
