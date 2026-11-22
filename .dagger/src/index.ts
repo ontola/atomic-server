@@ -188,6 +188,7 @@ export class AtomicServer {
       .withFile('/app/react/package.json', source.file('react/package.json'))
       .withFile('/app/svelte/package.json', source.file('svelte/package.json'))
       .withFile('/app/cli/package.json', source.file('cli/package.json'))
+      .withFile('/app/plugin/package.json', source.file('plugin/package.json'))
       .withFile(
         '/app/create-template/package.json',
         source.file('create-template/package.json'),
