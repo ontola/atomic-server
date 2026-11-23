@@ -479,6 +479,20 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         ...(message.metadata || {}),
         error: lastRequestErrorRef.current ?? 'The response was interrupted.',
       };
+    } else if (
+      message.role === 'assistant' &&
+      !message.parts.some(
+        part => part.type === 'text' && part.text.trim().length > 0,
+      )
+    ) {
+      // The model stopped after thinking or calling tools without writing a
+      // reply. Without this the chat just ends, which reads as "nothing
+      // happened".
+      const reason = 'The model finished without writing an answer.';
+
+      lastRequestErrorRef.current = reason;
+      message.metadata = { ...message.metadata, error: reason };
+      setRequestError(reason);
     } else {
       message.metadata = { ...message.metadata, error: undefined };
       setRequestError(undefined);
