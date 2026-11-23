@@ -13833,8 +13833,8 @@ msgstr "Maak hier een formulier"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "More powerful"
-msgstr "Nog krachtiger"
+msgid "Next steps"
+msgstr "Volgende stappen"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Describe what you need and the AI builds it in your drive"

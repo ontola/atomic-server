@@ -159,7 +159,7 @@ describe('GettingStartedPanel', () => {
     steps = steps.map(s => ({ ...s, done: true }));
     const html = render();
 
-    expect(html).toContain('More powerful');
+    expect(html).toContain('Next steps');
     expect(html).not.toContain('Getting started');
     expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*4/);
     expect(html).toContain('Make a table');
