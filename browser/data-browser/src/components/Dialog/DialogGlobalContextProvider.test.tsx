@@ -1,12 +1,77 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import React, { useContext } from 'react';
-import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import React, { StrictMode, useContext, useState } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from '@testing-library/react';
 import {
   DialogContext,
   DialogGlobalContextProvider,
   useDialogGlobalContext,
 } from './DialogGlobalContextProvider';
+
+afterEach(cleanup);
+
+function StackItem({ name }: { name: string }) {
+  const { isTopLevel, isTopLevelNow } = useDialogGlobalContext(true);
+
+  return (
+    <button
+      data-top-level={isTopLevel}
+      onClick={() => {
+        if (isTopLevelNow())
+          document.dispatchEvent(new Event('dialog-dismissed'));
+      }}
+    >
+      {name}
+    </button>
+  );
+}
+
+it.each(['Cancel', 'Save'])(
+  'restores live and rendered dismissal when %s unmounts an open dialog',
+  action => {
+    const dismissed = vi.fn();
+    document.addEventListener('dialog-dismissed', dismissed);
+
+    function Host() {
+      const [open, setOpen] = useState(true);
+
+      return (
+        <DialogGlobalContextProvider>
+          <StackItem name='Underlying dialog' />
+          {open && <StackItem name='Property dialog' />}
+          <button onClick={() => setOpen(false)}>{action}</button>
+        </DialogGlobalContextProvider>
+      );
+    }
+
+    try {
+      render(
+        <StrictMode>
+          <Host />
+        </StrictMode>,
+      );
+      const underlying = screen.getByRole('button', {
+        name: 'Underlying dialog',
+      });
+      expect(underlying.getAttribute('data-top-level')).toBe('false');
+      fireEvent.click(underlying);
+      expect(dismissed).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: action }));
+      expect(underlying.getAttribute('data-top-level')).toBe('true');
+      fireEvent.click(underlying);
+      expect(dismissed).toHaveBeenCalledOnce();
+    } finally {
+      document.removeEventListener('dialog-dismissed', dismissed);
+    }
+  },
+);
 
 /**
  * A dialog decides whether to answer an Escape while the key is being handled,

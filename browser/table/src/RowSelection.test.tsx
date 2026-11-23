@@ -90,3 +90,19 @@ it('does not render selection actions without selected rows', () => {
   );
   expect(screen.queryByRole('toolbar')).toBeNull();
 });
+
+it('provides canonical buttons when a host does not override them', () => {
+  const onDelete = vi.fn();
+  const onClear = vi.fn();
+  render(
+    <TableRowSelectionActions
+      count={1}
+      onDelete={onDelete}
+      onClear={onClear}
+    />,
+  );
+  fireEvent.click(screen.getByTitle('Delete selected rows'));
+  fireEvent.click(screen.getByTitle('Clear selection'));
+  expect(onDelete).toHaveBeenCalledOnce();
+  expect(onClear).toHaveBeenCalledOnce();
+});
