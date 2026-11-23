@@ -16,6 +16,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -97,7 +98,7 @@ export interface UseTableViewResult {
   setViewColumns: (columns: string[]) => void;
   /** The active View's name ('Default View' until renamed / created). */
   viewName: string;
-  renameView: (name: string) => void;
+  renameView: (name: string, subject?: string) => void;
   /** All saved View subjects of the table, in order (the tabs). */
   views: string[];
   /** The active View subject (undefined until one exists). */
@@ -242,6 +243,11 @@ export function useTableView(
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
+  const canWriteNow = useRef(canWrite);
+
+  useLayoutEffect(() => {
+    canWriteNow.current = canWrite;
+  }, [canWrite]);
 
   const [defaultViewSubject] = useString(
     table,
@@ -766,8 +772,49 @@ export function useTableView(
   );
 
   const renameView = useCallback(
-    (name: string) => withView(v => v.set(core.properties.name, name, false)),
-    [withView],
+    (name: string, subject?: string) => {
+      if (!subject) {
+        withView(v => v.set(core.properties.name, name, false));
+
+        return;
+      }
+
+      if (!canWrite || !name.trim()) {
+        return;
+      }
+
+      const initiatingAgent = store.getAgent()?.subject;
+
+      void (async () => {
+        const canRename = () =>
+          canWriteNow.current &&
+          store.getAgent()?.subject === initiatingAgent &&
+          table.getArray(dataBrowser.properties.tableViews).includes(subject);
+
+        if (!canRename()) {
+          return;
+        }
+
+        const target = await store.getResource(subject);
+
+        // Loading can outlive a tab removal or move. Check the current table
+        // list and the loaded owner before changing the captured target.
+        if (
+          !canRename() ||
+          !target.isReady() ||
+          target.get(core.properties.parent) !== table.subject
+        ) {
+          return;
+        }
+
+        await target.set(core.properties.name, name.trim(), false);
+
+        if (canRename()) {
+          await target.save();
+        }
+      })().catch(() => undefined);
+    },
+    [withView, canWrite, table, store],
   );
 
   const setViewGroupBy = useCallback(
