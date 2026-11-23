@@ -1374,6 +1374,10 @@ This does not yet prove restoration of the user's private staging workspace.
   `BuiltinSyncablesApp.test.ts` holds unrelated adoption/legacy scans pending:
   canonical collection controls still prepare, with and without a saved filter,
   while worker preparation continues to wait for the complete migration proof.
+- `embed/flutterHost.test.ts` covers native-host precedence, locked Flutter
+  channel tokens and lazy standalone fixtures. The production embed size check
+  keeps its existing first-use and total budgets; the main Data Browser build
+  remains independent of the standalone mock fallback.
 - `syncablesNavigation.test.ts` and `useSyncablesNavigation.test.tsx` verify that
   canonical collection metadata takes precedence over retained legacy local IDs.
   Adopted collections remain leaves in the sidebar and AI tree; metadata updates
