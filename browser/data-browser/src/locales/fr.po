@@ -14063,3 +14063,11 @@ msgstr "Enregistrement de l’application par identité"
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Native uniqueness registration outside any integration iframe write root."
 msgstr "Enregistrement natif d’unicité en dehors de toute racine d’écriture de l’iframe d’intégration."
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "This filter has no completed sync yet. Choose All cached rows to browse data stored by other filters or earlier imports."
+msgstr "Aucune synchronisation n’a encore été terminée pour ce filtre. Choisissez Toutes les lignes enregistrées pour consulter les données d’autres filtres ou d’importations précédentes."
+
+#: src/chunks/PluginRuns/SyncableRecordActions.tsx
+msgid "Related collections"
+msgstr "Collections associées"

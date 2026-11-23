@@ -1,6 +1,10 @@
 import { SyncableFilterBar } from '../PluginRuns/SyncableFilterBar';
 import { useSyncableTableNavigation } from '../PluginRuns/useSyncableTableNavigation';
 import {
+  retainHiddenSyncableViews,
+  syncableCollectionTabs,
+} from '../PluginRuns/syncableCollectionCompatibility';
+import {
   core,
   dataBrowser,
   unknownSubject,
@@ -8,6 +12,7 @@ import {
   type Aggregation,
   useCanWrite,
   useStore,
+  useResources,
   type DataBrowser,
   type ExpressionFilter,
   type Property,
@@ -20,6 +25,7 @@ import { styled } from 'styled-components';
 import { AppFrame } from '@chunks/AppPage/AppFrame';
 import { BuiltinSyncablesApp } from '@chunks/PluginRuns/BuiltinSyncablesApp';
 import { SyncableCollectionView } from '@chunks/PluginRuns/SyncableCollectionView';
+import { Spinner } from '@components/Spinner';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -201,12 +207,15 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const ruleSubjects = new Set(
     syncableFilters.rules.map(rule => rule.resource.subject),
   );
-  const visibleViews = views.filter(subject => !ruleSubjects.has(subject));
-  const collectionTab = visibleViews.find(
-    subject =>
-      store.getResourceLoading(subject).get(dataBrowser.properties.viewKind) ===
-      'syncable-collection',
-  );
+  const viewResources = useResources(views);
+  const visibleTabs = syncableCollectionTabs({
+    entity: syncableFilters.flat,
+    views,
+    activeView,
+    rules: ruleSubjects,
+    getView: subject =>
+      viewResources.get(subject) ?? store.getResourceLoading(subject),
+  });
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
@@ -1549,22 +1558,18 @@ export const TableResource: React.FC<TableResourceProps> = ({
               table={resource.subject}
               rowClass={tableClass.subject}
               drive={getTableDrive(store, resource) ?? store.getDrive()}
-              views={visibleViews}
-              activeView={
-                activeView && ruleSubjects.has(activeView)
-                  ? collectionTab
-                  : activeView
-              }
+              views={visibleTabs.views}
+              activeView={visibleTabs.activeView}
+              syncableEntity={syncableFilters.flat}
               setActiveView={setActiveView}
               createView={createView}
               setViewKind={setViewKind}
               duplicateView={duplicateView}
               deleteView={deleteView}
               reorderViews={next =>
-                reorderViews([
-                  ...next,
-                  ...views.filter(subject => ruleSubjects.has(subject)),
-                ])
+                reorderViews(
+                  retainHiddenSyncableViews(next, views, visibleTabs.hidden),
+                )
               }
               viewName={viewName}
               renameView={renameView}
@@ -1639,6 +1644,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 drive={(getTableDrive(store, resource) ?? store.getDrive())!}
               />
             </AppViewWrapper>
+          ) : viewKind === 'syncable-collection' && !syncableFilters.ready ? (
+            <Spinner />
           ) : viewKind === 'syncable-collection' ? (
             <SyncableCollectionView
               table={resource.subject}

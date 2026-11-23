@@ -58,12 +58,23 @@ repository to reach the same account's Issues table with that organization and
 repository scope retained. Related collection buttons can follow the selected
 filter across all its rows. Filters can be renamed and bookmarked.
 
+An imported record's own page also offers its stored relationship actions.
+For example, an organization can open its Repositories filter and an Issues
+filter through those repositories, when both relationships are declared in the
+catalog. These actions reuse existing filters and perform no provider request.
+A new filter has no completed sync history or observed membership yet; use its
+Sync controls to import that scope, or choose **All cached rows** for data from
+other filters and earlier imports. Its empty result does not delete those rows.
+
 Use **Sync settings** for the selected filter, then **Sync now**. Each filter has
 its own sync state and **Pause**/**Resume** controls. Pausing one filter retains
 its rows and does not pause another. Runs continue while you browse other views
 or resources in the app; closing the app stops them. Paused status survives a
 reload. The Sync view also offers source setup for new saved filters; catalog
 inputs and relationships determine the available sources.
+Sync history describes the selected filter, rather than every row in its table.
+The entry count shown in Sync belongs to its last read attempt. Existing rows
+alone do not imply that this particular filter has completed a successful read.
 
 To link a public repository, open **GitHub · Public**. In its Sync view,
 select the Issues collection and the catalog's repository source, enter its
@@ -72,8 +83,10 @@ to the repository's canonical identity. This branch uses GitHub's public API
 without a GitHub account. GitHub's Issues endpoint includes pull requests.
 
 **Table** follows the schema derived from the API description and provides
-**Open** for catalog-declared collection navigation. **Collection** remains
-available as a compatible view of selected stored fields and navigation actions.
+**Open** for catalog-declared collection navigation. Item tables use Table and
+Sync; the redundant unconfigured Collection tab is hidden. Existing Collection
+links open native Table with their saved settings and filter intact. Renamed or
+customized views are retained, and the principal App keeps its collection list.
 Opening, filtering or returning to these views makes no provider request.
 They remain available during a sync or a provider outage. Overlapping saved
 filters share one canonical row. Complete reads replace membership only for their
@@ -81,6 +94,9 @@ own filter; partial or interrupted reads retain prior membership and accepted
 rows. Missing fields do not erase richer stored values. User fields are retained.
 Moving a row within the same drive retains its identity; rows moved outside the
 worker's collection are protected from refresh rather than duplicated.
+Renaming a column changes its display label, while sync continues to address its
+stable property identity. Editing a provider-managed cell value can be replaced
+by a later provider observation; user-defined fields remain separate.
 
 A read is bounded to 128 requests, 4,000 records and five minutes, including
 validation and storage of supplied linked records. Reaching a limit keeps the
@@ -104,7 +120,8 @@ it explicitly to resume syncing. Opening a view does not restore trashed data.
 The canonical catalog identifier is now `github`. Installations and other clients
 using the historical `github-issues` identifier need reinstalling or reconnecting.
 Stored Atomic resources are retained; the rename does not automatically remove
-them. Historical GitHub-specific view tabs still open the native Collection view.
+them. Historical GitHub-specific view links remain readable; canonical item tables
+render through native Table.
 
 Migration promotes an existing principal resource in place, preserving its
 collections, row identities, saved filters and user fields. Verified account

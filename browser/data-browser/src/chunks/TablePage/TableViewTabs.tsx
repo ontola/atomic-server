@@ -84,6 +84,8 @@ interface TableViewTabsProps {
   drive?: string;
   /** The class of this table's rows, which decides what apps can show it. */
   rowClass: string;
+  /** Canonical entity tables browse stored data through ordinary Table. */
+  syncableEntity?: boolean;
   views: string[];
   activeView: string | undefined;
   setActiveView: (subject: string) => void;
@@ -134,6 +136,7 @@ export function TableViewTabs({
   table,
   drive: tableDrive,
   rowClass,
+  syncableEntity = false,
   views,
   activeView,
   setActiveView,
@@ -161,8 +164,16 @@ export function TableViewTabs({
   const store = useStore();
   const drive = tableDrive ?? store.getDrive();
   const driveApps = useDriveApps(drive);
-  const collectionView = useSyncableCollectionView(drive, table, rowClass);
-  const builtinKinds = selectableViewKinds(collectionView.applicable);
+  const collectionView = useSyncableCollectionView(
+    drive,
+    table,
+    rowClass,
+    !syncableEntity,
+  );
+  const builtinKinds = selectableViewKinds(
+    collectionView.applicable,
+    syncableEntity,
+  );
 
   const refreshApps = () => {
     driveApps.refresh();

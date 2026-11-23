@@ -19,7 +19,7 @@ import { ShowRoute } from '../../routes/ShowRoute';
 import { Button } from '@components/Button';
 import { useSyncableFilters } from './useSyncableFilters';
 
-/** One saved provider scope across Collection, Table and Sync renderers. */
+/** One saved provider scope across the native data views and Sync controls. */
 export function SyncableFilterBar({
   table,
   state,
@@ -76,12 +76,15 @@ export function SyncableFilterBar({
 
   const ruleSubjects = new Set(state.rules.map(rule => rule.resource.subject));
   const views = table.getSubjects(dataBrowser.properties.tableViews);
-  const baseView = views.find(
-    subject =>
-      !ruleSubjects.has(subject) &&
-      store.getResourceLoading(subject).get(dataBrowser.properties.viewKind) ===
-        'syncable-collection',
-  );
+  const baseView = ['table', 'syncable-collection'].flatMap(kind =>
+    views.filter(
+      subject =>
+        !ruleSubjects.has(subject) &&
+        store
+          .getResourceLoading(subject)
+          .get(dataBrowser.properties.viewKind) === kind,
+    ),
+  )[0];
   const status = selected?.resource.get(
     state.properties!['syncable-mirror-status'],
   ) as
@@ -169,6 +172,12 @@ export function SyncableFilterBar({
                     : status?.lastSuccess
                       ? 'Synced'
                       : 'Ready to sync'}
+        </span>
+      )}
+      {selected && !status?.lastSuccess && (
+        <span>
+          This filter has no completed sync yet. Choose All cached rows to
+          browse data stored by other filters or earlier imports.
         </span>
       )}
       {selected && canWrite && (

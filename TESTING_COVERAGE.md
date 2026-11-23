@@ -1348,6 +1348,23 @@ This does not yet prove restoration of the user's private staging workspace.
   stable cell identity and stale async navigation. The native GitHub journey
   verifies reused owner/author IDs and ordinary Table navigation without another
   provider request for supplied linked data.
+- `syncableFlatNavigation.test.ts`, `SyncableRecordActions.test.tsx` and
+  `ResourcePageDefault.test.tsx` cover shared native record/Table navigation,
+  multiple declared actions, bounded two-hop relationships, exact-filter reuse
+  without source write access, logical ownership across moves, stale actions
+  and absent/ambiguous/foreign stored targets. Ordinary resources do not load
+  the integration action module or perform schema lookups.
+- `syncableCollectionCompatibility.test.ts` covers entity-only native Table
+  rendering of old Collection links, preserving saved configuration and scope,
+  hiding only unconfigured duplicate tabs, retaining custom views and hidden
+  definitions during reorder, and keeping principal App directory navigation.
+  `builtinSyncApp.test.ts` checks new entity views are Table/Sync, App directories
+  retain Collection, and successful history stays on its exact saved rule.
+  `syncableApiSchema.test.ts` preserves a user-renamed column label and identity
+  when the catalog schema is reopened.
+  `BuiltinSyncablesApp.test.ts` holds unrelated adoption/legacy scans pending:
+  canonical collection controls still prepare, with and without a saved filter,
+  while worker preparation continues to wait for the complete migration proof.
 - `syncablesNavigation.test.ts` and `useSyncablesNavigation.test.tsx` verify that
   canonical collection metadata takes precedence over retained legacy local IDs.
   Adopted collections remain leaves in the sidebar and AI tree; metadata updates

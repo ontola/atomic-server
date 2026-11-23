@@ -191,6 +191,9 @@ describe('catalog-derived Atomic schema', () => {
       document(),
       true,
     );
+    const nameProperty =
+      first.resourceProperties?.board.name ?? first.properties.name;
+    resources.get(nameProperty)![core.properties.name] = 'name changed';
     const count = resources.size;
     const second = await syncableApiSchema(
       store,
@@ -201,6 +204,9 @@ describe('catalog-derived Atomic schema', () => {
       true,
     );
     expect(second).toEqual(first);
+    expect(resources.get(nameProperty)?.[core.properties.name]).toBe(
+      'name changed',
+    );
     expect(resources.size).toBe(count);
     expect(
       resources.get(first.properties.size)?.[core.properties.datatype],

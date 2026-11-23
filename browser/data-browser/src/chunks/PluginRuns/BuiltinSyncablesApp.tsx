@@ -543,41 +543,52 @@ export async function appProfile(
     throw new Error(
       'The integration installation is unavailable. Its saved sources were retained.',
     );
-  const flatAdoption = await collectSyncableFlatAdoption(store, {
-    drive,
-    app: installationApp,
-    proxyOrigin: context.proxyOrigin,
-    platform: context.platform,
-    document,
-    querySelection: trusted.querySelection,
-    properties: p,
-    referenceClass: context.schema.classes['syncable-reference'],
-    assertCurrent,
-  });
+  // Only V3 canonical entity contexts carry a resource. Opening their controls
+  // needs the selected source/rule proofs above, not adoption of every cached row.
+  // Worker preparation still gathers all migration evidence before any writes.
+  const canonicalControls =
+    !worker && context.kind === 'collection' && context.resource !== undefined;
+  const flatAdoption = canonicalControls
+    ? { aliases: [], blocks: [], warnings: [], rules: [] }
+    : await collectSyncableFlatAdoption(store, {
+        drive,
+        app: installationApp,
+        proxyOrigin: context.proxyOrigin,
+        platform: context.platform,
+        document,
+        querySelection: trusted.querySelection,
+        properties: p,
+        referenceClass: context.schema.classes['syncable-reference'],
+        assertCurrent,
+      });
   assertCurrent();
-  const appSchema = await findSchema(store, drive, pluginSchema());
+  const appSchema = canonicalControls
+    ? undefined
+    : await findSchema(store, drive, pluginSchema());
   assertCurrent();
-  const legacy = await collectSyncableLegacySources(store, {
-    drive,
-    app: installationApp,
-    appDataProperty: appSchema.properties?.['app-data'],
-    platform: context.platform,
-    proxyOrigin: context.proxyOrigin,
-    properties: p,
-    collections: describeCollections(document),
-    currentSourceIsLegacy: context.kind === 'legacy',
-    principalDescriptions,
-    principalProvenance: async slot => {
-      assertCurrent();
-      const proof = await proxy.keyedPrincipalProvenance(
-        context.platform,
-        slot,
-      );
-      assertCurrent();
+  const legacy = canonicalControls
+    ? { sources: [], warnings: [] }
+    : await collectSyncableLegacySources(store, {
+        drive,
+        app: installationApp,
+        appDataProperty: appSchema?.properties?.['app-data'],
+        platform: context.platform,
+        proxyOrigin: context.proxyOrigin,
+        properties: p,
+        collections: describeCollections(document),
+        currentSourceIsLegacy: context.kind === 'legacy',
+        principalDescriptions,
+        principalProvenance: async slot => {
+          assertCurrent();
+          const proof = await proxy.keyedPrincipalProvenance(
+            context.platform,
+            slot,
+          );
+          assertCurrent();
 
-      return proof;
-    },
-  });
+          return proof;
+        },
+      });
   assertCurrent();
 
   const legacyReconnectPrincipal = async (slot: string) => {
@@ -642,7 +653,7 @@ export async function appProfile(
   );
   assertCurrent();
 
-  if (!worker) {
+  if (!worker && !canonicalControls) {
     await migrateSyncableApiViews(store, drive, apiSchema, assertCurrent);
     assertCurrent();
   }

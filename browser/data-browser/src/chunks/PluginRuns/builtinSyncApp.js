@@ -377,10 +377,18 @@ export function createSyncApp(store, context) {
       )
       .map(definition => definition.get(viewKind));
     const added = [];
-    let browse;
+    const config = row.get(property('syncable-source-config'));
+    const entity = config?.version === 3 && config.kind === 'collection';
+    const defaultKind = entity ? 'table' : 'syncable-collection';
+    let preferred = definitions.find(
+      definition =>
+        !definition.error &&
+        definition.get(property('syncable-source-config'))?.kind !== 'rule' &&
+        definition.get(viewKind) === defaultKind,
+    )?.subject;
 
     for (const [name, kind] of [
-      ['Collection', 'syncable-collection'],
+      ...(!entity ? [['Collection', 'syncable-collection']] : []),
       ['Table', 'table'],
       ['Sync', 'syncables'],
     ]) {
@@ -391,13 +399,15 @@ export function createSyncApp(store, context) {
         propVals: { [core.name]: name, [viewKind]: kind },
       });
       added.push(definition.subject);
-      if (kind === 'syncable-collection') browse = definition.subject;
+      if (kind === defaultKind) preferred = definition.subject;
     }
 
     if (added.length)
       await patch(row, {
         [tableViews]: [...subjects, ...added],
-        ...(!row.get(defaultView) && browse ? { [defaultView]: browse } : {}),
+        ...(!row.get(defaultView) && preferred
+          ? { [defaultView]: preferred }
+          : {}),
       });
   }
 
@@ -683,7 +693,7 @@ export function createSyncApp(store, context) {
       name: name || entityType(definition.resource).presentation.title,
       isA: [viewClass],
       values: {
-        [viewKind]: 'syncable-collection',
+        [viewKind]: 'table',
         [property('syncable-source-config')]: {
           version: 3,
           kind: 'rule',
@@ -1758,17 +1768,11 @@ export async function view({ root, store }) {
     (context.kind === 'collection' && !context.rule)
   ) {
     if (context.kind === 'collection') {
-      root.append(el('h3', 'Saved filters'));
-      for (const rule of await app.savedRules())
-        root.append(
-          button(rule.get(core.name), () =>
-            store.ui.openResource(rule.subject),
-          ),
-        );
+      root.append(el('h3', 'Saved filter sync'));
       root.append(
         el(
           'p',
-          'All cached rows remain available in Collection. Each saved filter syncs independently.',
+          'Select a saved filter above to see its sync history and controls. Table shows cached rows across filters.',
           'muted',
         ),
       );
@@ -1911,21 +1915,29 @@ export async function view({ root, store }) {
           }),
         ),
       );
-    controls.append(
-      button('Browse stored data', () =>
-        store.ui.openResource(context.rule.subject),
-      ),
-    );
     const selected = await store.getResource(context.rule.subject);
     root.append(
       el('p', selected.get(core.name)),
       controls,
-      el('p', (status.rows ?? 0) + ' stored entries'),
-      el(
-        'p',
-        'Last successful sync: ' + (status.lastSuccess ?? 'Never'),
-        'muted',
-      ),
+      ...(typeof status.rows === 'number'
+        ? [
+            el(
+              'p',
+              status.rows + ' entries read in the last attempt for this filter',
+            ),
+          ]
+        : []),
+      status.lastSuccess
+        ? el(
+            'p',
+            'Last completed sync for this filter: ' + status.lastSuccess,
+            'muted',
+          )
+        : el(
+            'p',
+            'This filter has not completed a sync yet. Existing rows may come from another filter or an earlier import.',
+            'muted',
+          ),
     );
     if (status.lastSuccess || status.incomplete)
       root.append(

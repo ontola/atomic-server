@@ -16,6 +16,7 @@ import { getTableDrive } from './tableDrive';
 import { quantizedNow, splitFilters } from './tableFiltering';
 
 import { useSyncableFilters } from '../PluginRuns/useSyncableFilters';
+import { syncableEntityViewKind } from '../PluginRuns/syncableCollectionCompatibility';
 
 const PAGE_SIZE = 30;
 
@@ -117,6 +118,7 @@ export function useTableData(
 
   return {
     ...tableView,
+    viewKind: syncableEntityViewKind(tableView.viewKind, syncableFilters.flat),
     syncableFilters,
     tableClass,
     queryFilters: queryFilter.filters,

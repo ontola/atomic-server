@@ -1816,18 +1816,101 @@ describe('shared entity tables and independent saved filters', () => {
       )!;
       expect(queued.disabled).toBe(true);
       expect(set.request).not.toHaveBeenCalled();
-      const browse = [...element.querySelectorAll('button')].find(
-        button => button.textContent === 'Browse stored data',
-      )!;
-      browse.click();
-      await Promise.resolve();
-      expect(set.store.ui.openResource).toHaveBeenCalledWith(
-        'atomic:initial-rule',
-      );
+      expect(element.textContent).not.toContain('Browse stored data');
+      expect(set.store.ui.openResource).not.toHaveBeenCalled();
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();
     }
+  });
+
+  it('asks for a filter in Sync instead of opening its stored data through a second filter list', async () => {
+    const set = setup();
+    Object.assign(set.context, { rule: undefined });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('Select a saved filter above');
+    expect(element.textContent).not.toContain('My saved filter');
+    expect(element.textContent).not.toContain('Never');
+    expect(set.request).not.toHaveBeenCalled();
+    expect(set.store.ui.openResource).not.toHaveBeenCalled();
+  });
+
+  it('keeps successful history scoped to the selected filter rather than inferring it from stored rows', async () => {
+    const set = setup();
+    set.data.get(root)![prop('mirror-status')] = {
+      lastSuccess: '2026-11-20T10:00:00Z',
+      rows: 1274,
+    };
+    set.data.set('atomic:existing-row', {
+      [prop('entity-table')]: root,
+      [prop('rule-memberships')]: ['atomic:initial-rule'],
+    });
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain('My saved filter');
+    expect(element.textContent).toContain(
+      'This filter has not completed a sync yet',
+    );
+    expect(element.textContent).toContain(
+      'another filter or an earlier import',
+    );
+    expect(element.textContent).not.toContain('Never');
+    expect(element.textContent).not.toContain('0 stored entries');
+    expect(element.textContent).not.toContain('1274');
+    expect(element.textContent).not.toContain('Browse stored data');
+    expect(set.request).not.toHaveBeenCalled();
+    expect(set.store.ui.openResource).not.toHaveBeenCalled();
+
+    const completed = '2026-11-21T07:41:12.909Z';
+    set.data.get('atomic:initial-rule')![prop('mirror-status')] = {
+      lastSuccess: completed,
+      rows: 12,
+      incomplete: true,
+    };
+    await view({ root: element, store: set.store });
+    expect(element.textContent).toContain(
+      'Last completed sync for this filter: ' + completed,
+    );
+    expect(element.textContent).toContain(
+      '12 entries read in the last attempt for this filter',
+    );
+    expect(element.textContent).not.toContain('1274');
+    expect(set.data.get(root)![prop('mirror-status')]).toEqual({
+      lastSuccess: '2026-11-20T10:00:00Z',
+      rows: 1274,
+    });
+  });
+
+  it('provisions native Table and Sync for entity collections while retaining the App directory Collection', async () => {
+    const set = await ready();
+
+    for (const [subject, row] of nodes(set.data, 'collection')) {
+      const views = (row[P + 'table-views'] as string[])
+        .map(definition => set.data.get(definition)!)
+        .filter(
+          definition =>
+            (definition[prop('source-config')] as { kind?: string } | undefined)
+              ?.kind !== 'rule',
+        );
+      expect(views.map(definition => definition[P + 'view-kind'])).toEqual([
+        'table',
+        'syncables',
+      ]);
+      expect(
+        set.data.get(row[P + 'table-default-view'] as string)![P + 'view-kind'],
+      ).toBe('table');
+      expect(subject).toBeTruthy();
+    }
+
+    const principals = nodes(set.data, 'principal');
+
+    expect(principals).toHaveLength(1);
+    expect(
+      (principals[0][1][P + 'table-views'] as string[]).map(
+        definition => set.data.get(definition)![P + 'view-kind'],
+      ),
+    ).toContain('syncable-collection');
   });
 
   it('opens saved-filter controls without provider reads and pauses only the selected rule', async () => {

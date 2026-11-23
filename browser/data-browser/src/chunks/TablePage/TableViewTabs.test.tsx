@@ -25,16 +25,20 @@ import { buildTheme } from '../../styling';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS, type ViewKind } from './tableViewKinds';
 
-const collectionView = vi.hoisted(() => ({ applicable: false }));
+const collectionView = vi.hoisted(() => ({
+  applicable: false,
+  lookup: vi.fn(),
+}));
 
 vi.mock('@chunks/PluginRuns/syncableCollectionViews', async importOriginal => ({
   ...(await importOriginal<
     typeof import('@chunks/PluginRuns/syncableCollectionViews')
   >()),
-  useSyncableCollectionView: () => ({
-    applicable: collectionView.applicable,
-    refresh: () => undefined,
-  }),
+  useSyncableCollectionView: (...args: unknown[]) => {
+    collectionView.lookup(...args);
+
+    return { applicable: collectionView.applicable, refresh: () => undefined };
+  },
 }));
 
 vi.mock('@chunks/AppPage/useDriveApps', () => ({
@@ -60,6 +64,7 @@ beforeAll(async () => {
 afterEach(() => {
   cleanup();
   collectionView.applicable = false;
+  collectionView.lookup.mockClear();
 });
 
 let n = 0;
@@ -83,10 +88,12 @@ function Harness({
   store,
   initial,
   setViewKind,
+  syncableEntity = false,
 }: {
   store: Store;
   initial: string[];
   setViewKind: (subject: string, kind: string) => void;
+  syncableEntity?: boolean;
 }) {
   const portal = useRef<HTMLDivElement>(null);
   const [views, setViews] = useState(initial);
@@ -108,6 +115,7 @@ function Harness({
           <TableViewTabs
             table='https://example.com/tables/pieces'
             rowClass='https://example.com/classes/piece'
+            syncableEntity={syncableEntity}
             views={views}
             activeView={active}
             setActiveView={setActive}
@@ -136,7 +144,7 @@ function Harness({
   );
 }
 
-async function setup(views: Array<[string, string]>) {
+async function setup(views: Array<[string, string]>, syncableEntity = false) {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
   const subjects: string[] = [];
 
@@ -146,7 +154,12 @@ async function setup(views: Array<[string, string]>) {
 
   const setViewKind = vi.fn();
   render(
-    <Harness store={store} initial={subjects} setViewKind={setViewKind} />,
+    <Harness
+      store={store}
+      initial={subjects}
+      setViewKind={setViewKind}
+      syncableEntity={syncableEntity}
+    />,
   );
 
   return { setViewKind, store, subjects };
@@ -221,6 +234,24 @@ it('keeps collection views out of a table without a valid descriptor', async () 
 
   expect(within(menu).queryByText('Collection')).toBeNull();
   expect(within(menu).queryByText('Sync')).toBeNull();
+});
+
+it('keeps Collection out of canonical entity tables even with a saved descriptor', async () => {
+  collectionView.applicable = true;
+  await setup([['Table', 'table']], true);
+  fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
+  const menu = await screen.findByRole('menu');
+
+  expect(
+    within(menu).queryByRole('menuitem', { name: 'Collection' }),
+  ).toBeNull();
+  expect(within(menu).getByRole('menuitem', { name: 'Table' })).toBeTruthy();
+  expect(collectionView.lookup).toHaveBeenLastCalledWith(
+    undefined,
+    'https://example.com/tables/pieces',
+    'https://example.com/classes/piece',
+    false,
+  );
 });
 
 it('manually adds an applicable generic collection view while keeping the Table tab', async () => {

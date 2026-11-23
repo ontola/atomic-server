@@ -1,123 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import {
   core,
-  dataBrowser,
-  subjectsReferToSameResource,
   unknownSubject,
-  useCanWrite,
   useResourceSnapshot,
   useStore,
   useValue,
   type Resource,
   type Store,
 } from '@tomic/react';
-import { parseReadSelection } from 'syncables/browser';
 import { styled } from 'styled-components';
 import { Button } from '@components/Button';
 import { constructOpenURL } from '@helpers/navigation';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import type { TableColumn } from '../TablePage/useTableColumns';
 import { getTableDrive } from '../TablePage/tableDrive';
-import { canonicalValue } from './builtinSyncIdentity.js';
 import { openFlatSyncableRow } from './syncableFlatNavigation';
-import {
-  parseSyncableCollectionView,
-  type SyncableCollectionDescriptor,
-} from './syncableCollection';
-import {
-  parseSyncableSourceConfig,
-  parseSyncableSourceKey,
-  sourceConfigMatchesKey,
-  type SyncableSourceConfigV3,
-} from './syncableSource';
+import { parseSyncableCollectionView } from './syncableCollection';
 import type { useSyncableFilters } from './useSyncableFilters';
-
-type Properties = Record<string, string>;
-const same = (a: unknown, b: unknown) =>
-  JSON.stringify(canonicalValue(a)) === JSON.stringify(canonicalValue(b));
-const object = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-
-/** Rendering a stored summary never supplies evidence to create a child scope. */
-function hasNavigationEvidence(
-  row: Resource,
-  table: Resource,
-  drive: string,
-  source: SyncableSourceConfigV3,
-  descriptor: SyncableCollectionDescriptor,
-  properties: Properties,
-  configValue: unknown,
-  keyValue: unknown,
-  intentsValue: unknown,
-  membershipsValue: unknown,
-  activeRule?: string,
-): boolean {
-  try {
-    const config = parseSyncableSourceConfig(configValue);
-    const key = parseSyncableSourceKey(keyValue);
-    const assignedDrive = row.get('https://atomicdata.dev/properties/drive');
-    if (
-      typeof keyValue !== 'string' ||
-      key.version !== 3 ||
-      key.kind !== 'record' ||
-      config.version !== 3 ||
-      config.kind !== 'record' ||
-      !sourceConfigMatchesKey(config, key, keyValue) ||
-      !config.record ||
-      !config.read ||
-      config.read.resource !== config.resource ||
-      !config.entityIdentity ||
-      config.resource !== source.resource ||
-      config.platform !== source.platform ||
-      config.proxyOrigin !== source.proxyOrigin ||
-      !same(config.principal, source.principal) ||
-      !row.hasClasses(descriptor.rowClass) ||
-      !subjectsReferToSameResource(
-        row.get(properties['syncable-entity-table']),
-        table.subject,
-      ) ||
-      (assignedDrive !== undefined &&
-        (typeof assignedDrive !== 'string' ||
-          !subjectsReferToSameResource(assignedDrive, drive))) ||
-      !Array.isArray(intentsValue) ||
-      !intentsValue.length ||
-      (activeRule &&
-        (!Array.isArray(membershipsValue) ||
-          !membershipsValue.some(
-            subject =>
-              typeof subject === 'string' &&
-              subjectsReferToSameResource(subject, activeRule),
-          )))
-    )
-      return false;
-    const intent = intentsValue[0];
-    if (
-      !object(intent) ||
-      intent.version !== 1 ||
-      intent.sourceEntityKey !== keyValue
-    )
-      return false;
-    const definition = parseReadSelection(intent.definition);
-
-    return (
-      definition.source.kind === 'related' &&
-      definition.source.origin.entity.key === config.entityIdentity.key &&
-      intent.resource === definition.resource &&
-      !!descriptor.relationships?.some(
-        relationship =>
-          relationship.resource === intent.resource &&
-          same(
-            relationship.via,
-            definition.source.kind === 'related'
-              ? definition.source.via
-              : undefined,
-          ),
-      )
-    );
-  } catch {
-    return false;
-  }
-}
 
 /** Native data navigation only; this virtual column neither runs nor refreshes an app. */
 export function useSyncableTableNavigation(
@@ -132,7 +31,6 @@ export function useSyncableTableNavigation(
     state.properties?.['syncable-collection-view'] ?? unknownSubject,
   );
   const [rowClass] = useValue(table, core.properties.classtype);
-  const writable = useCanWrite(table);
   const drive = getTableDrive(store, table) ?? store.getDrive();
   const signature = useMemo(
     () =>
@@ -171,8 +69,6 @@ export function useSyncableTableNavigation(
     const saved = JSON.parse(signature) as {
       rawDescriptor: unknown;
       rowClass: unknown;
-      source: SyncableSourceConfigV3;
-      properties: Properties;
       activeRule?: string;
     };
     const descriptor = parseSyncableCollectionView(
@@ -185,11 +81,7 @@ export function useSyncableTableNavigation(
         subject={subject}
         table={table}
         drive={drive}
-        source={saved.source}
-        descriptor={descriptor}
-        properties={saved.properties}
         activeRule={saved.activeRule}
-        writable={writable}
       />
     );
 
@@ -199,56 +91,42 @@ export function useSyncableTableNavigation(
         virtual: { label: 'Open', width: 110, Cell },
       },
     ];
-  }, [ready, drive, table, signature, writable]);
+  }, [ready, drive, table, signature]);
 }
 
 // @wc-ignore
-async function destination(
+/** Resolve and open a stored action through the shared native checker. */
+export async function syncableRowDestination(
   store: Store,
   drive: string,
   table: Resource,
   row: Resource,
-  allowScope: boolean,
   activeRule?: string,
+  actionId?: string,
 ): Promise<string> {
-  if (!allowScope) return constructOpenURL(row.subject);
+  const actor = store.getAgent()?.subject;
+  const server = store.getServerUrl();
+
+  const assertSession = () => {
+    if (store.getAgent()?.subject !== actor || store.getServerUrl() !== server)
+      throw new Error(
+        'The active account or server changed; reopen this resource',
+      );
+  };
+
   const target = await openFlatSyncableRow(
     store,
     drive,
     table,
     row,
     activeRule,
+    actionId,
   );
+  assertSession();
   if (!target) return constructOpenURL(row.subject);
   const url = new URL(constructOpenURL(target.subject), window.location.href);
-  let preferred = 'view' in target ? target.view : undefined;
-
-  if (!subjectsReferToSameResource(target.subject, row.subject)) {
-    const targetTable = await store.getResource(target.subject);
-
-    if (targetTable.hasClasses(dataBrowser.classes.table)) {
-      for (const subject of targetTable.getSubjects(
-        dataBrowser.properties.tableViews,
-      )) {
-        const view = await store.getResource(subject);
-
-        if (
-          !view.error &&
-          view.hasClasses(dataBrowser.classes.view) &&
-          subjectsReferToSameResource(
-            view.get(core.properties.parent),
-            target.subject,
-          ) &&
-          view.get(dataBrowser.properties.viewKind) === 'table'
-        ) {
-          preferred = subject;
-          break;
-        }
-      }
-    }
-  }
-
-  if (preferred) url.searchParams.set('view', preferred);
+  if ('view' in target && target.view)
+    url.searchParams.set('view', target.view);
   if ('syncFilter' in target && target.syncFilter)
     url.searchParams.set('syncFilter', target.syncFilter);
 
@@ -259,43 +137,20 @@ function NavigationCell({
   subject,
   table,
   drive,
-  source,
-  descriptor,
-  properties,
   activeRule,
-  writable,
 }: {
   subject: string;
   table: Resource;
   drive: string;
-  source: SyncableSourceConfigV3;
-  descriptor: SyncableCollectionDescriptor;
-  properties: Properties;
   activeRule?: string;
-  writable: boolean;
 }): JSX.Element {
   const store = useStore();
   const navigate = useNavigateWithTransition();
   const snapshot = useResourceSnapshot(subject);
   const row = snapshot.resource;
-  const [config] = useValue(
-    row,
-    properties['syncable-source-config'] ?? unknownSubject,
-  );
-  const [key] = useValue(
-    row,
-    properties['syncable-source-key'] ?? unknownSubject,
-  );
-  const [intents] = useValue(
-    row,
-    properties['syncable-navigation-intents'] ?? unknownSubject,
-  );
-  const [memberships] = useValue(
-    row,
-    properties['syncable-rule-memberships'] ?? unknownSubject,
-  );
   const [status, setStatus] = useState<{
     subject: string;
+    snapshot: typeof snapshot;
     pending: boolean;
     error?: string;
   }>();
@@ -304,66 +159,36 @@ function NavigationCell({
     () => () => {
       generation.current++;
     },
-    [subject],
+    [subject, snapshot],
   );
-  const evidence = useMemo(
-    () =>
-      snapshot.ready &&
-      !snapshot.error &&
-      hasNavigationEvidence(
-        row,
-        table,
-        drive,
-        source,
-        descriptor,
-        properties,
-        config,
-        key,
-        intents,
-        memberships,
-        activeRule,
-      ),
-    [
-      snapshot,
-      row,
-      table,
-      drive,
-      source,
-      descriptor,
-      properties,
-      config,
-      key,
-      intents,
-      memberships,
-      activeRule,
-    ],
-  );
-  const busy = status?.subject === subject && status.pending;
-  const error = status?.subject === subject ? status.error : undefined;
+  const currentStatus = status?.snapshot === snapshot ? status : undefined;
+  const busy = currentStatus?.pending;
+  const error = currentStatus?.error;
   if (!snapshot.ready || snapshot.error) return <CellBox />;
 
   const open = (event: React.MouseEvent) => {
     event.stopPropagation();
     const token = ++generation.current;
-    setStatus({ subject, pending: true });
-    void destination(store, drive, table, row, writable && evidence, activeRule)
+    setStatus({ subject, snapshot, pending: true });
+    void syncableRowDestination(store, drive, table, row, activeRule)
       .then(path => {
         if (generation.current === token) return navigate(path);
       })
-      .catch(reason => {
-        if (generation.current === token)
-          setStatus({
-            subject,
-            pending: false,
-            error: String(reason?.message ?? reason),
-          });
-      })
-      .finally(() => {
-        if (generation.current === token)
-          setStatus(current =>
-            current ? { ...current, pending: false } : current,
-          );
-      });
+      .then(
+        () => {
+          if (generation.current === token)
+            setStatus({ subject, snapshot, pending: false });
+        },
+        reason => {
+          if (generation.current === token)
+            setStatus({
+              subject,
+              snapshot,
+              pending: false,
+              error: String(reason?.message ?? reason),
+            });
+        },
+      );
   };
 
   return (

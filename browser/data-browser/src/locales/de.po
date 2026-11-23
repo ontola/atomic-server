@@ -14066,3 +14066,11 @@ msgstr "Registrierung der Identitäts-App"
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Native uniqueness registration outside any integration iframe write root."
 msgstr "Native Eindeutigkeitsregistrierung außerhalb aller Schreibwurzeln des Integrations-Iframes."
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "This filter has no completed sync yet. Choose All cached rows to browse data stored by other filters or earlier imports."
+msgstr "Für diesen Filter wurde noch keine Synchronisierung abgeschlossen. Wähle Alle gespeicherten Zeilen, um Daten aus anderen Filtern oder früheren Importen anzuzeigen."
+
+#: src/chunks/PluginRuns/SyncableRecordActions.tsx
+msgid "Related collections"
+msgstr "Verknüpfte Sammlungen"

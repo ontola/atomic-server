@@ -16,6 +16,8 @@ import {
 } from './builtinSyncIdentity.js';
 import {
   openFlatSyncableRow,
+  resolveFlatSyncableRowActions,
+  resolveFlatSyncableRecordActions,
   saveFlatSyncableSelection,
 } from './syncableFlatNavigation';
 
@@ -23,15 +25,20 @@ const p = Object.fromEntries(
   [
     'syncable-source-config',
     'syncable-source-key',
+    'syncable-collection-view',
     'syncable-entity-table',
     'syncable-navigation-intents',
     'syncable-node-kind',
+    'syncable-mirror-status',
     'syncable-rule-memberships',
   ].map(name => [name, 'atomic:' + name]),
 );
 vi.mock('@tomic/lib', async original => ({
   ...(await original<typeof import('@tomic/lib')>()),
-  findSchema: async () => ({ properties: p }),
+  findSchema: async () => ({
+    properties: p,
+    classes: { 'syncable-reference': 'atomic:reference' },
+  }),
 }));
 afterEach(() => vi.restoreAllMocks());
 const principal = { kind: 'public' as const };
@@ -99,6 +106,19 @@ function fixture(queryGate?: () => Promise<void>) {
     [core.properties.parent]: 'atomic:principal',
     [core.properties.isA]: [dataBrowser.classes.table],
     [core.properties.classtype]: 'atomic:workspace-class',
+    [p['syncable-collection-view']]: {
+      version: 1,
+      rowClass: 'atomic:workspace-class',
+      title: 'Workspaces',
+      columns: [{ property: core.properties.name, label: 'Name' }],
+      relationships: [
+        {
+          resource: 'task',
+          title: 'Tasks',
+          via: { collection: 'tasks', kind: 'identity' },
+        },
+      ],
+    },
     [p['syncable-source-config']]: source,
     [p['syncable-source-key']]: tableKey,
     [dataBrowser.properties.tableViews]: ['atomic:rule'],
@@ -107,6 +127,14 @@ function fixture(queryGate?: () => Promise<void>) {
     [core.properties.parent]: 'atomic:principal',
     [core.properties.isA]: [dataBrowser.classes.table],
     [p['syncable-source-config']]: targetSource,
+    [core.properties.classtype]: 'atomic:task-class',
+    [p['syncable-collection-view']]: {
+      version: 1,
+      rowClass: 'atomic:task-class',
+      title: 'Tasks',
+      columns: [{ property: core.properties.name, label: 'Name' }],
+      relationships: [],
+    },
     [p['syncable-source-key']]: entityTableKey(targetSource),
   });
   values.set('atomic:row', {
@@ -138,6 +166,10 @@ function fixture(queryGate?: () => Promise<void>) {
     [core.properties.parent]: 'atomic:workspaces',
     [core.properties.isA]: [dataBrowser.classes.view],
     [core.properties.name]: 'Selected workspaces',
+    [p['syncable-source-key']]: ruleSourceKey(
+      tableKey,
+      readSelectionKey(definition),
+    ),
     [p['syncable-source-config']]: {
       version: 3,
       kind: 'rule',
@@ -182,7 +214,12 @@ function fixture(queryGate?: () => Promise<void>) {
     getAgent: () => ({ subject: session.actor }),
     getDrive: () => 'atomic:drive',
     normalizeSubject: (subject: string) => subject,
-    getResource: async (subject: string) => wrap(subject),
+    getResource: async (subject: string) => {
+      const resource = wrap(subject);
+      resources.set(subject, resource);
+
+      return resource;
+    },
     newResource: vi.fn(
       async (input: {
         parent: string;
@@ -474,4 +511,690 @@ it('refuses an unproven target query member instead of treating it as foreign ab
     saveFlatSyncableSelection(store, 'atomic:drive', table, related, 'Tasks'),
   ).rejects.toThrow('ancestry');
   expect(store.newResource).not.toHaveBeenCalled();
+});
+
+function addEntityTable(
+  values: Map<string, Record<string, unknown>>,
+  resource: string,
+  relationships: unknown[] = [],
+) {
+  const subject = 'atomic:' + resource;
+  values.set(subject, {
+    [core.properties.parent]: 'atomic:principal',
+    [core.properties.isA]: [dataBrowser.classes.table],
+    [core.properties.classtype]: 'atomic:' + resource + '-class',
+    [p['syncable-source-config']]: {
+      version: 3,
+      kind: 'collection',
+      ...scope,
+      resource,
+    },
+    [p['syncable-source-key']]: entityTableKey({ ...scope, resource }),
+    [p['syncable-collection-view']]: {
+      version: 1,
+      rowClass: 'atomic:' + resource + '-class',
+      title: resource,
+      columns: [{ property: core.properties.name, label: 'Name' }],
+      relationships,
+    },
+  });
+
+  return subject;
+}
+
+function twoHopFixture(queryGate?: () => Promise<void>) {
+  const set = fixture(queryGate);
+  const descriptor = set.values.get('atomic:tasks')![
+    p['syncable-collection-view']
+  ] as { relationships: unknown[] };
+  descriptor.relationships = [
+    {
+      resource: 'comment',
+      title: 'Comments',
+      via: { collection: 'taskComments', kind: 'identity' },
+    },
+  ];
+  addEntityTable(set.values, 'comment');
+
+  return set;
+}
+
+it('resolves all actions through stored data without writes, provider reads or parent-dependent ownership', async () => {
+  const { store, row, values, saved } = fixture();
+  values.get('atomic:row')![core.properties.parent] = 'atomic:drive';
+  const before = JSON.stringify([...values]);
+  const remote = vi.fn(() => {
+    throw new Error('Provider access is forbidden');
+  });
+  Object.assign(store, { fetchResourceFromServer: remote });
+  const resolved = await resolveFlatSyncableRecordActions(
+    store,
+    'atomic:drive',
+    row,
+  );
+  expect(resolved?.table.subject).toBe('atomic:workspaces');
+  expect(resolved?.actions).toMatchObject([
+    { label: 'Tasks', targetResource: 'task' },
+  ]);
+  expect(JSON.stringify([...values])).toBe(before);
+  expect(store.newResource).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+  expect(remote).not.toHaveBeenCalled();
+});
+
+it('checks every direct intent against its descriptor and supports an explicitly chosen second action', async () => {
+  const { store, row, table, values } = fixture();
+  addEntityTable(values, 'project');
+  const descriptor = values.get(table.subject)![
+    p['syncable-collection-view']
+  ] as { relationships: unknown[] };
+  descriptor.relationships.push({
+    resource: 'project',
+    title: 'Projects',
+    via: { collection: 'projects', kind: 'identity' },
+  });
+  const intents = values.get(row.subject)![
+    p['syncable-navigation-intents']
+  ] as Record<string, unknown>[];
+  const project = structuredClone(intents[0]);
+  project.resource = 'project';
+  project.label = 'Projects';
+  const selection = project.definition as ReadSelection;
+  selection.resource = 'project';
+  if (selection.source.kind === 'related')
+    selection.source.via.collection = 'projects';
+  intents.push(
+    { ...project, definition: { ...selection, resource: 'unapproved' } },
+    project,
+    structuredClone(project),
+  );
+  const actions = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  expect(actions.map(action => action.label)).toEqual(['Tasks', 'Projects']);
+  const target = await openFlatSyncableRow(
+    store,
+    'atomic:drive',
+    table,
+    row,
+    undefined,
+    actions[1].id,
+  );
+  expect(target).toMatchObject({ subject: 'atomic:project' });
+  expect(
+    (
+      values.get('atomic:saved-rule')![p['syncable-source-config']] as {
+        resource: string;
+      }
+    ).resource,
+  ).toBe('project');
+});
+
+it('ignores descriptor-mismatched direct evidence and rejects stale requested actions', async () => {
+  const { store, row, table, values } = fixture();
+  const [action] = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  (
+    values.get(table.subject)![p['syncable-collection-view']] as {
+      relationships: unknown[];
+    }
+  ).relationships = [];
+  expect(
+    await resolveFlatSyncableRowActions(store, 'atomic:drive', table, row),
+  ).toEqual([]);
+  await expect(
+    openFlatSyncableRow(
+      store,
+      'atomic:drive',
+      table,
+      row,
+      undefined,
+      action.id,
+    ),
+  ).rejects.toThrow('no longer available');
+  expect(store.newResource).not.toHaveBeenCalled();
+});
+
+it('reuses the exact attached saved filter without source or target write access', async () => {
+  const { store, row, table, session, saved } = fixture();
+  const first = await openFlatSyncableRow(store, 'atomic:drive', table, row);
+  session.writable = false;
+  saved.mockClear();
+  expect(await openFlatSyncableRow(store, 'atomic:drive', table, row)).toEqual(
+    first,
+  );
+  expect(store.newResource).toHaveBeenCalledTimes(1);
+  expect(saved).not.toHaveBeenCalled();
+});
+
+it('composes Organizations → Repositories → Issues from declared relationships without enumerating cached entities', async () => {
+  const { store, row, table, values } = fixture();
+  const org = { ...entity, resource: 'organization' };
+  org.key = JSON.stringify([org.resource, org.template, org.values]);
+  const source = {
+    version: 3,
+    kind: 'collection',
+    ...scope,
+    resource: 'organization',
+  };
+  const rowKey = entitySourceKey({ ...scope, entityIdentity: org });
+  Object.assign(values.get(table.subject)!, {
+    [p['syncable-source-config']]: source,
+    [p['syncable-source-key']]: entityTableKey(source),
+    [p['syncable-collection-view']]: {
+      version: 1,
+      rowClass: 'atomic:workspace-class',
+      title: 'Organizations',
+      columns: [{ property: core.properties.name, label: 'Name' }],
+      relationships: [
+        {
+          resource: 'repository',
+          title: 'Repositories',
+          via: { collection: 'orgRepos', kind: 'identity' },
+        },
+      ],
+    },
+  });
+  const orgRead = { ...read, resource: 'organization' };
+  const repos: ReadSelection = {
+    version: 1,
+    resource: 'repository',
+    source: {
+      kind: 'related',
+      origin: { entity: org, record: { id: 7 }, context: {}, read: orgRead },
+      via: { collection: 'orgRepos', kind: 'identity' },
+    },
+  };
+  Object.assign(values.get(row.subject)!, {
+    [p['syncable-source-key']]: rowKey,
+    [p['syncable-source-config']]: {
+      ...source,
+      kind: 'record',
+      entityIdentity: org,
+      record: { id: 7 },
+      context: {},
+      read: orgRead,
+    },
+    [p['syncable-navigation-intents']]: [
+      {
+        version: 1,
+        resource: 'repository',
+        sourceEntityKey: rowKey,
+        label: 'Repositories',
+        definition: repos,
+      },
+    ],
+  });
+  addEntityTable(values, 'repository', [
+    {
+      resource: 'issue',
+      title: 'Issues',
+      via: { collection: 'repoIssues', kind: 'identity' },
+    },
+  ]);
+  addEntityTable(values, 'issue');
+  const actions = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  expect(actions.map(action => action.label)).toEqual([
+    'Repositories',
+    'Issues (via Repositories)',
+  ]);
+  expect(actions[1].definition.source).toMatchObject({
+    kind: 'fanout',
+    from: repos,
+    via: { collection: 'repoIssues' },
+  });
+  expect(actions[1].definition.source).not.toHaveProperty('entities');
+  const result = await openFlatSyncableRow(
+    store,
+    'atomic:drive',
+    table,
+    row,
+    undefined,
+    actions[1].id,
+  );
+  expect(result).toMatchObject({ subject: 'atomic:issue' });
+  expect(values.get('atomic:saved-rule')).not.toHaveProperty(
+    p['syncable-mirror-status'],
+  );
+  expect(values.get(row.subject)![p['syncable-rule-memberships']]).toEqual([
+    'atomic:rule',
+  ]);
+});
+
+it.each(['missing', 'ambiguous', 'foreign', 'other principal', 'incomplete'])(
+  'omits the derived action for a %s canonical target without writing',
+  async condition => {
+    const { store, row, table, values } = twoHopFixture();
+    if (condition === 'missing') values.delete('atomic:comment');
+    if (condition === 'ambiguous')
+      values.set('atomic:duplicate-comment', {
+        ...values.get('atomic:comment'),
+      });
+
+    if (condition === 'foreign') {
+      values.set('atomic:other-drive', {
+        [core.properties.isA]: [server.classes.drive],
+      });
+      values.get('atomic:comment')![core.properties.parent] =
+        'atomic:other-drive';
+    }
+
+    if (condition === 'other principal') {
+      (
+        values.get('atomic:comment')![p['syncable-source-config']] as Record<
+          string,
+          unknown
+        >
+      ).principal = {
+        kind: 'authenticated',
+        namespace: 'https://identity.example',
+        subject: 8,
+      };
+    }
+
+    if (condition === 'incomplete') {
+      const original = vi
+        .mocked(CollectionBuilder.prototype.build)
+        .getMockImplementation()!;
+      vi.mocked(CollectionBuilder.prototype.build).mockImplementation(
+        function (this: CollectionBuilder) {
+          const result = original.call(this);
+          const params = (this as unknown as { params: { value: string } })
+            .params;
+          if (
+            params.value === entityTableKey({ ...scope, resource: 'comment' })
+          )
+            Object.assign(result, { totalMembers: 2 });
+
+          return result;
+        },
+      );
+    }
+
+    const actions = await resolveFlatSyncableRowActions(
+      store,
+      'atomic:drive',
+      table,
+      row,
+    );
+    expect(actions.map(action => action.label)).toEqual(['Tasks']);
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
+
+it('stops at depth two, ignores cycles and deduplicates repeated selections', async () => {
+  const { store, row, table, values } = twoHopFixture();
+  const tasks = values.get('atomic:tasks')![p['syncable-collection-view']] as {
+    relationships: unknown[];
+  };
+  tasks.relationships.push({
+    resource: 'workspace',
+    title: 'Back to workspaces',
+    via: { collection: 'workspaces', kind: 'identity' },
+  });
+  const comments = values.get('atomic:comment')![
+    p['syncable-collection-view']
+  ] as { relationships: unknown[] };
+  comments.relationships.push({
+    resource: 'reaction',
+    title: 'Reactions',
+    via: { collection: 'reactions', kind: 'identity' },
+  });
+  addEntityTable(values, 'reaction');
+  const intents = values.get(row.subject)![
+    p['syncable-navigation-intents']
+  ] as unknown[];
+  intents.push(structuredClone(intents[0]));
+  const actions = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  expect(actions.map(action => action.label)).toEqual([
+    'Tasks',
+    'Comments (via Tasks)',
+  ]);
+});
+
+it.each(['descriptor', 'row evidence', 'account'])(
+  'revokes an explicit two-hop action when %s changes while its filter lookup is pending',
+  async change => {
+    let release!: () => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const { store, row, table, values, session } = twoHopFixture(async () => {
+      entered();
+      await gate;
+    });
+    const action = (
+      await resolveFlatSyncableRowActions(store, 'atomic:drive', table, row)
+    )[1];
+    const operation = openFlatSyncableRow(
+      store,
+      'atomic:drive',
+      table,
+      row,
+      undefined,
+      action.id,
+    );
+    await waiting;
+    if (change === 'descriptor')
+      (
+        values.get('atomic:tasks')![p['syncable-collection-view']] as {
+          relationships: unknown[];
+        }
+      ).relationships = [];
+    if (change === 'row evidence')
+      values.get(row.subject)![p['syncable-navigation-intents']] = [];
+    if (change === 'account') session.actor = 'atomic:agent:another';
+    release();
+    await expect(operation).rejects.toThrow(/changed/);
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps allocations bounded by target rights without requiring source write rights', async () => {
+  const { store, row, table } = fixture();
+  const sourcePermission = vi
+    .spyOn(table, 'canWrite')
+    .mockResolvedValue([false, undefined]);
+  expect(
+    await openFlatSyncableRow(store, 'atomic:drive', table, row),
+  ).toMatchObject({ subject: 'atomic:tasks' });
+  expect(sourcePermission).not.toHaveBeenCalled();
+});
+
+it('does not follow an external logical-table pointer when opening a stored resource', async () => {
+  const { store, row, values } = fixture();
+  values.get(row.subject)![p['syncable-entity-table']] =
+    'https://provider.example/repos';
+  const get = vi.spyOn(store, 'getResource');
+  await expect(
+    resolveFlatSyncableRecordActions(store, 'atomic:drive', row),
+  ).rejects.toThrow('another server');
+  expect(get).not.toHaveBeenCalledWith('https://provider.example/repos');
+});
+
+it('does not derive cycles, self relationships or a third navigation hop', async () => {
+  const { store, row, table, values } = twoHopFixture();
+  const middle = values.get('atomic:tasks')![p['syncable-collection-view']] as {
+    relationships: unknown[];
+  };
+  middle.relationships.push(
+    {
+      resource: 'workspace',
+      title: 'Workspaces',
+      via: { collection: 'workspaces', kind: 'identity' },
+    },
+    {
+      resource: 'task',
+      title: 'Tasks',
+      via: { collection: 'tasks', kind: 'identity' },
+    },
+  );
+  (
+    values.get('atomic:comment')![p['syncable-collection-view']] as {
+      relationships: unknown[];
+    }
+  ).relationships = [
+    {
+      resource: 'attachment',
+      title: 'Attachments',
+      via: { collection: 'attachments', kind: 'identity' },
+    },
+  ];
+  addEntityTable(values, 'attachment');
+  const actions = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  expect(actions.map(action => action.targetResource)).toEqual([
+    'task',
+    'comment',
+  ]);
+});
+
+it('rechecks a selected intermediate descriptor while saving a two-hop filter', async () => {
+  let entered!: () => void;
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const { store, row, table, values } = fixture(async () => {
+    entered();
+    await gate;
+  });
+  (
+    values.get('atomic:tasks')![p['syncable-collection-view']] as {
+      relationships: unknown[];
+    }
+  ).relationships = [
+    {
+      resource: 'comment',
+      title: 'Comments',
+      via: { collection: 'taskComments', kind: 'identity' },
+    },
+  ];
+  addEntityTable(values, 'comment');
+  const actions = await resolveFlatSyncableRowActions(
+    store,
+    'atomic:drive',
+    table,
+    row,
+  );
+  const operation = openFlatSyncableRow(
+    store,
+    'atomic:drive',
+    table,
+    row,
+    undefined,
+    actions[1].id,
+  );
+  await waiting;
+  (
+    values.get('atomic:tasks')![p['syncable-collection-view']] as {
+      relationships: unknown[];
+    }
+  ).relationships = [];
+  release();
+  await expect(operation).rejects.toThrow('relationships changed');
+  expect(store.newResource).not.toHaveBeenCalled();
+});
+
+it('reuses a saved filter already attached under its legacy subject alias without requiring a grant', async () => {
+  const { store, row, table, values, session, saved } = fixture();
+  const first = await openFlatSyncableRow(store, 'atomic:drive', table, row);
+  values.get('atomic:tasks')![dataBrowser.properties.tableViews] = [
+    'did:ad:saved-rule',
+  ];
+  session.writable = false;
+  saved.mockClear();
+  expect(await openFlatSyncableRow(store, 'atomic:drive', table, row)).toEqual(
+    first,
+  );
+  expect(saved).not.toHaveBeenCalled();
+  expect(
+    values.get('atomic:tasks')![dataBrowser.properties.tableViews],
+  ).toEqual(['did:ad:saved-rule']);
+});
+
+it.each(['embedded object', 'scalar reference'])(
+  'opens a legitimate %s summary without navigation proof or an error',
+  async kind => {
+    const { store, row, values, saved } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = ['atomic:reference'];
+    const config = raw[p['syncable-source-config']] as Record<string, unknown>;
+    delete config.read;
+    if (kind === 'scalar reference') config.record = {};
+    const before = JSON.stringify([...values]);
+    const resolved = await resolveFlatSyncableRecordActions(
+      store,
+      'atomic:drive',
+      row,
+    );
+    expect(resolved?.table.subject).toBe('atomic:workspaces');
+    expect(resolved?.actions).toEqual([]);
+    expect(JSON.stringify([...values])).toBe(before);
+    expect(store.newResource).not.toHaveBeenCalled();
+    expect(saved).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['principal', 'source key', 'Drive', 'unrelated class'])(
+  'still rejects a reference summary with corrupt %s evidence',
+  async corruption => {
+    const { store, row, values } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = ['atomic:reference'];
+    const config = raw[p['syncable-source-config']] as Record<string, unknown>;
+    delete config.read;
+    if (corruption === 'principal')
+      config.principal = {
+        kind: 'authenticated',
+        namespace: 'https://identity.example',
+        subject: 8,
+      };
+    if (corruption === 'source key') raw[p['syncable-source-key']] = 'invalid';
+    if (corruption === 'Drive')
+      raw['https://atomicdata.dev/properties/drive'] = 'atomic:other-drive';
+    if (corruption === 'unrelated class')
+      raw[core.properties.isA] = ['atomic:unrelated'];
+    await expect(
+      resolveFlatSyncableRecordActions(store, 'atomic:drive', row),
+    ).rejects.toThrow();
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
+
+function addOrdinaryTableView(values: Map<string, Record<string, unknown>>) {
+  values.get('atomic:tasks')![dataBrowser.properties.tableViews] = [
+    'atomic:table-view',
+  ];
+  values.set('atomic:table-view', {
+    [core.properties.parent]: 'atomic:tasks',
+    [core.properties.isA]: [dataBrowser.classes.view],
+    [core.properties.name]: 'My table',
+    [dataBrowser.properties.viewKind]: 'table',
+  });
+}
+
+it('returns the ordinary Table presentation with the same saved filter identity', async () => {
+  const { store, row, table, values } = fixture();
+  addOrdinaryTableView(values);
+  const first = await openFlatSyncableRow(store, 'atomic:drive', table, row);
+  expect(first).toEqual({
+    subject: 'atomic:tasks',
+    view: 'atomic:table-view',
+    syncFilter: 'atomic:saved-rule',
+  });
+  expect(
+    values.get('atomic:saved-rule')![dataBrowser.properties.viewKind],
+  ).toBe('table');
+  expect(await openFlatSyncableRow(store, 'atomic:drive', table, row)).toEqual(
+    first,
+  );
+  expect(store.newResource).toHaveBeenCalledTimes(1);
+});
+
+it.each(['target move', 'source descriptor'])(
+  'rechecks %s while an ordinary Table View read is pending',
+  async change => {
+    const { store, row, table, values } = fixture();
+    addOrdinaryTableView(values);
+    let entered!: () => void;
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const get = store.getResource.bind(store);
+    vi.spyOn(store, 'getResource').mockImplementation(async subject => {
+      const resource = await get(subject);
+
+      if (subject === 'atomic:table-view') {
+        entered();
+        await gate;
+      }
+
+      return resource;
+    });
+    const operation = openFlatSyncableRow(store, 'atomic:drive', table, row);
+    await waiting;
+    if (change === 'target move')
+      values.get('atomic:tasks')![core.properties.parent] = 'atomic:drive';
+    else
+      (
+        values.get(table.subject)![p['syncable-collection-view']] as {
+          relationships: unknown[];
+        }
+      ).relationships = [];
+    release();
+    await expect(operation).rejects.toThrow(/changed/);
+  },
+);
+
+it('skips external and invalid stored View pointers before resource reads', async () => {
+  const { store, row, table, values } = fixture();
+  addOrdinaryTableView(values);
+  values.get('atomic:tasks')![dataBrowser.properties.tableViews] = [
+    'https://provider.example/view',
+    '//provider.example/view',
+    'invalid',
+    'atomic:table-view',
+  ];
+  const get = vi.spyOn(store, 'getResource');
+  expect(
+    await openFlatSyncableRow(store, 'atomic:drive', table, row),
+  ).toMatchObject({ view: 'atomic:table-view' });
+  for (const subject of [
+    'https://provider.example/view',
+    '//provider.example/view',
+    'invalid',
+  ])
+    expect(get).not.toHaveBeenCalledWith(subject);
+});
+
+it('does not prefer a View detached or reparented during its read', async () => {
+  const { store, row, table, values } = fixture();
+  addOrdinaryTableView(values);
+  const get = store.getResource.bind(store);
+  vi.spyOn(store, 'getResource').mockImplementation(async subject => {
+    const resource = await get(subject);
+    if (subject === 'atomic:table-view')
+      values.get(subject)![core.properties.parent] = 'atomic:other-table';
+
+    return resource;
+  });
+  expect(
+    await openFlatSyncableRow(store, 'atomic:drive', table, row),
+  ).toMatchObject({
+    view: 'atomic:saved-rule',
+    syncFilter: 'atomic:saved-rule',
+  });
 });

@@ -19,6 +19,8 @@ import type { useSyncableFilters } from './useSyncableFilters';
 
 const state = vi.hoisted(() => ({
   writable: true,
+  actor: 'atomic:agent:person',
+  server: 'https://node.example',
   values: new Map<string, Record<string, unknown>>(),
   resources: new Map<string, Resource>(),
   listeners: new Set<() => void>(),
@@ -29,7 +31,7 @@ const state = vi.hoisted(() => ({
       { subject: string; view?: string; syncFilter?: string } | undefined
     > => ({
       subject: 'atomic:children',
-      view: 'atomic:child-filter',
+      view: 'atomic:table-view',
       syncFilter: 'atomic:child-filter',
     }),
   ),
@@ -109,6 +111,8 @@ const resource = (subject: string): Resource =>
       ),
   }) as unknown as Resource;
 const store = {
+  getAgent: () => ({ subject: state.actor }),
+  getServerUrl: () => state.server,
   getDrive: () => DRIVE,
   driveOfSubject: () => DRIVE,
   getResource: vi.fn(async (subject: string) => state.resources.get(subject)!),
@@ -269,12 +273,14 @@ function notify() {
 beforeEach(() => {
   vi.clearAllMocks();
   state.writable = true;
+  state.actor = 'atomic:agent:person';
+  state.server = 'https://node.example';
   state.values.clear();
   state.resources.clear();
   setup();
   state.open.mockResolvedValue({
     subject: 'atomic:children',
-    view: 'atomic:child-filter',
+    view: 'atomic:table-view',
     syncFilter: 'atomic:child-filter',
   });
 });
@@ -312,6 +318,7 @@ it('opens a declared stored child scope in the ordinary Table renderer while ret
     state.resources.get(TABLE),
     state.resources.get(ROW),
     'atomic:active-filter',
+    undefined,
   );
   const url = new URL(
     state.navigate.mock.calls[0][0] as string,
@@ -320,6 +327,7 @@ it('opens a declared stored child scope in the ordinary Table renderer while ret
   expect(url.searchParams.get('subject')).toBe('atomic:children');
   expect(url.searchParams.get('view')).toBe('atomic:table-view');
   expect(url.searchParams.get('syncFilter')).toBe('atomic:child-filter');
+  expect(store.getResource).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
 });
 it('waits for a cold row and reacts to loaded stored navigation data', async () => {
@@ -335,45 +343,32 @@ it('waits for a cold row and reacts to loaded stored navigation data', async () 
       .disabled,
   ).toBe(false);
 });
-it.each(['partial', 'different read resource', 'stale', 'read only'] as const)(
-  'opens the stored resource safely for %s rows',
-  async kind => {
-    if (kind === 'partial')
-      delete (
-        state.values.get(ROW)![p['syncable-source-config']] as Record<
-          string,
-          unknown
-        >
-      ).read;
-    if (kind === 'different read resource')
-      (
-        (
-          state.values.get(ROW)![p['syncable-source-config']] as Record<
-            string,
-            unknown
-          >
-        ).read as Record<string, unknown>
-      ).resource = 'another-item';
-    if (kind === 'stale')
-      (
-        state.values.get(ROW)![p['syncable-navigation-intents']] as Record<
-          string,
-          unknown
-        >[]
-      )[0].sourceEntityKey = 'changed';
-    if (kind === 'read only') state.writable = false;
-    show();
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
-    await waitFor(() => expect(state.navigate).toHaveBeenCalledOnce());
-    expect(
-      new URL(
-        state.navigate.mock.calls[0][0] as string,
-        window.location.href,
-      ).searchParams.get('subject'),
-    ).toBe(ROW);
-    expect(state.open).not.toHaveBeenCalled();
-  },
-);
+it('opens the stored row when the shared checker has no available action', async () => {
+  state.open.mockResolvedValueOnce(undefined);
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  await waitFor(() => expect(state.navigate).toHaveBeenCalledOnce());
+  expect(
+    new URL(
+      state.navigate.mock.calls[0][0] as string,
+      window.location.href,
+    ).searchParams.get('subject'),
+  ).toBe(ROW);
+  expect(state.open).toHaveBeenCalledOnce();
+});
+it('delegates read-only source navigation to the shared checker so existing target filters remain usable', async () => {
+  state.writable = false;
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  await waitFor(() => expect(state.navigate).toHaveBeenCalledOnce());
+  expect(state.open).toHaveBeenCalledOnce();
+  expect(
+    new URL(
+      state.navigate.mock.calls[0][0] as string,
+      window.location.href,
+    ).searchParams.get('subject'),
+  ).toBe('atomic:children');
+});
 it('reacts when actual row navigation evidence changes without replacing its Resource object', async () => {
   show();
   await act(async () => {
@@ -385,9 +380,10 @@ it('reacts when actual row navigation evidence changes without replacing its Res
     )[0].sourceEntityKey = 'changed';
     notify();
   });
+  state.open.mockResolvedValueOnce(undefined);
   fireEvent.click(screen.getByRole('button', { name: 'Open' }));
   await waitFor(() => expect(state.navigate).toHaveBeenCalledOnce());
-  expect(state.open).not.toHaveBeenCalled();
+  expect(state.open).toHaveBeenCalledOnce();
 });
 it('announces pending navigation and errors without creating an iframe', async () => {
   let reject!: (reason: Error) => void;
@@ -447,7 +443,7 @@ it('keeps pending cells mounted across an equivalent managed-table state refresh
   await act(async () => {
     resolve({
       subject: 'atomic:children',
-      view: 'atomic:child-filter',
+      view: 'atomic:table-view',
       syncFilter: 'atomic:child-filter',
     });
   });
@@ -473,4 +469,48 @@ it('does not navigate after a pending Open cell unmounts', async () => {
     resolve({ subject: 'atomic:children', syncFilter: 'atomic:child-filter' });
   });
   expect(state.navigate).not.toHaveBeenCalled();
+});
+
+it('suppresses pending navigation when the same row resource moves', async () => {
+  let resolve!: (value: { subject: string }) => void;
+  state.open.mockImplementationOnce(
+    () =>
+      new Promise(done => {
+        resolve = done;
+      }),
+  );
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  await act(async () => {
+    state.values.get(ROW)![core.properties.parent] = 'atomic:moved-folder';
+    notify();
+  });
+  await act(async () => {
+    resolve({ subject: 'atomic:children' });
+  });
+  expect(state.navigate).not.toHaveBeenCalled();
+  expect(
+    (screen.getByRole('button', { name: 'Open' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+});
+
+it('rechecks the active account after asynchronous action resolution', async () => {
+  let resolve!: (value: { subject: string }) => void;
+  state.open.mockImplementationOnce(
+    () =>
+      new Promise(done => {
+        resolve = done;
+      }),
+  );
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  state.actor = 'atomic:agent:another';
+  await act(async () => {
+    resolve({ subject: 'atomic:children' });
+  });
+  expect(state.navigate).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert').textContent).toContain(
+    'active account or server changed',
+  );
 });

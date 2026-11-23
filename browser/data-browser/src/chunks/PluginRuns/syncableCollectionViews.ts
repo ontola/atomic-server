@@ -14,10 +14,14 @@ import {
 } from './syncableCollection';
 import { syncableHierarchySchema } from './syncableHierarchy';
 
-export function selectableViewKinds(applicable: boolean): ViewKind[] {
+export function selectableViewKinds(
+  applicable: boolean,
+  entity = false,
+): ViewKind[] {
   return VIEW_KINDS.filter(
     kind =>
-      kind !== 'syncables' && (kind !== 'syncable-collection' || applicable),
+      kind !== 'syncables' &&
+      (kind !== 'syncable-collection' || (applicable && !entity)),
   );
 }
 
@@ -26,6 +30,7 @@ export function useSyncableCollectionView(
   drive: string | undefined,
   table: string,
   rowClass: string,
+  enabled = true,
 ) {
   const store = useStore();
   const resource = useResource(table);
@@ -46,7 +51,7 @@ export function useSyncableCollectionView(
   const refresh = () => setRevision(value => value + 1);
 
   useEffect(() => {
-    if (!drive) return;
+    if (!drive || !enabled) return;
     let active = true;
     void Promise.all([
       resolveSyncableCollectionView(store, drive, table),
@@ -69,10 +74,11 @@ export function useSyncableCollectionView(
     return () => {
       active = false;
     };
-  }, [store, drive, table, rowClass, key]);
+  }, [store, drive, table, rowClass, key, enabled]);
 
   return {
     applicable:
+      enabled &&
       resolved?.key === key &&
       resource
         .getSubjects(core.properties.isA)

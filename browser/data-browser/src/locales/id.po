@@ -14061,3 +14061,11 @@ msgstr "Pendaftaran App identitas"
 #: src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Native uniqueness registration outside any integration iframe write root."
 msgstr "Pendaftaran keunikan bawaan di luar semua akar penulisan iframe integrasi."
+
+#: src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "This filter has no completed sync yet. Choose All cached rows to browse data stored by other filters or earlier imports."
+msgstr "Belum ada sinkronisasi yang selesai untuk filter ini. Pilih Semua baris tersimpan untuk melihat data dari filter lain atau impor sebelumnya."
+
+#: src/chunks/PluginRuns/SyncableRecordActions.tsx
+msgid "Related collections"
+msgstr "Koleksi terkait"

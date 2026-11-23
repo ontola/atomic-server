@@ -8,6 +8,8 @@ import {
 import type { SyncablePrincipalAppRef } from './syncablePrincipalApp';
 import { prepareDocument } from 'syncables/browser';
 import { collectSyncableLegacySources } from './syncableLegacy';
+import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
+import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import { syncableApiSchema } from './syncableApiSchema';
 import { syncProxyTransport } from './builtinSyncablesProfile';
 import {
@@ -127,6 +129,9 @@ vi.mock('./syncableFlatAdoption', async importActual => ({
     warnings: [],
   })),
 }));
+vi.mock('./syncableApiSchemaViews', () => ({
+  migrateSyncableApiViews: vi.fn(async () => undefined),
+}));
 vi.mock('./syncableApiSchema', () => ({
   syncableApiSchema: vi.fn(async () => ({ classes: {}, properties: {} })),
 }));
@@ -227,6 +232,16 @@ const open = (
   );
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(collectSyncableFlatAdoption).mockResolvedValue({
+    aliases: [],
+    blocks: [],
+    warnings: [],
+    rules: [],
+  });
+  vi.mocked(collectSyncableLegacySources).mockImplementation(
+    async () => state.legacy as never,
+  );
+  vi.mocked(migrateSyncableApiViews).mockResolvedValue(undefined);
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   state.actor = { subject: 'atomic:agent:person' };
   state.principalApps = [];
@@ -1017,4 +1032,98 @@ it('updates the existing binding only for a matching explicit OAuth selection an
     'calendar-service',
     next,
   );
+});
+
+it.each([undefined, 'atomic:selected-rule'])(
+  'prepares canonical collection controls without waiting for unrelated migration scans (filter=%s)',
+  async ruleSubject => {
+    state.kind = 'collection';
+    state.flat = true;
+    state.ruleSubject = ruleSubject;
+    const blocked = new Promise<never>(() => undefined);
+    vi.mocked(collectSyncableFlatAdoption).mockReturnValue(blocked);
+    vi.mocked(collectSyncableLegacySources).mockReturnValue(blocked);
+    vi.mocked(migrateSyncableApiViews).mockReturnValue(blocked);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const spec = await Promise.race([
+        open(false, ruleSubject),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Controls waited for unrelated rows')),
+            100,
+          );
+        }),
+      ]);
+      expect(spec.profile.context).toMatchObject({
+        kind: 'collection',
+        resource: 'event',
+        worker: false,
+      });
+      expect(spec.profile.access.root).toBe('atomic:source');
+      expect(spec.profile.proxy).toBeDefined();
+      expect(spec.profile.execution).toBeDefined();
+      expect(collectSyncableFlatAdoption).not.toHaveBeenCalled();
+      expect(collectSyncableLegacySources).not.toHaveBeenCalled();
+      expect(migrateSyncableApiViews).not.toHaveBeenCalled();
+      expect(syncableApiSchema).toHaveBeenCalled();
+      expect(state.resource.set).not.toHaveBeenCalled();
+      expect(state.ruleResource.set).not.toHaveBeenCalled();
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+);
+
+it('still waits for complete adoption evidence when the actual canonical worker is prepared', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.ruleSubject = 'atomic:selected-rule';
+  let release!: () => void;
+  let entered!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const scanning = new Promise<void>(resolve => {
+    entered = resolve;
+  });
+  vi.mocked(collectSyncableFlatAdoption).mockImplementation(async () => {
+    entered();
+    await gate;
+
+    return { aliases: [], blocks: [], warnings: [], rules: [] };
+  });
+  let prepared = false;
+  const operation = open(true, state.ruleSubject).then(spec => {
+    prepared = true;
+
+    return spec;
+  });
+  await scanning;
+  expect(prepared).toBe(false);
+  expect(state.ruleResource.set).not.toHaveBeenCalled();
+  release();
+  const worker = await operation;
+  expect(prepared).toBe(true);
+  expect(collectSyncableLegacySources).toHaveBeenCalled();
+  expect(worker.profile.context).toMatchObject({
+    worker: true,
+    kind: 'collection',
+    resource: 'event',
+  });
+  expect(state.ruleResource.set).toHaveBeenCalled();
+});
+
+it('retains setup adoption and view migration for noncanonical collection contexts', async () => {
+  state.kind = 'collection';
+  state.flat = false;
+  const spec = await open();
+  expect(spec.profile.context).toMatchObject({
+    kind: 'collection',
+    worker: false,
+  });
+  expect(collectSyncableFlatAdoption).toHaveBeenCalled();
+  expect(collectSyncableLegacySources).toHaveBeenCalled();
+  expect(migrateSyncableApiViews).toHaveBeenCalled();
 });

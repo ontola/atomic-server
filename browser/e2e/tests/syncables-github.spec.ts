@@ -895,10 +895,17 @@ async function selectView(page: Page, name: string) {
 }
 
 async function browse(page: Page) {
-  await selectView(page, 'Collection');
+  await expect(
+    page.getByRole('tab', { name: 'Table', exact: true }),
+  ).toBeVisible();
+  const directory = page.getByRole('tab', { name: 'Collection', exact: true });
+  await selectView(page, (await directory.count()) ? 'Collection' : 'Table');
   await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
 
-  return page.getByRole('main').getByRole('table');
+  return page
+    .getByRole('main')
+    .getByRole('table')
+    .or(page.getByRole('main').getByRole('grid'));
 }
 
 async function openRow(page: Page, text: string) {
@@ -1399,6 +1406,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     const organizationsSubject = await getCurrentSubject(page),
       organizationsUrl = page.url();
     await browse(page);
+    await expect(
+      page.getByRole('tab', { name: 'Collection', exact: true }),
+    ).toHaveCount(0);
     expect(requests.providerRequests).toHaveLength(setupReads);
     expect(requests.documentRequests).toHaveLength(setupDocuments);
     await sync(page);
@@ -1487,6 +1497,78 @@ test.describe('catalog-driven built-in Syncables', () => {
     };
 
     await page.route(PROXY + '/proxy/**', offline);
+    const organizationResourceUrl = new URL('/app/show', page.url());
+    organizationResourceUrl.searchParams.set('subject', organization.subject);
+    await page.goto(organizationResourceUrl.href);
+    await expect(
+      page.getByRole('heading', { name: 'ontola', exact: true }),
+    ).toBeVisible();
+    const related = page.getByRole('group', {
+      name: 'Related collections',
+      exact: true,
+    });
+    await expect(
+      related.getByRole('button', { name: 'Repositories', exact: true }),
+    ).toBeVisible();
+    await expect(
+      related.getByRole('button', {
+        name: 'Issues and pull requests (via Repositories)',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.locator('iframe[title="App"]')).toHaveCount(0);
+    await testInfo.attach('github-organization-resource-actions-desktop', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await testInfo.attach('github-organization-resource-actions-mobile', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await related
+      .getByRole('button', { name: 'Repositories', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      repositoriesSubject,
+    );
+    await expect(
+      page.getByRole('tab', { name: 'Table', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    const directOrganizationRule = await selectFilter(page);
+    await expect(
+      page.getByText('This filter has no completed sync yet.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '1');
+    expect((await sourceState(page, repositoriesSubject)).rows).toHaveLength(3);
+    await page.goto(organizationResourceUrl.href);
+    await related
+      .getByRole('button', {
+        name: 'Issues and pull requests (via Repositories)',
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole('heading', {
+        name: 'Issues and pull requests',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '1');
+    expect(
+      (await sourceState(page, await getCurrentSubject(page))).config,
+    ).toMatchObject({ resource: 'issue' });
+    await page.goto(organizationResourceUrl.href);
+    await related
+      .getByRole('button', { name: 'Repositories', exact: true })
+      .click();
+    expect(await selectFilter(page)).toBe(directOrganizationRule);
+    expect(attemptedNativeReads).toBe(0);
+    expect(requests.documentRequests).toHaveLength(nativeDocuments);
     await page.goto(organizationsUrl);
     await browse(page);
     await selectFilter(page, organizationsRule);
@@ -1628,7 +1710,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     release?.();
     requests.issueGate = undefined;
     await expect(
-      iframe.getByText('3 stored entries', { exact: true }),
+      iframe.getByText('3 entries read in the last attempt for this filter', {
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 60_000 });
     await expect(syncNow).toBeEnabled();
     await browse(page);
