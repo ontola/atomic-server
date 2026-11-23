@@ -203,6 +203,69 @@ Replace the grep expression with any test title or regular expression; a focused
 run uses one shard. Use this for feature iteration instead of adding a
 branch-specific workflow under `.github/workflows/`.
 
+For independent Docker/Dagger engines, build the E2E artifacts once and copy
+them to the browser workers. The bundle contains the optimized E2E server
+(with its production frontend and WASM), the installed Playwright client image,
+and the complete test inventory. Obtain the manifest hash from the trusted
+builder, rather than from an untrusted copy of the bundle:
+
+```sh
+commit=$(git rev-parse HEAD)
+dagger call prepare-browser-bundle --source-commit "$commit" \
+  export --path /absolute/path/browser-bundle
+manifest_hash=$(shasum -a 256 /absolute/path/browser-bundle/manifest.json | cut -d ' ' -f 1)
+
+# On each worker, check out the same commit and copy the bundle first.
+# Give every worker a different index, from 1 through shard-count.
+dagger call browser-shard --bundle /absolute/path/browser-bundle \
+  --expected-commit "$commit" --manifest-sha256 "$manifest_hash" \
+  --shard-index 1 --shard-count 20 --playwright-workers 1 \
+  --playwright-retries 1 export --path /absolute/path/browser-results
+```
+
+Workers verify the manifest, file hashes, platform, pinned tool versions and
+the actual checkout contents before importing the image. Each shard gets a
+fresh server database and browser state. This path always selects the full
+suite; it does not compile the frontend, WASM or server again. It returns
+reports even when a browser assertion fails: the caller must require
+`test-exit-code` to be zero and reconcile every test against the inventory.
+Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
+checks still run independently; the shared E2E build does not replace them.
+
+The temporary DigitalOcean runner is `scripts/ci-fanout.py`. It takes an
+external batch JSON file with the frozen source commit, worktree and runtime
+directory, explicit account contexts and expected account UUIDs, and a node
+count per account. Keep credentials and runtime state outside the checkout.
+Required keys are `batch_key`, `source_commit`, `worktree`, `runtime_dir` and
+`accounts`; each account supplies `context`, `expected_uuid` and `nodes`.
+Optional `region`, `size`, `expected_hourly_rate`, `max_hours`, `workers` and
+`retries` set the budget. The default is a four-vCPU Amsterdam machine and a
+four-hour deadline. The tiny cross-engine probe ships with the runner.
+`plan` checks capacity and prices without creating resources; `run` builds and
+runs the checks, then distributes the bundle directly to the browser workers:
+
+```sh
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json plan
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json run
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json status
+# To stop and remove only this batch's resources:
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json cleanup
+```
+
+The runner records machine lifetimes and actual hourly prices, saves logs and
+browser reports, and removes its temporary machines and keys. A separate
+watchdog enforces the configured deadline (four hours by default). Completed
+checks are not repeated merely to occupy otherwise idle machines; additional
+browser workers are started after the build is ready. The first imported
+browser shard must succeed before the rest of the fleet is created.
+Full-suite acceptance requires successful independent checks and an exact,
+disjoint union of all browser shard reports. Quota and a listed machine size
+do not guarantee regional capacity. These commands do not dispatch GitHub CI.
+Public-IP artifact transfers count against the sender account's bandwidth
+allowance. The runner records payload bytes separately from compute costs;
+the eventual bandwidth bill depends on that account's monthly usage and
+allowance. See [DigitalOcean bandwidth billing](https://docs.digitalocean.com/platform/billing/bandwidth/).
+
 ```sh
 # Make sure nextest is installed
 cargo install cargo-nextest

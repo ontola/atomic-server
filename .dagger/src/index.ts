@@ -13,6 +13,15 @@ import {
   CacheVolume,
 } from '@dagger.io/dagger';
 import { overrideE2eBudget } from './e2e-budget';
+import {
+  BROWSER_BUNDLE_PLATFORM,
+  BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+  validateBundleCommit,
+  validateBundleHash,
+  validateBrowserManifest,
+  validateBrowserShard,
+  type BrowserBundleManifest,
+} from './browser-bundle';
 
 /**
  * Bumps the mtime of every mounted workspace source before cargo runs.
@@ -376,6 +385,7 @@ export class AtomicServer {
       ignore: [
         '**/node_modules',
         '**/.git',
+        '**/.dagger/sdk',
         '**/.github',
         '**/.husky',
         '**/.vscode',
@@ -2221,6 +2231,15 @@ export class AtomicServer {
       e2e,
     ).file('/atomic-server-binary');
 
+    return this.atomicServiceFromBinary(atomicServerBinary, e2e, instance);
+  }
+
+  /** Runtime-only path, also used by workers importing the builder's binary. */
+  private atomicServiceFromBinary(
+    atomicServerBinary: File,
+    e2e: boolean,
+    instance: string,
+  ): Service {
     let runtime = dag
       .container()
       .from('alpine:latest')
@@ -2303,9 +2322,9 @@ export class AtomicServer {
    * `atomicService` so 4 servers don't share state.
    */
   private e2eBaseContainer(): Container {
-    // Workspace deps only — SPA assets come from `atomicService(true)` →
-    // `rustBuild(..., e2e=true)` → `jsBuild(true)`.
-    const browserContainer = this.jsBuild();
+    // Match the server's exact graph, including VITE_E2E, so SDK dependencies
+    // reuse its build instead of triggering a second production SPA build.
+    const browserContainer = this.jsBuild(true);
 
     // Reuses the npm-global volume so `netlify-cli` isn't re-downloaded when
     // docs deploy already warmed it.
@@ -2416,14 +2435,21 @@ export class AtomicServer {
   private readonly e2eRunNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   /** One Playwright shard against its own atomic-server service. */
-  private e2eShardContainer(base: Container, shardIndex: number): Container {
-    const shardCount = this.e2eRun.shardCount;
+  private e2eShardContainer(
+    base: Container,
+    shardIndex: number,
+    shardCount: number = this.e2eRun.shardCount,
+    binary?: File,
+  ): Container {
+    const instance = `${this.e2eRunNonce}-${shardIndex}`;
 
     return (
       base
         .withServiceBinding(
           'atomic',
-          this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
+          binary
+            ? this.atomicServiceFromBinary(binary, true, instance)
+            : this.atomicService(true, instance),
         )
         .withExec([
           'sh',
@@ -2445,6 +2471,197 @@ export class AtomicServer {
           e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
         ])
     );
+  }
+
+  /** Actual content hash; Dagger object IDs are not portable across engines. */
+  private async browserArtifactHash(file: File): Promise<string> {
+    const output = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withFile('/artifact', file)
+      .withExec(['sha256sum', '/artifact'])
+      .stdout();
+    const hash = output.trim().split(/\s+/)[0];
+    validateBundleHash(hash);
+    return hash;
+  }
+
+  private async browserSourceFingerprint(): Promise<string> {
+    const fingerprint = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec(['node', '-e', BROWSER_SOURCE_FINGERPRINT_SCRIPT])
+      .stdout();
+    validateBundleHash(fingerprint);
+    return fingerprint;
+  }
+
+  private async requireBrowserBundlePlatform(): Promise<void> {
+    const platform = await dag.container().from(NODE_IMAGE).platform();
+    if (String(platform) !== BROWSER_BUNDLE_PLATFORM) {
+      throw new Error('Portable browser bundles require a linux/amd64 worker');
+    }
+  }
+
+  /**
+   * Build once on one engine, then export this directory to independent workers.
+   * The controller verifies a clean checkout at sourceCommit before this call.
+   */
+  @func()
+  async prepareBrowserBundle(
+    @argument() sourceCommit: string,
+  ): Promise<Directory> {
+    validateBundleCommit(sourceCommit);
+    await this.requireBrowserBundlePlatform();
+
+    // No service or browser execution is captured in the portable client.
+    const base = this.e2eBaseContainer();
+    const client = base
+      // Cache mounts and their contents are not part of an OCI image. Workers
+      // execute the installed tools and packages, without another install or
+      // Netlify upload; reports are returned directly to the controller.
+      .withoutMount('/opt/npm-global')
+      .withoutMount('/root/.npm')
+      .withoutMount('/app/.pnpm-store');
+    const archive = client.asTarball();
+    const inventory = client
+      .withExec([
+        'sh',
+        '-c',
+        'pnpm exec playwright test --config=./playwright.config.ts --list --reporter=json > /test-inventory.json',
+      ])
+      .file('/test-inventory.json');
+    const binary = this.rustBuild(
+      false,
+      'x86_64-unknown-linux-musl',
+      true,
+    ).file('/atomic-server-binary');
+    const [sourceFingerprint, binaryHash, archiveHash, inventoryHash] =
+      await Promise.all([
+        this.browserSourceFingerprint(),
+        this.browserArtifactHash(binary),
+        this.browserArtifactHash(archive),
+        this.browserArtifactHash(inventory),
+      ]);
+    const manifest: BrowserBundleManifest = {
+      version: 1,
+      sourceCommit,
+      sourceFingerprint,
+      platform: BROWSER_BUNDLE_PLATFORM,
+      rustVersion: RUST_VERSION,
+      pnpmVersion: PNPM_VERSION,
+      playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      files: {
+        'atomic-server-binary': binaryHash,
+        'client.oci.tar': archiveHash,
+        'test-inventory.json': inventoryHash,
+      },
+    };
+    return dag
+      .directory()
+      .withFile('atomic-server-binary', binary)
+      .withFile('client.oci.tar', archive)
+      .withFile('test-inventory.json', inventory)
+      .withNewFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+  }
+
+  /**
+   * Execute one global shard without rebuilding or installing its dependencies.
+   * Browser assertion failures still return all artifacts; the controller must
+   * gate on test-exit-code and reconcile JSON identities with the full inventory.
+   */
+  @func()
+  async browserShard(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 received directly from the trusted builder, outside the bundle. */
+    @argument() manifestSha256: string,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightRetries: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBundleCommit(expectedCommit);
+    validateBundleHash(manifestSha256);
+    validateBrowserShard(
+      shardIndex,
+      shardCount,
+      playwrightWorkers,
+      playwrightRetries,
+    );
+    await this.requireBrowserBundlePlatform();
+    const manifestFile = bundle.file('manifest.json');
+    if ((await this.browserArtifactHash(manifestFile)) !== manifestSha256) {
+      throw new Error(
+        'Browser bundle manifest SHA256 does not match the builder',
+      );
+    }
+    const manifest = validateBrowserManifest(
+      JSON.parse(await manifestFile.contents()),
+      {
+        sourceCommit: expectedCommit,
+        sourceFingerprint: await this.browserSourceFingerprint(),
+        rustVersion: RUST_VERSION,
+        pnpmVersion: PNPM_VERSION,
+        playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      },
+    );
+    for (const name of [
+      'atomic-server-binary',
+      'client.oci.tar',
+      'test-inventory.json',
+    ] as const) {
+      if (
+        (await this.browserArtifactHash(bundle.file(name))) !==
+        manifest.files[name]
+      ) {
+        throw new Error(
+          `Browser bundle ${name} SHA256 does not match the manifest`,
+        );
+      }
+    }
+    this.e2eRun = {
+      shardCount,
+      workers: String(playwrightWorkers),
+      retries: String(playwrightRetries),
+      grep: '',
+    };
+    this.e2eCloneSessions = playwrightCloneSessions;
+    const base = dag
+      .container()
+      .import_(bundle.file('client.oci.tar'))
+      .withEnvVariable('PLAYWRIGHT_WORKERS', String(playwrightWorkers))
+      .withEnvVariable('PLAYWRIGHT_RETRIES', String(playwrightRetries))
+      .withEnvVariable(
+        'ATOMIC_E2E_CLONE_SESSION',
+        playwrightCloneSessions ? '1' : '0',
+      );
+    if (String(await base.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser bundle client platform does not match its manifest',
+      );
+    }
+    const run = this.e2eShardContainer(
+      base,
+      shardIndex,
+      shardCount,
+      bundle.file('atomic-server-binary'),
+    );
+    // Startup/configuration errors may leave no HTML or JSON. Keep their log
+    // and exit code as well; a missing JSON report cannot count as a pass.
+    return run
+      .withExec([
+        'sh',
+        '-c',
+        'mkdir -p /browser-results/playwright-report /browser-results/test-results; ' +
+          'cp /test-exit-code /test-output.log /browser-results/; ' +
+          'if [ -f /test-results.json ]; then cp /test-results.json /browser-results/; fi; ' +
+          'if [ -d /app/e2e/playwright-report ]; then cp -a /app/e2e/playwright-report/. /browser-results/playwright-report/; fi; ' +
+          'if [ -d /app/e2e/test-results ]; then cp -a /app/e2e/test-results/. /browser-results/test-results/; fi',
+      ])
+      .directory('/browser-results');
   }
 
   @func()

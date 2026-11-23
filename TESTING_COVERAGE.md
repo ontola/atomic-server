@@ -658,6 +658,17 @@ fully green, and the compaction assertions remain unchanged.
 
 ### Playwright light vs full
 
+Portable browser fan-out uses the same production E2E server and Playwright
+configuration on independent Dagger engines. `scripts/browser-bundle.test.mjs`
+checks portable checkout fingerprints, manifest/source/tool/platform validation
+and imported shard graph behavior. `scripts/ci-fanout.test.py` exercises the
+temporary runner's resource ownership, deadlines, accounting and report gates
+without creating paid resources. These fixtures do not establish real OCI
+transport, regional capacity or full browser acceptance; an actual frozen-commit
+Docker/Dagger fan-out run is required. Its full test inventory and all shard
+reports must reconcile before the controller can report success. Compiler and
+unit suites remain separate from the shared production E2E build.
+
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
 integration, and Flutter run on every Main CI job. Automatic Main CI on PR events
 and feature-branch pushes is paused while runner capacity is limited; focused
