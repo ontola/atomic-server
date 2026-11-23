@@ -30,6 +30,9 @@ import {
 import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
 import { hideHoverUiHint, showUiHint, type UiHintTarget } from '@hooks/uiHint';
+import { Dialog, useDialog } from '../Dialog';
+import { NewMessageDialogBody } from '@views/Conversation/NewMessageDialog';
+import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { UiHint } from '../UiHint';
 import { SectionTitle } from '@views/Drive/SectionTitle';
 
@@ -73,13 +76,19 @@ function Steps({
   placement: GettingStartedPlacement;
 }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, doneCount } = useOnboardingProgress(drive.subject, name);
+  const progress = useOnboardingProgress(drive.subject, name);
+  // Once the basics are done the panel moves on to the advanced round.
+  const advanced = progress.doneCount === progress.steps.length;
+  const steps = advanced ? progress.advancedSteps : progress.steps;
+  const doneCount = advanced ? progress.advancedDoneCount : progress.doneCount;
   const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
     userSettingProps.onboardingPanelOpen,
     'gettingStartedPanelHeight.open',
     true,
   );
-  const { openChat } = useAISidebar();
+  const { openChat, askAI } = useAISidebar();
+  const [dialogProps, showMessageDialog, closeMessageDialog, messageOpen] =
+    useDialog();
   const navigate = useNavigateWithTransition();
   const navigateToNewRoute = useNewRoute(drive.subject);
   const { setSideBarLocked } = useSettings();
@@ -102,7 +111,8 @@ function Steps({
       /** The callout text on the target. */
       pointer: string;
       run: () => void;
-      target: UiHintTarget;
+      /** Absent when the step opens its own dialog instead of pointing. */
+      target?: UiHintTarget;
     }
   > = {
     name: {
@@ -164,6 +174,44 @@ function Steps({
       target: 'save-row',
       run: openSaveWorkDialog,
     },
+    table: {
+      title: 'Make a table',
+      hint: 'Tables with your own columns, like a small database',
+      pointer: 'Make a table here',
+      target: 'new-row',
+      run: () => {
+        closeDrawer('new-row');
+        pointAt('new-row', copy.table.pointer, navigateToNewRoute);
+      },
+    },
+    form: {
+      title: 'Make a form',
+      hint: 'Collect answers from anyone with a link',
+      pointer: 'Make a form here',
+      target: 'new-row',
+      run: () => {
+        closeDrawer('new-row');
+        pointAt('new-row', copy.form.pointer, navigateToNewRoute);
+      },
+    },
+    app: {
+      title: 'Build an app with AI',
+      hint: 'Describe what you need and the AI builds it in your drive',
+      pointer: 'Build an app with AI here',
+      target: 'ai-button',
+      run: () => {
+        closeDrawer('ai-button');
+        // The hint shows where the AI lives; the ask goes out either way.
+        pointAt('ai-button', copy.app.pointer, () => {});
+        askAI({ prompt: BUILD_APP_PROMPT });
+      },
+    },
+    message: {
+      title: 'Send someone a message',
+      hint: 'Write to someone you invited, like a colleague or friend',
+      pointer: 'Send a message here',
+      run: showMessageDialog,
+    },
   };
 
   const count = (
@@ -174,6 +222,9 @@ function Steps({
 
   const rows = (
     <>
+      <Dialog {...dialogProps} width='30rem'>
+        {messageOpen && <NewMessageDialogBody onDone={closeMessageDialog} />}
+      </Dialog>
       {steps.map(step => {
         const { title, hint, pointer, run, target } = copy[step.id];
 
@@ -210,6 +261,8 @@ function Steps({
 
         const hoverHint = () => {
           // A drawer that is out of view has nothing to point at.
+          if (!target) return;
+
           if (
             placement === 'page' &&
             sidebarCoversPage() &&
@@ -257,9 +310,14 @@ function Steps({
 
   if (placement === 'page') {
     return (
-      <section aria-label='Getting started' data-testid='getting-started-page'>
+      <section
+        aria-label={advanced ? 'More powerful' : 'Getting started'}
+        data-testid='getting-started-page'
+      >
         <SectionHeading>
-          <SectionTitle>Getting started</SectionTitle>
+          <SectionTitle>
+            {advanced ? 'More powerful' : 'Getting started'}
+          </SectionTitle>
           {count}
         </SectionHeading>
         <PageSteps>{rows}</PageSteps>
@@ -269,7 +327,7 @@ function Steps({
 
   return (
     <SideBarPanel
-      title='Getting started'
+      title={advanced ? 'More powerful' : 'Getting started'}
       heightStorageKey='gettingStartedPanelHeight'
       initialHeight={280}
       open={panelOpen}

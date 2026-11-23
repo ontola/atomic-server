@@ -6,6 +6,7 @@ import { GettingStartedPanel } from './GettingStartedPanel';
 
 type Step = { id: string; done: boolean; needs?: string };
 let steps: Step[] = [];
+let advancedSteps: Step[] = [];
 let agent: string | undefined = 'did:ad:agent:me';
 let writers = ['did:ad:agent:me'];
 let isPrivate = false;
@@ -27,6 +28,8 @@ vi.mock('@hooks/useOnboardingProgress', () => ({
   useOnboardingProgress: () => ({
     steps,
     doneCount: steps.filter(s => s.done).length,
+    advancedSteps,
+    advancedDoneCount: advancedSteps.filter(s => s.done).length,
   }),
 }));
 vi.mock('@hooks/useUserSetting', () => ({
@@ -43,7 +46,7 @@ vi.mock('@hooks/useNavigateWithTransition', () => ({
   useNavigateWithTransition: () => () => {},
 }));
 vi.mock('@components/AI/AISidebarContext', () => ({
-  useAISidebar: () => ({ openChat: () => {} }),
+  useAISidebar: () => ({ openChat: () => {}, askAI: () => {} }),
 }));
 vi.mock('@components/SaveWork/saveWorkDialogState', () => ({
   openSaveWorkDialog: vi.fn(),
@@ -53,6 +56,13 @@ vi.mock('@components/Share/shareDialogState', () => ({
 }));
 vi.mock('@helpers/AppSettings', () => ({
   useSettings: () => ({ drive: 'did:ad:drive' }),
+}));
+vi.mock('../Dialog', () => ({
+  Dialog: () => null,
+  useDialog: () => [{}, () => {}, () => {}, false],
+}));
+vi.mock('@views/Conversation/NewMessageDialog', () => ({
+  NewMessageDialogBody: () => null,
 }));
 vi.mock('../UiHint', () => ({
   UiHint: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -90,8 +100,12 @@ const fresh = (): Step[] =>
     done: false,
   }));
 
+const freshAdvanced = (): Step[] =>
+  ['table', 'form', 'app', 'message'].map(id => ({ id, done: false }));
+
 beforeEach(() => {
   steps = fresh();
+  advancedSteps = freshAdvanced();
   agent = 'did:ad:agent:me';
   writers = ['did:ad:agent:me'];
   isPrivate = false;
@@ -137,11 +151,33 @@ describe('GettingStartedPanel', () => {
     expect(html).toContain('Name your drive');
     expect(html).toContain('Save your work');
     steps = steps.map(s => ({ ...s, done: true }));
+    advancedSteps = advancedSteps.map(s => ({ ...s, done: true }));
     expect(render('page')).toBe('');
+  });
+
+  it('moves on to the advanced round once the basics are done, then goes', () => {
+    steps = steps.map(s => ({ ...s, done: true }));
+    const html = render();
+
+    expect(html).toContain('More powerful');
+    expect(html).not.toContain('Getting started');
+    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*4/);
+    expect(html).toContain('Make a table');
+    expect(html).toContain('Make a form');
+    expect(html).toContain('Build an app with AI');
+    expect(html).toContain('Send someone a message');
+    expect(html).not.toContain('Name your drive');
+    advancedSteps[2].needs = 'ai-source';
+    expect(render()).toContain('Needs an AI source');
+    advancedSteps[0].done = true;
+    expect(render()).toMatch(/1\s*(<!-- -->)?\s*of/);
+    advancedSteps = advancedSteps.map(s => ({ ...s, done: true }));
+    expect(render()).toBe('');
   });
 
   it("is gone when finished, read-only, private or someone else's", () => {
     steps = steps.map(s => ({ ...s, done: true }));
+    advancedSteps = advancedSteps.map(s => ({ ...s, done: true }));
     expect(render()).toBe('');
     steps = fresh();
     canEdit = false;

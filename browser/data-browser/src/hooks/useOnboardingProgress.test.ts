@@ -11,13 +11,19 @@ vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
 vi.mock('./useUserSetting', () => ({}));
 vi.mock('./useVisibleDriveChildren', () => ({}));
+vi.mock('@chunks/AppPage/useDriveApps', () => ({}));
+vi.mock('@helpers/conversations/useConversations', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
 import type { OnboardingInput } from './useOnboardingProgress';
 
-const { deriveOnboardingSteps, hasInviteForDrives, isDefaultDriveName } =
-  await import('./useOnboardingProgress');
+const {
+  deriveAdvancedSteps,
+  deriveOnboardingSteps,
+  hasInviteForDrives,
+  isDefaultDriveName,
+} = await import('./useOnboardingProgress');
 
 const base: OnboardingInput = {
   driveName: 'Welcome to Atomic',
@@ -97,5 +103,49 @@ describe('hasInviteForDrives', () => {
     expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a', 'did:ad:b'])).toBe(
       true,
     );
+  });
+});
+
+describe('deriveAdvancedSteps', () => {
+  const adv = (input: Partial<OnboardingInput> = {}) =>
+    Object.fromEntries(
+      deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
+    );
+
+  it('lists table, form, app, message, none done for a new drive', () => {
+    expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual([
+      'table',
+      'form',
+      'app',
+      'message',
+    ]);
+    expect(adv()).toEqual({
+      table: false,
+      form: false,
+      app: false,
+      message: false,
+    });
+  });
+
+  it("does not count the Welcome template's Tasks table", () => {
+    expect(adv({ tableCount: 1, templateTableCount: 1 }).table).toBe(false);
+    expect(adv({ tableCount: 2, templateTableCount: 1 }).table).toBe(true);
+    expect(adv({ tableCount: 1, templateTableCount: 0 }).table).toBe(true);
+  });
+
+  it('counts a form once the drive has one', () => {
+    expect(adv({ hasForm: true }).form).toBe(true);
+  });
+
+  it('counts the app once the drive has one, and names a missing AI source', () => {
+    expect(adv({ hasApp: true }).app).toBe(true);
+    expect(deriveAdvancedSteps(base)[2].needs).toBeUndefined();
+    expect(deriveAdvancedSteps({ ...base, aiAvailable: false })[2].needs).toBe(
+      'ai-source',
+    );
+  });
+
+  it('counts a conversation for the message step', () => {
+    expect(adv({ hasConversation: true }).message).toBe(true);
   });
 });

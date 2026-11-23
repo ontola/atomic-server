@@ -261,6 +261,9 @@ const PanelTitle = styled.span`
   color: ${p => p.theme.colors.textLight};
   text-align: start;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 /** Shows the section can fold: points down while open, right while closed. */
@@ -288,6 +291,7 @@ const HeaderButton = styled.button<{ $dragging: boolean }>`
   border-radius: ${p => p.theme.radius};
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   text-align: start;
   gap: 0.5rem;
 
