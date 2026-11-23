@@ -321,6 +321,150 @@ export class Collection {
   private _queriedMembers = new Set<string>();
   /** A server page's count includes members whose identities we have not read. */
   private _serverMembershipIncomplete = false;
+  /** Cached ancestry that can change visibility without changing a row's fields. */
+  private _visibilityAncestors = new Map<string, string | undefined>();
+  /** Only an accepted complete local Drive query can vouch for uncached ancestry. */
+  private _visibilityAuthority = { local: false };
+
+  private cachedResource(subject: string): Resource | undefined {
+    return (
+      this.store.resources.get(this.store.normalizeSubject(subject)) ??
+      this.store.resources.get(subject)
+    );
+  }
+
+  private visibilityStamp(resource: Resource | undefined): string | undefined {
+    if (!resource || resource.error || resource.loading) return undefined;
+
+    return JSON.stringify([
+      resource.get(core.properties.parent),
+      resource.get('https://atomicdata.dev/properties/drive'),
+      resource.get(dataBrowser.properties.trashFolder),
+    ]);
+  }
+
+  /** Explicitly browsing a folder in Trash is allowed by the query engine. */
+  private listsTrashedFolder(trash: string): boolean {
+    const constraints = [this.params, ...(this.params.filters ?? [])];
+    const normalize = (subject: string) => this.store.normalizeSubject(subject);
+    const expectedTrash = normalize(trash);
+
+    for (const constraint of constraints) {
+      if (
+        constraint.property !== core.properties.parent ||
+        typeof constraint.value !== 'string' ||
+        ('operator' in constraint &&
+          constraint.operator &&
+          constraint.operator !== 'eq')
+      )
+        continue;
+      let parent: string | undefined = constraint.value;
+      const seen = new Set<string>();
+
+      while (parent && seen.size < 64) {
+        const subject = normalize(parent);
+        if (subject === expectedTrash) return true;
+        if (seen.has(subject)) break;
+        seen.add(subject);
+        const ancestor = this.cachedResource(parent);
+        if (!ancestor || ancestor.error || ancestor.loading) break;
+        const next = ancestor.get(core.properties.parent);
+        parent = typeof next === 'string' ? next : undefined;
+      }
+    }
+
+    return false;
+  }
+
+  /** No transport: undefined means cached ancestry cannot establish visibility. */
+  private cachedVisibility(
+    resource: Resource,
+    remember = false,
+  ): boolean | undefined {
+    const drive = this.params.drive;
+    if (!drive) return true;
+    const normalize = (subject: string) => this.store.normalizeSubject(subject);
+    const expectedDrive = normalize(drive);
+    const assignedDrive = resource.get(
+      'https://atomicdata.dev/properties/drive',
+    );
+    if (
+      typeof assignedDrive === 'string' &&
+      normalize(assignedDrive) !== expectedDrive
+    )
+      return false;
+    const driveResource = this.cachedResource(drive);
+    if (remember)
+      this._visibilityAncestors.set(
+        expectedDrive,
+        this.visibilityStamp(driveResource),
+      );
+    if (!driveResource || driveResource.loading || driveResource.error)
+      return undefined;
+    const trash = driveResource.get(dataBrowser.properties.trashFolder);
+    if (!this.params.include_trashed && typeof trash !== 'string')
+      return undefined;
+    const listsTrash =
+      typeof trash === 'string' && this.listsTrashedFolder(trash);
+    const seen = new Set<string>();
+    let current: Resource | undefined = resource;
+
+    while (current && !current.error && !current.loading && seen.size < 64) {
+      const subject = normalize(current.subject);
+      if (remember)
+        this._visibilityAncestors.set(subject, this.visibilityStamp(current));
+      if (subject === expectedDrive) return true;
+      if (seen.has(subject)) return undefined;
+      seen.add(subject);
+      const parent = current.get(core.properties.parent);
+      if (typeof parent !== 'string') return undefined;
+      const normalizedParent = normalize(parent);
+      if (
+        !this.params.include_trashed &&
+        !listsTrash &&
+        typeof trash === 'string' &&
+        normalizedParent === normalize(trash)
+      )
+        return false;
+      if (normalizedParent === expectedDrive) return true;
+      current = this.cachedResource(parent);
+      if (remember)
+        this._visibilityAncestors.set(
+          normalizedParent,
+          this.visibilityStamp(current),
+        );
+    }
+
+    return undefined;
+  }
+
+  private rememberVisibility(): void {
+    this._visibilityAncestors.clear();
+    if (!this.params.drive) return;
+    this._visibilityAncestors.set(
+      this.store.normalizeSubject(this.params.drive),
+      this.visibilityStamp(this.cachedResource(this.params.drive)),
+    );
+    const scope = this.params.value && this.cachedResource(this.params.value);
+    if (this.params.value)
+      this._visibilityAncestors.set(
+        this.store.normalizeSubject(this.params.value),
+        this.visibilityStamp(scope || undefined),
+      );
+
+    if (scope) {
+      this.cachedVisibility(scope, true);
+    }
+
+    for (const subject of this._memberIndex.keys()) {
+      const resource = this.cachedResource(subject);
+      this._visibilityAncestors.set(
+        this.store.normalizeSubject(subject),
+        this.visibilityStamp(resource),
+      );
+      if (resource) this.cachedVisibility(resource, true);
+    }
+  }
 
   /** Statistics from the last loaded page. The store computes them over every
    *  matching resource, so any page carries the same numbers. */
@@ -483,6 +627,7 @@ export class Collection {
     this.legacyMembers = undefined;
     this._memberIndex.clear();
     this._queriedMembers.clear();
+    this.rememberVisibility();
     // Note: `_optimisticAdds` is preserved on `clearPages` — they
     // represent subjects we trust are members (locally-created and
     // confirmed at the resource layer); the next `setPage` merges
@@ -531,7 +676,20 @@ export class Collection {
     const incomingMembers = resource.getSubjects(
       collections.properties.members,
     );
-    const retained = incomingMembers.filter(s => !this.isDestroyed(s));
+    const retained = incomingMembers.filter(s => {
+      const candidate = this.cachedResource(s);
+
+      return (
+        !this.isDestroyed(s) &&
+        (!candidate || this.cachedVisibility(candidate) !== false)
+      );
+    });
+
+    for (const subject of this._optimisticAdds) {
+      const candidate = this.cachedResource(subject);
+      if (candidate && this.cachedVisibility(candidate) === false)
+        this._optimisticAdds.delete(subject);
+    }
 
     if (retained.length !== incomingMembers.length) {
       const total = resource.get(collections.properties.totalMembers);
@@ -586,6 +744,8 @@ export class Collection {
     for (const s of resource.getSubjects(collections.properties.members)) {
       this._memberIndex.set(s, pageIdx);
     }
+
+    this.rememberVisibility();
   }
 
   /** Tracks an in-flight `refresh()` so concurrent callers reuse the same
@@ -679,6 +839,25 @@ export class Collection {
     // row renders) and must not affect membership.
     if (subject.startsWith('_new:')) return 'unchanged';
 
+    const normalizedSubject = this.store.normalizeSubject(subject);
+    const scopeChanged =
+      this._visibilityAncestors.has(normalizedSubject) &&
+      this._visibilityAncestors.get(normalizedSubject) !==
+        this.visibilityStamp(resource);
+
+    if (scopeChanged) {
+      // A folder/Drive change can hide children without changing their query
+      // property. Requery the normal index, retaining no now-hidden optimistic rows.
+      for (const optimistic of this._optimisticAdds) {
+        const candidate = this.cachedResource(optimistic);
+        if (candidate && this.cachedVisibility(candidate) === false)
+          this._optimisticAdds.delete(optimistic);
+      }
+    }
+
+    const visibility = resource ? this.cachedVisibility(resource) : undefined;
+    if (visibility === false) this._optimisticAdds.delete(subject);
+
     // `r.get(fp)` is a string for single-valued properties (e.g. `parent`)
     // and an array for multi-valued ones (e.g. `isA`). Match like
     // server-side `/query` does ("value-in-property").
@@ -689,6 +868,7 @@ export class Collection {
       // carrying its full body, and each one used to read as a member that
       // matches the filter.
       !this.isDestroyed(subject) &&
+      visibility !== false &&
       constraintMatches(resource, fp, fv) &&
       // Every extra AND constraint must also hold (multi-property filtering).
       (this.params.filters ?? []).every(
@@ -710,6 +890,23 @@ export class Collection {
     // splice position, which we don't track separately.
     const foundInPage = this._memberIndex.get(subject);
     const currentlyMember = foundInPage !== undefined;
+
+    // Matching field values alone cannot prove that a server-scoped row is
+    // outside Trash. Offline WebSocket state does not make HTTP data local.
+    if (scopeChanged && (!currentlyMember || matches))
+      return this._assemblingPage ? 'unchanged' : 'membership-stale';
+
+    const locallyAuthoritative =
+      this.store.noServer ||
+      this.store.isLocalOnlySubject(fv) ||
+      (this._visibilityAuthority.local &&
+        this.store.hasCompletedDriveSyncFor(this.params.drive));
+
+    if (matches && visibility === undefined && !locallyAuthoritative) {
+      if (this._assemblingPage || resource?.new) return 'unchanged';
+
+      return 'membership-stale';
+    }
 
     // Computed constraints are evaluated by the query engine. Matching the
     // stored parent/class alone must not admit a row that the computed filter
@@ -792,6 +989,7 @@ export class Collection {
         this.writePageMembers(page, members, total);
         this.setPage(0, page);
         this._totalMembers = total;
+        this.cachedVisibility(resource, true);
 
         return 'member-added';
       }
@@ -824,6 +1022,7 @@ export class Collection {
         this.pages.size === 1,
       );
       this.writePageMembers(lastPage, sorted.members, this._totalMembers);
+      this.cachedVisibility(resource, true);
 
       // A row that arrives while the rows around it are still loading cannot be
       // compared with them, so it went to the end. That stuck: after a reload
@@ -857,6 +1056,7 @@ export class Collection {
       this._memberIndex.delete(subject);
       this._optimisticAdds.delete(subject);
       this.writePageMembers(page, next, this._totalMembers);
+      this.rememberVisibility();
 
       return 'member-removed';
     }
@@ -874,6 +1074,8 @@ export class Collection {
     collection._memberIndex = this._memberIndex;
     collection._queriedMembers = this._queriedMembers;
     collection._serverMembershipIncomplete = this._serverMembershipIncomplete;
+    collection._visibilityAncestors = this._visibilityAncestors;
+    collection._visibilityAuthority = this._visibilityAuthority;
 
     return collection;
   }
@@ -1374,6 +1576,7 @@ export class Collection {
     },
     drive: string | undefined,
     syncedWhenAsked: boolean,
+    fromLocal = true,
   ): 'ok' | 'no-db' {
     if (result.count === 0) {
       this._queriedMembers.clear();
@@ -1392,6 +1595,8 @@ export class Collection {
         // populated the page with non-empty data, leave it — server is
         // authoritative for the instant of the query.
         if (!this.pages.has(page)) {
+          this._visibilityAuthority.local =
+            fromLocal && drive === this.params.drive;
           this.setEmptyPage(page);
         }
 
@@ -1406,6 +1611,9 @@ export class Collection {
 
       return 'no-db';
     }
+
+    this._visibilityAuthority.local =
+      fromLocal && syncedWhenAsked && drive === this.params.drive;
 
     // Destroyed subjects are dropped from the page below, so they must not
     // count as "the query accounted for this one" either — that is what the
@@ -1551,6 +1759,7 @@ export class Collection {
   /** Old nodes have no drive or multi-filter query support. Fetch the base
    * match set, then apply scope, AND filters, sorting and pagination here. */
   private async fetchLegacyPage(page: number): Promise<void> {
+    this._visibilityAuthority.local = false;
     this.legacyMembers ??= this.loadLegacyMembers();
     const subjects = [...(await this.legacyMembers)];
 
@@ -1565,6 +1774,7 @@ export class Collection {
       { subjects, count: subjects.length },
       this.params.drive,
       this.store.hasCompletedDriveSyncFor(this.params.drive),
+      false,
     );
   }
 
@@ -1691,6 +1901,7 @@ export class Collection {
   }
 
   private async fetchPageFromServer(page: number): Promise<void> {
+    this._visibilityAuthority.local = false;
     if (
       this.legacyQuery ||
       (/^https?:\/\//.test(this.params.drive ?? '') &&

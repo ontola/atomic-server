@@ -1302,6 +1302,13 @@ This does not yet prove restoration of the user's private staging workspace.
   stale empty answers, partial local caches and a complete local query replacing
   server paging. Unknown identities in a partial page trigger revalidation
   instead of inflating its authoritative total.
+- `browser/lib/src/collection-include-trashed.test.ts` covers live query
+  visibility after direct reads of retained descendants, ancestor-only moves,
+  explicit Trash inclusion, and unknown cached ancestry. Structural metadata
+  changes revalidate the same Drive query without fetching foreign ancestors.
+  The native Trash journey checks the empty Table again after signed retained-row
+  reads and identity queries, while preserving resources and excluding writes,
+  provider requests and iframe activation.
 - Flat collection regressions in `builtinSyncFlatState.test.ts`,
   `syncableRules.test.ts`, `syncableFlatNavigation.test.ts` and
   `useSyncableFilters.test.tsx` cover typed canonical identities, shared rows,

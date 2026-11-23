@@ -5,6 +5,7 @@ import { LoroLoader } from './loro-loader.js';
 import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
 import { Resource } from './resource.js';
 import type { ClientDbWorker } from './client-db.js';
 
@@ -47,6 +48,18 @@ async function pagedServerCollection(initial: string[], local?: string[]) {
   const store = new Store({ serverUrl: SERVER, connect: false });
   store.setServerConnected(true);
   store.setDrive(DRIVE);
+
+  // Positive optimistic additions have a cached, visible Drive ancestry.
+  for (const [subject, values] of [
+    [DRIVE, [[dataBrowser.properties.trashFolder, 'atomic:trash']]],
+    [TABLE, [[core.properties.parent, DRIVE]]],
+  ] as [string, [string, string][]][]) {
+    const resource = new Resource(subject);
+    resource.applyHydratedValues(values);
+    resource.loading = false;
+    store.resources.set(store.normalizeSubject(subject), resource);
+  }
+
   if (local) store.setClientDb(localMembership(local));
   let members = initial;
   let peer = 1;
@@ -94,6 +107,31 @@ async function pagedServerCollection(initial: string[], local?: string[]) {
     },
   };
 }
+
+it('does not trust uncached ancestry of HTTP query rows when WebSocket is disconnected', async () => {
+  const { collection, store, row } = await pagedServerCollection([]);
+  store.setServerConnected(false);
+  store.resources.delete(store.normalizeSubject(TABLE));
+  expect(collection.applyResourceChange(ALPHA, row(ALPHA))).toBe(
+    'membership-stale',
+  );
+  expect(collection.totalMembers).toBe(0);
+  expect(await collection.getAllMembers()).toEqual([]);
+});
+
+it('shares server page authority with clones after a complete local answer', async () => {
+  const { collection, store, row } = await pagedServerCollection([]);
+  store.setServerConnected(false);
+  store.setClientDb(localMembership([]));
+  store.finishDriveSync(DRIVE, 0, Date.now());
+  await collection.refresh();
+  const clone = collection.clone();
+  await clone.waitForReady();
+  await collection['fetchPageFromServer'](0);
+  store.resources.delete(store.normalizeSubject(TABLE));
+  expect(clone.applyResourceChange(ALPHA, row(ALPHA))).toBe('membership-stale');
+  expect(clone.totalMembers).toBe(0);
+});
 
 it('revalidates existing off-page updates without counting the same server members twice', async () => {
   const members = Array.from({ length: 90 }, (_, i) => 'atomic:row-' + i);
