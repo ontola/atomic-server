@@ -7,8 +7,11 @@ and matching localhost build are `d993656e6`.
   Main/server CI on the final integration candidate, reviews and merges.
   Integration and shared CI remain with trekmeester; workers must not rebase,
   dispatch or rerun shared CI. Remove this handoff after that acceptance.
-- [ ] Attach a current real-data walkthrough when desktop capture is available.
-  The existing real sign-in recording shows the historical UI.
+- [x] Attached the [current real-data walkthrough](https://github.com/ontola/atomic-server/pull/2522#issuecomment-7102109541)
+  on 23 November 2026: 25 seconds from My drive through the principal App to
+  the 2,608 stored Issues/PRs and linked authors. This edited capture uses the
+  existing connection and completed import; it does not repeat OAuth.
+  The earlier real sign-in recording shows the historical UI.
 
 ## Contract
 
