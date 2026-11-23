@@ -222,6 +222,22 @@ pnpm test-e2e
 pnpm run test-query {testname}
 ```
 
+The workspace Rust test profile uses optimization level 1 to reduce repeated
+real database/bootstrap and signed-fixture execution costs. Debug assertions and
+arithmetic overflow checks remain enabled. This affects `cargo test` and
+`cargo nextest run`, including Dagger's Rust tests; ordinary development builds,
+release/E2E builds and the workspace-excluded Flutter bridge retain their own
+profiles. An initial test compile can take longer, so compare compilation and
+execution times separately when evaluating a change.
+
+TablePage and shared-package PR changes also run the separate **Table package**
+workflow. It checks the SDK-aware package, application consumer types, real WASM
+formula behavior and packed dependencies/locales without running the full Rust
+suite. Its isolated WASM target and checkout-local tool install use an exact
+OS/architecture/Rust-input cache key. Cargo still runs on a cache hit; download
+and pnpm caches only avoid fetching dependencies again. Full integration CI
+remains necessary for a combined merge candidate.
+
 ## Performance monitoring / benchmarks
 
 We want to make Atomic Server as fast as possible.

@@ -18,6 +18,7 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
       - 'rust-toolchain.toml'
+      - '**/.cargo/config*'
       - 'tools/cargo-bin/**'
       - 'browser/ui/**'
       - 'browser/utils/**'
@@ -32,6 +33,8 @@ on:
       - 'browser/package.json'
       - 'browser/.ox*'
       - 'browser/patches/**'
+      - 'browser/data-browser/scripts/build-wasm.mjs'
+      - 'scripts/table-package-cache.test.mjs'
       - '.github/workflows/table-package.yml'
   push:
     branches: [develop]
@@ -51,6 +54,7 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
       - 'rust-toolchain.toml'
+      - '**/.cargo/config*'
       - 'tools/cargo-bin/**'
       - 'browser/ui/**'
       - 'browser/utils/**'
@@ -65,6 +69,8 @@ on:
       - 'browser/package.json'
       - 'browser/.ox*'
       - 'browser/patches/**'
+      - 'browser/data-browser/scripts/build-wasm.mjs'
+      - 'scripts/table-package-cache.test.mjs'
       - '.github/workflows/table-package.yml'
   workflow_dispatch:
 
@@ -151,12 +157,38 @@ jobs:
       OPENROUTER_API_KEY: ''
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
       - uses: pnpm/action-setup@v4
         with:
           version: 11.10.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - name: Cache Cargo downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            ~/.cargo/git/db
+            ~/.cargo/git/checkouts
+          key: table-page-cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            table-page-cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-
+      - name: Cache isolated formula compilation
+        uses: actions/cache@v4
+        with:
+          # build-wasm.mjs fixes both Cargo target/build dirs under this root.
+          # .bin holds the checkout-local, Cargo.toml-pinned wasm-pack install.
+          path: |
+            target/wasm-pack
+            .bin
+          # No broad restore key for executables or compiled Rust artifacts.
+          key: table-page-wasm-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', '**/Cargo.toml', '**/.cargo/config*', 'wasm/**', 'lib/**', 'tools/cargo-bin/**', 'browser/data-browser/scripts/build-wasm.mjs', '.github/workflows/table-package.yml') }}
+      - name: Verify formula cache and validation contract
+        run: node --test scripts/table-package-cache.test.mjs
       - name: Install shared page dependencies
         working-directory: browser
         run: pnpm --filter @tomic/table-page... install --frozen-lockfile
