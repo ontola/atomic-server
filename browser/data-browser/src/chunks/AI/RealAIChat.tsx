@@ -952,7 +952,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         ))}
       </ChatMessagesContainer>
       <Column gap='0.5rem' style={{ minWidth: 0 }}>
-        {status === 'streaming' && (
+        {(status === 'streaming' || (status === 'submitted' && !isRagging)) && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Generating' />
             <IconButton title='Stop generating' onClick={stop}>
