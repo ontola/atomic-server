@@ -18,6 +18,7 @@
 //   serve, and the content type rules.
 // - `POST /link/{*path}` with `{ hash }` creates a File pointing at `hash`,
 //   so the tests can check a route cannot adopt a blob it did not store.
+const LOCAL_ID = 'https://atomicdata.dev/properties/localId';
 const NAME = 'https://atomicdata.dev/properties/name';
 const PARENT = 'https://atomicdata.dev/properties/parent';
 const BLOB = 'https://atomicdata.dev/properties/blob';
@@ -68,7 +69,7 @@ export function handle(ctx, request) {
                 localId: 'file',
                 parent: ctx.config.folder,
                 isA: [FILE],
-                set: { [NAME]: path, ...set },
+                set: { [LOCAL_ID]: 'file:' + path, [NAME]: path, ...set },
               },
             ],
       };

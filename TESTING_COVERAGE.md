@@ -2706,3 +2706,25 @@ naming the extras, an answer at once when the grant covers them, a new request
 when the declaration widened, and a pre-extras grant covering none. Gap:
 nothing automated checks the row dialog's read-only "Kept by apps" fold or that
 the table shows no extra columns.
+
+## Conditional plugin blob writes (remoteStorage integration)
+
+`lib/tests/conditional_commit.rs` checks that two guarded signed commits sharing
+a precondition have exactly one winner, and that a normal signed writer
+invalidates a guarded view. The check runs under the same subject lock as normal
+commit validation and persistence.
+
+`server/src/plugins/route_blobs_test.rs` drives actual Actix routes and the
+embedded QuickJS/WASM plugin runtime. Competing If-Match PUTs run for five rounds
+and retain the winning bytes; simultaneous If-None-Match creates yield one 201
+and one 412 with one persistent identity. The fixture now supplies the persistent
+localId property, like the real remoteStorage plugin. An intent's localId is
+only a within-verdict reference and does not supply database uniqueness.
+Conditional creates without a persistent identity and multi-resource conditional
+plans are refused. The remaining blob-route tests cover ordinary reads/writes,
+preconditions, ownership, grants, limits and quotas.
+
+These are host API/runtime checks, not an end-to-end browser consent test of the
+Atomic remoteStorage installation. The real plugin's browser acceptance suite
+still needs to run against a host containing this patch. No frontend build was
+used for these API tests.

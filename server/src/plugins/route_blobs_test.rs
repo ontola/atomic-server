@@ -350,6 +350,71 @@ async fn conditional_puts_store_nothing_when_the_precondition_fails() {
 }
 
 #[actix_rt::test]
+async fn competing_conditional_puts_have_one_winner_and_keep_its_bytes() {
+    let x = setup("route_blob_concurrent_put", &[]).await;
+    let app = app!(x.f.appstate);
+    let uri = format!("{}/files/doc.txt", x.prefix);
+    let first = b"initial".to_vec();
+    assert_eq!(
+        actix_test::call_service(&app, put(&uri, "text/plain", first.clone()).to_request())
+            .await
+            .status(),
+        201
+    );
+    let mut seen = hash(&first);
+    for round in 0..5 {
+        let a = format!("a-{round}").into_bytes();
+        let b = format!("b-{round}").into_bytes();
+        let request = |bytes: Vec<u8>| {
+            put(&uri, "text/plain", bytes)
+                .insert_header((header::IF_MATCH, format!("\"{seen}\"")))
+                .to_request()
+        };
+        let (left, right) = futures::join!(
+            actix_test::call_service(&app, request(a.clone())),
+            actix_test::call_service(&app, request(b.clone()))
+        );
+        let statuses = [left.status().as_u16(), right.status().as_u16()];
+        assert!(
+            statuses == [200, 412] || statuses == [412, 200],
+            "one winner and one precondition failure: {statuses:?}"
+        );
+        let winner = if statuses[0] == 200 { a } else { b };
+        seen = hash(&winner);
+        assert_eq!(
+            files(&x).await,
+            vec![("doc.txt".into(), format!("atomic:blob:{seen}"))]
+        );
+    }
+}
+
+#[actix_rt::test]
+async fn simultaneous_create_if_absent_returns_a_precondition_failure_to_the_loser() {
+    let x = setup("route_blob_concurrent_create", &[]).await;
+    let app = app!(x.f.appstate);
+    let uri = format!("{}/files/doc.txt", x.prefix);
+    let create = |bytes: Vec<u8>| {
+        put(&uri, "text/plain", bytes)
+            .insert_header((header::IF_NONE_MATCH, "*"))
+            .to_request()
+    };
+    let (left, right) = futures::join!(
+        actix_test::call_service(&app, create(b"a".to_vec())),
+        actix_test::call_service(&app, create(b"b".to_vec()))
+    );
+    let statuses = [left.status().as_u16(), right.status().as_u16()];
+    assert!(
+        statuses == [201, 412] || statuses == [412, 201],
+        "one creation and one precondition failure: {statuses:?}"
+    );
+    let winner = if statuses[0] == 201 { b"a" } else { b"b" };
+    assert_eq!(
+        files(&x).await,
+        vec![("doc.txt".into(), format!("atomic:blob:{}", hash(winner)))]
+    );
+}
+
+#[actix_rt::test]
 async fn an_oversized_body_is_refused_before_it_is_stored() {
     // The operator's cap (1000 bytes) is below the route default of 16 MiB.
     let x = setup(

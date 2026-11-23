@@ -2032,6 +2032,7 @@ async fn run(
                 }
             }
             if intents {
+                let preconditions = super::route_blobs::Preconditions::from_request(req);
                 let Some(http) = loaded.manifest.http.as_ref() else {
                     return Outcome {
                         fuel,
@@ -2053,6 +2054,8 @@ async fn run(
                         caller: &caller,
                         remote: &remote,
                         at,
+                        preconditions: (served.current.is_some() && preconditions.is_conditional())
+                            .then_some(&preconditions),
                     },
                     &verdict["intents"],
                 )

@@ -85,6 +85,7 @@ use self::{
 
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
+type CommitCheck = dyn Fn(&Commit, &Option<Resource>) -> AtomicResult<()> + Send + Sync;
 
 /// Live-collaboration state received from a peer over the sync link:
 /// presence, cursors, or the ops of an edit someone has not saved yet.
@@ -450,6 +451,8 @@ pub struct Db {
     /// store, not global — see [`crate::subject_lock`].
     pub(crate) subject_locks: crate::subject_lock::SubjectLocks,
     plugin_locks: crate::subject_lock::SubjectLocks,
+    /// Extra host-side checks on this store view, run under the subject write lock.
+    commit_check: Option<Arc<CommitCheck>>,
     /// Where the DB is stored on disk.
     #[allow(dead_code)]
     path: std::path::PathBuf,
@@ -846,6 +849,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            commit_check: None,
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -893,6 +897,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            commit_check: None,
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -936,6 +941,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            commit_check: None,
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -1066,6 +1072,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            commit_check: None,
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -1287,6 +1294,7 @@ impl Db {
             filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
+            commit_check: None,
             base_domain,
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
@@ -3168,6 +3176,27 @@ impl Db {
         Ok(due)
     }
 
+    /// A clone-local validation view of the same database. The callback runs
+    /// while the subject write lock is held, before validation,
+    /// extenders or persistence. Other writers share that lock even if they do
+    /// not use this view. A callback may only inspect its arguments; it must not
+    /// write or acquire another subject lock. Checks compose rather than replace
+    /// an existing check. Signed commits cannot request or disable these checks.
+    pub fn with_commit_check<F>(&self, check: F) -> Self
+    where
+        F: Fn(&Commit, &Option<Resource>) -> AtomicResult<()> + Send + Sync + 'static,
+    {
+        let mut view = self.clone();
+        let previous = self.commit_check.clone();
+        view.commit_check = Some(Arc::new(move |commit, current| {
+            if let Some(previous) = &previous {
+                previous(commit, current)?;
+            }
+            check(commit, current)
+        }));
+        view
+    }
+
     /// Exclusion scoped to this database and plugin operation namespace.
     pub async fn lock_plugin(&self, key: &str) -> tokio::sync::OwnedMutexGuard<()> {
         self.plugin_locks.lock(key).await
@@ -4545,6 +4574,16 @@ impl Storelike for Db {
             }
         }
 
+        if let Some(check) = &self.commit_check {
+            let current = match self.get_resource_shallow(&commit.subject) {
+                Ok(resource) => Some(resource),
+                Err(error) if error.error_type == crate::errors::AtomicErrorType::NotFoundError => {
+                    None
+                }
+                Err(error) => return Err(error),
+            };
+            check(&commit, &current)?;
+        }
         let commit_response = commit.validate_and_build_response(opts, store).await?;
 
         if let Some(old) = &commit_response.resource_old {
