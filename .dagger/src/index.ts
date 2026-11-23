@@ -2566,31 +2566,14 @@ export class AtomicServer {
       .withNewFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
   }
 
-  /**
-   * Execute one global shard without rebuilding or installing its dependencies.
-   * Browser assertion failures still return all artifacts; the controller must
-   * gate on test-exit-code and reconcile JSON identities with the full inventory.
-   */
-  @func()
-  async browserShard(
-    @argument() bundle: Directory,
-    @argument() expectedCommit: string,
-    /** SHA256 received directly from the trusted builder, outside the bundle. */
-    @argument() manifestSha256: string,
-    @argument() shardIndex: number,
-    @argument() shardCount: number,
-    @argument() playwrightWorkers: number = 1,
-    @argument() playwrightRetries: number = 1,
-    @argument() playwrightCloneSessions: boolean = false,
-  ): Promise<Directory> {
+  /** Shared validation constructs no build and imports no executable image. */
+  private async validatedBrowserBundle(
+    bundle: Directory,
+    expectedCommit: string,
+    manifestSha256: string,
+  ): Promise<BrowserBundleManifest> {
     validateBundleCommit(expectedCommit);
     validateBundleHash(manifestSha256);
-    validateBrowserShard(
-      shardIndex,
-      shardCount,
-      playwrightWorkers,
-      playwrightRetries,
-    );
     await this.requireBrowserBundlePlatform();
     const manifestFile = bundle.file('manifest.json');
     if ((await this.browserArtifactHash(manifestFile)) !== manifestSha256) {
@@ -2622,6 +2605,58 @@ export class AtomicServer {
         );
       }
     }
+    return manifest;
+  }
+
+  /** Validate an existing bundle without executing a build or a browser shard. */
+  @func()
+  async validateBrowserBundle(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 recorded by the original successful builder. */
+    @argument() manifestSha256: string,
+  ): Promise<string> {
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    return JSON.stringify({
+      ...manifest,
+      kind: 'browser-bundle-validation',
+      manifestSha256,
+      validatedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Execute one global shard without rebuilding or installing its dependencies.
+   * Browser assertion failures still return all artifacts; the controller must
+   * gate on test-exit-code and reconcile JSON identities with the full inventory.
+   */
+  @func()
+  async browserShard(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 received directly from the trusted builder, outside the bundle. */
+    @argument() manifestSha256: string,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightRetries: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBrowserShard(
+      shardIndex,
+      shardCount,
+      playwrightWorkers,
+      playwrightRetries,
+    );
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
     this.e2eRun = {
       shardCount,
       workers: String(playwrightWorkers),

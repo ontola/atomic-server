@@ -669,6 +669,16 @@ Docker/Dagger fan-out run is required. Its full test inventory and all shard
 reports must reconcile before the controller can report success. Compiler and
 unit suites remain separate from the shared production E2E build.
 
+`scripts/ci-browser-build.test.py` uses a recording builder to verify completed
+host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries
+are rebuilt, failures publish no completion marker, concurrent requests build
+once, and copied volumes materialize regular files for the SFTP chroot. It
+also rejects overlapping cache/output paths and preserves foreign files.
+Validation-only Dagger regressions check copied bundles without constructing
+any compiler, install, image-import or browser-runtime graph. Real persistent
+bundle reuse still needs an actual completed-build validation; these fixtures
+do not constitute full-suite CI on a changed commit.
+
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
 integration, and Flutter run on every Main CI job. Automatic Main CI on PR events
 and feature-branch pushes is paused while runner capacity is limited; focused

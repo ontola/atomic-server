@@ -232,6 +232,37 @@ reports even when a browser assertion fails: the caller must require
 Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
 checks still run independently; the shared E2E build does not replace them.
 
+For repeated jobs on the same machine, use the host artifact cache. Run this
+from the checked-out repository root, with separate absolute cache and output
+paths:
+
+```sh
+python3 scripts/ci-browser-build.py --source-commit "$(git rev-parse HEAD)" \
+  --cache-root /var/cache/atomic-ci/browser-bundles \
+  --output /opt/atomic-ci/share/bundle \
+  --receipt /opt/atomic-ci/build-result.json --cache-namespace browser-builder
+```
+
+A completed entry contains the successful build's original commit, command,
+timestamps, exit code and manifest hash, protected by a completion marker.
+Every reuse validates the actual checkout, tool versions and all bundle file
+hashes through `validate-browser-bundle`. A valid hit runs no compiler,
+package installation or image import. It reuses the successful build check
+and feeds its exact outputs to the browser shards; the new receipt records
+`cached` and retains the original build provenance. Missing, partial, corrupt
+or mismatched entries are built into a temporary directory and published only
+after success. Concurrent jobs share one writer per cache entry.
+
+Set the temporary runner's optional `artifact_cache_dir` to the same host path
+to use this automatically. A persistent filesystem or a Docker bind mount at
+that path preserves complete bundles independently of the Dagger engine.
+Ordinary Droplet storage is deleted with the machine; mount persistent storage
+before the job when reuse across machines is required. The runner creates no
+volumes. An older manually exported bundle without its successful-build
+receipt and completion marker is rebuilt before entering this cache. Browser
+commands can use the published bundle with a fresh results directory after an
+interruption; the fleet's deadline and cleanup policy still apply.
+
 The temporary DigitalOcean runner is `scripts/ci-fanout.py`. It takes an
 external batch JSON file with the frozen source commit, worktree and runtime
 directory, explicit account contexts and expected account UUIDs, and a node

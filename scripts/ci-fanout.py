@@ -84,6 +84,9 @@ def validate_config(config):
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
     config.setdefault('oci_probe_dir', str(Path(__file__).resolve().parent / 'ci-fanout/oci-smoke'))
+    config.setdefault('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles')
+    if not Path(config['artifact_cache_dir']).is_absolute():
+        raise ValueError('artifact_cache_dir must be an absolute host path')
     config.setdefault('region', 'ams3')
     config.setdefault('size', 's-4vcpu-8gb-240gb-intel')
     config.setdefault('expected_hourly_rate', .09524)
@@ -473,7 +476,8 @@ dagger version
                 raise ValueError('node is unavailable for a new phase')
             config = {'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
                       'node_id': node_id, 'phase': name, 'kind': kind, 'args': args,
-                      'preflight': preflight, 'module': module}
+                      'preflight': preflight, 'module': module,
+                      'artifact_cache_dir': self.config['artifact_cache_dir']}
             path = self.root / node_id / (name + '.json')
             path.write_text(json.dumps(config))
             self.scp(node_id, [path], '/opt/atomic-ci/phase.json')

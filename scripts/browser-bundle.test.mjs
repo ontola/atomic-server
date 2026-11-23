@@ -273,6 +273,153 @@ function pipelineWithoutBuilds() {
   return pipeline;
 }
 
+function assertValidationOnly(expectHashCheck = true) {
+  const calls = recordedCalls();
+  for (const name of [
+    'import_',
+    'asTarball',
+    'asService',
+    'withServiceBinding',
+  ]) {
+    assert.equal(calls.some(([actual]) => actual === name), false, name);
+  }
+  const commands = calls
+    .filter(([name]) => name === 'withExec')
+    .map(([, args]) => args);
+  if (expectHashCheck) {
+    assert.ok(commands.length > 0, 'cached bytes must actually be checked');
+  }
+  for (const command of commands) {
+    assert.ok(
+      command[0] === 'sha256sum' ||
+        (command[0] === 'node' &&
+          command[2] === BROWSER_SOURCE_FINGERPRINT_SCRIPT),
+      `validation must not install, compile or run browsers: ${command[0]}`,
+    );
+  }
+}
+
+test('completed bundles validate after a persistent-volume copy without any build or runtime graph', async () => {
+  const bundle = bundleFixture();
+  const temp = mkdtempSync(join(tmpdir(), 'atomic-bundle-volume-'));
+  try {
+    const first = join(temp, 'before-remount');
+    const mounted = join(temp, 'remounted');
+    mkdirSync(first);
+    for (const file of Object.values(bundle.files)) {
+      writeFileSync(join(first, file.name), file.bytes);
+    }
+    cpSync(first, mounted, { recursive: true });
+    for (const directory of [first, mounted]) {
+      const stored = {
+        file(name) {
+          const bytes = readFileSync(join(directory, name));
+          return { bytes, contents: async () => bytes.toString('utf8') };
+        },
+      };
+      const pipeline = pipelineWithoutBuilds();
+      pipeline.e2eShardContainer = () => {
+        throw new Error('validation cannot start a browser shard');
+      };
+      resetCalls();
+      importFixtureResponse();
+      const receipt = JSON.parse(
+        await pipeline.validateBrowserBundle(
+          stored,
+          COMMIT,
+          bundle.manifestHash,
+        ),
+      );
+      assert.ok(Number.isFinite(Date.parse(receipt.validatedAt)));
+      assert.deepEqual(receipt, {
+        ...JSON.parse(bundle.files['manifest.json'].bytes),
+        kind: 'browser-bundle-validation',
+        manifestSha256: bundle.manifestHash,
+        validatedAt: receipt.validatedAt,
+      });
+      assertValidationOnly();
+    }
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('validation-only checks reject incomplete, corrupt and untrusted cache entries', async () => {
+  for (const filename of [
+    'manifest.json',
+    'atomic-server-binary',
+    'client.oci.tar',
+    'test-inventory.json',
+  ]) {
+    for (const failure of ['missing', 'corrupt']) {
+      const bundle = bundleFixture();
+      if (failure === 'missing') delete bundle.files[filename];
+      else bundle.files[filename].bytes = Buffer.from('corrupt cached bytes');
+      resetCalls();
+      importFixtureResponse();
+      await assert.rejects(
+        () =>
+          pipelineWithoutBuilds().validateBrowserBundle(
+            bundle,
+            COMMIT,
+            bundle.manifestHash,
+          ),
+        failure === 'missing' ? /unexpected bundle file/ : /SHA256 does not match/,
+      );
+      assertValidationOnly(failure !== 'missing' || filename !== 'manifest.json');
+    }
+  }
+  const bundle = bundleFixture();
+  resetCalls();
+  importFixtureResponse();
+  await assert.rejects(
+    () =>
+      pipelineWithoutBuilds().validateBrowserBundle(bundle, COMMIT, '0'.repeat(64)),
+    /manifest SHA256 does not match/,
+  );
+  assertValidationOnly();
+});
+
+test('cache validation refuses another commit, source, toolchain or architecture before reuse', async () => {
+  for (const [key, replacement] of [
+    ['sourceCommit', 'c'.repeat(40)],
+    ['sourceFingerprint', 'c'.repeat(64)],
+    ['rustVersion', '0.0.0'],
+    ['pnpmVersion', '0.0.0'],
+    ['playwrightVersion', '0.0.0'],
+    ['platform', 'linux/arm64'],
+  ]) {
+    const bundle = bundleFixture(metadata => {
+      metadata[key] = replacement;
+    });
+    resetCalls();
+    importFixtureResponse();
+    await assert.rejects(
+      () =>
+        pipelineWithoutBuilds().validateBrowserBundle(
+          bundle,
+          COMMIT,
+          bundle.manifestHash,
+        ),
+      new RegExp(key),
+    );
+    assertValidationOnly();
+  }
+  const bundle = bundleFixture();
+  resetCalls();
+  importFixtureResponse({ platform: 'linux/arm64' });
+  await assert.rejects(
+    () =>
+      pipelineWithoutBuilds().validateBrowserBundle(
+        bundle,
+        COMMIT,
+        bundle.manifestHash,
+      ),
+    /linux\/amd64 worker/,
+  );
+  assert.equal(recordedCalls().some(([name]) => name === 'import_'), false);
+});
+
 test('tampered manifest and every corrupted artifact are rejected before executable import', async () => {
   for (const filename of [
     'manifest.json',

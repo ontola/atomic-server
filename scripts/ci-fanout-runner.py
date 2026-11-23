@@ -95,7 +95,16 @@ def main(config_path):
                          'node --test ../scripts/table-package-cache.test.mjs']]
         else:
             commands = []
-        commands.append(prefix + config['args'])
+        if config['kind'] == 'builder':
+            commands.append([sys.executable, str(repo / 'scripts/ci-browser-build.py'),
+                '--source-commit', config['source_commit'],
+                '--cache-root', config.get('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles'),
+                '--output', '/opt/atomic-ci/share/bundle',
+                '--receipt', str(results / 'browser-build-receipt.json'),
+                '--cache-namespace', config['batch_key'] + '-' + config['node_id'],
+                '--max-build-jobs', '4'])
+        else:
+            commands.append(prefix + config['args'])
         for index, command in enumerate(commands):
             item = {'command': command, 'started_at': stamp()}
             state['commands'].append(item)
@@ -105,6 +114,8 @@ def main(config_path):
             check_identity(config, repo)
             if item['exit_code'] != 0:
                 raise RuntimeError('phase command exited ' + str(item['exit_code']))
+        if config['kind'] == 'builder':
+            state['browser_build'] = json.loads((results / 'browser-build-receipt.json').read_text())
         if config['kind'] == 'browser':
             exported = results / 'browser'
             state['browser_exit_code'] = int((exported / 'test-exit-code').read_text().strip())
