@@ -1,12 +1,19 @@
 # Built-in Syncables: integration handoff
 
-Real-data import acceptance passed on `18c46ed3a`; the final SDK counter fix
-and matching localhost build are `d993656e6`.
+Real-data import acceptance passed on `18c46ed3a`; the SDK counter fix is
+`d993656e6`. The current production revision is `fa9cb95f4`: native resource
+actions, paged entity Collection compatibility, faster Sync controls, accepted
+background preparation, source invalidation recovery and generic reference-origin
+navigation. All 18 native browser journeys passed, and localhost serves the
+matching build against the existing drive.
 
 - [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
   Main/server CI on the final integration candidate, reviews and merges.
   Integration and shared CI remain with trekmeester; workers must not rebase,
   dispatch or rerun shared CI. Remove this handoff after that acceptance.
+- [ ] Signed-in Chrome verification of the new reference-origin actions on
+  `fa9cb95f4` remains open because browser control was unavailable after the
+  restart. The existing account and drive remain available on localhost.
 - [x] Attached the [current real-data walkthrough](https://github.com/ontola/atomic-server/pull/2522#issuecomment-7102109541)
   on 23 November 2026: 25 seconds from My drive through the principal App to
   the 2,608 stored Issues/PRs and linked authors. This edited capture uses the
@@ -41,14 +48,26 @@ Overlapping reads share typed rows, explicit field evidence and durable run orde
 Complete reads replace only their own membership; incomplete/cancelled reads
 retain accepted data. Canonical identity survives same-drive moves.
 
-Collection and Table are native views of stored data. Ordinary Table cells show
-stored resource links; its Open action follows proven catalog relationships to a
-saved filter of the target table, without provider/catalog reads. The navigation
-column adds no API schema field. Saved Collection views remain compatible. Sync
+Canonical entity collections use ordinary Table and Sync. Existing Collection
+links render native Table with the same saved filters and view settings; only
+unconfigured duplicate Collection tabs are hidden. App directories retain their
+Collection view. Ordinary Table cells show stored resource links. Table Open and
+ordinary Resource actions share one guarded catalog relationship resolver.
+Imported organizations and embedded owner summaries with suitable evidence can
+open repositories and catalog-declared issue collections. Sync verifies the
+stored source against the current catalog before reading from the provider.
+Open leads the default Table columns on small screens, while explicit saved column
+order still wins. Each action opens an exact saved filter without provider or
+catalog reads. The navigation column adds no API schema field. Sync
 runs in an opaque iframe through the existing bridge; the proxy retains
 credentials. Request authority comes from the selected filter, current catalog
 and actual response provenance, without Drive-root iframe write grants.
-Reopening Sync revalidates metadata without restarting its worker.
+Reopening Sync revalidates selected source, principal, catalog and permissions
+without restarting its worker. Canonical controls skip whole-integration legacy
+and adoption scans; actual workers and setup retain their full evidence checks.
+Sync status belongs to the selected saved filter. Cached rows do not imply that
+a new filter has completed a sync or contains those rows. Column label changes
+retain stable Property IDs; API-owned cell values can change on the next sync.
 
 The catalog's `x-embeddedResources` declarations supply object, object-array,
 discriminator-selected and explicit scalar reference links. Host-held response
@@ -71,53 +90,59 @@ is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
 
-- Production source: `d993656e6e413d71ccd738e1b96a9429c75a1554`, owned branch
+- Production source: `fa9cb95f420b739db18f3b34b0b9ad4b9927c081`, owned branch
   `codex/builtin-syncables-completion`, published through
   `feat/builtin-syncables-foundation` in
   [PR #2522](https://github.com/ontola/atomic-server/pull/2522).
-- The actual registry package `syncables@0.31.2` is bundled into the Sync app,
-  from merged plugins [#755](https://github.com/ontola/atomic-plugins/pull/755),
-  [#756](https://github.com/ontola/atomic-plugins/pull/756) and
-  [#757](https://github.com/ontola/atomic-plugins/pull/757), final merge
-  `026b22f2242a715a67260f2f5427cd092a56246d`. Required package CI and 2,158
-  tests passed (85 existing skips). All 230 registry files and modes match the
-  tested release candidate, with publication provenance verified.
-- 3,125 Data Browser tests across 381 files and both MCP tests pass in UTC.
-  Full app typecheck, staged lint/format, navigation hook compiler checks and
-  the six-language audit pass; locales contain 3,146 keys each.
-- The 84 focused host/query/profile cases cover large 5,518- and 10,734-record
-  journals, bulk cold hydration, scope changes, malformed pages, cancellation
-  and native retained-parent identities. Every child page uses a fresh signed
-  server query; pagination retains only bounded totals/seen-ID metadata.
-  Parent and explicit Drive stamps are checked again after async work.
-  Full identity scans retain Trash-aware, fail-closed behavior.
-- Read limits remain 128 requests, 4,000 records, 32 partitions and zero retries,
-  with a five-minute elapsed budget including native response processing.
-  Timed tests complete a valid 150-second read and retain only accepted pages
-  when the elapsed budget is exhausted.
-- The final SDK suite passed 1,804 tests (one existing skip), including seven
-  HTTP paging/count regressions. Existing off-page updates revalidate partial
-  server membership instead of being counted twice; complete local/small-query
-  optimistic behavior remains covered. The matching WASM was rebuilt.
-  Rust paging tests passed 38 query cases (one existing ignored benchmark),
-  12 Trash cases and explicit authorization/Drive regressions. No later Rust
-  change was made. Both query paths check visibility before totals/offsets.
-- All 17 optimized native Chromium journeys pass with one worker and zero
-  retries, skips or flakes (171.6 seconds for seven Syncables journeys and
-  53.4 seconds for ten shared App journeys). They cover real stored target IDs,
-  native Table navigation without provider reads, overlapping filters, pause,
-  background/offline navigation, principal reuse, moves, reconnect, Public,
-  unrelated providers, two populated Drives and retained Trash collisions.
-  Fixtures use invented records; the real-data check below is separate.
-- Native reports: `.e2e-runs/2026-11-21T07-57-52.646Z-UW45VM/{report,run}.json`
-  and `.e2e-runs/2026-11-21T08-06-26.916Z-mIxSai/{report,run}.json`.
-  Executable SHA256:
-  `b8f349e89cb80400bc64d4e2bf4798515a84e5d1e0ec8fbcc64b8660bf7833ec`.
-  Localhost52771 runs that private executable against the existing drive data;
-  host, Sync and WASM bytes match the tested distribution. No data was reset.
-- [Flutter checks 44882636597](https://github.com/ontola/atomic-server/actions/runs/44882636597)
-  passed on that production source. Full shared Main/server CI has not run on
-  this head. PR #2522 remains draft/conflicting pending integration acceptance.
+- The actual registry package `syncables@0.32.0` is bundled into the Sync app.
+  Plugins [#758](https://github.com/ontola/atomic-plugins/pull/758) merged at
+  `606c667e566d482d6c51e8db30a22730887990d1` after required CI and all other
+  checks passed. Local library validation passed 2,163 tests (85 optional/database
+  skips). [Publication 45208128186](https://github.com/ontola/atomic-plugins/actions/runs/45208128186)
+  passed. The registry archive is byte-identical to the tested release candidate:
+  SHA-1 `eebb2b6058113393439cc39febed15234fcb2c06`. All 230 installed files match;
+  npm provenance names the merge and publication workflow. The exact version has
+  a narrowly bounded release-age exception alongside the earlier paired releases.
+- Reference origins may omit their own collection read. Compilation still proves
+  canonical identity from the current catalog and raw/context evidence; response
+  Links still check the provider detail identity. Navigation creates no origin
+  read, membership or success. Old stored summaries use bounded declarative
+  candidates; Sync must validate missing route bindings before provider transport.
+- Child imports reuse active, host-proved source links without enriching those
+  origins during the read. Other references still enrich normally. Existing
+  source guards subscribe to rows and bounded cached ancestry, including Drive
+  Trash changes, and refresh subscriptions after valid same-Drive moves. Real
+  outside changes cancel preparing/active work; stale visible controls reprepare
+  using fresh proof. No timeout extension or weaker identity comparison was used.
+- 3,210 Data Browser tests across 385 files and both MCP tests pass in UTC.
+  App typecheck, staged lint/format and React compiler checks pass. All six
+  translation catalogs retain their complete 3,148 keys; no new UI copy was added
+  by the reference-origin fix. The focused lifecycle/rule/projector run passed
+  115 cases, including the reproduced self-invalidation and stale controls.
+- SDK validation from `3d54dbada` passed 1,814 tests (one existing skip), with no
+  later SDK production change. Explicit Drive queries keep retained trashed rows
+  out after direct reads and follow ancestor changes without fetching ancestry.
+  Earlier Rust paging/Trash/authorization checks passed; no later Rust code changed.
+- Read limits remain 128 requests, 4,000 records, 32 partitions, five minutes and
+  zero retries. Accepted incomplete reads retain data; complete reads replace
+  membership only for their own filter. Native data views do not fetch providers.
+- The optimized native build `fa9cb95f4` passed 18 Chromium journeys in 279
+  seconds with one worker and zero retries, skips or flakes. It includes the
+  embedded-organization relationship sync that exposed self-invalidation.
+  The run reports and desktop/mobile fixtures are in
+  `.e2e-runs/2026-11-23T17-57-35.101Z-kOvuFs/`.
+  Executable SHA256
+  `77f91f481cb9f8e7cc897ee0a00d75efae4c95d835229070529a1aa07e12f872`.
+  Localhost on port 52771 serves that same executable with the existing data.
+  Served host JS, Sync JS and WASM match the built assets, and the built-in
+  iframe response retains `connect-src 'none'`.
+- [Flutter 45206261415](https://github.com/ontola/atomic-server/actions/runs/45206261415)
+  passed on `8e811627a`; the sole earlier embed-size failure is fixed by lazy
+  standalone mock loading (first-use gzip 1000.3 → 984.4 kB, unchanged 1000 kB
+  budget). [Flutter 45211049900](https://github.com/ontola/atomic-server/actions/runs/45211049900)
+  also passed on `fa9cb95f4`. Full shared Main/server CI awaits integration.
+  The PR stays draft/conflicting for trekmeester's
+  integration, review and shared CI; workers must not dispatch or rerun it.
 
 ## Real-data acceptance
 
@@ -147,9 +172,15 @@ bytes are unchanged from the accepted import. Dev drive's old App remains in
 Trash as explicitly requested, and the 22 historical blocked drafts are retained.
 No restore, deletion or initialization was performed.
 
-On the final localhost build, explicitly refreshing 30 existing off-page Issues
+On the SDK counter fix build, explicitly refreshing 30 existing off-page Issues
 kept all 41 Table count samples at 2,608 data rows plus the header. This used only
 signed Atomic reads, with zero iframes or provider requests.
+
+On the subsequent control latency build `3d54dbada`, the live Repositories Sync
+controls appeared in 776 ms in a warm Table-to-Sync interaction. The earlier
+opening still showed its loading state at 33.6 seconds. The signed-in Table
+showed 1,274 rows and retained the user label `name changed`. These observations
+predate the final reference-origin change.
 
 The immutable record-links catalog is active on `integrations.atomic.place` via
 [catalog-only rollout 44760703345](https://github.com/ontola/atomic-saas/actions/runs/44760703345),
