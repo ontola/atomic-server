@@ -1,5 +1,5 @@
 import { Property } from '@tomic/react';
-import { useContext, useMemo, type JSX } from 'react';
+import { useContext, useLayoutEffect, useMemo, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaPlus } from 'react-icons/fa6';
 import type { DropdownItem } from '@tomic/resource-ui/components/Dropdown/index';
@@ -20,6 +20,7 @@ interface TableFilterBarProps {
   allColumns?: Property[];
   /** The view's computed columns — filterable like any other. */
   derivedColumns: DerivedColumnSpec[];
+  disabled?: boolean;
 }
 
 const AddFilterTrigger = buildDefaultTrigger(<FaPlus />, () => 'Add filter');
@@ -33,8 +34,13 @@ export function TableFilterBar({
   columns,
   allColumns = columns,
   derivedColumns,
+  disabled,
 }: TableFilterBarProps): JSX.Element | null {
   const { filters, addFilter } = useContext(TablePageContext);
+  const disabledRef = useRef(disabled);
+  useLayoutEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   const columnBySubject = useMemo(
     () => new Map(allColumns.map(c => [c.subject, c])),
@@ -51,13 +57,15 @@ export function TableFilterBar({
   const addItems = useMemo((): DropdownItem[] => {
     const taken = new Set(filters.map(filterKey));
 
-    return [
+    const candidates = [
       ...columns
         .filter(c => !taken.has(c.subject))
         .map(c => ({
           id: c.subject,
           label: titles.get(c.subject)!,
-          onClick: () => addFilter(c.subject),
+          onClick: () => {
+            if (!disabledRef.current) addFilter(c.subject);
+          },
         })),
       // A computed column is filterable too: the store evaluates it per row, so
       // "logged more than an hour" or "due" narrows the table like any value.
@@ -66,9 +74,20 @@ export function TableFilterBar({
         .map(spec => ({
           id: derivedFilterKey(spec.id),
           label: spec.label,
-          onClick: () => addFilter(derivedFilterKey(spec.id)),
+          onClick: () => {
+            if (!disabledRef.current) addFilter(derivedFilterKey(spec.id));
+          },
         })),
     ];
+
+    const seen = new Set<string>();
+
+    return candidates.filter(item => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+
+      return true;
+    });
   }, [columns, derivedColumns, filters, addFilter, titles]);
 
   if (filters.length === 0) {
@@ -86,22 +105,17 @@ export function TableFilterBar({
           ? columnBySubject.get(filter.property)
           : undefined;
 
-        // A filter whose column is gone (a computed column that was
-        // removed) renders nothing rather than an unlabelled chip.
-        if (!column && !derived) {
-          return null;
-        }
-
         return (
           <TableFilterChip
             key={key}
             filter={filter}
             column={column}
             derived={derived}
+            disabled={disabled}
           />
         );
       })}
-      {addItems.length > 0 && (
+      {addItems.length > 0 && !disabled && (
         <ColumnFilterDropdown Trigger={AddFilterTrigger} items={addItems} />
       )}
     </Bar>
