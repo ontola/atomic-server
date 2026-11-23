@@ -34,10 +34,13 @@ export const shortcuts = {
   deleteLine: osAlt('backspace'),
 };
 
-// A regex, not a string: wuchale extracts 'Mac' as translatable text, and then
+// A function declaration (hoisted: `shortcuts` above calls it while this module
+// loads) with a regex, not a string: wuchale extracts 'Mac' as translatable text, and then
 // `shortcuts` (computed when this module loads, before the catalog has) read the
 // platform as not-Mac, so a Mac showed `ctrl+k`.
-const isMac = (): boolean => /Mac/.test(navigator.platform);
+function isMac(): boolean {
+  return /Mac/.test(navigator.platform);
+}
 
 function osCtrl(key: string): string {
   // react-hotkeys-hook v5 dropped the `cmd` modifier alias that v4 accepted —
