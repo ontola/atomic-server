@@ -553,7 +553,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -11009,7 +11009,7 @@ msgstr "{0} vergeten op dit apparaat"
 msgid "Saved {0}, identity …{1}"
 msgstr "{0} opgeslagen, identiteit …{1}"
 
-#. 0: candidates[0]
+#. 0: authority ?? candidates[0]
 #: ../data-browser/src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr "Deze uitnodiging kan hier niet worden geopend: {0} draait geen server waarop de schijf staat. Vraag de uitnodiger om een nieuwe link."
@@ -13546,6 +13546,7 @@ msgstr "Voer deze app uit en beoordeel de voorstellen voordat er iets wordt gesc
 msgid "Show Apps panel"
 msgstr "Toon Apps-paneel"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "Bouw een app met AI"
@@ -13804,3 +13805,53 @@ msgstr ""
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
 msgstr ""
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table"
+msgstr "Maak een tabel"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Tables with your own columns, like a small database"
+msgstr "Tabellen met je eigen kolommen, zoals een kleine database"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table here"
+msgstr "Maak hier een tabel"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form"
+msgstr "Maak een formulier"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Collect answers from anyone with a link"
+msgstr "Verzamel antwoorden van iedereen met een link"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form here"
+msgstr "Maak hier een formulier"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "More powerful"
+msgstr "Nog krachtiger"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Beschrijf wat je nodig hebt en de AI bouwt het in je drive"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Bouw hier een app met AI"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Stuur iemand een bericht"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Schrijf iemand die je hebt uitgenodigd, zoals een collega of vriend"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Stuur hier een bericht"

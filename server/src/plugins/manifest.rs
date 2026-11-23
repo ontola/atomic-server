@@ -611,9 +611,12 @@ impl Manifest {
         }
         names.clear();
         for class in class_urls {
-            let url = url::Url::parse(class).map_err(|e| e.to_string())?;
-            if !matches!(url.scheme(), "https" | "http") || url.host_str().is_none() {
-                return Err("classExtender entries must be class URLs".into());
+            let is_identifier = atomic_lib::identifiers::is_resource_id(class);
+            if !is_identifier {
+                let url = url::Url::parse(class).map_err(|e| e.to_string())?;
+                if !matches!(url.scheme(), "https" | "http") || url.host_str().is_none() {
+                    return Err("classExtender entries must be class URLs".into());
+                }
             }
             if !names.insert(class) {
                 return Err("classExtender entries must be unique".into());
@@ -1347,6 +1350,20 @@ mod export_tests {
             assert!(out.get("exports").is_none(), "{out}");
             assert!(out.get("world").is_none_or(|w| w != "sandboxed-app"));
         }
+    }
+
+    #[test]
+    fn class_extender_accepts_atomic_identifiers() {
+        let with = |class: &str| {
+            Manifest::parse(json!({"schemaVersion": 2, "runtime": "wasip2/1",
+                "world": "server-extension",
+                "entrypoints": {"classExtender": [class]}}))
+        };
+        assert!(with("atomic:us_abc123").is_ok());
+        assert!(with("did:ad:abc123").is_ok());
+        assert!(with("https://example.com/classes/a").is_ok());
+        assert!(with("atomic:agent:abc123").is_err());
+        assert!(with("ftp://example.com/a").is_err());
     }
 
     #[test]

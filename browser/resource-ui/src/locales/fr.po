@@ -553,7 +553,7 @@ msgstr "Ne répond pas"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -11003,7 +11003,7 @@ msgstr "Oublier {0} sur cet appareil"
 msgid "Saved {0}, identity …{1}"
 msgstr "Enregistré {0}, identité …{1}"
 
-#. 0: candidates[0]
+#. 0: authority ?? candidates[0]
 #: ../data-browser/src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr "Cette invitation ne peut pas être ouverte ici : {0} n’exécute pas de serveur contenant ce lecteur. Demandez un nouveau lien à la personne qui vous a invité."
@@ -13540,6 +13540,7 @@ msgstr "Exécutez cette app et vérifiez ce qu'elle propose avant que quoi que c
 msgid "Show Apps panel"
 msgstr "Afficher le panneau Apps"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "Créer une app avec l'IA"
@@ -13798,3 +13799,53 @@ msgstr ""
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
 msgstr ""
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table"
+msgstr "Créer un tableau"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Tables with your own columns, like a small database"
+msgstr "Des tableaux avec vos propres colonnes, comme une petite base de données"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table here"
+msgstr "Créez un tableau ici"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form"
+msgstr "Créer un formulaire"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Collect answers from anyone with a link"
+msgstr "Recueillez des réponses de tous avec un lien"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form here"
+msgstr "Créez un formulaire ici"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "More powerful"
+msgstr "Plus puissant"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Décrivez ce dont vous avez besoin et l'IA le construit dans votre drive"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Créez ici une app avec l'IA"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Envoyez un message à quelqu'un"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Écrivez à quelqu'un que vous avez invité, comme un collègue ou un ami"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Envoyez un message ici"
