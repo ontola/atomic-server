@@ -2086,6 +2086,8 @@ msgid "Add tag"
 msgstr "Tambahkan tag"
 
 #. 0: label
+#. 0: label
+#: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Beralih ke {0}"
@@ -2736,7 +2738,6 @@ msgstr "Pilih kelas"
 #: ../data-browser/src/chunks/PluginRuns/ImportCollision.tsx
 #: ../data-browser/src/chunks/PluginRuns/ImportConflict.tsx
 #: src/components/LoroDocValue.tsx
-#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Kosong"
 
@@ -5336,7 +5337,6 @@ msgstr "Mendapatkan kode…"
 msgid "Android"
 msgstr "Android"
 
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -13842,3 +13842,8 @@ msgstr "Tulis kepada orang yang kamu undang, seperti rekan kerja atau teman"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Kirim pesan di sini"
+
+#. 0: property.shortname
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to set {0}"
+msgstr "Klik untuk mengatur {0}"
