@@ -13827,8 +13827,8 @@ msgstr "Crea un formulario aquí"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "More powerful"
-msgstr "Más potencia"
+msgid "Next steps"
+msgstr "Siguientes pasos"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Describe what you need and the AI builds it in your drive"
