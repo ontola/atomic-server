@@ -1,20 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { createRoute } from '@tanstack/react-router';
-import { Button } from '@tomic/ui/components/Button';
-import { Column } from '@tomic/ui/components/Row';
+import { useEffect, useState, type FormEvent } from "react";
+import { createRoute } from "@tanstack/react-router";
+import { Button } from "@tomic/ui/components/Button";
+import { Column } from "@tomic/ui/components/Row";
 import {
   InputStyled,
   InputWrapper,
-} from '@tomic/ui/components/forms/InputStyles';
+} from "@tomic/ui/components/forms/InputStyles";
 import {
   accountAddress,
   getManagedAccount,
   type ManagedAccount,
-} from '../helpers/managed/session';
-import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
-import { canHoldProviderCookie } from '../helpers/managed/deviceLink';
-import { getUnlockableRecoverySecret } from '../helpers/managed/recovery';
-import type { RecoverySecret } from '../helpers/managed/recovery';
+} from "../helpers/managed/session";
+import { getAccountServiceUrl } from "../helpers/managed/cloudSync";
+import { canHoldProviderCookie } from "../helpers/managed/deviceLink";
+import { getUnlockableRecoverySecret } from "../helpers/managed/recovery";
+import type { RecoverySecret } from "../helpers/managed/recovery";
 import {
   describeLink,
   sendIdentity,
@@ -22,13 +22,13 @@ import {
   unlockMethods,
   type LinkDescription,
   type UnlockMethod,
-} from '../helpers/managed/sendIdentity';
-import { fetchManagedInfo } from '../helpers/managedServer';
-import { useSettings } from '../helpers/AppSettings';
+} from "../helpers/managed/sendIdentity";
+import { fetchManagedInfo } from "../helpers/managedServer";
+import { useSettings } from "../helpers/AppSettings";
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
-} from '../views/getting-started/AccountSignInPanel';
+} from "../views/getting-started/AccountSignInPanel";
 import {
   CardError,
   CardSubtitle,
@@ -37,32 +37,32 @@ import {
   OnboardingCard,
   OnboardingWrap,
   Shell,
-} from '../views/getting-started/chrome';
-import { pathNames } from './paths';
-import { appRoute } from './RootRoutes';
+} from "../views/getting-started/chrome";
+import { pathNames } from "./paths";
+import { appRoute } from "./RootRoutes";
 
 export const SendIdentityRoute = createRoute({
   path: pathNames.sendIdentity,
   component: () => <SendIdentityPage />,
   getParentRoute: () => appRoute,
   validateSearch: (search): { code: string } => ({
-    code: typeof search.code === 'string' ? search.code.trim() : '',
+    code: typeof search.code === "string" ? search.code.trim() : "",
   }),
 });
 
 type Phase =
-  | { name: 'loading' }
-  | { name: 'sign-in' }
-  | { name: 'confirm'; link: LinkDescription; account: ManagedAccount }
+  | { name: "loading" }
+  | { name: "sign-in" }
+  | { name: "confirm"; link: LinkDescription; account: ManagedAccount }
   | {
-      name: 'unlock';
+      name: "unlock";
       link: LinkDescription;
       recovery: RecoverySecret;
       methods: UnlockMethod[];
     }
-  | { name: 'sending' }
-  | { name: 'done' }
-  | { name: 'failed'; message: string };
+  | { name: "sending" }
+  | { name: "done" }
+  | { name: "failed"; message: string };
 
 /**
  * /app/send-identity?code=<user code>
@@ -75,18 +75,18 @@ type Phase =
 function SendIdentityPage() {
   const { code } = SendIdentityRoute.useSearch();
   const { baseURL } = useSettings();
-  const [phase, setPhase] = useState<Phase>({ name: 'loading' });
+  const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [portalUrl, setPortalUrl] = useState<string | null>(() =>
     getAccountServiceUrl(),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [codeInput, setCodeInput] = useState('');
+  const [codeInput, setCodeInput] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    void fetchManagedInfo(baseURL).then(info => {
+    void fetchManagedInfo(baseURL).then((info) => {
       if (!cancelled) {
         setPortalUrl(getAccountServiceUrl(info));
       }
@@ -100,10 +100,10 @@ function SendIdentityPage() {
   useEffect(() => {
     let cancelled = false;
     const fail = (message: string) =>
-      !cancelled && setPhase({ name: 'failed', message });
+      !cancelled && setPhase({ name: "failed", message });
 
     if (!code) {
-      fail('This link has no code. Start again from your device.');
+      fail("This link has no code. Start again from your device.");
 
       return;
     }
@@ -114,7 +114,7 @@ function SendIdentityPage() {
       if (cancelled) return;
 
       if (!account) {
-        setPhase({ name: 'sign-in' });
+        setPhase({ name: "sign-in" });
 
         return;
       }
@@ -123,15 +123,15 @@ function SendIdentityPage() {
         const link = await describeLink(code);
 
         if (!link.appKey) {
-          fail('That device did not ask for your identity.');
+          fail("That device did not ask for your identity.");
         } else if (link.alreadyApproved) {
-          fail('This code was already used. Ask the device for a new one.');
+          fail("This code was already used. Ask the device for a new one.");
         } else if (!cancelled) {
-          setPhase({ name: 'confirm', link, account });
+          setPhase({ name: "confirm", link, account });
         }
       } catch (err) {
         fail(
-          err instanceof Error ? err.message : 'Could not look up that code.',
+          err instanceof Error ? err.message : "Could not look up that code.",
         );
       }
     })();
@@ -162,23 +162,23 @@ function SendIdentityPage() {
       const message =
         err instanceof Error && err.message
           ? err.message
-          : 'Could not unlock your backup.';
+          : "Could not unlock your backup.";
 
       if (!quiet) setError(message);
 
       return message;
     }
 
-    setPhase({ name: 'sending' });
+    setPhase({ name: "sending" });
 
     try {
       await sendIdentity(code, link, recovery, secret);
-      setPhase({ name: 'done' });
+      setPhase({ name: "done" });
     } catch (err) {
       setPhase({
-        name: 'failed',
+        name: "failed",
         message:
-          err instanceof Error ? err.message : 'Could not send your identity.',
+          err instanceof Error ? err.message : "Could not send your identity.",
       });
     }
 
@@ -186,7 +186,7 @@ function SendIdentityPage() {
   }
 
   async function unlockStep(
-    p: Extract<Phase, { name: 'unlock' }>,
+    p: Extract<Phase, { name: "unlock" }>,
     method: UnlockMethod,
     input?: string,
   ) {
@@ -209,9 +209,9 @@ function SendIdentityPage() {
 
       if (!recovery) {
         setPhase({
-          name: 'failed',
+          name: "failed",
           message:
-            'This account has no backup yet. Create it in the web app first.',
+            "This account has no backup yet. Create it in the web app first.",
         });
 
         return;
@@ -223,11 +223,11 @@ function SendIdentityPage() {
       // or code below.
       let assistedFailure: string | undefined;
 
-      if (methods[0] === 'assisted') {
+      if (methods[0] === "assisted") {
         assistedFailure = await finish(
           link,
           recovery,
-          'assisted',
+          "assisted",
           undefined,
           true,
         );
@@ -235,64 +235,64 @@ function SendIdentityPage() {
         if (assistedFailure === undefined) return;
       }
 
-      const rest = methods.filter(m => m !== 'assisted');
+      const rest = methods.filter((m) => m !== "assisted");
 
       if (rest.length === 0) {
         // Say why: the account's own unlock failed, or the backup was made by
         // another address than the one signed in, or it has no way in here.
         setPhase({
-          name: 'failed',
+          name: "failed",
           message:
             assistedFailure ??
             (recovery.owner_email &&
             account.email &&
             recovery.owner_email !== account.email
               ? `This backup belongs to ${recovery.owner_email}, but you are signed in as ${account.email}. Sign in with that address.`
-              : 'This backup cannot be opened here. Restore it in the web app first.'),
+              : "This backup cannot be opened here. Restore it in the web app first."),
         });
 
         return;
       }
 
-      setPhase({ name: 'unlock', link, recovery, methods: rest });
+      setPhase({ name: "unlock", link, recovery, methods: rest });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Could not read your backup.',
+        err instanceof Error ? err.message : "Could not read your backup.",
       );
     } finally {
       setBusy(false);
     }
   }
 
-  function handleCode(e: FormEvent, p: Extract<Phase, { name: 'unlock' }>) {
+  function handleCode(e: FormEvent, p: Extract<Phase, { name: "unlock" }>) {
     e.preventDefault();
 
     if (!codeInput.trim()) return;
 
     void unlockStep(
       p,
-      p.methods.includes('password') ? 'password' : 'code',
+      p.methods.includes("password") ? "password" : "code",
       codeInput,
     );
   }
 
   const onSignedIn = () => {
-    setPhase({ name: 'loading' });
-    setAttempt(n => n + 1);
+    setPhase({ name: "loading" });
+    setAttempt((n) => n + 1);
   };
 
   return (
     <Shell>
       <OnboardingWrap>
         <OnboardingCard>
-          <Column gap='1rem'>
-            {phase.name === 'loading' || phase.name === 'sending' ? (
+          <Column gap="1rem">
+            {phase.name === "loading" || phase.name === "sending" ? (
               <CardSubtitle>
-                {phase.name === 'sending' ? 'Sending…' : 'Loading…'}
+                {phase.name === "sending" ? "Sending…" : "Loading…"}
               </CardSubtitle>
             ) : null}
 
-            {phase.name === 'sign-in' ? (
+            {phase.name === "sign-in" ? (
               <>
                 <CardTitle>Sign in to continue</CardTitle>
                 <CardSubtitle>
@@ -309,14 +309,14 @@ function SendIdentityPage() {
                     onSignedIn={onSignedIn}
                   />
                 ) : (
-                  <CardError role='alert'>
+                  <CardError role="alert">
                     No account service is known here.
                   </CardError>
                 )}
               </>
             ) : null}
 
-            {phase.name === 'confirm' ? (
+            {phase.name === "confirm" ? (
               <>
                 <CardTitle>
                   Send your identity to {phase.link.deviceName}?
@@ -328,52 +328,52 @@ function SendIdentityPage() {
                 <CardSubtitle>
                   Signed in as {accountAddress(phase.account)}.
                 </CardSubtitle>
-                {error ? <CardError role='alert'>{error}</CardError> : null}
+                {error ? <CardError role="alert">{error}</CardError> : null}
                 <CtaButton
                   disabled={busy}
                   onClick={() => void handleSend(phase.link, phase.account)}
                 >
-                  {busy ? 'Unlocking…' : 'Send'}
+                  {busy ? "Unlocking…" : "Send"}
                 </CtaButton>
               </>
             ) : null}
 
-            {phase.name === 'unlock' ? (
+            {phase.name === "unlock" ? (
               <>
                 <CardTitle>Unlock your backup</CardTitle>
-                {phase.methods.includes('passkey') ? (
+                {phase.methods.includes("passkey") ? (
                   <Button
-                    type='button'
+                    type="button"
                     disabled={busy}
-                    onClick={() => void unlockStep(phase, 'passkey')}
+                    onClick={() => void unlockStep(phase, "passkey")}
                   >
                     {busy
-                      ? 'Waiting for your passkey…'
-                      : 'Unlock with your passkey'}
+                      ? "Waiting for your passkey…"
+                      : "Unlock with your passkey"}
                   </Button>
                 ) : null}
-                {phase.methods.includes('code') ||
-                phase.methods.includes('password') ? (
-                  <form onSubmit={e => handleCode(e, phase)}>
-                    <Column gap='1rem'>
+                {phase.methods.includes("code") ||
+                phase.methods.includes("password") ? (
+                  <form onSubmit={(e) => handleCode(e, phase)}>
+                    <Column gap="1rem">
                       <InputWrapper>
                         <InputStyled
                           value={codeInput}
-                          onChange={e => setCodeInput(e.target.value)}
-                          type='password'
-                          autoComplete='off'
+                          onChange={(e) => setCodeInput(e.target.value)}
+                          type="password"
+                          autoComplete="off"
                           spellCheck={false}
                           disabled={busy}
                           placeholder={
-                            phase.methods.includes('password')
-                              ? 'Recovery password'
-                              : 'Recovery code'
+                            phase.methods.includes("password")
+                              ? "Recovery password"
+                              : "Recovery code"
                           }
-                          aria-label='Recovery code'
+                          aria-label="Recovery code"
                         />
                       </InputWrapper>
                       <Button
-                        type='submit'
+                        type="submit"
                         subtle
                         disabled={busy || !codeInput.trim()}
                       >
@@ -382,21 +382,21 @@ function SendIdentityPage() {
                     </Column>
                   </form>
                 ) : null}
-                {error ? <CardError role='alert'>{error}</CardError> : null}
+                {error ? <CardError role="alert">{error}</CardError> : null}
               </>
             ) : null}
 
-            {phase.name === 'done' ? (
+            {phase.name === "done" ? (
               <>
                 <CardTitle>Done</CardTitle>
                 <CardSubtitle>Go back to your device.</CardSubtitle>
               </>
             ) : null}
 
-            {phase.name === 'failed' ? (
+            {phase.name === "failed" ? (
               <>
                 <CardTitle>Could not send your identity</CardTitle>
-                <CardError role='alert'>{phase.message}</CardError>
+                <CardError role="alert">{phase.message}</CardError>
               </>
             ) : null}
           </Column>
