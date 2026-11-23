@@ -46,16 +46,14 @@ export function useFileInfo(resource: Resource): FileInfo {
     }
   }, [downloadUrl]);
 
+  // A File that has not arrived (or arrived without its properties) is not
+  // loaded yet: show the placeholder instead of throwing into an error page.
   if (
-    !resource.loading &&
-    ((downloadUrl === undefined && serverDownloadUrl === undefined) ||
-      mimeType === undefined ||
-      bytes === undefined)
+    resource.loading ||
+    downloadUrl === undefined ||
+    mimeType === undefined ||
+    bytes === undefined
   ) {
-    throw new Error('File resource is missing properties');
-  }
-
-  if (resource.loading || downloadUrl === undefined) {
     return {
       loading: true,
       downloadUrl: undefined,

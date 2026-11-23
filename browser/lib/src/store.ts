@@ -1561,6 +1561,22 @@ export class Store {
           profile.markDirty();
           await profile.save();
           published = true;
+
+          // Files made while the profile was local-only (the picture, with
+          // the profile as parent) were never queued: send them too.
+          for (const child of [...this.resources.values()]) {
+            if (
+              child.isReady() &&
+              child.subject !== subject &&
+              this.normalizeSubject(
+                String(child.get(core.properties.parent)),
+              ) === subject
+            ) {
+              child.clearLoroSaveCursor();
+              child.markDirty();
+              await child.save();
+            }
+          }
         }
       }
     } catch (e) {
