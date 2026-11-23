@@ -29,7 +29,9 @@ pub trait NotifySink: Send + Sync {
 static SINK: OnceLock<Arc<dyn NotifySink>> = OnceLock::new();
 
 /// Installs the sink (once; later calls are ignored). For embedders, from the
-/// `serve_with_hook` hook.
+/// `serve_with_hook` hook. The binary compiles this module too and never
+/// calls it, hence the allow.
+#[allow(dead_code)]
 pub fn set_sink(sink: Arc<dyn NotifySink>) {
     let _ = SINK.set(sink);
 }
