@@ -349,6 +349,32 @@ test.describe('table filtering + views', () => {
   }, testInfo) => {
     const { table } = await createPeopleTable(page);
     await addFilter(page, 'Name', 'starts_with', 'A');
+    // Filter edits render before their debounce materializes the default view.
+    // The second tab needs that saved first tab, as in the reload case below.
+    await page.waitForFunction(
+      tableSubject => {
+        const store = window.store;
+        const resource = store.resources.get(tableSubject);
+        const defaultView = resource?.get(
+          'https://atomicdata.dev/properties/table-default-view',
+        );
+
+        return (
+          typeof defaultView === 'string' &&
+          resource
+            ?.getArray('https://atomicdata.dev/properties/table-views')
+            .includes(defaultView) &&
+          Array.isArray(
+            store.resources
+              .get(defaultView)
+              ?.get('https://atomicdata.dev/properties/view-filters'),
+          ) &&
+          store.getSyncStatus().pendingDirtyCount === 0
+        );
+      },
+      table,
+      { timeout: 30000 },
+    );
     await page.getByTitle('Add view').click();
     await page.getByRole('menuitem', { name: 'Table', exact: true }).click();
     const tabs = page.getByRole('tab');
