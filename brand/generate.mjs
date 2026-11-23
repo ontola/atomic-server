@@ -183,7 +183,7 @@ const TARGETS = [
     ],
   },
   {
-    mark: 'atomic',
+    mark: 'place',
     root: SERVER_ROOT,
     label: 'atomic-server: Tauri desktop',
     dir: 'desktop/icons',

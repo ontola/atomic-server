@@ -28,10 +28,19 @@ type FileInfo =
 const DOWNLOAD_PATH = /^\/download\/files\/[^/]+$/;
 
 /**
+ * A node that does not have the blob may answer with its web app's index page
+ * (200, text/html) instead of a 404. Downloads are content-addressed, so the
+ * connected server's copy is the same file.
+ */
+function isAppShell(response: Response): boolean {
+  return (response.headers.get('content-type') ?? '').startsWith('text/html');
+}
+
+/**
  * The File's own `downloadURL` names the node that first got the upload. A
  * client that talks to another server (the desktop app's embedded one, which
  * has no WASM client DB to serve the bytes locally) can hold the blob there
- * while that node answers 404. Ask once; only a clear 404 switches to this
+ * while that node answers 404. Ask once; only a 404 or an app page switches to this
  * client's own server. Any other answer, including a blocked request, keeps
  * the resource's URL, which is what loaded before.
  */
@@ -68,7 +77,10 @@ function useConnectedServerFallback(
       .then(response => {
         setAnswer({
           url,
-          use: response.status === 404 ? alternative : undefined,
+          use:
+            response.status === 404 || isAppShell(response)
+              ? alternative
+              : undefined,
         });
       })
       .catch(() => {});
