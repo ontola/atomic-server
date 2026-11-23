@@ -22,19 +22,17 @@ export function FilePreviewThumbnail(
   props: FilePreviewThumbnailProps,
 ): JSX.Element {
   const { resource } = props;
-  const [downloadUrl] = useString(resource, server.properties.downloadUrl);
   const [mimeType] = useString(resource, server.properties.mimetype);
   const [bytes] = useNumber(resource, server.properties.filesize);
 
   // A File that finished loading without its file properties (404,
   // unauthorized, another server) cannot be previewed. Say so here instead of
-  // letting `useFileInfo` throw, which would be reported as an error.
+  // letting `useFileInfo` throw, which would be reported as an error. The
+  // download URL is not checked: a local-first File can be shown from its
+  // local bytes before the server knows it.
   const unavailable =
     !resource.loading &&
-    (!!resource.error ||
-      downloadUrl === undefined ||
-      mimeType === undefined ||
-      bytes === undefined);
+    (!!resource.error || mimeType === undefined || bytes === undefined);
 
   if (unavailable) {
     return <PreviewError />;
