@@ -553,7 +553,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13535,6 +13535,7 @@ msgstr "Jalankan aplikasi ini dan tinjau apa yang diusulkannya sebelum ada yang 
 msgid "Show Apps panel"
 msgstr "Tampilkan panel Aplikasi"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "Buat aplikasi dengan AI"
@@ -13795,3 +13796,23 @@ msgstr "Buat formulir di sini"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "More powerful"
 msgstr "Lebih canggih"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Jelaskan apa yang kamu butuhkan dan AI membuatnya di drive-mu"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Buat aplikasi dengan AI di sini"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Kirim pesan ke seseorang"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Tulis kepada orang yang kamu undang, seperti rekan kerja atau teman"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Kirim pesan di sini"

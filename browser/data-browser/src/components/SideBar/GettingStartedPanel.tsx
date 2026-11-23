@@ -30,6 +30,9 @@ import {
 import { userSettingProps, useUserSetting } from '@hooks/useUserSetting';
 import { SideBarPanel } from './SideBarPanel';
 import { hideHoverUiHint, showUiHint, type UiHintTarget } from '@hooks/uiHint';
+import { Dialog, useDialog } from '../Dialog';
+import { NewMessageDialogBody } from '@views/Conversation/NewMessageDialog';
+import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { UiHint } from '../UiHint';
 import { SectionTitle } from '@views/Drive/SectionTitle';
 
@@ -83,7 +86,9 @@ function Steps({
     'gettingStartedPanelHeight.open',
     true,
   );
-  const { openChat } = useAISidebar();
+  const { openChat, askAI } = useAISidebar();
+  const [dialogProps, showMessageDialog, closeMessageDialog, messageOpen] =
+    useDialog();
   const navigate = useNavigateWithTransition();
   const navigateToNewRoute = useNewRoute(drive.subject);
   const { setSideBarLocked } = useSettings();
@@ -106,7 +111,8 @@ function Steps({
       /** The callout text on the target. */
       pointer: string;
       run: () => void;
-      target: UiHintTarget;
+      /** Absent when the step opens its own dialog instead of pointing. */
+      target?: UiHintTarget;
     }
   > = {
     name: {
@@ -188,6 +194,24 @@ function Steps({
         pointAt('new-row', copy.form.pointer, navigateToNewRoute);
       },
     },
+    app: {
+      title: 'Build an app with AI',
+      hint: 'Describe what you need and the AI builds it in your drive',
+      pointer: 'Build an app with AI here',
+      target: 'ai-button',
+      run: () => {
+        closeDrawer('ai-button');
+        // The hint shows where the AI lives; the ask goes out either way.
+        pointAt('ai-button', copy.app.pointer, () => {});
+        askAI({ prompt: BUILD_APP_PROMPT });
+      },
+    },
+    message: {
+      title: 'Send someone a message',
+      hint: 'Write to someone you invited, like a colleague or friend',
+      pointer: 'Send a message here',
+      run: showMessageDialog,
+    },
   };
 
   const count = (
@@ -198,6 +222,9 @@ function Steps({
 
   const rows = (
     <>
+      <Dialog {...dialogProps} width='30rem'>
+        {messageOpen && <NewMessageDialogBody onDone={closeMessageDialog} />}
+      </Dialog>
       {steps.map(step => {
         const { title, hint, pointer, run, target } = copy[step.id];
 
@@ -234,6 +261,8 @@ function Steps({
 
         const hoverHint = () => {
           // A drawer that is out of view has nothing to point at.
+          if (!target) return;
+
           if (
             placement === 'page' &&
             sidebarCoversPage() &&

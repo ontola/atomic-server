@@ -553,8 +553,8 @@ msgstr "Not responding"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
-msgstr "Read more"
+msgid "Read more "
+msgstr "Read more "
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -13546,6 +13546,7 @@ msgstr "Run this app and review what it proposes before anything is written."
 msgid "Show Apps panel"
 msgstr "Show Apps panel"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "Build an app with AI"
@@ -13806,3 +13807,23 @@ msgstr "Make a form here"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "More powerful"
 msgstr "More powerful"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Describe what you need and the AI builds it in your drive"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Build an app with AI here"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Send someone a message"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Write to someone you invited, like a colleague or friend"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Send a message here"

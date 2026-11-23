@@ -553,7 +553,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13543,6 +13543,7 @@ msgstr "Führe diese App aus und prüfe ihre Vorschläge, bevor etwas geschriebe
 msgid "Show Apps panel"
 msgstr "Apps-Bereich anzeigen"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "App mit KI erstellen"
@@ -13803,3 +13804,23 @@ msgstr "Hier ein Formular erstellen"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "More powerful"
 msgstr "Mehr Funktionen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Beschreibe, was du brauchst, und die KI baut es in deinem Drive"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Baue hier eine App mit KI"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Schicke jemandem eine Nachricht"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Schreibe jemandem, den du eingeladen hast, etwa einer Kollegin oder einem Freund"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Sende hier eine Nachricht"

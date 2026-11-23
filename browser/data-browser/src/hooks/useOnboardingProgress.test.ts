@@ -11,6 +11,8 @@ vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
 vi.mock('./useUserSetting', () => ({}));
 vi.mock('./useVisibleDriveChildren', () => ({}));
+vi.mock('@chunks/AppPage/useDriveApps', () => ({}));
+vi.mock('@helpers/conversations/useConversations', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
@@ -110,9 +112,19 @@ describe('deriveAdvancedSteps', () => {
       deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
     );
 
-  it('lists table then form, none done for a new drive', () => {
-    expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual(['table', 'form']);
-    expect(adv()).toEqual({ table: false, form: false });
+  it('lists table, form, app, message, none done for a new drive', () => {
+    expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual([
+      'table',
+      'form',
+      'app',
+      'message',
+    ]);
+    expect(adv()).toEqual({
+      table: false,
+      form: false,
+      app: false,
+      message: false,
+    });
   });
 
   it("does not count the Welcome template's Tasks table", () => {
@@ -123,5 +135,17 @@ describe('deriveAdvancedSteps', () => {
 
   it('counts a form once the drive has one', () => {
     expect(adv({ hasForm: true }).form).toBe(true);
+  });
+
+  it('counts the app once the drive has one, and names a missing AI source', () => {
+    expect(adv({ hasApp: true }).app).toBe(true);
+    expect(deriveAdvancedSteps(base)[2].needs).toBeUndefined();
+    expect(deriveAdvancedSteps({ ...base, aiAvailable: false })[2].needs).toBe(
+      'ai-source',
+    );
+  });
+
+  it('counts a conversation for the message step', () => {
+    expect(adv({ hasConversation: true }).message).toBe(true);
   });
 });

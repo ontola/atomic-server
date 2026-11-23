@@ -553,7 +553,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -13546,6 +13546,7 @@ msgstr "Voer deze app uit en beoordeel de voorstellen voordat er iets wordt gesc
 msgid "Show Apps panel"
 msgstr "Toon Apps-paneel"
 
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Build an app with AI"
 msgstr "Bouw een app met AI"
@@ -13806,3 +13807,23 @@ msgstr "Maak hier een formulier"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "More powerful"
 msgstr "Nog krachtiger"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Describe what you need and the AI builds it in your drive"
+msgstr "Beschrijf wat je nodig hebt en de AI bouwt het in je drive"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Build an app with AI here"
+msgstr "Bouw hier een app met AI"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send someone a message"
+msgstr "Stuur iemand een bericht"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Write to someone you invited, like a colleague or friend"
+msgstr "Schrijf iemand die je hebt uitgenodigd, zoals een collega of vriend"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Send a message here"
+msgstr "Stuur hier een bericht"

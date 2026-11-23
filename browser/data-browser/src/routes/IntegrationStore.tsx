@@ -52,6 +52,7 @@ import { Input } from '@tomic/ui/components/forms/InputStyles';
 import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useAISidebar } from '@components/AI/AISidebarContext';
+import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 
@@ -347,14 +348,7 @@ function IntegrationStore(): React.JSX.Element {
                   marketplace, or submit it to the community marketplace.
                 </p>
                 <Row center gap='1rem' wrapItems>
-                  <Button
-                    onClick={() =>
-                      askAI({
-                        prompt:
-                          /* @wc-ignore */ 'I want to build an app in my drive. Ask me what it should do, then create it with create_app.',
-                      })
-                    }
-                  >
+                  <Button onClick={() => askAI({ prompt: BUILD_APP_PROMPT })}>
                     Build an app with AI
                   </Button>
                   <a

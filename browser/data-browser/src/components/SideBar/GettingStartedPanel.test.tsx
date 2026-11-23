@@ -46,7 +46,7 @@ vi.mock('@hooks/useNavigateWithTransition', () => ({
   useNavigateWithTransition: () => () => {},
 }));
 vi.mock('@components/AI/AISidebarContext', () => ({
-  useAISidebar: () => ({ openChat: () => {} }),
+  useAISidebar: () => ({ openChat: () => {}, askAI: () => {} }),
 }));
 vi.mock('@components/SaveWork/saveWorkDialogState', () => ({
   openSaveWorkDialog: vi.fn(),
@@ -56,6 +56,13 @@ vi.mock('@components/Share/shareDialogState', () => ({
 }));
 vi.mock('@helpers/AppSettings', () => ({
   useSettings: () => ({ drive: 'did:ad:drive' }),
+}));
+vi.mock('../Dialog', () => ({
+  Dialog: () => null,
+  useDialog: () => [{}, () => {}, () => {}, false],
+}));
+vi.mock('@views/Conversation/NewMessageDialog', () => ({
+  NewMessageDialogBody: () => null,
 }));
 vi.mock('../UiHint', () => ({
   UiHint: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -94,7 +101,7 @@ const fresh = (): Step[] =>
   }));
 
 const freshAdvanced = (): Step[] =>
-  ['table', 'form'].map(id => ({ id, done: false }));
+  ['table', 'form', 'app', 'message'].map(id => ({ id, done: false }));
 
 beforeEach(() => {
   steps = fresh();
@@ -154,10 +161,14 @@ describe('GettingStartedPanel', () => {
 
     expect(html).toContain('More powerful');
     expect(html).not.toContain('Getting started');
-    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*2/);
+    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*4/);
     expect(html).toContain('Make a table');
     expect(html).toContain('Make a form');
+    expect(html).toContain('Build an app with AI');
+    expect(html).toContain('Send someone a message');
     expect(html).not.toContain('Name your drive');
+    advancedSteps[2].needs = 'ai-source';
+    expect(render()).toContain('Needs an AI source');
     advancedSteps[0].done = true;
     expect(render()).toMatch(/1\s*(<!-- -->)?\s*of/);
     advancedSteps = advancedSteps.map(s => ({ ...s, done: true }));

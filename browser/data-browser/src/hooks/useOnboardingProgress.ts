@@ -25,6 +25,8 @@ import { useIsLinkedToAccount } from './useIsLinkedToAccount';
 import { pendingInviteQuery } from '../helpers/pendingInvites';
 import { usePrivateDrive } from './usePrivateDrive';
 import { usePrivateDriveSync } from './usePrivateDriveSync';
+import { useDriveApps } from '@chunks/AppPage/useDriveApps';
+import { useConversations } from '@helpers/conversations/useConversations';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
 export type OnboardingStepId =
@@ -34,7 +36,9 @@ export type OnboardingStepId =
   | 'invite'
   | 'save'
   | 'table'
-  | 'form';
+  | 'form'
+  | 'app'
+  | 'message';
 
 /** What a step is waiting for before its button can do anything. */
 export type OnboardingNeed = 'ai-source';
@@ -83,6 +87,10 @@ export interface OnboardingInput {
   tableCount?: number;
   templateTableCount?: number;
   hasForm?: boolean;
+  /** The drive has at least one app. */
+  hasApp?: boolean;
+  /** The agent is in at least one conversation. */
+  hasConversation?: boolean;
 }
 
 /** The steps in order, each with a derived `done` and, if blocked, why. */
@@ -110,6 +118,12 @@ export function deriveAdvancedSteps(input: OnboardingInput): OnboardingStep[] {
       done: (input.tableCount ?? 0) > (input.templateTableCount ?? 0),
     },
     { id: 'form', done: !!input.hasForm },
+    {
+      id: 'app',
+      done: !!input.hasApp,
+      needs: input.aiAvailable ? undefined : 'ai-source',
+    },
+    { id: 'message', done: !!input.hasConversation },
   ];
 }
 
@@ -191,7 +205,8 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     }),
     shared,
   );
-  const input: OnboardingInput = {
+  const conversations = useConversations();
+  const basics: OnboardingInput = {
     driveName,
     childCount: children.length,
     templateChildCount,
@@ -200,11 +215,20 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     otherAgentsOnDrives: others,
     inviteSent,
     accountLinked,
+  };
+  // Only the advanced round asks what apps the drive has, so the panel costs
+  // no extra query for as long as the basics are what it shows.
+  const advancedShown = deriveOnboardingSteps(basics).every(s => s.done);
+  const { apps } = useDriveApps(advancedShown ? drive : undefined);
+  const input: OnboardingInput = {
+    ...basics,
     // The Welcome template's Tasks table is not the person's own.
     tableCount: childClasses.filter(c => c.includes(dataBrowser.classes.table))
       .length,
     templateTableCount: isWelcome ? 1 : 0,
     hasForm: childClasses.some(c => c.includes(forms.classes.form)),
+    hasApp: apps.length > 0,
+    hasConversation: conversations.length > 0,
   };
   const steps = deriveOnboardingSteps(input);
   const advancedSteps = deriveAdvancedSteps(input);
