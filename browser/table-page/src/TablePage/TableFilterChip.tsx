@@ -69,7 +69,7 @@ export function TableFilterChip({
       onRemove={() => removeFilter(key)}
       derivedUnit={derived ? unit : undefined}
       renderValueInput={state => (
-        <TableFilterValueInput property={column!} {...state} />
+        <TableFilterValueInput property={column!} {...state} normalizeNumbers />
       )}
       renderValueSummary={(value, suffix) => (
         <FilterValueSummary value={value} suffix={suffix} />

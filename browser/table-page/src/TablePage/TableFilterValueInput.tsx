@@ -1,5 +1,5 @@
 import { Datatype, Property, server } from '@tomic/react';
-import { type JSX } from 'react';
+import { useLayoutEffect, useRef, type JSX } from 'react';
 import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
 import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import {
@@ -14,6 +14,10 @@ interface TableFilterValueInputProps {
   value: string;
   onChange: (value: string) => void;
   autoFocus?: boolean;
+  disabled?: boolean;
+  /** Atomic's index compares canonical numeric strings. Other hosts can keep
+   * their exact query literal until their own parser validates it. */
+  normalizeNumbers?: boolean;
 }
 
 /**
@@ -27,19 +31,37 @@ export function TableFilterValueInput({
   value,
   onChange,
   autoFocus,
+  disabled,
+  normalizeNumbers = false,
 }: TableFilterValueInputProps): JSX.Element {
   const datatype = property.datatype;
+  const disabledRef = useRef(disabled);
+  useLayoutEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
+  const numeric = datatype === Datatype.INTEGER || datatype === Datatype.FLOAT;
+
+  const change = (next: string) => {
+    if (!disabledRef.current) onChange(next);
+  };
 
   // A select column only holds its own options, so offer exactly those rather
   // than a search over every tag in the drive.
   if (property.allowsOnly?.length) {
     return (
       <BasicSelect
+        aria-label='Filter value'
         value={value}
         autoFocus={autoFocus}
-        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        onChange={e => change(e.target.value)}
       >
         <option value=''>Pick an option…</option>
+        {value && !property.allowsOnly.includes(value) && (
+          <option value={value} disabled>
+            {value}
+          </option>
+        )}
         {property.allowsOnly.map(tag => (
           <TagOption key={tag} subject={tag} />
         ))}
@@ -58,7 +80,8 @@ export function TableFilterValueInput({
         }
         hideCreateOption
         autoFocus={autoFocus}
-        setSubject={subject => onChange(subject ?? '')}
+        disabled={disabled}
+        setSubject={subject => change(subject ?? '')}
       />
     );
   }
@@ -66,10 +89,17 @@ export function TableFilterValueInput({
   if (datatype === Datatype.BOOLEAN) {
     return (
       <BasicSelect
+        aria-label='Filter value'
         value={value}
         autoFocus={autoFocus}
-        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        onChange={e => change(e.target.value)}
       >
+        {value && !['true', 'false'].includes(value) && (
+          <option value={value} disabled>
+            {value}
+          </option>
+        )}
         <option value=''>Any</option>
         <option value='true'>True</option>
         <option value='false'>False</option>
@@ -77,39 +107,45 @@ export function TableFilterValueInput({
     );
   }
 
-  const inputType =
-    datatype === Datatype.INTEGER || datatype === Datatype.FLOAT
-      ? 'number'
-      : datatype === Datatype.DATE
-        ? 'date'
-        : 'text';
+  // Native number inputs erase incomplete literals such as `1e` before React
+  // sees them. Keep the query draft as text and offer a numeric keyboard.
+  const inputType = datatype === Datatype.DATE ? 'date' : 'text';
 
   return (
     <InputWrapper>
       <InputStyled
+        aria-label='Filter value'
         type={inputType}
+        inputMode={numeric ? 'decimal' : undefined}
         value={value}
         autoFocus={autoFocus}
+        disabled={disabled}
         placeholder='Value…'
-        onChange={e => onChange(e.target.value)}
+        onChange={e => change(e.target.value)}
         onBlur={() => {
+          if (disabled || value.trim() === '') return;
+
           // A JSON value is indexed with its keys sorted and no whitespace, so
           // `{"b":2,"a":1}` would match nothing though a row stores exactly that.
           if (datatype === Datatype.JSON && value !== '') {
             const canonical = canonicalJson(value);
 
             if (canonical !== undefined && canonical !== value) {
-              onChange(canonical);
+              change(canonical);
             }
           }
 
           // The index compares the text of a stored number, so "2.5e-5" and
           // "0.00002500" would match nothing though they equal a stored 0.000025.
-          if (inputType === 'number' && value !== '') {
+          if (numeric && normalizeNumbers) {
             const number = Number(value);
 
-            if (Number.isFinite(number) && String(number) !== value) {
-              onChange(String(number));
+            if (
+              Number.isFinite(number) &&
+              !(Number.isInteger(number) && !Number.isSafeInteger(number)) &&
+              String(number) !== value
+            ) {
+              change(String(number));
             }
           }
         }}
