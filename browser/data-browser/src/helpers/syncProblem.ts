@@ -6,6 +6,7 @@ export type SyncProblemAction =
   | 'try-again'
   | 'connect-device'
   | 'review-sync'
+  | 'discard'
   | 'storage';
 
 /**
@@ -25,6 +26,8 @@ export type SyncProblem = {
   actions: SyncProblemAction[];
   /** The raw message, for a person who wants to quote it. */
   detail?: string;
+  /** The changes a 'discard' action would drop. */
+  subjects?: string[];
   /**
    * Sentry already has this one: the outbox reports a commit that keeps
    * failing by itself, so reporting it again would count it twice.
@@ -39,7 +42,7 @@ export type SyncProblemInput = {
   /** `store.outbox.pending()`. */
   entries: readonly Pick<
     OutboxEntry,
-    'subject' | 'blocked' | 'failures' | 'lastAttemptError'
+    'subject' | 'blocked' | 'failures' | 'lastAttemptError' | 'signedGenesis'
   >[];
   /** The server in use, as a person reads it: `atomicserver.eu`. */
   serverName: string;
@@ -58,6 +61,7 @@ const QUOTA = /storage quota|quota exceeded|over (its|your) quota/i;
 const NO_ACCESS =
   /unauthori[sz]ed|forbidden|no write|write right|not allowed|permission|\b40[13]\b/i;
 const MISSING_PARENT = /Parent of .+ not found/;
+const NOT_FOUND = /DID Resource .+ not found locally/;
 const NOT_ENROLLED = /is not enrolled for sync on this node/;
 
 function firstEntry(
@@ -124,6 +128,36 @@ function fromMessage(
   }
 
   return null;
+}
+
+/**
+ * An update to a resource the server never received. The server answers 404
+ * every time, so retrying cannot help; only the person can decide what to do.
+ * A genesis entry carries the resource itself, so it never lands here.
+ */
+function unknownResource(
+  entries: SyncProblemInput['entries'],
+  message: string,
+  reported: boolean,
+): SyncProblem | null {
+  if (!NOT_FOUND.test(message) || MISSING_PARENT.test(message)) return null;
+
+  const subjects = entries
+    .filter(e => !e.signedGenesis && e.lastAttemptError === message)
+    .map(e => e.subject);
+
+  if (subjects.length === 0) return null;
+
+  return {
+    key: 'unknown-resource',
+    cause: 'you',
+    title: 'These changes belong to something this server never received',
+    body: 'It may exist on another device. Connect that device to send it, or discard these changes.',
+    actions: ['connect-device', 'discard'],
+    subjects,
+    detail: message,
+    reported,
+  };
 }
 
 function ours(
@@ -202,7 +236,10 @@ export function describeSyncProblem(
     const entry = firstEntry(entries, e => !!e.blocked);
     const message = entry?.lastAttemptError;
     // Parked after the outbox reported them, so Sentry has these already.
-    const known = message ? fromMessage(input, message, true) : null;
+    const known = message
+      ? (unknownResource(entries, message, true) ??
+        fromMessage(input, message, true))
+      : null;
 
     return (
       known ?? ours('blocked', 'Some changes could not sync', message, true)
@@ -218,7 +255,10 @@ export function describeSyncProblem(
     const message = entry?.lastAttemptError;
 
     return (
-      (message ? fromMessage(input, message, true) : null) ??
+      (message
+        ? (unknownResource(entries, message, true) ??
+          fromMessage(input, message, true))
+        : null) ??
       ours('failing', 'Some changes keep failing to sync', message, true)
     );
   }

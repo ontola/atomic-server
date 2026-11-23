@@ -553,7 +553,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13844,3 +13844,19 @@ msgstr "Tulis kepada orang yang kamu undang, seperti rekan kerja atau teman"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Kirim pesan di sini"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes"
+msgstr "Buang perubahan ini"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes? They never reached the server, so they will be gone for good."
+msgstr "Buang perubahan ini? Perubahan ini tidak pernah sampai ke server, jadi akan hilang selamanya."
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "These changes belong to something this server never received"
+msgstr "Perubahan ini milik sesuatu yang tidak pernah diterima server ini"
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "It may exist on another device. Connect that device to send it, or discard these changes."
+msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya, atau buang perubahan ini."

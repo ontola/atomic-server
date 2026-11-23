@@ -553,7 +553,7 @@ msgstr "No responde"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Leer más"
 
 #: src/components/forms/Field.tsx
@@ -13849,3 +13849,19 @@ msgstr "Escribe a alguien a quien hayas invitado, como un colega o un amigo"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Envía un mensaje aquí"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes"
+msgstr "Descartar estos cambios"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes? They never reached the server, so they will be gone for good."
+msgstr "¿Descartar estos cambios? Nunca llegaron al servidor, así que se perderán para siempre."
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "These changes belong to something this server never received"
+msgstr "Estos cambios pertenecen a algo que este servidor nunca recibió"
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "It may exist on another device. Connect that device to send it, or discard these changes."
+msgstr "Puede que exista en otro dispositivo. Conecta ese dispositivo para enviarlo, o descarta estos cambios."
