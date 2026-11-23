@@ -2168,6 +2168,11 @@ export function SyncSettings({
           notified={isErrorReportingEnabled()}
           retrying={syncRetrying}
           onTryAgain={() => void tryAgainSync()}
+          onDiscard={() => {
+            for (const subject of syncProblem.subjects ?? []) {
+              store.outbox.discard(subject);
+            }
+          }}
         />
       )}
 

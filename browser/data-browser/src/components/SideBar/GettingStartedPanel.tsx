@@ -311,12 +311,12 @@ function Steps({
   if (placement === 'page') {
     return (
       <section
-        aria-label={advanced ? 'More powerful' : 'Getting started'}
+        aria-label={advanced ? 'Next steps' : 'Getting started'}
         data-testid='getting-started-page'
       >
         <SectionHeading>
           <SectionTitle>
-            {advanced ? 'More powerful' : 'Getting started'}
+            {advanced ? 'Next steps' : 'Getting started'}
           </SectionTitle>
           {count}
         </SectionHeading>
@@ -327,7 +327,7 @@ function Steps({
 
   return (
     <SideBarPanel
-      title={advanced ? 'More powerful' : 'Getting started'}
+      title={advanced ? 'Next steps' : 'Getting started'}
       heightStorageKey='gettingStartedPanelHeight'
       initialHeight={280}
       open={panelOpen}

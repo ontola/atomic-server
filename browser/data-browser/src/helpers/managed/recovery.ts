@@ -1,5 +1,6 @@
 import { canonicalIdentifier, encodeB64 } from '@tomic/lib';
 import { base64ToBytes, randomBytes } from '@tomic/resource-ui/helpers/bytes';
+import { hasPasskeyApi } from '../passkeySupport';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
@@ -359,7 +360,7 @@ export class AccountPasskeyUnsupportedError extends PrfUnsupportedError {
  * missing.
  */
 export async function isPasskeySupported(): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+  if (!hasPasskeyApi()) {
     return false;
   }
 

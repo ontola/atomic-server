@@ -13833,8 +13833,8 @@ msgstr "Make a form here"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "More powerful"
-msgstr "More powerful"
+msgid "Next steps"
+msgstr "Next steps"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Describe what you need and the AI builds it in your drive"
@@ -13876,3 +13876,19 @@ msgstr "Column name"
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 msgid "Unavailable column"
 msgstr "Unavailable column"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes"
+msgstr "Discard these changes"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes? They never reached the server, so they will be gone for good."
+msgstr "Discard these changes? They never reached the server, so they will be gone for good."
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "These changes belong to something this server never received"
+msgstr "These changes belong to something this server never received"
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "It may exist on another device. Connect that device to send it, or discard these changes."
+msgstr "It may exist on another device. Connect that device to send it, or discard these changes."
