@@ -1490,6 +1490,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           return;
         }
       }
+
       const corners: [number, number][] = [
         [bounds.minX, bounds.minY],
         [bounds.maxX, bounds.minY],
@@ -1551,12 +1552,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     y: number,
   ): CanvasStroke[] => {
     if (g.mode === 'bend') {
-      const arrow = resolveArrows(g.base)[g.selection[0]];
+      // Bending moves the ends along the shapes' edges too, so settle on the
+      // bend that leaves the curve's middle under the pointer.
+      const arrow = g.base[g.selection[0]];
+      let bend = arrow.bend;
+
+      for (let i = 0; i < 4; i++) {
+        const [p0, p1] = resolveArrowIn(withBend(arrow, bend), g.base).path;
+
+        bend = bendFromHandle(p0, p1, [x, y]);
+      }
 
       return g.base.map((el, i) =>
-        i === g.selection[0]
-          ? withBend(el, bendFromHandle(arrow.path[0], arrow.path[1], [x, y]))
-          : el,
+        i === g.selection[0] ? withBend(el, bend) : el,
       );
     }
 

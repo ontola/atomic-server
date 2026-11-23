@@ -222,6 +222,22 @@ describe('shapes and arrows in the element helpers', () => {
     ).toEqual([0]);
   });
 
+  it('lasso leaves out a bound arrow that only brushes the loop', () => {
+    const list = [block('a', 0, 0), block('b', 300, 0), link('a', 'b')];
+
+    expect(
+      lassoSelect(
+        [
+          [-10, -10],
+          [150, -10],
+          [150, 100],
+          [-10, 100],
+        ],
+        list,
+      ),
+    ).toEqual([0]);
+  });
+
   it('moves a shape and scales its size and text', () => {
     const a = { ...block('a', 10, 10), text: 'x', size: 20 };
     const [moved] = transformSelection([a], [0], 2, 0, 0, 5, 5);

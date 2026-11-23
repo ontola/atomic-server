@@ -262,18 +262,46 @@ export function lassoHits(
   return el.path.some(([x, y]) => pointInPolygon(x, y, polygon));
 }
 
-/** Indices of the elements the lasso loop encloses. */
+/**
+ * Indices of the elements the lasso loop encloses. An arrow bound to a shape
+ * is picked with it, or when it lies wholly inside; one that merely brushes
+ * the loop stays out, so that moving a block does not tear the arrow from the
+ * block at its other end.
+ */
 export function lassoSelect(
   polygon: [number, number][],
   elements: CanvasStroke[],
 ): number[] {
-  const picked: number[] = [];
+  const placed = resolveArrows(elements);
+  const picked = new Set<number>();
 
-  resolveArrows(elements).forEach((el, i) => {
-    if (lassoHits(polygon, el)) picked.push(i);
+  placed.forEach((el, i) => {
+    if (el.kind !== 'arrow' && lassoHits(polygon, el)) picked.add(i);
   });
 
-  return picked;
+  const shapeIds = new Set([...picked].map(i => placed[i].id));
+
+  placed.forEach((el, i) => {
+    if (el.kind !== 'arrow') return;
+
+    const bound = [el.from, el.to].filter(Boolean);
+
+    if (bound.length === 0) {
+      if (lassoHits(polygon, el)) picked.add(i);
+
+      return;
+    }
+
+    const inside =
+      polygon.length >= 3 &&
+      curvePoints(el.path[0], el.path[1], el.bend).every(([x, y]) =>
+        pointInPolygon(x, y, polygon),
+      );
+
+    if (inside || bound.every(id => shapeIds.has(id))) picked.add(i);
+  });
+
+  return [...picked].sort((a, b) => a - b);
 }
 
 /**
