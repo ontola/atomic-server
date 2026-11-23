@@ -359,27 +359,51 @@ fn list_matches(header: &str, current: Option<&str>, weak: bool) -> bool {
 /// holds (`current`, `None` when it holds nothing), or `None` to go on.
 /// `If-Match: *` needs something there; `If-None-Match: *` needs nothing.
 pub fn precondition(req: &HttpRequest, current: Option<&str>) -> Option<StatusCode> {
-    let get = matches!(req.method().as_str(), "GET" | "HEAD");
-    let value = |name| {
-        req.headers()
-            .get_all(name)
-            .filter_map(|v| v.to_str().ok())
-            .collect::<Vec<_>>()
-            .join(",")
-    };
-    let if_match = value(header::IF_MATCH);
-    if !if_match.is_empty() && !list_matches(&if_match, current, false) {
-        return Some(StatusCode::PRECONDITION_FAILED);
+    Preconditions::from_request(req).evaluate(current)
+}
+
+/// Owned HTTP conditions can be re-evaluated at commit time without retaining
+/// the Actix request inside a database validation callback.
+#[derive(Clone, Debug)]
+pub struct Preconditions {
+    safe: bool,
+    if_match: String,
+    if_none_match: String,
+}
+
+impl Preconditions {
+    pub fn from_request(req: &HttpRequest) -> Self {
+        let value = |name| {
+            req.headers()
+                .get_all(name)
+                .filter_map(|v| v.to_str().ok())
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        Self {
+            safe: matches!(req.method().as_str(), "GET" | "HEAD"),
+            if_match: value(header::IF_MATCH),
+            if_none_match: value(header::IF_NONE_MATCH),
+        }
     }
-    let if_none_match = value(header::IF_NONE_MATCH);
-    if !if_none_match.is_empty() && list_matches(&if_none_match, current, true) {
-        return Some(if get {
-            StatusCode::NOT_MODIFIED
-        } else {
-            StatusCode::PRECONDITION_FAILED
-        });
+
+    pub fn is_conditional(&self) -> bool {
+        !self.if_match.is_empty() || !self.if_none_match.is_empty()
     }
-    None
+
+    pub fn evaluate(&self, current: Option<&str>) -> Option<StatusCode> {
+        if !self.if_match.is_empty() && !list_matches(&self.if_match, current, false) {
+            return Some(StatusCode::PRECONDITION_FAILED);
+        }
+        if !self.if_none_match.is_empty() && list_matches(&self.if_none_match, current, true) {
+            return Some(if self.safe {
+                StatusCode::NOT_MODIFIED
+            } else {
+                StatusCode::PRECONDITION_FAILED
+            });
+        }
+        None
+    }
 }
 
 #[cfg(test)]

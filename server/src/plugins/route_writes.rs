@@ -28,7 +28,13 @@
 //! use ([`plan_verdict`], [`apply_plan`], [`StoreApplyHost`]), before the
 //! response is sent: a `2xx` means the write is stored.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use actix_web::http::StatusCode;
 use atomic_lib::{
@@ -567,6 +573,8 @@ pub struct WriteRequest<'a> {
     /// nothing was verified. Never stored.
     pub remote: &'a str,
     pub at: i64,
+    /// Only set when the handler identified the target's current blob.
+    pub preconditions: Option<&'a super::route_blobs::Preconditions>,
 }
 
 /// What was stored, for the run log.
@@ -623,6 +631,9 @@ pub async fn apply(request: WriteRequest<'_>, intents: &Json) -> Result<Applied,
 
     // Only the intents: a route's `problems` are for its log, not a veto.
     let plan = plan_verdict(&json!({ "intents": intents }), &mut host.inner).await;
+    if current_condition_failed(&request, intents) {
+        return Err(precondition_failed());
+    }
     if plan.blocked {
         let problems: Vec<String> = plan
             .problems
@@ -644,6 +655,56 @@ pub async fn apply(request: WriteRequest<'_>, intents: &Json) -> Result<Applied,
         });
     }
     check_plan(store, &plan, &allowed, &agent).await?;
+    // An HTTP condition describes one resource. A multi-resource plan cannot
+    // promise that a failed condition stored nothing without a transaction.
+    if request.preconditions.is_some()
+        && (plan.changes.len() != 1 || plan.changes[0].op == Op::Remove)
+    {
+        return Err(Refusal::refused(
+            "conditional blob writes must contain one create, set or destroy",
+        ));
+    }
+    // `localId` on an intent is only a reference within that verdict. A
+    // persistent localId property plus parent supplies the DB's identity lock.
+    let create_identity = plan
+        .changes
+        .first()
+        .filter(|c| c.op == Op::Create)
+        .and_then(|c| c.properties.iter().find(|p| p.property == urls::LOCAL_ID))
+        .and_then(|p| p.to.as_ref())
+        .and_then(Json::as_str)
+        .map(str::to_owned);
+    if request.preconditions.is_some()
+        && plan.changes[0].op == Op::Create
+        && create_identity.as_ref().is_none_or(|id| id.is_empty())
+    {
+        return Err(Refusal::refused(
+            "conditional creates need a persistent localId property",
+        ));
+    }
+    let condition_failed = Arc::new(AtomicBool::new(false));
+    if let Some(conditions) = request.preconditions {
+        let conditions = conditions.clone();
+        let failed = condition_failed.clone();
+        let subject = normalize(store, &plan.changes[0].subject);
+        let create = plan.changes[0].op == Op::Create;
+        host.inner.store = store.with_commit_check(move |commit, resource_old| {
+            if !create && commit.subject.pure_id() != Subject::from(subject.as_str()).pure_id() {
+                return Ok(());
+            }
+            let current = resource_old
+                .as_ref()
+                .and_then(|resource| resource.get(urls::BLOB).ok())
+                .and_then(|value| value.to_subjects(None).ok())
+                .and_then(|values| values.into_iter().next())
+                .and_then(|value| super::route_blobs::parse_hash(&value));
+            if conditions.evaluate(current.as_deref()).is_some() {
+                failed.store(true, Ordering::SeqCst);
+                return Err("HTTP blob precondition failed at commit".into());
+            }
+            Ok(())
+        });
+    }
     // A blob a write references becomes servable from the target (#1720),
     // so a route may only reference one its installation stored or its
     // targets already hold: a hash alone is not the bytes.
@@ -707,6 +768,34 @@ pub async fn apply(request: WriteRequest<'_>, intents: &Json) -> Result<Applied,
             .iter()
             .filter_map(|o| o.error.clone())
             .collect();
+        if report.applied == 0
+            && (condition_failed.load(Ordering::SeqCst)
+                || current_condition_failed(&request, intents))
+        {
+            return Err(precondition_failed());
+        }
+        // Import identity is unique under its own database lock. A losing
+        // create-if-absent is a precondition failure, not a server error.
+        if report.applied == 0
+            && request.preconditions.is_some()
+            && plan.changes[0].op == Op::Create
+        {
+            let change = &plan.changes[0];
+            if let (Some(parent), Some(local_id)) = (&change.parent, &create_identity) {
+                if atomic_lib::import_identity::find_existing(
+                    store,
+                    &Subject::from(parent.as_str()),
+                    local_id,
+                )
+                .await
+                .ok()
+                .flatten()
+                .is_some()
+                {
+                    return Err(precondition_failed());
+                }
+            }
+        }
         return Err(failed(format!(
             "applied {} of {} change(s): {}",
             report.applied,
@@ -723,6 +812,42 @@ pub async fn apply(request: WriteRequest<'_>, intents: &Json) -> Result<Applied,
             .collect(),
         summary: format!("applied {} change(s)", report.applied),
     })
+}
+
+fn precondition_failed() -> Refusal {
+    Refusal {
+        status: StatusCode::PRECONDITION_FAILED,
+        kind: "route-precondition-failed",
+        title: "Precondition failed",
+        detail: "The resource changed before the commit. Nothing was stored.".into(),
+        error: "HTTP blob precondition failed at commit".into(),
+        retry_after_secs: None,
+    }
+}
+
+fn current_condition_failed(request: &WriteRequest<'_>, intents: &Json) -> bool {
+    let Some(conditions) = request.preconditions else {
+        return false;
+    };
+    let Some(intents) = intents.as_array().filter(|items| items.len() == 1) else {
+        return false;
+    };
+    let Some(subject) = intents[0]["subject"].as_str() else {
+        return false;
+    };
+    let current = match request.store.get_resource_shallow(&subject.into()) {
+        Ok(resource) => resource
+            .get(urls::BLOB)
+            .ok()
+            .and_then(|value| value.to_subjects(None).ok())
+            .and_then(|values| values.into_iter().next())
+            .and_then(|value| super::route_blobs::parse_hash(&value)),
+        Err(error) if error.error_type == atomic_lib::errors::AtomicErrorType::NotFoundError => {
+            None
+        }
+        Err(_) => return false,
+    };
+    conditions.evaluate(current.as_deref()).is_some()
 }
 
 fn failed(error: String) -> Refusal {
