@@ -108,14 +108,17 @@ export class AppExecutionRegistry {
         return;
       }
 
-      await this.begin(run, true);
+      // The bridge acknowledges accepted work, not completion of its authority
+      // checks. Preparation remains cancellable and owned by this registry.
+      this.publish();
+      void this.begin(run);
     } catch (error) {
       this.finish(run);
       throw error;
     }
   };
 
-  private async begin(run: AppExecutionRun, propagate = false) {
+  private async begin(run: AppExecutionRun) {
     if (this.runs.get(run.key) !== run || run.controller.signal.aborted) return;
     run.queued = false;
 
@@ -148,11 +151,6 @@ export class AppExecutionRegistry {
       );
       this.publish();
     } catch (error) {
-      if (propagate) {
-        this.finish(run);
-        throw error;
-      }
-
       if (this.runs.get(run.key) !== run || run.controller.signal.aborted)
         return;
       this.settle(run, {

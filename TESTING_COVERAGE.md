@@ -1447,7 +1447,10 @@ This does not yet prove restoration of the user's private staging workspace.
   provisioning, stable schema identities across branding changes, safe immutable
   datatype changes, read-only lookup and delayed bootstrap cancellation.
 - Existing AppFrame/hostStore and AppExecutionRuntime tests cover shared bridge
-  write boundaries, worker lifetime, deduplication and stale completions. The
+  write boundaries, worker lifetime, deduplication and stale completions. Accepted
+  executions acknowledge and publish preparing state before asynchronous authority
+  checks complete, including preparation beyond the bridge deadline; cancellation,
+  replacement and failed preparation still release serialized destinations safely. The
   real-Store `plugin-run.integration.test.ts` cancels a delayed property fetch
   before Loro mutation. Same-drive moves retain identity; crossing the selected
   drive boundary revokes authority, including stale descendant drive stamps.

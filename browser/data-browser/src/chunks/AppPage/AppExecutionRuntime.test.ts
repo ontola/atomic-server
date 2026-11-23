@@ -20,6 +20,42 @@ const spec = (signal: AbortSignal): AppExecutionSpec => ({
   },
 });
 describe('background app executions', () => {
+  it('acknowledges and deduplicates accepted work while preparation exceeds the bridge deadline', async () => {
+    vi.useFakeTimers();
+    const runs = new AppExecutionRegistry();
+    const previous = runs.getSnapshot();
+    const observedRunning: boolean[] = [];
+    runs.subscribe(() => observedRunning.push(runs.isRunning('selected')));
+    let release!: (value: AppExecutionSpec) => void;
+    let signal!: AbortSignal;
+    const prepare = vi.fn((pendingSignal: AbortSignal) => {
+      signal = pendingSignal;
+
+      return new Promise<AppExecutionSpec>(resolve => {
+        release = resolve;
+      });
+    });
+    let acknowledged = false;
+    const accepted = runs.start('selected', prepare).then(() => {
+      acknowledged = true;
+    });
+    await Promise.resolve();
+    expect(acknowledged).toBe(true);
+    expect(observedRunning).toEqual([true]);
+    expect(runs.getSnapshot()).not.toBe(previous);
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect(acknowledged).toBe(true);
+    expect(runs.isRunning('selected')).toBe(true);
+    expect(runs.getSnapshot()).toEqual([]);
+    await runs.start('selected', prepare);
+    expect(prepare).toHaveBeenCalledOnce();
+    release(spec(signal));
+    await accepted;
+    await Promise.resolve();
+    expect(runs.getSnapshot()).toHaveLength(1);
+    runs.clear();
+  });
+
   it('deduplicates a selected execution and discards stale completions', async () => {
     const runs = new AppExecutionRegistry();
     const prepare = vi.fn(async (signal: AbortSignal) => spec(signal));
@@ -52,8 +88,60 @@ describe('background app executions', () => {
     });
     runs.clear();
     release(spec(pendingSignal!));
-    await expect(pending).rejects.toThrow();
+    await pending;
+    await Promise.resolve();
+    expect(pendingSignal?.aborted).toBe(true);
     expect(runs.getSnapshot()).toEqual([]);
+  });
+
+  it('does not mount a cancelled preparation over a replacement with the same key', async () => {
+    const runs = new AppExecutionRegistry();
+    let release!: (value: AppExecutionSpec) => void;
+    let oldSignal!: AbortSignal;
+    await runs.start('selected', signal => {
+      oldSignal = signal;
+
+      return new Promise(resolve => {
+        release = resolve;
+      });
+    });
+    runs.cancel('selected');
+    await runs.start('selected', async signal => spec(signal));
+    const [replacement] = runs.getSnapshot();
+    release(spec(oldSignal));
+    await Promise.resolve();
+    expect(oldSignal.aborted).toBe(true);
+    expect(runs.getSnapshot()).toEqual([replacement]);
+    expect(replacement.controller.signal.aborted).toBe(false);
+    runs.clear();
+  });
+
+  it('reports an accepted preparation failure and releases its serialized destination', async () => {
+    const runs = new AppExecutionRegistry();
+    let reject!: (error: Error) => void;
+    const failed = vi.fn(async () => undefined);
+    const next = vi.fn(async (signal: AbortSignal) => spec(signal));
+    await runs.start(
+      'bad',
+      () =>
+        new Promise((_resolve, rejectPreparation) => {
+          reject = rejectPreparation;
+        }),
+      { group: 'table', failed },
+    );
+    await runs.start('next', next, { group: 'table' });
+    expect(next).not.toHaveBeenCalled();
+    reject(new Error('The selected source changed during preparation'));
+    await vi.waitFor(() => {
+      expect(failed).toHaveBeenCalledWith(
+        'The selected source changed during preparation',
+        expect.any(AbortSignal),
+      );
+      expect(next).toHaveBeenCalledOnce();
+    });
+    expect(runs.isRunning('bad')).toBe(false);
+    expect(runs.getSnapshot().map(run => run.key)).toEqual(['next']);
+    runs.clear();
   });
   it('records a stalled startup and frees the execution after bounded error reporting', async () => {
     vi.useFakeTimers();
