@@ -1348,6 +1348,8 @@ This does not yet prove restoration of the user's private staging workspace.
   stable cell identity and stale async navigation. The native GitHub journey
   verifies reused owner/author IDs and ordinary Table navigation without another
   provider request for supplied linked data.
+  Its 390px viewport assertion keeps the native Open control visible before
+  wide API columns; explicitly saved column order still takes precedence.
 - `syncableFlatNavigation.test.ts`, `SyncableRecordActions.test.tsx` and
   `ResourcePageDefault.test.tsx` cover shared native record/Table navigation,
   multiple declared actions, bounded two-hop relationships, exact-filter reuse

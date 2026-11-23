@@ -2534,9 +2534,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     // queries exclude Trash; a direct stored-row GET retains the original data.
     await page.goto(storedUrl);
     await browse(page);
-    await expect(
-      page.getByRole('main').getByText('No stored rows yet.', { exact: true }),
-    ).toBeVisible();
+    const storedGrid = page.getByRole('main').getByRole('grid');
+    await expect(storedGrid).toHaveAttribute('aria-busy', 'false');
+    await expect(storedGrid).toHaveAttribute('aria-rowcount', '1');
     await expect(page.locator('#boot-splash')).toHaveCSS('opacity', '0');
     await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
     expect(await readStoredRows()).toEqual(originalRows);
@@ -2595,6 +2595,8 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.documentRequests).toHaveLength(documents);
     expect(attachedFrames).toBe(0);
     expect(writes).toHaveLength(existingWrites);
+    await expect(storedGrid).toHaveAttribute('aria-busy', 'false');
+    await expect(storedGrid).toHaveAttribute('aria-rowcount', '1');
   });
 
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({

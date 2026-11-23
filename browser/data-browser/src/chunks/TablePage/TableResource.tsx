@@ -530,18 +530,23 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [isTimer, derivedColumns, actionColumns, navigationColumns, timer.columns],
   );
 
-  // The default order: stored columns, then the ones the view adds — except in a
-  // timer view, where its Duration and Start/Stop lead. Timing something is the
-  // point of that view, so its controls belong where the eye starts, not past
-  // four columns of data.
+  // Navigation leads so Open remains reachable before a wide API schema on a
+  // small screen. Other view-added columns follow stored properties, except
+  // the timer's Duration and Start/Stop, which lead their view as before.
   const defaultOrder = useMemo(
     () =>
       virtualColumns.length === 0
         ? columns
         : isTimer
           ? [...virtualColumns, ...columns]
-          : [...columns, ...virtualColumns],
-    [isTimer, columns, virtualColumns],
+          : [
+              ...navigationColumns,
+              ...columns,
+              ...virtualColumns.filter(
+                column => !navigationColumns.includes(column),
+              ),
+            ],
+    [isTimer, columns, virtualColumns, navigationColumns],
   );
 
   // A saved order (from dragging a heading) wins over that default, for every
