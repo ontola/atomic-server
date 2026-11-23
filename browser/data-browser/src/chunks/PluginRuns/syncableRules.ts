@@ -149,6 +149,7 @@ export interface ResolvedSyncableRule extends SyncableRuleContext {
   origins: OriginRecord[];
   definitionStamp: string;
   assertCurrent: () => void;
+  subscribe: (onInvalidated: () => void) => () => void;
 }
 
 /** Resolve origins from stored typed source identities, never the iframe's saved raw snapshots. */
@@ -264,8 +265,7 @@ export async function resolveSyncableRule(
       !parsed.entityIdentity ||
       !parsed.record ||
       parsed.resource !== saved.entity.resource ||
-      parsed.entityIdentity.key !== saved.entity.key ||
-      !parsed.read
+      parsed.entityIdentity.key !== saved.entity.key
     )
       throw new Error('The filter source entity identity changed');
     dependencies.push({
@@ -276,7 +276,7 @@ export async function resolveSyncableRule(
       entity: parsed.entityIdentity,
       record: parsed.record,
       context: parsed.context ?? {},
-      read: parsed.read,
+      ...(parsed.read ? { read: parsed.read } : {}),
     });
   };
 
@@ -318,6 +318,81 @@ export async function resolveSyncableRule(
 
   assertCurrent();
 
+  const subscribe = (onInvalidated: () => void) => {
+    const removes = new Map<string, () => void>();
+    let stopped = false;
+    let checking = false;
+
+    // Inventory only: the existing guard proves scope. No resource fetches or
+    // query scans are needed to watch the ancestry it already validated.
+    const subjects = () => {
+      const watched = new Set([store.normalizeSubject(drive)]);
+
+      for (const dependency of dependencies) {
+        const seen = new Set<string>();
+        let current = dependency.row.subject;
+
+        while (seen.size < 64) {
+          const normalized = store.normalizeSubject(current);
+          if (seen.has(normalized)) break;
+          seen.add(normalized);
+          watched.add(normalized);
+          if (subjectsReferToSameResource(current, drive)) break;
+          const parent = store.resources
+            .get(normalized)
+            ?.get(core.properties.parent);
+          if (typeof parent !== 'string' || !parent) break;
+          current = parent;
+        }
+      }
+
+      return watched;
+    };
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      for (const remove of removes.values()) remove();
+      removes.clear();
+    };
+
+    const check = () => {
+      if (stopped || checking) return;
+      checking = true;
+
+      try {
+        assertCurrent();
+        const currentSubjects = subjects();
+
+        for (const [watched, remove] of removes)
+          if (!currentSubjects.has(watched)) {
+            remove();
+            removes.delete(watched);
+          }
+
+        for (const watched of currentSubjects) {
+          if (stopped) break;
+          if (removes.has(watched)) continue;
+          const remove = store.subscribe(watched, check);
+          if (stopped) remove();
+          else removes.set(watched, remove);
+        }
+
+        // Recheck after registration, including changes during subscribe.
+        assertCurrent();
+      } catch {
+        stop();
+        onInvalidated();
+      } finally {
+        checking = false;
+      }
+    };
+
+    check();
+
+    return stop;
+  };
+
   return {
     subject,
     key: config.ruleKey,
@@ -327,5 +402,6 @@ export async function resolveSyncableRule(
     view,
     origins,
     assertCurrent,
+    subscribe,
   };
 }

@@ -1384,6 +1384,15 @@ This does not yet prove restoration of the user's private staging workspace.
   react in place, and ordinary tables incur no Syncables schema lookup.
 - Browser storage assertions query complete signed canonical row sets independently
   of the active filter and the browser's partially materialized resource cache.
+- A browser journey imports repositories before any Organizations read, opens the
+  embedded organization through native Related collections, and syncs its saved
+  repository filter. It checks no provider/catalog request on navigation, stable
+  identity, and no invented originating read or organization membership.
+  Reference projector, navigation and rule tests cover catalog-derived intents,
+  older summary compatibility, missing route fields and current-origin validation.
+  Child reads reuse proved active origin links without rewriting their raw data,
+  context or intents. Source dependency invalidation cancels preparing and active
+  executions immediately; invalid visible controls are replaced using fresh proof.
 - `syncablePrincipalApp.test.ts` verifies one App per typed principal/Public,
   authoritative drive lookup, native registration outside iframe write roots,
   collision/interruption recovery, moved Apps, preserved subjects/local IDs and

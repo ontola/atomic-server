@@ -16,6 +16,8 @@ import {
   ontologyShortname,
   resolveEntityIdentity,
   resolveResourceField,
+  relatedCollectionReads,
+  parseReadSelection,
   type EntityObservation,
   type OpenApiDocument,
   type ResourceFieldDescription,
@@ -54,6 +56,8 @@ export interface ReferenceMaterializationContext {
   platform: string;
   principal: SyncablePrincipal;
   principalApp: string;
+  /** Host-proved active filter origins stay immutable for this projection. */
+  readonlyOriginEntityKeys?: readonly string[];
   document: OpenApiDocument;
   schema: {
     classes: Record<string, string>;
@@ -245,8 +249,10 @@ export async function materializeSyncableReferences(
       context.platform,
       context.principal,
       context.principalApp,
+      context.readonlyOriginEntityKeys,
     ];
     const scopeStamp = sourceConfigFingerprint(scope());
+    const readonlyOrigins = new Set(context.readonlyOriginEntityKeys ?? []);
     const document = context.document;
     const schema = context.schema;
     const apiSchema = context.apiSchema;
@@ -261,6 +267,7 @@ export async function materializeSyncableReferences(
         context.schema.properties['syncable-node-kind'],
         context.schema.properties['syncable-entity-table'],
         context.schema.properties['syncable-reference-evidence'],
+        context.schema.properties['syncable-navigation-intents'],
         core.properties.parent,
         core.properties.isA,
         core.properties.localId,
@@ -411,6 +418,7 @@ export async function materializeSyncableReferences(
       'syncable-entity-table',
       'syncable-collection-view',
       'syncable-reference-evidence',
+      'syncable-navigation-intents',
     ];
     if (
       required.some(name => !p[name]) ||
@@ -583,7 +591,7 @@ export async function materializeSyncableReferences(
 
     const tables = new Map<string, Resource>();
 
-    const tableFor = async (resource: string) => {
+    const tableFor = async (resource: string, requireExisting = false) => {
       if (tables.has(resource)) return tables.get(resource)!;
       const type = types.find(item => item.resource === resource);
       const rowClass = context.apiSchema.classes[ontologyShortname(resource)];
@@ -602,6 +610,8 @@ export async function materializeSyncableReferences(
             'The retained linked table has a different API class',
           );
       } else {
+        if (requireExisting)
+          throw new Error('The active Sync filter origin table is unavailable');
         const bindings = {
           ...context.apiSchema.properties,
           ...context.apiSchema.resourceProperties?.[resource],
@@ -689,8 +699,14 @@ export async function materializeSyncableReferences(
         ...context,
         entityIdentity: target.entity,
       });
-      const table = await tableFor(target.resource);
-      let row = targets.get(key) ?? (await lookup(key));
+      const readonlyOrigin = readonlyOrigins.has(target.entity.key);
+      const retainedOrigin = readonlyOrigin
+        ? (targets.get(key) ?? (await lookup(key)))
+        : undefined;
+      if (readonlyOrigin && !retainedOrigin)
+        throw new Error('The active Sync filter origin is unavailable');
+      const table = await tableFor(target.resource, readonlyOrigin);
+      let row = retainedOrigin ?? targets.get(key) ?? (await lookup(key));
       let previous: ReturnType<typeof parseSyncableSourceConfig> | undefined;
 
       if (row) {
@@ -732,6 +748,17 @@ export async function materializeSyncableReferences(
             'The retained linked row has no valid identity evidence',
           );
 
+        if (readonlyOrigin) {
+          if (!proved)
+            throw new Error('The active Sync filter origin identity changed');
+          // Reading a child may return its owner with extra fields or request
+          // context. Do not rewrite the source proof of this in-flight read.
+          targets.set(key, row);
+          watched.delete(row);
+
+          return row;
+        }
+
         if (!same(row.get(core.properties.parent), table.subject)) {
           targets.set(key, row);
           watched.delete(row);
@@ -760,7 +787,10 @@ export async function materializeSyncableReferences(
           supplied[bindings[name]] = field.value;
       if (row) watch(row, Object.keys(supplied));
       const raw = fillAbsent(previous?.record ?? {}, target.object ?? {});
-      const savedContext = fillAbsent(previous?.context ?? {}, typedContext);
+      const savedContext: TypedReadContext = {
+        ...typedContext,
+        ...previous?.context,
+      };
       const managed = [
         ...new Set([
           ...(previous?.managedProperties ?? []),
@@ -780,6 +810,87 @@ export async function materializeSyncableReferences(
         context: savedContext,
         managedProperties: managed,
       };
+      // Native observation proves the canonical object, but not membership in
+      // this entity's own collection. Keep that read absent unless it existed.
+      let intents: unknown[] = [];
+      let canonical = false;
+
+      try {
+        canonical = equal(
+          resolveEntityIdentity(context.document, {
+            resource: target.resource,
+            record: raw,
+            context: savedContext,
+          }),
+          target.entity,
+        );
+      } catch {
+        /* Scalar references need not contain a navigable raw object. */
+      }
+
+      try {
+        if (canonical) {
+          const relationships =
+            types.find(type => type.resource === target.resource)
+              ?.relationships ?? [];
+          intents = relatedCollectionReads(context.document, {
+            resource: target.resource,
+            record: raw,
+            context: Object.fromEntries(
+              Object.entries(savedContext).map(([name, value]) => [
+                name,
+                String(value),
+              ]),
+            ),
+          })
+            .flatMap(navigation => {
+              const via = {
+                collection: navigation.collection,
+                kind:
+                  navigation.kind === 'direct' ? 'identity' : 'responseLink',
+                ...('reference' in navigation
+                  ? { reference: navigation.reference }
+                  : {}),
+                ...('link' in navigation ? { link: navigation.link } : {}),
+              };
+              const relationship = relationships.find(
+                candidate =>
+                  candidate.resource === navigation.resource &&
+                  equal(candidate.via, via),
+              );
+              if (!relationship) return [];
+
+              return [
+                {
+                  version: 1,
+                  sourceEntityKey: key,
+                  resource: navigation.resource,
+                  label: relationship.title,
+                  definition: parseReadSelection({
+                    version: 1,
+                    resource: navigation.resource,
+                    source: {
+                      kind: 'related',
+                      origin: {
+                        entity: target.entity,
+                        record: raw,
+                        context: savedContext,
+                        ...(previous?.read ? { read: previous.read } : {}),
+                      },
+                      via,
+                    },
+                  }),
+                },
+              ];
+            })
+            .slice(0, 100);
+        }
+      } catch {
+        // A valid embedded identity can omit a separate relationship binding.
+        // Preserve its stored data without inventing a navigable origin.
+        intents = [];
+      }
+
       const fullClass =
         context.apiSchema.classes[ontologyShortname(target.resource)];
       const requiredProperties =
@@ -852,6 +963,7 @@ export async function materializeSyncableReferences(
       const values = {
         ...supplied,
         [p['syncable-source-config']]: config,
+        [p['syncable-navigation-intents']]: intents,
         ...(target.object
           ? {}
           : { [p['syncable-reference-evidence']]: evidence }),

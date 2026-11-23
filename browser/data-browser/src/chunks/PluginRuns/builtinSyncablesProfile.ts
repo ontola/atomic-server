@@ -118,6 +118,23 @@ export function assertSyncAppContext(context: SyncAppContext): void {
   provenanceGuards.get(context)?.();
 }
 
+/** Revoke accepted work when the existing stored-source proof becomes stale. */
+export function subscribeSyncAppContext(
+  context: SyncAppContext,
+  onInvalidated: () => void,
+): () => void {
+  return resolvedRules.get(context)?.subscribe(onInvalidated) ?? (() => {});
+}
+
+/** Host-resolved origins must stay unchanged while their selected read is active. */
+export function syncAppOriginEntityKeys(
+  context: SyncAppContext,
+): readonly string[] {
+  return (
+    resolvedRules.get(context)?.origins.map(origin => origin.entity.key) ?? []
+  );
+}
+
 /** Revalidate the selected drive without yielding between authority and mutation.
  * Check parents too: moving an ancestor can leave a descendant's drive stamp stale. */
 export function assertSyncAppDrive(

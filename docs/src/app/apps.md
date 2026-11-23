@@ -110,10 +110,17 @@ and issue authors link to stored organizations or users. Undeclared objects stay
 JSON. Raw API values and read evidence are retained. Omitted fields preserve
 stored data; an explicitly unresolved relationship clears its previous managed
 link and keeps a diagnostic rather than displaying a stale destination.
+A relationship sync keeps its selected source record unchanged while reading
+its targets. Returned copies link back to that record; other linked records can
+still be enriched. An outside change to the selected source cancels the run.
 
 Identity-only and incomplete linked records remain summaries until enough
-required data is supplied. Later imports enrich that same resource, retaining
-its identity and user fields. These references stay within the selected drive,
+required data is supplied. Embedded records can offer catalog-declared relationship
+actions without claiming an originating collection read. Older stored summaries
+use their saved relationship definitions; Sync checks the current catalog and
+required bindings before making a provider request. A summary missing those fields
+cannot start that read. Later imports enrich the same resource, retaining its
+identity and user fields. These references stay within the selected drive,
 provider and principal. A retained identity in Trash blocks replacement; restore
 it explicitly to resume syncing. Opening a view does not restore trashed data.
 

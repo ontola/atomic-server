@@ -70,6 +70,8 @@ import {
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
+  subscribeSyncAppContext,
+  syncAppOriginEntityKeys,
   canonicalSyncAppContext,
   syncAppContext,
   syncProxyTransport,
@@ -715,6 +717,7 @@ export async function appProfile(
         }
       }),
     );
+    removes.push(subscribeSyncAppContext(context, cancel));
 
     return () => {
       for (const remove of removes) remove();
@@ -811,6 +814,7 @@ export async function appProfile(
             principalApp: context.principalApp,
             document: trusted.document,
             apiSchema,
+            readonlyOriginEntityKeys: syncAppOriginEntityKeys(context),
           },
           observations,
           assertQueuedAuthority,
@@ -1016,9 +1020,11 @@ export function BuiltinSyncablesApp({
     message: string;
     installationApp?: string;
   }>();
+  const [generation, setGeneration] = useState(0);
   useEffect(() => {
     if (!registry) return;
     const controller = new AbortController();
+    let unsubscribe: (() => void) | undefined;
     void appProfile(
       store,
       drive,
@@ -1030,6 +1036,20 @@ export function BuiltinSyncablesApp({
       ruleSubject,
     )
       .then(spec => {
+        if (controller.signal.aborted) return;
+        unsubscribe = spec.subscribe?.(() => {
+          if (controller.signal.aborted) return;
+
+          try {
+            spec.profile.access.assertCurrent();
+          } catch {
+            // Replace controls holding a stale proof; status/pause changes alone
+            // keep their current profile and do not restart any execution.
+            controller.abort();
+            setLoaded(undefined);
+            setGeneration(value => value + 1);
+          }
+        });
         if (!controller.signal.aborted) {
           setError(undefined);
           setLoaded({
@@ -1039,7 +1059,7 @@ export function BuiltinSyncablesApp({
             ruleSubject,
             profile: spec.profile,
           });
-        }
+        } else unsubscribe?.();
       })
       .catch(reason => {
         if (!controller.signal.aborted)
@@ -1051,7 +1071,10 @@ export function BuiltinSyncablesApp({
           });
       });
 
-    return () => controller.abort();
+    return () => {
+      unsubscribe?.();
+      controller.abort();
+    };
   }, [
     store,
     drive,
@@ -1062,6 +1085,7 @@ export function BuiltinSyncablesApp({
     actor,
     server,
     origin,
+    generation,
   ]);
   if (error)
     return (

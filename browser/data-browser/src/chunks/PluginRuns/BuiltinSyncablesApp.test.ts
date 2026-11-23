@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/lib';
-import type { AppExecutionRegistry } from '@chunks/AppPage/AppExecutionRuntime';
+import { AppExecutionRegistry } from '@chunks/AppPage/AppExecutionRuntime';
 import {
   appProfile,
   prepareSyncablePrincipalAppOpen,
@@ -11,7 +11,10 @@ import { collectSyncableLegacySources } from './syncableLegacy';
 import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
 import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import { syncableApiSchema } from './syncableApiSchema';
-import { syncProxyTransport } from './builtinSyncablesProfile';
+import {
+  syncProxyTransport,
+  subscribeSyncAppContext,
+} from './builtinSyncablesProfile';
 import {
   ruleSourceKey,
   sourceConfigFingerprint,
@@ -31,6 +34,7 @@ const state = vi.hoisted(() => ({
   boundSlot: undefined as string | undefined,
   flat: false,
   runSchema: false,
+  invalidateOrigins: undefined as (() => void) | undefined,
   ruleSubject: undefined as string | undefined,
   ruleStatus: {} as Record<string, unknown>,
   ruleResource: {
@@ -99,7 +103,8 @@ vi.mock('@helpers/proxyConnections', () => ({
 }));
 vi.mock('@components/AtomicLink', () => ({ AtomicLink: () => null }));
 vi.mock('@chunks/AppPage/AppFrame', () => ({ AppFrame: () => null }));
-vi.mock('@chunks/AppPage/AppExecutionRuntime', () => ({
+vi.mock('@chunks/AppPage/AppExecutionRuntime', async original => ({
+  ...(await original<typeof import('@chunks/AppPage/AppExecutionRuntime')>()),
   useAppExecutions: () => undefined,
 }));
 vi.mock('../../routes/ShowRoute', () => ({
@@ -138,6 +143,12 @@ vi.mock('./syncableApiSchema', () => ({
 vi.mock('./builtinSyncablesProfile', () => ({
   assertSyncAppDrive: vi.fn(),
   assertSyncAppContext: vi.fn(),
+  subscribeSyncAppContext: vi.fn((_context, invalidate: () => void) => {
+    state.invalidateOrigins = invalidate;
+
+    return vi.fn();
+  }),
+  syncAppOriginEntityKeys: vi.fn(() => []),
   syncAppContext: vi.fn(async () => ({
     subject: 'atomic:source',
     drive: 'drive',
@@ -232,6 +243,7 @@ const open = (
   );
 beforeEach(() => {
   vi.clearAllMocks();
+  state.invalidateOrigins = undefined;
   vi.mocked(collectSyncableFlatAdoption).mockResolvedValue({
     aliases: [],
     blocks: [],
@@ -1073,6 +1085,58 @@ it.each([undefined, 'atomic:selected-rule'])(
     } finally {
       clearTimeout(timeout);
     }
+  },
+);
+
+it.each(['preparing', 'active'])(
+  'revokes accepted %s execution when a stored rule origin is invalidated',
+  async phase => {
+    state.kind = 'collection';
+    state.flat = true;
+    state.ruleSubject = 'atomic:rule';
+    const runs = new AppExecutionRegistry();
+    const interactive = await appProfile(
+      store,
+      'drive',
+      'atomic:source',
+      runs,
+      new AbortController().signal,
+      false,
+      undefined,
+      state.ruleSubject,
+    );
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    if (phase === 'preparing')
+      vi.mocked(collectSyncableFlatAdoption).mockImplementationOnce(
+        async () => {
+          await waiting;
+
+          return { aliases: [], blocks: [], warnings: [], rules: [] };
+        },
+      );
+    const observed: boolean[] = [];
+    const key = JSON.stringify(['drive', 'atomic:source', state.ruleSubject]);
+    runs.subscribe(() => observed.push(runs.isRunning(key)));
+    await interactive.profile.execution!('start');
+    expect(vi.mocked(subscribeSyncAppContext)).toHaveBeenCalled();
+    if (phase === 'active')
+      await vi.waitFor(() => expect(runs.getSnapshot()).toHaveLength(1));
+    const active = runs.getSnapshot()[0];
+    expect(runs.isRunning(key)).toBe(true);
+    expect(state.invalidateOrigins).toBeDefined();
+    state.invalidateOrigins!();
+    expect(runs.isRunning(key)).toBe(false);
+    expect(runs.getSnapshot()).toEqual([]);
+    expect(observed.at(-1)).toBe(false);
+    if (active) expect(active.controller.signal.aborted).toBe(true);
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(runs.getSnapshot()).toEqual([]);
+    runs.clear();
   },
 );
 

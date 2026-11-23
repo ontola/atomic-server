@@ -18,8 +18,8 @@ allowBuilds:
   unix-dgram: true
 
 minimumReleaseAgeExclude:
-  # Paired releases #749/#755/#756/#757: source, CI and registry tarball bytes verified.
-  - syncables@0.30.0 || 0.31.0 || 0.31.1 || 0.31.2
+  # Paired releases #749/#755/#756/#757/#758: source, CI and registry tarball bytes verified.
+  - syncables@0.30.0 || 0.31.0 || 0.31.1 || 0.31.2 || 0.32.0
 
 # Each range below is bounded to the package's current major line
 # (>=patched <nextMajor) — an open-ended ">=x" lets pnpm resolve to a much

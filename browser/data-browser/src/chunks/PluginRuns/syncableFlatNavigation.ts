@@ -315,23 +315,26 @@ async function rowNavigation(
     row.get(core.properties.name) ?? record.entityIdentity.path,
   );
   const referenceClass = classes?.['syncable-reference'];
+  const reference = !!referenceClass && row.hasClasses(referenceClass);
   if (
     !row.hasClasses(table.get(core.properties.classtype) as string) &&
-    !(referenceClass && row.hasClasses(referenceClass))
+    !reference
   )
     throw new Error('This row no longer belongs to this entity collection');
-  // Embedded/scalar summaries retain canonical identity without claiming a
-  // complete API row or collection-read provenance. They supply no actions.
+  // A reference may supply a relationship origin without claiming its own
+  // collection membership or a complete API row. Empty scalar evidence cannot.
   if (
-    !row.hasClasses(table.get(core.properties.classtype) as string) ||
     !record.record ||
-    !record.read ||
-    record.read.resource !== record.resource
+    !Object.keys(record.record).length ||
+    (!reference && !record.read) ||
+    (record.read && record.read.resource !== record.resource)
   )
     return { actions: [], name, assertCurrent, configProperty };
   let selected: ReturnType<typeof parseSyncableRuleConfig> | undefined;
 
   if (activeRule) {
+    if (!record.read)
+      throw new Error('This row no longer belongs to the selected filter');
     const rule = await store.getResource(activeRule);
     assertCurrent();
     if (
@@ -376,14 +379,33 @@ async function rowNavigation(
   }
 
   const actions: FlatSyncableRowAction[] = [];
-  const intents = row.get(p['syncable-navigation-intents']);
-  if (
-    !descriptor ||
-    !Array.isArray(intents) ||
-    intents.length > 100 ||
-    !record.read ||
-    record.read.resource !== record.resource
-  )
+  let intents: unknown = row.get(p['syncable-navigation-intents']);
+  // Older native summaries predate persisted intents. These are declarative
+  // candidates from their stored catalog descriptor, not proof of route bindings.
+  // Sync re-resolves the stored origin and validates the current catalog before
+  // any provider request. Present but invalid metadata never enables a fallback.
+  if (reference && intents === undefined && descriptor)
+    intents = (descriptor.relationships ?? []).map(relationship => ({
+      version: 1,
+      sourceEntityKey: row.get(keyProperty),
+      resource: relationship.resource,
+      label: relationship.title,
+      definition: {
+        version: 1,
+        resource: relationship.resource,
+        source: {
+          kind: 'related',
+          origin: {
+            entity: record.entityIdentity,
+            record: record.record,
+            context: record.context ?? {},
+            ...(record.read ? { read: record.read } : {}),
+          },
+          via: relationship.via,
+        },
+      },
+    }));
+  if (!descriptor || !Array.isArray(intents) || intents.length > 100)
     return { actions, name, assertCurrent, configProperty };
 
   // One complete canonical lookup per resource, shared by direct and depth-two actions.
@@ -526,30 +548,31 @@ async function rowNavigation(
     )
       continue;
     const via = direct.source.via;
-    direct = selected
-      ? ({
-          version: 1,
-          resource: direct.resource,
-          source: {
-            kind: 'fanout',
-            from: selected.definition,
-            via,
-            entities: [record.entityIdentity],
-          },
-        } as ReadSelection)
-      : {
-          ...direct,
-          source: {
-            ...direct.source,
-            origin: {
-              entity: record.entityIdentity,
-              record: record.record,
-              context: record.context ?? {},
-              read: record.read,
+    direct = parseReadSelection(
+      selected
+        ? ({
+            version: 1,
+            resource: direct.resource,
+            source: {
+              kind: 'fanout',
+              from: selected.definition,
+              via,
+              entities: [record.entityIdentity],
+            },
+          } as ReadSelection)
+        : {
+            ...direct,
+            source: {
+              ...direct.source,
+              origin: {
+                entity: record.entityIdentity,
+                record: record.record,
+                context: record.context ?? {},
+                ...(record.read ? { read: record.read } : {}),
+              },
             },
           },
-        };
-    direct = parseReadSelection(direct);
+    );
     if (direct.resource === source.resource) continue;
     const intermediate = await targetFor(direct.resource);
     assertCurrent();

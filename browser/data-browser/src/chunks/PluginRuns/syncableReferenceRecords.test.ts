@@ -66,6 +66,7 @@ function document(): OpenApiDocument {
           },
           collections: {
             tickets: { urlTemplate: '/workspaces/{workspace_id}/tickets' },
+            personTickets: { urlTemplate: '/people/{person_id}/tickets' },
           },
           references: {
             sponsor: {
@@ -125,6 +126,34 @@ function document(): OpenApiDocument {
       },
     },
     paths: {
+      '/people/{person_id}/tickets': {
+        get: {
+          operationId: 'personTickets',
+          parameters: [
+            {
+              name: 'person_id',
+              in: 'path',
+              required: true,
+              schema: { type: 'integer' },
+            },
+          ],
+          'x-crud': {
+            action: 'list',
+            resource: 'ticket',
+            collection: 'personTickets',
+          },
+          responses: {
+            '200': {
+              description: 'Person tickets',
+              content: {
+                'application/json': {
+                  schema: { type: 'array', items: { type: 'object' } },
+                },
+              },
+            },
+          },
+        },
+      },
       '/workspaces/{workspace_id}/tickets': {
         get: {
           operationId: 'tickets',
@@ -366,11 +395,12 @@ async function fixture() {
   const observe = (
     raw: Record<string, unknown>,
     workspace_id: string | number = 9,
+    extraContext: Record<string, string | number> = {},
   ) =>
     projectEntityObservation(doc, {
       collection,
       record: { id: 1, ...raw },
-      context: { workspace_id },
+      context: { workspace_id, ...extraContext },
       provenance: {
         read: bindCollection(doc, {
           collection: 'tickets',
@@ -382,11 +412,12 @@ async function fixture() {
     raw: Record<string, unknown>,
     workspace_id: string | number = 9,
     assert = () => {},
+    extraContext: Record<string, string | number> = {},
   ) =>
     materializeSyncableReferences(
       f.store as unknown as Store,
       context,
-      [observe(raw, workspace_id)],
+      [observe(raw, workspace_id, extraContext)],
       assert,
     );
   const owner = (result: Awaited<ReturnType<typeof run>>) =>
@@ -409,6 +440,123 @@ const configOf = (f: Awaited<ReturnType<typeof fixture>>, id: string) =>
   ] as Record<string, unknown>;
 
 describe('native direct reference records', () => {
+  it('retains an active proven origin without self-invalidating on new child-read context or raw enrichment', async () => {
+    const f = await fixture();
+    const id = f.owner(await f.run({ owner: person() }));
+    const before = structuredClone(f.resources.get(id)!);
+    const origin = configOf(f, id);
+    f.context.readonlyOriginEntityKeys = [
+      (origin.entityIdentity as { key: string }).key,
+    ];
+    const stamp = JSON.stringify(origin);
+
+    const assertOrigin = () => {
+      if (JSON.stringify(configOf(f, id)) !== stamp)
+        throw new Error('The Sync filter source entity changed');
+    };
+
+    f.writes.length = 0;
+    const result = await f.run(
+      { owner: person({ email: 'new@example.test' }) },
+      9,
+      assertOrigin,
+      { child_scope: 123 },
+    );
+    expect(f.owner(result)).toBe(id);
+    expect(f.resources.get(id)).toEqual(before);
+    expect(f.writes).not.toContain(id);
+    expect(configOf(f, id).read).toBeUndefined();
+  });
+
+  it.each([
+    'key',
+    'principal',
+    'table',
+    'Drive',
+    'raw identity',
+    'missing',
+    'missing table',
+  ])(
+    'does not bypass retained origin validation for corrupt %s evidence',
+    async corruption => {
+      const f = await fixture();
+      const id = f.owner(await f.run({ owner: person() }));
+      const p = f.context.schema.properties;
+      const row = f.resources.get(id)!;
+      const origin = configOf(f, id);
+      f.context.readonlyOriginEntityKeys = [
+        (origin.entityIdentity as { key: string }).key,
+      ];
+      if (corruption === 'key') row[p['syncable-source-key']] = 'forged';
+      if (corruption === 'principal')
+        origin.principal = {
+          kind: 'authenticated',
+          namespace: 'https://foreign.example',
+          subject: 8,
+        };
+      if (corruption === 'table')
+        row[p['syncable-entity-table']] = 'atomic:foreign-table';
+      if (corruption === 'Drive')
+        row['https://atomicdata.dev/properties/drive'] = 'atomic:other-drive';
+      if (corruption === 'raw identity') origin.record = { id: 999 };
+      if (corruption === 'missing') f.resources.delete(id);
+
+      if (corruption === 'missing table') {
+        row[core.properties.parent] = f.context.principalApp;
+        f.resources.delete(String(row[p['syncable-entity-table']]));
+      }
+
+      f.writes.length = 0;
+      await expect(
+        f.run({ owner: person({ email: 'more@example.test' }) }),
+      ).rejects.toThrow();
+      expect(f.writes).toEqual([]);
+    },
+  );
+
+  it('keeps a canonical partial record when a separate relationship binding is missing', async () => {
+    const f = await fixture();
+    const resources = f.context.document.components!.crudResources as Record<
+      string,
+      Record<string, unknown>
+    >;
+    resources.person.references = {
+      teamRoute: {
+        resource: 'team',
+        bindings: { team_id: { field: 'routeId' } },
+      },
+    };
+    const detailResponse = {
+      description: 'Team',
+      links: {
+        tickets: {
+          operationId: 'personTickets',
+          parameters: { person_id: '$response.body#/id' },
+        },
+      },
+    };
+    f.context.document.paths['/teams/{team_id}'] = {
+      get: {
+        operationId: 'teamRoute',
+        'x-crud': { action: 'read', resource: 'team' },
+        responses: {
+          '200': detailResponse,
+        },
+      },
+    };
+    const result = await f.run({ owner: { id: 7, kind: 'Person' } });
+    const id = f.owner(result);
+    const row = f.resources.get(id)!;
+    expect(configOf(f, id).record).toEqual({ id: 7, kind: 'Person' });
+    expect(configOf(f, id).read).toBeUndefined();
+    expect(
+      row[f.context.schema.properties['syncable-navigation-intents']],
+    ).toEqual([]);
+    expect(
+      row[f.context.schema.properties['syncable-rule-memberships']],
+    ).toBeUndefined();
+  });
+
   it('stores canonical partial rows and ordinary views without inventing collection membership', async () => {
     const f = await fixture(),
       result = await f.run({ owner: person() }),
@@ -429,6 +577,22 @@ describe('native direct reference records', () => {
       context: { workspace_id: 9 },
     });
     expect(configOf(f, id).read).toBeUndefined();
+    expect(row[p['syncable-navigation-intents']]).toMatchObject([
+      {
+        version: 1,
+        resource: 'ticket',
+        definition: {
+          source: {
+            kind: 'related',
+            origin: { record: person(), context: { workspace_id: 9 } },
+            via: { collection: 'personTickets', kind: 'identity' },
+          },
+        },
+      },
+    ]);
+    expect(JSON.stringify(row[p['syncable-navigation-intents']])).not.toContain(
+      '"read":',
+    );
     expect(row[p['syncable-rule-memberships']]).toBeUndefined();
     expect(table[dataBrowser.properties.tableViews]).toHaveLength(3);
     expect(table[dataBrowser.properties.tableDefaultView]).toBe(

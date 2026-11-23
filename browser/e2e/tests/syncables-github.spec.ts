@@ -711,6 +711,7 @@ async function sourceState(
                   values: Array<[string, string | number]>;
                 };
                 record?: Record<string, unknown>;
+                read?: unknown;
               }
             | undefined;
 
@@ -722,6 +723,7 @@ async function sourceState(
             note: row.get(base + 'description'),
             entityIdentity: saved?.entityIdentity,
             raw: saved?.record,
+            hasOriginatingRead: saved?.read !== undefined,
             memberships: row.getSubjects(property('syncable-rule-memberships')),
             managed: await Promise.all(
               (saved?.managedProperties ?? []).map(async field => {
@@ -1117,6 +1119,85 @@ async function publicForm(page: Page, collection = 'repositoryIssues') {
 }
 
 test.describe('catalog-driven built-in Syncables', () => {
+  test('navigates and syncs from an embedded organization without inventing an origin read', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    const requests = await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page
+      .locator(`[data-proxy-platform="${PLATFORM}"]`)
+      .getByRole('button', { name: 'Add GitHub to drive' })
+      .click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await expect(
+      iframe.getByRole('heading', { name: 'Connected principals' }),
+    ).toBeVisible({ timeout: 45_000 });
+    await openConsent(page, iframe, 'Connect account');
+    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await expect(
+      iframe.getByRole('button', { name: 'michiel', exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    await browse(page);
+    const principalUrl = page.url();
+    await openRow(page, 'Organizations');
+    const organizationsSubject = await getCurrentSubject(page);
+    await page.goto(principalUrl);
+    await openRow(page, 'Repositories');
+    const repositoriesSubject = await getCurrentSubject(page);
+    await sync(page);
+    const organization = (
+      await sourceState(page, organizationsSubject)
+    ).rows.find(row => row.raw?.id === 123)!;
+    expect(organization).toBeDefined();
+    expect(organization.hasOriginatingRead).toBe(false);
+    expect(organization.memberships).toEqual([]);
+    expect(requests.organizationRequests).toBe(0);
+    const reads = requests.providerRequests.length;
+    const documents = requests.documentRequests.length;
+    const resourceUrl = new URL('/app/show', page.url());
+    resourceUrl.searchParams.set('subject', organization.subject);
+    await page.goto(resourceUrl.href);
+    const related = page.getByRole('group', {
+      name: 'Related collections',
+      exact: true,
+    });
+    await expect(
+      related.getByRole('button', {
+        name: 'Issues and pull requests (via Repositories)',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await related
+      .getByRole('button', { name: 'Repositories', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      repositoriesSubject,
+    );
+    await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
+    const selected = await selectFilter(page);
+    expect(requests.providerRequests).toHaveLength(reads);
+    expect(requests.documentRequests).toHaveLength(documents);
+    await sync(page, selected);
+    await browse(page);
+    await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '3');
+    expect(requests.providerRequests).toContain('/orgs/ontola');
+    expect(requests.providerRequests).toContain('/orgs/ontola/repos');
+    expect(requests.organizationRequests).toBe(0);
+    const unchangedOrigin = (
+      await sourceState(page, organizationsSubject)
+    ).rows.find(row => row.subject === organization.subject)!;
+    expect(unchangedOrigin.hasOriginatingRead).toBe(false);
+    expect(unchangedOrigin.memberships).toEqual([]);
+    expect(unchangedOrigin.key).toBe(organization.key);
+  });
+
   test('retains a saved principal and safely reconnects an expired orphan connection from the App', async ({
     page,
     browserDiagnostics,
