@@ -283,13 +283,19 @@ test.describe('table filtering + views', () => {
     await page.screenshot({
       path: testInfo.outputPath('numeric-filter-draft-desktop.png'),
       fullPage: true,
+      animations: 'disabled',
     });
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('opacity', '0');
+    await filterChip(page, 'Age').click();
     await expect(value).toBeVisible();
     await expect(value).toHaveValue('1e');
     await page.screenshot({
       path: testInfo.outputPath('numeric-filter-draft-mobile.png'),
       fullPage: true,
+      animations: 'disabled',
     });
     await page.setViewportSize({ width: 1200, height: 800 });
 
@@ -426,14 +432,18 @@ test.describe('table filtering + views', () => {
     await page.screenshot({
       path: testInfo.outputPath('inactive-view-rename-desktop.png'),
       fullPage: true,
+      animations: 'disabled',
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('opacity', '0');
     await expect(
       page.getByRole('tab', { name: 'Filtered people', exact: true }),
     ).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('inactive-view-rename-mobile.png'),
       fullPage: true,
+      animations: 'disabled',
     });
   });
 
