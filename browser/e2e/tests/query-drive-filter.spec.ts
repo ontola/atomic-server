@@ -104,10 +104,18 @@ test.describe('query GETs after refresh', () => {
     page,
   }) => {
     // Seed the drive with one document so children-of-drive isn't empty.
+    const driveSubject = await getCurrentSubject(page);
     await page
       .getByTestId('sidebar')
       .getByRole('button', { name: 'New Document' })
       .click();
+    // The drive page has an editable title too: wait until the page shows the
+    // new document, or `getCurrentSubject` reads the drive's `main[about]`.
+    await expect(page.locator('main[about]')).not.toHaveAttribute(
+      'about',
+      driveSubject,
+      { timeout: 10000 },
+    );
     await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
 
     const documentSubject = await getCurrentSubject(page);
