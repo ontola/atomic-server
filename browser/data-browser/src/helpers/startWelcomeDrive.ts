@@ -2,6 +2,7 @@ import { type Store } from '@tomic/react';
 import { preferencesSchema } from '@tomic/lib';
 import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
 import { planTemplate } from '../chunks/Templates/model';
+import { welcomeTemplate } from '../chunks/Templates/welcome';
 import { onboardingKeys } from '../hooks/useOnboardingProgress';
 
 /**
@@ -18,8 +19,8 @@ export async function startWelcomeDrive(
 ): Promise<{ drive: string; landing: string }> {
   const { instantiateTemplate } =
     await import('../chunks/Templates/instantiate');
-  const template = TEMPLATE_CATALOG.find(t => t.id === 'welcome')!;
-  const plan = planTemplate(template, TEMPLATE_CATALOG, true);
+  // Built now, so the title, names and text are in the current language.
+  const plan = planTemplate(welcomeTemplate(), TEMPLATE_CATALOG, true);
   const drive = await store.createDrive(plan.title, {
     personal: false,
     localOnly: store.isLocalOnlyDrive(personalDrive),

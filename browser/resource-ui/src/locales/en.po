@@ -554,7 +554,7 @@ msgstr "Not responding"
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more"
-msgstr "Read more"
+msgstr "Read more "
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -13243,18 +13243,6 @@ msgid "Your account"
 msgstr "Your account"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Read Start here"
-msgstr "Read Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "A short tour of this drive, in its first document"
-msgstr "A short tour of this drive, in its first document"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Open Start here"
-msgstr "Open Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Only saved on this device"
 msgstr "Only saved on this device"
 
@@ -13747,3 +13735,44 @@ msgstr "That is not an Atomic secret. Copy the whole secret and try again."
 #: ../data-browser/src/views/getting-started/AccountSignInPanel.tsx
 msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
 msgstr "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic"
+msgstr "Welcome to Atomic"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The drive a new person starts in."
+msgstr "The drive a new person starts in."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Start here"
+msgstr "Start here"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do."
+msgstr "Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do."
+
+#. 0: TASKS_LINK; 1: SKETCH_LINK
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "In it you will find a {0} table to keep track of things and a {1} canvas to draw on."
+msgstr "In it you will find a {0} table to keep track of things and a {1} canvas to draw on."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Select text in this document to make it **bold**, a heading or a list."
+msgstr "Select text in this document to make it **bold**, a heading or a list."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Everything is stored on this device and only you can read it. You can edit or delete anything here, including this document."
+msgstr "Everything is stored on this device and only you can read it. You can edit or delete anything here, including this document."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The **Getting started** panel in the sidebar shows the next steps."
+msgstr "The **Getting started** panel in the sidebar shows the next steps."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Tasks"
+msgstr "Tasks"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Sketch"
+msgstr "Sketch"

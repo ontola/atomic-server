@@ -13235,18 +13235,6 @@ msgid "Your account"
 msgstr "Akun Anda"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Read Start here"
-msgstr "Baca Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "A short tour of this drive, in its first document"
-msgstr "Tur singkat drive ini, di dokumen pertamanya"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Open Start here"
-msgstr "Buka Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Only saved on this device"
 msgstr "Hanya tersimpan di perangkat ini"
 
@@ -13736,3 +13724,44 @@ msgstr "Itu bukan secret Atomic. Salin seluruh secret dan coba lagi."
 #: ../data-browser/src/views/getting-started/AccountSignInPanel.tsx
 msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
 msgstr "Secret ini tidak terhubung ke akun atomic.place, atau tidak dapat diperiksa. Coba cara lain untuk masuk."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic"
+msgstr "Selamat datang di Atomic"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The drive a new person starts in."
+msgstr "Drive tempat orang baru memulai."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Start here"
+msgstr "Mulai di sini"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do."
+msgstr "Selamat datang di Atomic. Ini drive kecil untuk bereksperimen, sesuai kecepatanmu sendiri. Tidak ada yang wajib kamu lakukan."
+
+#. 0: TASKS_LINK; 1: SKETCH_LINK
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "In it you will find a {0} table to keep track of things and a {1} canvas to draw on."
+msgstr "Di dalamnya ada tabel {0} untuk mencatat berbagai hal dan kanvas {1} untuk menggambar."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Select text in this document to make it **bold**, a heading or a list."
+msgstr "Pilih teks di dokumen ini untuk membuatnya **tebal**, judul, atau daftar."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Everything is stored on this device and only you can read it. You can edit or delete anything here, including this document."
+msgstr "Semuanya disimpan di perangkat ini dan hanya kamu yang bisa membacanya. Kamu bisa mengubah atau menghapus apa pun di sini, termasuk dokumen ini."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The **Getting started** panel in the sidebar shows the next steps."
+msgstr "Panel **Memulai** di bilah samping menampilkan langkah berikutnya."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Tasks"
+msgstr "Tugas"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Sketch"
+msgstr "Sketsa"

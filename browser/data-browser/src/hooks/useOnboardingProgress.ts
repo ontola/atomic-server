@@ -1,5 +1,5 @@
 // @wc-ignore-file
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect } from 'react';
 import {
   contacts,
   core,
@@ -12,13 +12,9 @@ import {
   useResources,
 } from '@tomic/react';
 import {
-  TEMPLATE_CATALOG,
-  WELCOME_DOC_NAME,
-} from '../chunks/Templates/catalog';
-import {
-  getRecentResources,
-  subscribeRecentResources,
-} from '../helpers/recentResources';
+  WELCOME_PART_COUNT,
+  welcomeDriveTitle,
+} from '../chunks/Templates/welcome';
 import { useVisibleDriveChildren } from './useVisibleDriveChildren';
 import { canonicalizeScheme } from '@tomic/lib';
 import { useAISettings } from '@components/AI/AISettingsContext';
@@ -29,13 +25,7 @@ import { usePrivateDrive } from './usePrivateDrive';
 import { usePrivateDriveSync } from './usePrivateDriveSync';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
-export type OnboardingStepId =
-  | 'start'
-  | 'name'
-  | 'create'
-  | 'ai'
-  | 'invite'
-  | 'save';
+export type OnboardingStepId = 'name' | 'create' | 'ai' | 'invite' | 'save';
 
 /** What a step is waiting for before its button can do anything. */
 export type OnboardingNeed = 'ai-source';
@@ -61,12 +51,14 @@ const same = (a: string, b?: string) =>
 
 /** A drive keeps its first name until someone gives it one of their own. */
 export function isDefaultDriveName(name: string | undefined): boolean {
-  return !name || /^(Welcome to Atomic|My drive|.+'s Drive)$/.test(name);
+  return (
+    !name ||
+    name === welcomeDriveTitle() ||
+    /^(Welcome to Atomic|My drive|.+'s Drive)$/.test(name)
+  );
 }
 
 export interface OnboardingInput {
-  /** Set on the Welcome drive when it still has its Start here document. */
-  startHere?: { opened: boolean };
   driveName?: string;
   /** Visible children of the drive the panel is for, and how many its template gave. */
   childCount: number;
@@ -85,9 +77,6 @@ export function deriveOnboardingSteps(
   input: OnboardingInput,
 ): OnboardingStep[] {
   return [
-    ...(input.startHere
-      ? [{ id: 'start' as const, done: input.startHere.opened }]
-      : []),
     { id: 'name', done: !isDefaultDriveName(input.driveName) },
     { id: 'create', done: input.childCount > input.templateChildCount },
     {
@@ -127,9 +116,7 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
   const accountLinked = useIsLinkedToAccount();
   const { subjects: children } = useVisibleDriveChildren(drive);
   // The Welcome template fills its drive; anything past that is the person's.
-  const templateChildCount = same(drive, welcomeDrive)
-    ? TEMPLATE_CATALOG.find(t => t.id === 'welcome')!.parts.length
-    : 0;
+  const templateChildCount = same(drive, welcomeDrive) ? WELCOME_PART_COUNT : 0;
   // Only the panel's own drive: fetching every saved drive to look for other
   // members hits legacy drives on dead servers on every render.
   const shared = same(drive, privateDrive) ? [] : [drive];
@@ -176,22 +163,7 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     }),
     shared,
   );
-  const childResources = useResources(
-    same(drive, welcomeDrive) ? children : [],
-  );
-  // Found by the name the template wrote, which is never translated; a
-  // renamed or deleted document drops the step.
-  const startHereSubject = [...childResources.values()].find(
-    r => r.get(core.properties.name) === WELCOME_DOC_NAME,
-  )?.subject;
-  const startHereOpened = useSyncExternalStore(
-    subscribeRecentResources,
-    () =>
-      !!startHereSubject &&
-      getRecentResources(agent?.subject, drive).includes(startHereSubject),
-  );
   const input: OnboardingInput = {
-    startHere: startHereSubject ? { opened: startHereOpened } : undefined,
     driveName,
     childCount: children.length,
     templateChildCount,
@@ -205,8 +177,6 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
 
   return {
     steps,
-    /** The Start here document, for the step to point at. */
-    startHere: startHereSubject,
     doneCount: steps.filter(s => s.done).length,
   };
 }

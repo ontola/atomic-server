@@ -13237,18 +13237,6 @@ msgid "Your account"
 msgstr "Votre compte"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Read Start here"
-msgstr "Lire Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "A short tour of this drive, in its first document"
-msgstr "Une courte visite de ce lecteur, dans son premier document"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Open Start here"
-msgstr "Ouvrez Start here"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Only saved on this device"
 msgstr "Enregistré uniquement sur cet appareil"
 
@@ -13741,3 +13729,44 @@ msgstr "Ce n'est pas un secret Atomic. Copiez le secret en entier et réessayez.
 #: ../data-browser/src/views/getting-started/AccountSignInPanel.tsx
 msgid "This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in."
 msgstr "Ce secret n'est lié à aucun compte atomic.place ou n'a pas pu être vérifié. Essayez une autre façon de vous connecter."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic"
+msgstr "Bienvenue dans Atomic"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The drive a new person starts in."
+msgstr "Le lecteur par lequel commence une nouvelle personne."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Start here"
+msgstr "Commence ici"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Welcome to Atomic. This is a small drive to play in, at your own pace. There is nothing you have to do."
+msgstr "Bienvenue dans Atomic. Voici un petit lecteur pour essayer, à ton rythme. Tu n'as rien à faire."
+
+#. 0: TASKS_LINK; 1: SKETCH_LINK
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "In it you will find a {0} table to keep track of things and a {1} canvas to draw on."
+msgstr "Tu y trouveras un tableau {0} pour suivre tes affaires et un canevas {1} pour dessiner."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Select text in this document to make it **bold**, a heading or a list."
+msgstr "Sélectionne du texte dans ce document pour le mettre en **gras**, en faire un titre ou une liste."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Everything is stored on this device and only you can read it. You can edit or delete anything here, including this document."
+msgstr "Tout est enregistré sur cet appareil et toi seul peux le lire. Tu peux modifier ou supprimer n'importe quoi ici, y compris ce document."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "The **Getting started** panel in the sidebar shows the next steps."
+msgstr "Le panneau **Premiers pas** dans la barre latérale indique les étapes suivantes."
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Tasks"
+msgstr "Tâches"
+
+#: ../data-browser/src/chunks/Templates/welcome.ts
+msgid "Sketch"
+msgstr "Croquis"

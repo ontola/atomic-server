@@ -911,7 +911,7 @@ export function GettingStartedFlow({
 
     try {
       const { agent, drive } = await startLocalIdentity(store);
-      let open = { drive };
+      let open: { drive: string; landing?: string } = { drive };
 
       try {
         open = await startWelcomeDrive(store, drive);
@@ -922,8 +922,10 @@ export function GettingStartedFlow({
 
       setAgent(agent);
       setDrive(open.drive);
-      // The drive page, with the Getting started card above its documents.
-      navigate(constructOpenURL(open.drive));
+      // Its Start here document, which says what to try first; the drive
+      // and the Getting started panel stay in the sidebar. Without a Welcome
+      // drive, the personal drive's page.
+      navigate(constructOpenURL(open.landing ?? open.drive));
     } catch (err) {
       setError(asError(err));
       setStep('welcome');
