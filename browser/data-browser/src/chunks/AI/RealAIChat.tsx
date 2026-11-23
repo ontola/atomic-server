@@ -3,6 +3,7 @@ import {
   HOSTED_AI_USAGE_EVENT,
 } from '@helpers/managed/ai';
 import { getManagedApiBase, getManagedDeviceToken } from '@helpers/managed/api';
+import { isRunningInTauri } from '@helpers/tauri';
 import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
 import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
 import { isHostedDistribution } from '@helpers/managedServer';
@@ -378,7 +379,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // Without an account there is no included AI; say where to get it when the
   // build offers an account service.
   const accountServiceHost = (() => {
-    if (hostedAI || hostedBuild || getManagedDeviceToken()) return undefined;
+    // A hosted web build signs people in before it gets here; the desktop
+    // app is hosted too but starts without an account.
+    if (
+      hostedAI ||
+      (hostedBuild && !isRunningInTauri()) ||
+      getManagedDeviceToken()
+    )
+      return undefined;
 
     try {
       return new URL(getAccountServiceUrl() ?? '').host;
@@ -393,13 +401,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ? 'Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges.'
       : activeModel.provider === AIProvider.Ollama
         ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-        : activeModel.provider === AIProvider.OpenRouter && hostedBuild
-          ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
-          : activeModel.provider === AIProvider.OpenRouter
-            ? accountServiceHost
-              ? `Sign in to ${accountServiceHost} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime.`
-              : 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-            : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+        : activeModel.provider === AIProvider.OpenRouter && accountServiceHost
+          ? `Sign in to ${accountServiceHost} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime.`
+          : activeModel.provider === AIProvider.OpenRouter && hostedBuild
+            ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+            : activeModel.provider === AIProvider.OpenRouter
+              ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+              : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const creditPurchaseUrl =
     canPurchaseHostedAICredits(hostedAI) &&

@@ -13853,3 +13853,7 @@ msgstr "Klik untuk mengatur {0}"
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
 msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
 msgstr "Masuk ke {0} untuk memakai AI bawaan, atau tambahkan kunci API OpenRouter atau model Ollama lokal. Anda tetap bisa mengetik sementara itu."
+
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Hanya perangkat ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."

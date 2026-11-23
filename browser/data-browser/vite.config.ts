@@ -103,6 +103,18 @@ const wasmVersionHash = wasmVersion();
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+
+  // The desktop app's account service is atomic.place unless a local .env
+  // names another (a dev control plane). Without this a portal remembered from
+  // some server it once asked (staging) wins over the product's own.
+  if (
+    isTauri &&
+    !process.env.VITE_MANAGED_PORTAL_URL &&
+    !env.VITE_MANAGED_PORTAL_URL
+  ) {
+    process.env.VITE_MANAGED_PORTAL_URL = 'https://atomic.place';
+  }
+
   const atomicServerUrl =
     process.env.VITE_ATOMIC_SERVER_URL ??
     env.VITE_ATOMIC_SERVER_URL ??
