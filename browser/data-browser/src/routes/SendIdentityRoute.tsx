@@ -142,9 +142,10 @@ function SendIdentityPage() {
   }, [code, attempt]);
 
   /**
-   * Unlock, then seal and deposit. False when the unlock failed (the caller
-   * decides whether to say so); a failed deposit ends the page instead, since
-   * the person cannot fix it from here.
+   * Unlock, then seal and deposit. Returns why the unlock failed (the caller
+   * decides whether to say so), or undefined once it got past the unlock; a
+   * failed deposit ends the page instead, since the person cannot fix it from
+   * here.
    */
   async function finish(
     link: LinkDescription,
@@ -152,19 +153,20 @@ function SendIdentityPage() {
     method: UnlockMethod,
     input?: string,
     quiet = false,
-  ): Promise<boolean> {
+  ): Promise<string | undefined> {
     let secret: string;
 
     try {
       secret = await unlockBackup(recovery, method, input);
     } catch (err) {
-      if (!quiet) {
-        setError(
-          err instanceof Error ? err.message : 'Could not unlock your backup.',
-        );
-      }
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not unlock your backup.';
 
-      return false;
+      if (!quiet) setError(message);
+
+      return message;
     }
 
     setPhase({ name: 'sending' });
@@ -180,7 +182,7 @@ function SendIdentityPage() {
       });
     }
 
-    return true;
+    return undefined;
   }
 
   async function unlockStep(
@@ -219,20 +221,34 @@ function SendIdentityPage() {
 
       // The account alone opens it when it can; otherwise ask for the passkey
       // or code below.
-      if (
-        methods[0] === 'assisted' &&
-        (await finish(link, recovery, 'assisted', undefined, true))
-      ) {
-        return;
+      let assistedFailure: string | undefined;
+
+      if (methods[0] === 'assisted') {
+        assistedFailure = await finish(
+          link,
+          recovery,
+          'assisted',
+          undefined,
+          true,
+        );
+
+        if (assistedFailure === undefined) return;
       }
 
       const rest = methods.filter(m => m !== 'assisted');
 
       if (rest.length === 0) {
+        // Say why: the account's own unlock failed, or the backup was made by
+        // another address than the one signed in, or it has no way in here.
         setPhase({
           name: 'failed',
           message:
-            'This backup cannot be opened here. Restore it in the web app first.',
+            assistedFailure ??
+            (recovery.owner_email &&
+            account.email &&
+            recovery.owner_email !== account.email
+              ? `This backup belongs to ${recovery.owner_email}, but you are signed in as ${account.email}. Sign in with that address.`
+              : 'This backup cannot be opened here. Restore it in the web app first.'),
         });
 
         return;
