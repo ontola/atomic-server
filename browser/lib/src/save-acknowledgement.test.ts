@@ -212,6 +212,50 @@ describe('explicit save acknowledgement', () => {
     store.setServerConnected(false);
   });
 
+  it('names the date of an old blocked entry, not of a fresh one', async () => {
+    const { store } = await testStore();
+    const refusal =
+      'Unauthorized. No https://atomicdata.dev/properties/append right has been found for atomic:agent:x in this resource or its parents';
+    const errors: string[] = [];
+    store.on(StoreEvents.Error, e => errors.push(e.message));
+    const notify = (subject: string, enqueuedAt: number) =>
+      (
+        store as unknown as {
+          notifyBlockedSync(
+            subject: string,
+            message: string,
+            alreadyAnnounced: boolean,
+            code: undefined,
+            enqueuedAt: number,
+          ): void;
+        }
+      ).notifyBlockedSync(subject, refusal, false, undefined, enqueuedAt);
+
+    const old = Date.now() - 38 * 24 * 60 * 60 * 1000;
+    const date = new Intl.DateTimeFormat(undefined, {
+      day: 'numeric',
+      month: 'short',
+    }).format(new Date(old));
+
+    const lastYear = Date.now() - 400 * 24 * 60 * 60 * 1000;
+    const lastYearDate = new Intl.DateTimeFormat(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(lastYear));
+
+    notify('did:ad:old-entry', old);
+    notify('did:ad:fresh-entry', Date.now() - 60 * 1000);
+    notify('did:ad:last-year', lastYear);
+
+    expect(errors).toHaveLength(3);
+    expect(errors[2]).toContain(`a change from ${lastYearDate} was not`);
+    expect(errors[0]).toContain(`a change from ${date} was not synced`);
+    expect(errors[1]).toContain('a change was not synced');
+    expect(errors[1]).not.toContain(' from ');
+    store.setServerConnected(false);
+  });
+
   it('names the item and points to the Sync page when a right is missing', async () => {
     const { store } = await testStore();
     const drive = await store.newResource({
