@@ -15,6 +15,7 @@ import {
 import { overrideE2eBudget } from './e2e-budget';
 import {
   BROWSER_BUNDLE_PLATFORM,
+  BROWSER_SOURCE_FINGERPRINT_VERSION,
   BROWSER_SOURCE_FINGERPRINT_SCRIPT,
   validateBundleCommit,
   validateBundleHash,
@@ -2499,6 +2500,23 @@ export class AtomicServer {
     return fingerprint;
   }
 
+  /** Inspect exact filtered build inputs before allocating time to compilation. */
+  @func()
+  browserSourceInputs(): Promise<string> {
+    return dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec([
+        'node',
+        '-e',
+        BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+        '/source',
+        '--manifest',
+      ])
+      .stdout();
+  }
+
   private async requireBrowserBundlePlatform(): Promise<void> {
     const platform = await dag.container().from(NODE_IMAGE).platform();
     if (String(platform) !== BROWSER_BUNDLE_PLATFORM) {
@@ -2550,6 +2568,7 @@ export class AtomicServer {
       version: 1,
       sourceCommit,
       sourceFingerprint,
+      sourceFingerprintVersion: BROWSER_SOURCE_FINGERPRINT_VERSION,
       platform: BROWSER_BUNDLE_PLATFORM,
       rustVersion: RUST_VERSION,
       pnpmVersion: PNPM_VERSION,

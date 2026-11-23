@@ -46,6 +46,7 @@ const EXPECTED = Object.freeze({
 function manifest() {
   return {
     version: 1,
+    sourceFingerprintVersion: 2,
     ...EXPECTED,
     platform: 'linux/amd64',
     files: {
@@ -78,6 +79,8 @@ test('portable manifest requires the exact checkout, platform and tool versions'
     'manifest',
     {},
     { ...manifest(), version: 2 },
+    { ...manifest(), sourceFingerprintVersion: undefined },
+    { ...manifest(), sourceFingerprintVersion: 1 },
     { ...manifest(), platform: 'linux/arm64' },
     { ...manifest(), files: undefined },
   ])
@@ -170,6 +173,78 @@ test('source fingerprint survives another checkout and timestamp changes', () =>
     utimesSync(join(second, 'unicode-🌳', 'space name'), 1, 1);
     utimesSync(second, 10, 10);
     assert.equal(fingerprint(second), original);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('source fingerprint ignores empty directories left by filtered checkout setup', () => {
+  const temp = mkdtempSync(join(tmpdir(), 'atomic-bundle-empty-dirs-'));
+  try {
+    writeFileSync(join(temp, 'input.ts'), 'export const retained = true;\n');
+    const original = fingerprint(temp);
+    // Git does not track empty directories. Dependency installation and
+    // source filtering can leave these without changing a single input file.
+    mkdirSync(join(temp, '.dagger', 'node_modules', '.pnpm'), {
+      recursive: true,
+    });
+    mkdirSync(join(temp, 'browser', 'empty-filtered-parent'), {
+      recursive: true,
+    });
+    assert.equal(fingerprint(temp), original);
+    writeFileSync(
+      join(temp, 'browser', 'empty-filtered-parent', 'input.ts'),
+      'export const additional = true;\n',
+    );
+    assert.notEqual(fingerprint(temp), original);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('source diagnostics retain the exact file, executable and symlink differences', () => {
+  const temp = mkdtempSync(join(tmpdir(), 'atomic-bundle-input-diagnostics-'));
+  const inspect = () => JSON.parse(
+    execFileSync(
+      process.execPath,
+      ['-e', BROWSER_SOURCE_FINGERPRINT_SCRIPT, temp, '--manifest'],
+      { encoding: 'utf8' },
+    ),
+  );
+  try {
+    writeFileSync(join(temp, 'input.ts'), 'first bytes');
+    symlinkSync('input.ts', join(temp, 'alias'));
+    const first = inspect();
+    assert.equal(first.fingerprintVersion, 2);
+    assert.equal(first.fingerprint, fingerprint(temp));
+    const entry = (inventory, name) =>
+      inventory.files.find(file => file[0] === name);
+    assert.deepEqual(entry(first, 'input.ts'), [
+      'input.ts', 'file', 0, sha256('first bytes'),
+    ]);
+    assert.deepEqual(entry(first, 'alias'), ['alias', 'symlink', 'input.ts']);
+    mkdirSync(join(temp, 'derived-empty'));
+    const empty = inspect();
+    assert.equal(empty.fingerprint, first.fingerprint);
+    assert.deepEqual(empty.files, first.files);
+    assert.ok(empty.directories.includes('derived-empty'));
+    writeFileSync(join(temp, 'input.ts'), 'changed bytes');
+    const changed = inspect();
+    assert.equal(entry(changed, 'input.ts')[3], sha256('changed bytes'));
+    assert.deepEqual(entry(changed, 'alias'), entry(first, 'alias'));
+    assert.notEqual(changed.fingerprint, first.fingerprint);
+    chmodSync(join(temp, 'input.ts'), 0o755);
+    const executable = inspect();
+    assert.equal(entry(executable, 'input.ts')[2], 0o111);
+    unlinkSync(join(temp, 'alias'));
+    symlinkSync('new-target', join(temp, 'alias'));
+    assert.deepEqual(entry(inspect(), 'alias'), [
+      'alias', 'symlink', 'new-target',
+    ]);
+    writeFileSync(join(temp, 'new-untracked-input.ts'), 'also an input');
+    const additional = inspect();
+    assert.ok(entry(additional, 'new-untracked-input.ts'));
+    assert.notEqual(additional.fingerprint, executable.fingerprint);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
@@ -272,6 +347,29 @@ function pipelineWithoutBuilds() {
   }
   return pipeline;
 }
+
+test('the source-input preflight exports diagnostics without constructing a build', async () => {
+  const diagnostics = {
+    fingerprintVersion: 2,
+    fingerprint: HASH,
+    files: [['input.ts', 'file', 0, HASH]],
+    directories: [''],
+  };
+  const pipeline = pipelineWithoutBuilds();
+  resetCalls();
+  setChainResponse((_label, property) => {
+    assert.equal(property, 'stdout');
+    const command = recordedCalls().findLast(
+      ([name]) => name === 'withExec',
+    )[1];
+    assert.deepEqual(command, [
+      'node', '-e', BROWSER_SOURCE_FINGERPRINT_SCRIPT, '/source', '--manifest',
+    ]);
+    return JSON.stringify(diagnostics);
+  });
+  assert.deepEqual(JSON.parse(await pipeline.browserSourceInputs()), diagnostics);
+  assertValidationOnly();
+});
 
 function assertValidationOnly(expectHashCheck = true) {
   const calls = recordedCalls();

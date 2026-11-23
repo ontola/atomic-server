@@ -3,6 +3,7 @@ export type BrowserBundleManifest = {
   version: 1;
   sourceCommit: string;
   sourceFingerprint: string;
+  sourceFingerprintVersion: 2;
   platform: 'linux/amd64';
   rustVersion: string;
   pnpmVersion: string;
@@ -15,6 +16,7 @@ export type BrowserBundleManifest = {
 };
 
 export const BROWSER_BUNDLE_PLATFORM = 'linux/amd64';
+export const BROWSER_SOURCE_FINGERPRINT_VERSION = 2;
 
 export function validateBundleCommit(commit: string): void {
   if (!/^[a-f0-9]{40}$/.test(commit)) {
@@ -65,7 +67,11 @@ export function validateBrowserManifest(
     throw new Error('Invalid browser bundle manifest');
   }
   const manifest = value as BrowserBundleManifest;
-  if (manifest.version !== 1 || manifest.platform !== BROWSER_BUNDLE_PLATFORM) {
+  if (
+    manifest.version !== 1 ||
+    manifest.platform !== BROWSER_BUNDLE_PLATFORM ||
+    manifest.sourceFingerprintVersion !== BROWSER_SOURCE_FINGERPRINT_VERSION
+  ) {
     throw new Error('Unsupported browser bundle version or platform');
   }
   validateBundleCommit(manifest.sourceCommit);
@@ -91,8 +97,9 @@ export function validateBrowserManifest(
 }
 
 /**
- * Canonical source fingerprint across engines: sorted paths, executable bits,
- * symlink targets and file contents. Timestamps and checkout ownership vary.
+ * Canonical source fingerprint across engines: files, executable bits,
+ * symlink targets and contents. Empty directories are generated metadata,
+ * not build inputs. Every non-ignored file, including untracked files, counts.
  * Run with Node and the module's already-filtered source mounted at /source.
  */
 export const BROWSER_SOURCE_FINGERPRINT_SCRIPT = String.raw`
@@ -101,16 +108,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const root = process.argv[1] || '/source';
 const hash = crypto.createHash('sha256');
+const legacyHash = crypto.createHash('sha256');
+const files = [];
+const directories = [];
 function visit(relative) {
   const absolute = path.join(root, relative);
   const stat = fs.lstatSync(absolute);
   if (stat.isDirectory()) {
-    hash.update(JSON.stringify([relative, 'directory']) + '\n');
+    directories.push(relative);
+    legacyHash.update(JSON.stringify([relative, 'directory']) + '\n');
     for (const child of fs.readdirSync(absolute).sort()) {
       visit(relative ? relative + '/' + child : child);
     }
   } else if (stat.isSymbolicLink()) {
-    hash.update(JSON.stringify([relative, 'symlink', fs.readlinkSync(absolute)]) + '\n');
+    const file = [relative, 'symlink', fs.readlinkSync(absolute)];
+    files.push(file);
+    legacyHash.update(JSON.stringify(file) + '\n');
   } else if (stat.isFile()) {
     const content = crypto.createHash('sha256');
     const fd = fs.openSync(absolute, 'r');
@@ -121,11 +134,19 @@ function visit(relative) {
         content.update(buffer.subarray(0, length));
       }
     } finally { fs.closeSync(fd); }
-    hash.update(JSON.stringify([relative, 'file', stat.mode & 0o111, content.digest('hex')]) + '\n');
+    const file = [relative, 'file', stat.mode & 0o111, content.digest('hex')];
+    files.push(file);
+    legacyHash.update(JSON.stringify(file) + '\n');
   } else {
     throw new Error('Unsupported source entry: ' + relative);
   }
 }
 visit('');
-process.stdout.write(hash.digest('hex'));
+files.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+for (const file of files) hash.update(JSON.stringify(file) + '\n');
+const fingerprint = hash.digest('hex');
+const legacyFingerprint = legacyHash.digest('hex');
+process.stdout.write(process.argv[2] === '--manifest'
+  ? JSON.stringify({fingerprintVersion: 2, fingerprint, legacyFingerprint, files, directories: directories.sort()})
+  : fingerprint);
 `;
