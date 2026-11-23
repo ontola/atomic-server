@@ -7,6 +7,7 @@ import {
   enableLoro,
   hexToBytes,
   isBlobSubject,
+  newCanvasElementId,
   server,
   parseCanvasStrokes,
   ResourceEvents,
@@ -15,9 +16,16 @@ import {
   type Resource,
 } from '@tomic/lib';
 import type { ResourcePageProps } from '@views/ResourcePage';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import styled from 'styled-components';
 import {
+  arrowHandleScreenPosition,
   drawCanvasStrokes,
   drawSelectionHalo,
   drawSelectionOverlay,
@@ -28,9 +36,20 @@ import {
   setCanvasImageResolver,
 } from './canvas-draw';
 import {
+  bendFromHandle,
+  deleteElements,
+  edgePoint,
+  nearShapeOutline,
+  resolveArrowIn,
+  resolveArrows,
+  shapeAt,
+} from './canvas-connectors';
+import {
   contentBounds,
   elementBounds,
+  hitElement,
   lassoSelect,
+  layoutShapeText,
   TEXT_FONT_FAMILY,
   TEXT_LINE_HEIGHT,
   transformSelection,
@@ -49,6 +68,9 @@ import {
   FaImage,
   FaPalette,
   FaPen,
+  FaRegCircle,
+  FaRegSquare,
+  FaArrowRight,
   FaRotateLeft,
   FaRotateRight,
   FaTrash,
@@ -107,7 +129,14 @@ const PEN_COLORS = [
  */
 const ERASE_SCREEN_RADIUS = 15;
 
-type Tool = 'pen' | 'eraser' | 'lasso' | 'text';
+type Tool = 'pen' | 'eraser' | 'lasso' | 'text' | 'shape' | 'arrow';
+
+/** Size of a shape made by a tap instead of a drag, in screen pixels. */
+const NEW_SHAPE_SCREEN_SIZE = { w: 140, h: 90 };
+/** Dragging less than this many screen pixels draws nothing (an arrow) or a default shape. */
+const MIN_DRAG_SCREEN = 8;
+/** Two taps this close in time (ms) are a double tap. */
+const DOUBLE_TAP_MS = 350;
 
 /** Finger wobble below this still counts as a tap on the color/size buttons. */
 const FAN_DRAG_THRESHOLD = 10;
@@ -161,11 +190,13 @@ type TextEdit = {
   size: number;
   color: number;
   text: string;
+  /** The shape whose text is edited: the field sits inside it, centred. */
+  shape?: CanvasStroke;
 };
 
 type TransformGesture = {
   pointerId: number;
-  mode: 'move' | 'scale';
+  mode: 'move' | 'scale' | 'bend';
   start: [number, number];
   anchor: [number, number];
   corner: [number, number];
@@ -173,6 +204,13 @@ type TransformGesture = {
   selection: number[];
   moved: boolean;
 };
+
+/** An arrow with a new bend, or straight when there is none. */
+function withBend(el: CanvasStroke, bend: [number, number] | undefined) {
+  const { bend: _old, ...rest } = el;
+
+  return bend ? { ...rest, bend } : rest;
+}
 
 function readPenSeen(): boolean {
   try {
@@ -243,6 +281,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [penWidth, setPenWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [prevWidth, setPrevWidth] = useState(3);
   const [tool, setTool] = useState<Tool>('pen');
+  const [shapeKind, setShapeKind] = useState<'rect' | 'ellipse'>('rect');
+  /** The shape an arrow would bind to, outlined while drawing arrows. */
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const eraserMode = tool === 'eraser';
   const [selection, setSelection] = useState<number[]>([]);
   const [lassoPath, setLassoPath] = useState<[number, number][] | null>(null);
@@ -365,12 +406,17 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const previewStrokesRef = useRef(previewStrokes);
   const eraserModeRef = useRef(eraserMode);
   const toolRef = useRef(tool);
+  const hoverIdRef = useRef(hoverId);
   const selectionRef = useRef(selection);
   /** Element count when the selection was made; a different count means the
    *  strokes changed underneath it, so the indices no longer mean the same. */
   const selectionLengthRef = useRef(0);
   const lassoPathRef = useRef(lassoPath);
   const lassoPointerRef = useRef<number | null>(null);
+  /** Where a shape or arrow drag started, in canvas coordinates. */
+  const dragOriginRef = useRef<[number, number]>([0, 0]);
+  const lastTapRef = useRef<{ key: string; time: number } | null>(null);
+  const startShapeTextRef = useRef<(index: number) => void>(() => undefined);
   const transformRef = useRef<TransformGesture | null>(null);
   const textEditRef = useRef<TextEdit | null>(null);
   const penDetectedRef = useRef(penDetected);
@@ -447,6 +493,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   previewStrokesRef.current = previewStrokes;
   eraserModeRef.current = eraserMode;
   toolRef.current = tool;
+  hoverIdRef.current = hoverId;
   selectionRef.current = selection;
   lassoPathRef.current = lassoPath;
   textEditRef.current = textEdit;
@@ -616,14 +663,19 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.x,
       offsetRef.current.y,
       darkMode,
+      hoverIdRef.current,
     );
 
-    const list = previewStrokesRef.current ?? strokesRef.current;
+    const list = resolveArrows(previewStrokesRef.current ?? strokesRef.current);
     const selected = unionBounds(
       selectionRef.current
         .filter(i => list[i])
         .map(i => elementBounds(list[i])),
     );
+    const only =
+      selectionRef.current.length === 1
+        ? list[selectionRef.current[0]]
+        : undefined;
 
     drawSelectionHalo(
       ctx,
@@ -641,6 +693,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       offsetRef.current.x,
       offsetRef.current.y,
       '#3b82f6',
+      only?.kind === 'arrow' ? only : undefined,
     );
   }, [darkMode]);
 
@@ -655,6 +708,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     previewStrokes,
     selection,
     lassoPath,
+    hoverId,
   ]);
 
   // The canvas area is sized from the viewport height the browser reports,
@@ -1203,11 +1257,28 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     const hitRadius = ERASE_SCREEN_RADIUS / scaleRef.current;
     const erased = erasedIndicesRef.current;
     const strokesNow = strokesRef.current;
+    const placed = resolveArrows(strokesNow);
     let changed = false;
 
     for (let i = 0; i < strokesNow.length; i++) {
       if (erased.has(i)) continue;
-      const stroke = strokesNow[i];
+      const stroke = placed[i];
+
+      // A shape is erased at its outline, so scribbles inside it can go
+      // without taking the block along.
+      if (
+        stroke.kind === 'shape'
+          ? nearShapeOutline(stroke, canvasX, canvasY, hitRadius)
+          : stroke.kind === 'arrow' &&
+            hitElement(stroke, canvasX, canvasY, hitRadius)
+      ) {
+        erased.add(i);
+        changed = true;
+        continue;
+      }
+
+      if (stroke.kind === 'shape' || stroke.kind === 'arrow') continue;
+
       const radius = hitRadius + stroke.width / 2 / scaleRef.current;
 
       for (const [px, py] of stroke.path) {
@@ -1223,8 +1294,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       // Optimistic visual: paint the canvas without the erased strokes.
       // We DON'T mutate the resource until pointer-up; this is preview
       // only. Reusing `previewStrokes` keeps `paint()` consistent.
-      const preview = strokesNow.filter((_, i) => !erased.has(i));
-      setPreviewStrokes(preview);
+      setPreviewStrokes(deleteElements(strokesNow, erased));
     }
   }, []);
 
@@ -1236,9 +1306,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     }
 
     const preEdit = strokesRef.current;
-    const remaining = preEdit.filter(
-      (_, i) => !erasedIndicesRef.current.has(i),
-    );
+    const remaining = deleteElements(preEdit, erasedIndicesRef.current);
     erasedIndicesRef.current = new Set();
     setPreviewStrokes(null);
 
@@ -1326,7 +1394,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     if (picked.size === 0) return;
 
     const pre = strokesRef.current;
-    const next = pre.filter((_, i) => !picked.has(i));
+    const next = deleteElements(pre, picked);
 
     selectElements([], next.length);
     setStrokes(next);
@@ -1356,24 +1424,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   /** The topmost element under a point (a tap), or -1. */
   const hitTestAt = (x: number, y: number): number => {
     const reach = 12 / scaleRef.current;
-    const list = strokesRef.current;
+    const list = resolveArrows(strokesRef.current);
 
     for (let i = list.length - 1; i >= 0; i--) {
-      const el = list[i];
-
-      if (el.kind) {
-        const b = elementBounds(el);
-
-        if (x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY) return i;
-
-        continue;
-      }
-
-      const radius = reach + el.width / 2;
-
-      if (el.path.some(([px, py]) => Math.hypot(x - px, y - py) < radius)) {
-        return i;
-      }
+      if (hitElement(list[i], x, y, reach)) return i;
     }
 
     return -1;
@@ -1389,14 +1443,53 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     if (!el) return;
 
     const list = strokesRef.current;
+    const placed = resolveArrows(list);
     const picked = selectionRef.current.filter(i => list[i]);
-    const bounds = unionBounds(picked.map(i => elementBounds(list[i])));
+    const bounds = unionBounds(picked.map(i => elementBounds(placed[i])));
 
     if (bounds) {
       const rect = el.getBoundingClientRect();
       const s = scaleRef.current;
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
+      const arrow = picked.length === 1 ? placed[picked[0]] : undefined;
+
+      if (arrow?.kind === 'arrow') {
+        const [hx, hy] = arrowHandleScreenPosition(
+          arrow,
+          s,
+          offsetRef.current.x,
+          offsetRef.current.y,
+        );
+
+        if (Math.hypot(sx - hx, sy - hy) <= HANDLE_HIT_RADIUS) {
+          if (isDoubleTap('bend', e.timeStamp)) {
+            // Double tap on the handle: straight again.
+            const next = list.map((item, i) =>
+              i === picked[0] ? withBend(item, undefined) : item,
+            );
+
+            setStrokes(next);
+            void commitReplace(next, list);
+
+            return;
+          }
+
+          transformRef.current = {
+            pointerId: e.pointerId,
+            mode: 'bend',
+            start: [x, y],
+            anchor: [x, y],
+            corner: [x, y],
+            base: list,
+            selection: picked,
+            moved: false,
+          };
+          el.setPointerCapture(e.pointerId);
+
+          return;
+        }
+      }
       const corners: [number, number][] = [
         [bounds.minX, bounds.minY],
         [bounds.maxX, bounds.minY],
@@ -1440,12 +1533,33 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     el.setPointerCapture(e.pointerId);
   };
 
+  /** Whether this is the second tap on `key` in quick succession. */
+  const isDoubleTap = (key: string, time: number): boolean => {
+    const last = lastTapRef.current;
+    const double =
+      !!last && last.key === key && time - last.time < DOUBLE_TAP_MS;
+
+    lastTapRef.current = double ? null : { key, time };
+
+    return double;
+  };
+
   /** The element list a transform gesture currently describes. */
   const transformedStrokes = (
     g: TransformGesture,
     x: number,
     y: number,
   ): CanvasStroke[] => {
+    if (g.mode === 'bend') {
+      const arrow = resolveArrows(g.base)[g.selection[0]];
+
+      return g.base.map((el, i) =>
+        i === g.selection[0]
+          ? withBend(el, bendFromHandle(arrow.path[0], arrow.path[1], [x, y]))
+          : el,
+      );
+    }
+
     if (g.mode === 'move') {
       return transformSelection(
         g.base,
@@ -1511,6 +1625,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     const old = pre[edit.index];
 
+    if (old?.kind === 'shape') {
+      // A shape keeps existing when its text is cleared.
+      if ((old.text ?? '') === text) return;
+
+      const next = pre.map((el, i) =>
+        i === edit.index
+          ? { ...el, text: text || undefined, size: edit.size }
+          : el,
+      );
+
+      setStrokes(next);
+      await commitReplace(next, pre);
+
+      return;
+    }
+
     if (!old || text === old.text) return;
 
     const next = text
@@ -1524,6 +1654,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const startText = (x: number, y: number) => {
     const hit = hitTestAt(x, y);
     const existing = hit >= 0 ? strokesRef.current[hit] : undefined;
+
+    if (existing?.kind === 'shape') {
+      startShapeText(hit);
+
+      return;
+    }
 
     if (existing?.kind === 'text') {
       // Hide the element while its text is edited in place.
@@ -1549,6 +1685,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       text: '',
     });
   };
+
+  /** Edit the text of a shape, in the field that edits free text. */
+  const startShapeText = (index: number) => {
+    const el = strokesRef.current[index];
+
+    if (el?.kind !== 'shape') return;
+
+    // Hide the shape's own text while the field shows it.
+    setPreviewStrokes(
+      strokesRef.current.map((item, i) =>
+        i === index ? { ...item, text: undefined } : item,
+      ),
+    );
+    selectElements([index], strokesRef.current.length);
+    setTextEdit({
+      index,
+      x: el.path[0][0],
+      y: el.path[0][1],
+      size: el.size ?? NEW_TEXT_SCREEN_SIZE / scaleRef.current,
+      color: el.color,
+      text: el.text ?? '',
+      shape: el,
+    });
+  };
+
+  startShapeTextRef.current = startShapeText;
 
   // ──────────────── Image tool ─────────────────────────────────────────────
 
@@ -1621,6 +1783,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     if (drawingPointerRef.current !== null) {
       drawingPointerRef.current = null;
       setCurrentStroke(null);
+      setHoverId(null);
     }
 
     if (erasingPointerRef.current !== null) {
@@ -1777,6 +1940,21 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     }
 
     if (toolRef.current === 'lasso') {
+      // A double tap on a shape edits its text.
+      const hit = hitTestAt(x, y);
+
+      if (
+        hit >= 0 &&
+        strokesRef.current[hit].kind === 'shape' &&
+        isDoubleTap(`shape:${hit}`, e.timeStamp)
+      ) {
+        startShapeText(hit);
+
+        return;
+      }
+
+      if (hit < 0) lastTapRef.current = null;
+
       startLassoOrTransform(e, x, y);
 
       return;
@@ -1784,6 +1962,40 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     if (toolRef.current === 'text') {
       startText(x, y);
+
+      return;
+    }
+
+    if (toolRef.current === 'shape' || toolRef.current === 'arrow') {
+      const list = strokesRef.current;
+      const from =
+        toolRef.current === 'arrow'
+          ? shapeAt(resolveArrows(list), x, y, 6 / scaleRef.current)
+          : undefined;
+
+      dragOriginRef.current = [x, y];
+      drawingPointerRef.current = e.pointerId;
+      setCurrentStroke(
+        toolRef.current === 'shape'
+          ? {
+              kind: 'shape',
+              shape: shapeKind,
+              color: penColor,
+              width: Math.max(2, Math.min(penWidth, 8)),
+              size: NEW_TEXT_SCREEN_SIZE / scaleRef.current,
+              path: [[x, y]],
+              w: 0,
+              h: 0,
+            }
+          : {
+              kind: 'arrow',
+              color: penColor,
+              width: Math.max(2, Math.min(penWidth, 8)),
+              path: [from ? edgePoint(from, [x, y]) : [x, y], [x, y]],
+              ...(from?.id ? { from: from.id } : {}),
+            },
+      );
+      el.setPointerCapture(e.pointerId);
 
       return;
     }
@@ -1840,6 +2052,54 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     broadcastPointer(x, y);
 
+    if (toolRef.current === 'arrow' && e.pointerType !== 'touch') {
+      // Outline the shape the arrow would bind to, before and while dragging.
+      const skip = currentStrokeRef.current?.from;
+
+      setHoverId(
+        shapeAt(
+          resolveArrows(strokesRef.current),
+          x,
+          y,
+          6 / scaleRef.current,
+          skip,
+        )?.id ?? null,
+      );
+    }
+
+    const dragged = currentStrokeRef.current;
+
+    if (
+      dragged &&
+      drawingPointerRef.current === e.pointerId &&
+      (dragged.kind === 'shape' || dragged.kind === 'arrow')
+    ) {
+      const [ox, oy] = dragOriginRef.current;
+
+      setCurrentStroke(
+        dragged.kind === 'shape'
+          ? {
+              ...dragged,
+              path: [[Math.min(ox, x), Math.min(oy, y)]],
+              w: Math.abs(x - ox),
+              h: Math.abs(y - oy),
+            }
+          : {
+              ...dragged,
+              path: [dragged.path[0], [x, y]],
+              to: shapeAt(
+                resolveArrows(strokesRef.current),
+                x,
+                y,
+                6 / scaleRef.current,
+                dragged.from,
+              )?.id,
+            },
+      );
+
+      return;
+    }
+
     if (erasingPointerRef.current === e.pointerId) {
       eraseAt(x, y);
 
@@ -1883,6 +2143,46 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         path: [...stroke.path, [x, y]],
       });
     }
+  };
+
+  /** Commit a dragged shape or arrow, then select it for moving and editing. */
+  const finishConnectable = (drawn: CanvasStroke, cancelled: boolean) => {
+    const s = scaleRef.current;
+    const min = MIN_DRAG_SCREEN / s;
+    const pre = strokesRef.current;
+    let element: CanvasStroke | undefined;
+
+    if (drawn.kind === 'shape') {
+      const tap = (drawn.w ?? 0) < min && (drawn.h ?? 0) < min;
+      const w = tap ? NEW_SHAPE_SCREEN_SIZE.w / s : drawn.w;
+      const h = tap ? NEW_SHAPE_SCREEN_SIZE.h / s : drawn.h;
+      const [ox, oy] = dragOriginRef.current;
+
+      element = {
+        ...drawn,
+        id: newCanvasElementId(),
+        path: tap ? [[ox - (w ?? 0) / 2, oy - (h ?? 0) / 2]] : drawn.path,
+        w,
+        h,
+      };
+    } else {
+      const [p0, p1] = resolveArrowIn(drawn, pre).path;
+
+      // An arrow that went nowhere is a stray tap.
+      if (drawn.to || Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) >= min) {
+        element = { ...drawn, id: newCanvasElementId(), path: [p0, p1] };
+      }
+    }
+
+    setCurrentStroke(null);
+    setHoverId(null);
+
+    if (!element || cancelled) return;
+
+    setStrokes([...pre, element]);
+    setTool('lasso');
+    selectElements([pre.length], pre.length + 1);
+    void pushStrokeToServer(element, pre);
   };
 
   const finishStroke = (e: React.PointerEvent) => {
@@ -1970,6 +2270,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     if (!stroke || stroke.path.length === 0) {
       setCurrentStroke(null);
+
+      return;
+    }
+
+    if (stroke.kind === 'shape' || stroke.kind === 'arrow') {
+      finishConnectable(stroke, e.type === 'pointercancel');
 
       return;
     }
@@ -2082,6 +2388,21 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       ) {
         e.preventDefault();
         deleteSelection();
+
+        return;
+      }
+
+      // Enter edits the text of the selected shape.
+      const [only] = selectionRef.current;
+
+      if (
+        e.key === 'Enter' &&
+        selectionRef.current.length === 1 &&
+        strokesRef.current[only]?.kind === 'shape' &&
+        !(e.target instanceof HTMLElement && e.target.closest('button, a'))
+      ) {
+        e.preventDefault();
+        startShapeTextRef.current(only);
 
         return;
       }
@@ -2257,6 +2578,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     if (textEditRef.current) void commitText();
 
     setTool(next);
+    setHoverId(null);
     selectElements([], strokesRef.current.length);
     setLassoPath(null);
   };
@@ -2465,6 +2787,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           onPointerEnter={trackCursorForPreview}
           onPointerLeave={() => {
             setCursorPos(null);
+            setHoverId(null);
             clearPointer();
           }}
           onPointerUp={finishStroke}
@@ -2477,6 +2800,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             value={textEdit.text}
             rows={textEdit.text.split('\n').length}
             aria-label='Canvas text'
+            $inShape={!!textEdit.shape}
             onChange={e => setTextEdit({ ...textEdit, text: e.target.value })}
             onBlur={() => void commitText()}
             onKeyDown={e => {
@@ -2490,6 +2814,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
               top: textEdit.y * scale + offset.y,
               fontSize: textEdit.size * scale,
               color: colorIntToHex(textEdit.color),
+              ...(textEdit.shape ? shapeEditorStyle(textEdit, scale) : {}),
             }}
           />
         )}
@@ -2558,6 +2883,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onClick={() => chooseTool('text')}
           >
             <FaFont />
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)'
+            aria-label={
+              shapeKind === 'rect' ? 'Rectangle tool' : 'Ellipse tool'
+            }
+            $active={tool === 'shape'}
+            onClick={() => {
+              if (tool === 'shape') {
+                setShapeKind(k => (k === 'rect' ? 'ellipse' : 'rect'));
+              } else {
+                chooseTool('shape');
+              }
+            }}
+          >
+            {shapeKind === 'rect' ? <FaRegSquare /> : <FaRegCircle />}
+          </CircleButton>
+          <CircleButton
+            type='button'
+            title='Arrow: drag from one block to another, or into free space'
+            aria-label='Arrow tool'
+            $active={tool === 'arrow'}
+            onClick={() => chooseTool('arrow')}
+          >
+            <FaArrowRight />
           </CircleButton>
           <CircleButton
             type='button'
@@ -2701,6 +3052,15 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
                 <li>
                   Text: tap the canvas and type; tap existing text to edit it
                 </li>
+                <li>
+                  Shape: drag to draw a rectangle or ellipse; double tap it (or
+                  select it and press <kbd>Enter</kbd>) to type inside
+                </li>
+                <li>
+                  Arrow: drag from one block to another and it follows them when
+                  they move; select an arrow and drag its middle handle to bend
+                  it, double tap the handle to straighten
+                </li>
                 <li>Image: pick a picture, then move or scale it</li>
                 <li>
                   Touch: two fingers pan and zoom. Once a pen has been seen, one
@@ -2822,7 +3182,22 @@ const DrawCanvas = styled.canvas`
 `;
 
 /** In-place text field over the canvas, sized to match the drawn text. */
-const TextEditor = styled.textarea`
+/** The field of a shape fills it, with the text centred as it is drawn. */
+function shapeEditorStyle(edit: TextEdit, scale: number): CSSProperties {
+  const shape = edit.shape as CanvasStroke;
+  const { size, lines } = layoutShapeText({ ...shape, text: edit.text });
+  const height = (shape.h ?? 0) * scale;
+  const textHeight = lines.length * size * scale * TEXT_LINE_HEIGHT;
+
+  return {
+    width: (shape.w ?? 0) * scale,
+    height,
+    fontSize: size * scale,
+    paddingTop: Math.max(0, (height - textHeight) / 2),
+  };
+}
+
+const TextEditor = styled.textarea<{ $inShape?: boolean }>`
   position: absolute;
   z-index: 2;
   margin: 0;
@@ -2837,6 +3212,16 @@ const TextEditor = styled.textarea`
   field-sizing: content;
   font-family: ${TEXT_FONT_FAMILY};
   line-height: ${TEXT_LINE_HEIGHT};
+
+  ${p =>
+    p.$inShape &&
+    `
+    box-sizing: border-box;
+    field-sizing: fixed;
+    white-space: pre-wrap;
+    text-align: center;
+    border-style: none;
+  `}
 `;
 
 /** The current zoom as a percentage, shown on the zoom button. */
@@ -2964,9 +3349,9 @@ const BottomToolbar = styled.div<{ $lift: number }>`
     padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Narrow phones: all eleven buttons must fit without sideways scrolling. */
+  /* Narrow phones: all thirteen buttons must fit without sideways scrolling. */
   @media (max-width: 480px) {
-    --canvas-button-size: 32px;
+    --canvas-button-size: 28px;
     gap: 0;
     padding-left: 2px;
     padding-right: 2px;

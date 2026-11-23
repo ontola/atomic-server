@@ -13776,3 +13776,31 @@ msgstr "Taken"
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Sketch"
 msgstr "Schets"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Rectangle tool"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Ellipse tool"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another, or into free space"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow tool"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
+msgstr ""
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
+msgstr ""

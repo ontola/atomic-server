@@ -1,6 +1,7 @@
 import { useEffect, useRef, type JSX } from 'react';
 import styled from 'styled-components';
 import { drawCanvasStrokes } from './canvas-draw';
+import { contentBounds } from './canvas-elements';
 import type { DiscardedBranch, StrokeSnapshot } from './history-helpers';
 
 interface HistoryScrubOverlayProps {
@@ -105,19 +106,11 @@ function BranchThumb({
 
     if (strokes.length === 0) return;
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    const bounds = contentBounds(strokes);
 
-    for (const s of strokes) {
-      for (const [x, y] of s.path) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
+    if (!bounds) return;
+
+    const { minX, minY, maxX, maxY } = bounds;
 
     const padding = 6;
     const contentW = Math.max(1, maxX - minX);
