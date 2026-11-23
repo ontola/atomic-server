@@ -115,6 +115,20 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_MANAGED_PORTAL_URL = 'https://atomic.place';
   }
 
+  // Feedback needs a Sentry DSN, and the desktop app is not served by a node
+  // that could inject one, so "Send feedback" would be greyed out. The DSN is
+  // public (it only allows sending). A dev app reports as its own environment,
+  // apart from released builds.
+  if (isTauri && !process.env.VITE_SENTRY_DSN && !env.VITE_SENTRY_DSN) {
+    process.env.VITE_SENTRY_DSN =
+      'https://b08842f7f4ac1d5bea3415049eb226c0@o1378995.ingest.us.sentry.io/4512015907291136';
+
+    if (!process.env.VITE_SENTRY_ENVIRONMENT && !env.VITE_SENTRY_ENVIRONMENT) {
+      process.env.VITE_SENTRY_ENVIRONMENT =
+        mode === 'development' ? 'desktop-dev' : 'production';
+    }
+  }
+
   const atomicServerUrl =
     process.env.VITE_ATOMIC_SERVER_URL ??
     env.VITE_ATOMIC_SERVER_URL ??
