@@ -553,7 +553,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13852,3 +13852,19 @@ msgstr "Schreibe jemandem, den du eingeladen hast, etwa einer Kollegin oder eine
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Sende hier eine Nachricht"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes"
+msgstr "Änderungen verwerfen"
+
+#: ../data-browser/src/components/SyncProblemBanner.tsx
+msgid "Discard these changes? They never reached the server, so they will be gone for good."
+msgstr "Diese Änderungen verwerfen? Sie haben den Server nie erreicht und sind danach endgültig weg."
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "These changes belong to something this server never received"
+msgstr "Diese Änderungen gehören zu etwas, das dieser Server nie erhalten hat"
+
+#: ../data-browser/src/helpers/syncProblem.ts
+msgid "It may exist on another device. Connect that device to send it, or discard these changes."
+msgstr "Es existiert vielleicht auf einem anderen Gerät. Verbinde dieses Gerät, um es zu senden, oder verwirf diese Änderungen."
