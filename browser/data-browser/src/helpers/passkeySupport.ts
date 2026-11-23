@@ -3,6 +3,7 @@
 export function hasPasskeyApi(): boolean {
   return (
     typeof window !== 'undefined' &&
+    !isAndroidWebView() &&
     window.isSecureContext === true &&
     typeof window.PublicKeyCredential === 'function' &&
     typeof navigator !== 'undefined' &&
@@ -15,6 +16,18 @@ function isAndroidGecko(): boolean {
   const ua = navigator.userAgent;
 
   return /Android/i.test(ua) && /Gecko\/\d|Firefox\//.test(ua);
+}
+
+/**
+ * An Android System WebView (the in-app browser of launchers and other apps,
+ * marked `wv` in its user agent) exposes WebAuthn and answers every capability
+ * probe with yes, but the call into the missing credential provider freezes
+ * the host app natively, so no timeout can recover it. Treat it as no support.
+ */
+function isAndroidWebView(): boolean {
+  const ua = navigator.userAgent;
+
+  return /Android/i.test(ua) && /\bwv\b/.test(ua);
 }
 
 type ClientCapabilities = Record<string, boolean | undefined>;
