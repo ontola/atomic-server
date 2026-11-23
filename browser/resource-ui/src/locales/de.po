@@ -1903,6 +1903,7 @@ msgstr "Subjekt"
 msgid "Edit value"
 msgstr "Wert bearbeiten"
 
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -13855,3 +13856,8 @@ msgstr "Sende hier eine Nachricht"
 #: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Click to set {0}"
 msgstr "Klicken, um {0} festzulegen"
+
+#. 0: accountServiceHost
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+msgstr "Melde dich bei {0} an, um die enthaltene KI zu nutzen, oder füge einen OpenRouter-API-Schlüssel oder ein lokales Ollama-Modell hinzu. Du kannst währenddessen weitertippen."

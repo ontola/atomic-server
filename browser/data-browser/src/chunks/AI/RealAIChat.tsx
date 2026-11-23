@@ -2,7 +2,9 @@ import {
   canPurchaseHostedAICredits,
   HOSTED_AI_USAGE_EVENT,
 } from '@helpers/managed/ai';
-import { getManagedApiBase } from '@helpers/managed/api';
+import { getManagedApiBase, getManagedDeviceToken } from '@helpers/managed/api';
+import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
+import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
 import { isHostedDistribution } from '@helpers/managedServer';
 import { HostedAICredits } from './HostedAICredits';
 import { compactionTokens } from './usageMetadata';
@@ -373,6 +375,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // would be wrong while the account status is merely still loading or failed.
   const hostedBuild = isHostedDistribution();
 
+  // Without an account there is no included AI; say where to get it when the
+  // build offers an account service.
+  const accountServiceHost = (() => {
+    if (hostedAI || hostedBuild || getManagedDeviceToken()) return undefined;
+
+    try {
+      return new URL(getAccountServiceUrl() ?? '').host;
+    } catch {
+      return undefined;
+    }
+  })();
+
   const providerNotice = canUseInput
     ? null
     : activeModel.provider === AIProvider.Hosted
@@ -382,7 +396,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         : activeModel.provider === AIProvider.OpenRouter && hostedBuild
           ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
           : activeModel.provider === AIProvider.OpenRouter
-            ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+            ? accountServiceHost
+              ? `Sign in to ${accountServiceHost} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime.`
+              : 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
             : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const creditPurchaseUrl =
@@ -968,6 +984,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     Buy AI credits
                   </ButtonLink>
                 )}
+                {accountServiceHost &&
+                  activeModel.provider === AIProvider.OpenRouter && (
+                    <Button onClick={openSaveWorkDialog}>Sign in</Button>
+                  )}
                 <Button onClick={openAISettings}>
                   {hostedAI?.enabled
                     ? 'Advanced AI settings'
