@@ -76,7 +76,7 @@ function useConnectedServerFallback(
     return () => controller.abort();
   }, [url, serverUrl]);
 
-  return answer?.url === url ? (answer.use ?? url) : url;
+  return answer && answer.url === url ? (answer.use ?? url) : url;
 }
 
 export function useFileInfo(resource: Resource): FileInfo {
