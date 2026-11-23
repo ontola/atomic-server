@@ -1,9 +1,22 @@
 #[cfg(target_os = "macos")]
 use tauri::menu::AboutMetadata;
 use tauri::{
-  menu::{Menu, PredefinedMenuItem, Submenu},
-  AppHandle, Runtime,
+  menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+  AppHandle, Manager, Runtime,
 };
+
+/// Id of the View > Reload item.
+pub const RELOAD_ID: &str = "reload";
+
+/// Reload the webview, as a browser would. Handy when the app gets stuck.
+pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
+  if id != RELOAD_ID {
+    return;
+  }
+  for window in app.webview_windows().values() {
+    let _ = window.eval("location.reload()");
+  }
+}
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
   let edit_menu = Submenu::with_items(
@@ -25,7 +38,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     app,
     "View",
     true,
-    &[&PredefinedMenuItem::fullscreen(app, None)?],
+    &[
+      &MenuItem::with_id(app, RELOAD_ID, "Reload", true, Some("CmdOrCtrl+R"))?,
+      &PredefinedMenuItem::fullscreen(app, None)?,
+    ],
   )?;
 
   let window_menu = Submenu::with_items(
