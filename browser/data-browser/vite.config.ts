@@ -19,6 +19,11 @@ import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
 // doesn't happen), no PWA service worker (tauri:// isn't HTTP), separate
 // outDir so the server build keeps its own nonce'd dist.
 const isTauri = process.env.TAURI === '1';
+
+// The packaged and dev desktop app is the atomic.place product, so it is a
+// hosted distribution unless a build says otherwise. A plain web build from
+// source stays the neutral, self-hostable AtomicServer.
+if (isTauri) process.env.VITE_ATOMIC_HOSTED_DISTRIBUTION ??= 'true';
 const isVitest = process.env.VITEST === 'true';
 
 // Source maps are 28MB of the 48MB dist -- and that dist is compiled into the
