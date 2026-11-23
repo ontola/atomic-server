@@ -5339,8 +5339,6 @@ msgid "Android"
 msgstr "Android"
 
 #: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
