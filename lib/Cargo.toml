@@ -78,10 +78,14 @@ webpki-roots = { version = "1", optional = true }
 
 # For WASM: enable JS-backed randomness via feature unification
 getrandom = { version = "0.4.2", features = ["wasm_js"], optional = true }
+# Transitive crates still use getrandom 0.3, which also needs its `wasm_js`
+# feature on wasm32; enabling it here lets an embedder depend on `atomic_lib`
+# alone (the `--cfg getrandom_backend="wasm_js"` rustflag is still required).
+getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"], optional = true }
 js-sys = { version = "0.3.99", optional = true }
 wasm-bindgen = { version = "0.2.122", optional = true }
 wasm-bindgen-futures = { version = "0.4.72", optional = true }
-web-sys = { version = "0.3.99", optional = true, features = ["DomException", "FileSystemDirectoryHandle", "FileSystemFileHandle", "FileSystemGetFileOptions", "FileSystemSyncAccessHandle", "FileSystemReadWriteOptions", "StorageManager", "WorkerGlobalScope", "WorkerNavigator"] }
+web-sys = { version = "0.3.99", optional = true, features = ["DomException", "FileSystemDirectoryHandle", "FileSystemFileHandle", "FileSystemGetFileOptions", "FileSystemSyncAccessHandle", "FileSystemReadWriteOptions", "StorageManager", "WorkerGlobalScope", "WorkerNavigator", "Window", "Navigator", "File", "Blob", "FileSystemWritableFileStream", "WebSocket", "BinaryType", "MessageEvent", "CloseEvent", "Event", "IdbFactory", "IdbOpenDbRequest", "IdbDatabase", "IdbTransaction", "IdbTransactionMode", "IdbObjectStore", "IdbRequest", "IdbVersionChangeEvent"] }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["async_tokio"] }
@@ -129,6 +133,7 @@ telemetry = ["opentelemetry"]
 wasm = [
   "getrandom/wasm_js",
   "getrandom",
+  "dep:getrandom03",
   "js-sys",
   "wasm-bindgen",
   "wasm-bindgen-futures",

@@ -353,6 +353,8 @@ caught it, and if the answer is "none", that is the row to add.
 
 ## WASM database opening
 
+Main-thread embedding (2026-11-22, #2633): `lib/src/db/snapshot_backend.rs` tests the dirty flag, a redb store surviving an export/import roundtrip, and an encrypted snapshot (ciphertext on export, wrong key refused); CI type-checks `atomic_lib` for wasm32 with `--no-default-features --features db,wasm`. Not covered: `snapshot_load`/`snapshot_save`/`flush_snapshot` (async OPFS), `WebSocketTransport` and `device_key` (IndexedDB and WebCrypto) all need a browser and have no test.
+
 `browser/lib/src/resource-loro-lifecycle.test.ts` uses V8's full-GC object query
 to verify that abandoned hydrated Resources can be collected. It also retains
 the old public Loro document across `clearUnsafe()` and an authoritative snapshot
