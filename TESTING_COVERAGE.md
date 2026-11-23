@@ -451,6 +451,9 @@ CI overrides without mutating the profile or coverage selection.
 `pnpm --dir .dagger test` also exercises the actual Dagger module against a
 recording SDK double: lint must not construct a WASM build, CI validates and
 forwards budget arguments, and E2E applies them to shard and clone settings.
+Rust checks cover the standalone `rust-test --test-threads` override, unchanged
+host defaults and build/retry/coverage arguments, and rejection of invalid
+budgets before constructing containers. Nextest's group limits remain in force.
 These checks run before Dagger in CI and reproduce the incomplete merge in
 `2ccff0976`; they do not substitute for container or browser execution.
 The existing full-snapshot duplicate-import test also covers parent-only resources

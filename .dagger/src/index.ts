@@ -1898,7 +1898,23 @@ export class AtomicServer {
   }
 
   @func()
-  rustTest(): Promise<string> {
+  rustTest(
+    /** Test execution threads for this invocation; 0 keeps the host profile. */
+    @argument() testThreads: number = 0,
+  ): Promise<string> {
+    if (
+      !Number.isSafeInteger(testThreads) ||
+      testThreads < 0 ||
+      testThreads > 128
+    ) {
+      throw new Error('test-threads must be an integer between 0 and 128');
+    }
+
+    const threads =
+      testThreads === 0
+        ? this.hostKnobs.nextestTestThreads
+        : String(testThreads);
+
     return (
       this.rustChecksContainer()
         .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
@@ -1942,8 +1958,9 @@ export class AtomicServer {
         // don't define a `light` feature and are unaffected.
         //
         // `--build-jobs` / `--test-threads` / `--retries`: from
-        // `--host-profile` (mancave hot / hosted quiet). The toml still
-        // caps `it` at 2 and serializes `iroh_pairing::*`.
+        // `--host-profile` (mancave hot / hosted quiet), with an optional
+        // per-invocation test-thread override. The toml still caps `it` at 2
+        // and serializes `iroh_pairing::*`.
         .withExec([
           'sh',
           '-c',
@@ -1957,7 +1974,7 @@ export class AtomicServer {
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
-            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--test-threads ${threads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
         ])
         .stdout()
