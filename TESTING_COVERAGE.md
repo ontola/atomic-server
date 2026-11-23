@@ -606,15 +606,43 @@ and absent in another:
 
 A flow is only genuinely safe when all three are covered.
 
+### Focused TablePage package CI
+
+`.github/workflows/table-package.yml` runs automatically for matching package
+and dependency changes on PRs and `develop`. It checks TablePage/shared-control
+behavior, package boundaries, application consumer types and packed SDK/locale
+bindings, including the real WASM formula evaluator. This is separate from
+Main CI and does not run server Rust tests or the full browser suite.
+
+`node --test scripts/table-package-cache.test.mjs` executes the real WASM build
+wrapper against a recording Cargo fixture with cold and restored directories.
+It checks both actual private Cargo directories are cached and the build still
+runs when warm. It also protects Rust/toolchain/input cache keys and the
+unconditional behavior/type/packed-locale checks. This fixture does not compile
+WASM or measure a GitHub cache hit; the workflow continues to do the real build.
+
+Rust `cargo test`/nextest uses the workspace's optimized test profile with debug
+assertions and overflow checks enabled. Test selection, nextest concurrency
+groups and retries are unchanged. Native representative before/after timings
+are recorded with the performance PR; they do not establish a full-suite or
+DigitalOcean speedup on their own.
+The broader native macOS `atomic_lib --features db-redb --lib` run passed
+1,138 cases with 16 existing ignores and one failure in
+`db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`.
+That filesystem-allocation-sensitive case also failed in an isolated unoptimized
+baseline run; its isolated optimized rerun passed. The suite is not reported as
+fully green, and the compaction assertions remain unchanged.
+
 ### Playwright light vs full
 
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
-integration, and Flutter run on every Main CI job. Automatic CI on PR events
-and feature-branch pushes is paused while runner capacity is limited.
+integration, and Flutter run on every Main CI job. Automatic Main CI on PR events
+and feature-branch pushes is paused while runner capacity is limited; focused
+package workflows, including Table package above, still run on matching PRs.
 
 | Trigger | Playwright |
 |---|---|
-| PR event or feature-branch push | No automatic repository CI |
+| PR event or feature-branch push | No automatic Main CI; focused package workflows may run |
 | `develop` push | **full**, required (staging) |
 | `v*` tag | **full**, required (release) |
 | Manual `workflow_dispatch` on a temporary branch combining PR heads | **full** |
