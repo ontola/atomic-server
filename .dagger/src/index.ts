@@ -385,6 +385,9 @@ export class AtomicServer {
       defaultPath: '.',
       ignore: [
         '**/node_modules',
+        // Local package downloads are setup outputs, not workspace sources.
+        '**/.pnpm-store',
+        '**/.pnpm-store/**',
         '**/.git',
         '**/.dagger/sdk',
         '**/__pycache__',

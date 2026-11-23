@@ -232,6 +232,13 @@ reports even when a browser assertion fails: the caller must require
 Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
 checks still run independently; the shared E2E build does not replace them.
 
+`dagger call browser-source-inputs` reports the exact source files and their
+hashes before compilation. The fingerprint excludes generated package stores,
+Python bytecode and empty directories; ordinary source files and symlinks,
+including untracked source files, still count. The temporary runner compares
+these inputs after setup and before building, retaining file-level diagnostics
+when two checkouts differ.
+
 For repeated jobs on the same machine, use the host artifact cache. Run this
 from the checked-out repository root, with separate absolute cache and output
 paths:
@@ -289,6 +296,13 @@ watchdog enforces the configured deadline (four hours by default). Completed
 checks are not repeated merely to occupy otherwise idle machines; additional
 browser workers are started after the build is ready. The first imported
 browser shard must succeed before the rest of the fleet is created.
+Before that first browser shard, the runner also copies the completed bundle
+and its original build receipt to `artifact_archive_dir` on the controller's
+machine. This archive survives Droplet deletion and can restore a verified
+same-commit cache on a fresh runner. A browser-preparation failure preserves an
+already-running Rust check within the existing deadline; explicit interruption
+and the deadline still stop the run. Failed backups are reported, and cleanup
+continues within its time bound.
 Full-suite acceptance requires successful independent checks and an exact,
 disjoint union of all browser shard reports. Quota and a listed machine size
 do not guarantee regional capacity. These commands do not dispatch GitHub CI.

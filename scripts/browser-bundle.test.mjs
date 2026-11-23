@@ -217,6 +217,7 @@ test('source diagnostics retain the exact file, executable and symlink differenc
     const first = inspect();
     assert.equal(first.fingerprintVersion, 2);
     assert.equal(first.fingerprint, fingerprint(temp));
+    assert.match(first.legacyFingerprint, /^[a-f0-9]{64}$/);
     const entry = (inventory, name) =>
       inventory.files.find(file => file[0] === name);
     assert.deepEqual(entry(first, 'input.ts'), [
@@ -226,6 +227,7 @@ test('source diagnostics retain the exact file, executable and symlink differenc
     mkdirSync(join(temp, 'derived-empty'));
     const empty = inspect();
     assert.equal(empty.fingerprint, first.fingerprint);
+    assert.notEqual(empty.legacyFingerprint, first.legacyFingerprint);
     assert.deepEqual(empty.files, first.files);
     assert.ok(empty.directories.includes('derived-empty'));
     writeFileSync(join(temp, 'input.ts'), 'changed bytes');

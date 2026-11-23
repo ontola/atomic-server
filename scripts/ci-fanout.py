@@ -25,6 +25,7 @@ import sys
 import tarfile
 import threading
 import time
+import uuid
 
 CHECKS = (
     ('js-lint', ['js-lint']),
@@ -66,6 +67,35 @@ def execute(args, timeout=120, **kwargs):
     return result.stdout
 
 
+def file_sha256(path):
+    value = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            value.update(chunk)
+    return value.hexdigest()
+
+
+def validate_archive(path, source):
+    path = Path(path)
+    if path.is_symlink() or any((path / 'bundle' / name).is_symlink() for name in BUNDLE_FILES):
+        raise ValueError('archive payload must be materialized regular files')
+    receipt = json.loads((path / 'build-receipt.json').read_text())
+    if receipt.get('version') != 1:
+        raise ValueError('unsupported successful build receipt version')
+    if ((path / 'COMPLETED').read_text().strip() != file_sha256(path / 'build-receipt.json')
+            or receipt.get('source_commit') != source or receipt.get('build_exit_code') != 0):
+        raise ValueError('archive does not prove a successful matching build')
+    manifest = json.loads((path / 'bundle/manifest.json').read_text())
+    if (manifest.get('sourceCommit') != source or manifest.get('platform') != 'linux/amd64'
+            or receipt.get('manifest_sha256') != file_sha256(path / 'bundle/manifest.json')
+            or set(manifest.get('files', {})) != set(BUNDLE_FILES) - {'manifest.json'}):
+        raise ValueError('archive manifest provenance mismatch')
+    for name, expected in manifest['files'].items():
+        if file_sha256(path / 'bundle' / name) != expected:
+            raise ValueError('archive payload hash mismatch: ' + name)
+    return receipt, manifest
+
+
 def validate_config(config):
     if not safe_slug(config.get('batch_key')):
         raise ValueError('batch_key must be a unique safe identifier')
@@ -84,6 +114,9 @@ def validate_config(config):
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
     config.setdefault('oci_probe_dir', str(Path(__file__).resolve().parent / 'ci-fanout/oci-smoke'))
+    config.setdefault('artifact_archive_dir', str(Path(config['runtime_dir']).parent.parent / 'artifacts/browser-bundles'))
+    if not Path(config['artifact_archive_dir']).is_absolute():
+        raise ValueError('artifact_archive_dir must be an absolute local path')
     config.setdefault('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles')
     if not Path(config['artifact_cache_dir']).is_absolute():
         raise ValueError('artifact_cache_dir must be an absolute host path')
@@ -418,12 +451,12 @@ runcmd:
         return execute(['ssh', *self.ssh_options(node, first), 'root@' + node['ip'], command],
                        timeout=timeout, input=input, text=True)
 
-    def scp(self, node_id, sources, destination, download=False):
+    def scp(self, node_id, sources, destination, download=False, timeout=180):
         node = self.read()['nodes'][node_id]
         remote = 'root@' + node['ip'] + ':'
         args = ([remote + str(source) for source in sources] + [str(destination)] if download else
                 [str(source) for source in sources] + [remote + str(destination)])
-        return execute(['scp', *self.ssh_options(node), *args], timeout=180, text=True)
+        return execute(['scp', *self.ssh_options(node), *args], timeout=timeout, text=True)
 
     def prepare(self, node_id):
         began = time.monotonic()
@@ -525,6 +558,133 @@ dagger version
             if waiting:
                 time.sleep(15)
 
+    def source_inputs(self, nodes):
+        reference = self.read().get('source_input_reference')
+        for key in nodes:
+            output = self.ssh(key, 'cd /opt/atomic-ci/repo && dagger call browser-source-inputs', timeout=180)
+            report = json.loads(output)
+            if report.get('fingerprintVersion') != 2 or not re.fullmatch(r'[0-9a-f]{64}', report.get('fingerprint', '')):
+                raise ValueError('source input diagnostic has an unsupported fingerprint')
+            path = self.root / key / 'source-inputs.json'
+            path.write_text(json.dumps(report, indent=2) + '\n')
+            self.node_update(key, source_input_fingerprint=report['fingerprint'],
+                             source_input_report_sha256=file_sha256(path))
+            if reference is None:
+                immutable = self.root / 'source-input-reference.json'
+                immutable.write_text(json.dumps(report, indent=2) + '\n')
+                reference = {'node':key, 'fingerprint':report['fingerprint'], 'report_path':str(immutable)}
+                self.update(lambda state:state.update(source_input_reference=reference))
+            elif report['fingerprint'] != reference['fingerprint']:
+                original = json.loads(Path(reference['report_path']).read_text())
+                left = {item[0]:item[1:] for item in original['files']}
+                right = {item[0]:item[1:] for item in report['files']}
+                differences = [name for name in sorted(set(left)|set(right)) if left.get(name)!=right.get(name)]
+                self.node_update(key, source_input_differences=differences)
+                raise ValueError('Source inputs differ before build/browser: ' + ', '.join(differences[:40]))
+
+    def source_preflight(self, builder, canary):
+        self.source_inputs([builder, canary])
+        for key in (builder, canary):
+            self.phase(key, 'source-preflight', 'check', ['browser-source-inputs'], preflight=True)
+        self.wait([builder, canary])
+        self.source_inputs([builder, canary])
+
+    def archive_bundle(self, builder):
+        """Persist a successful build outside every temporary Droplet before tests."""
+        with self.lock('bundle-archive'):
+            state = self.read()
+            node = state['nodes'][builder]
+            result = node.get('phase_results', {}).get('build')
+            if not result or result.get('status') != 'passed':
+                return None
+            if (result.get('source_commit') != self.config['source_commit']
+                    or result.get('node_id') != builder or result.get('phase') != 'build'
+                    or result.get('batch_key') != self.config['batch_key']
+                    or not result.get('commands') or any(item.get('exit_code') != 0 for item in result['commands'])):
+                raise ValueError('original successful build phase provenance mismatch')
+            bundle = state.get('bundle') or self.read_bundle(builder)
+            root = Path(self.config['artifact_archive_dir'])
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            entry = root / (self.config['source_commit'] + '-' + bundle['manifest_sha256'])
+            if entry.exists():
+                try:
+                    validate_archive(entry, self.config['source_commit'])
+                except (ValueError, OSError, json.JSONDecodeError):
+                    entry.rename(entry.with_name(entry.name + '.corrupt-' + uuid.uuid4().hex))
+            if not entry.exists():
+                partial = root / ('.' + entry.name + '.' + uuid.uuid4().hex + '.partial')
+                (partial / 'bundle').mkdir(parents=True)
+                try:
+                    deadline = state.get('deadline')
+                    remaining = (dt.datetime.fromisoformat(deadline) - utcnow()).total_seconds() if deadline else 300
+                    if remaining <= 0:
+                        raise TimeoutError('deadline reached; skipping unarchived bundle network copy before cleanup')
+                    self.scp(builder, ['/opt/atomic-ci/share/bundle/' + name for name in BUNDLE_FILES],
+                             partial / 'bundle', download=True, timeout=min(300, remaining))
+                    execution = result.get('browser_build', {})
+                    receipt = execution.get('original_build')
+                    if receipt is None:
+                        commands = result.get('commands', [])
+                        if not commands or any(item.get('exit_code') != 0 for item in commands):
+                            raise ValueError('successful original build command evidence is missing')
+                        receipt = {'version':1, 'source_commit':self.config['source_commit'],
+                            'platform':'linux/amd64', 'build_exit_code':0,
+                            'build_started_at':result['started_at'], 'build_finished_at':result['finished_at'],
+                            'build_command':commands[-1]['command'], 'manifest_sha256':bundle['manifest_sha256'],
+                            'origin':'observed-build-phase'}
+                    (partial / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+                    checksum = file_sha256(partial / 'build-receipt.json')
+                    if execution.get('original_build_receipt_sha256', checksum) != checksum:
+                        raise ValueError('original successful build receipt checksum differs')
+                    (partial / 'COMPLETED').write_text(checksum + '\n')
+                    (partial / 'archive-provenance.json').write_text(json.dumps({
+                        'batch_key':self.config['batch_key'], 'node':builder, 'account':node['account'],
+                        'droplet_id':node.get('droplet_id'), 'build_phase':result, 'archived_at':stamp()}, indent=2))
+                    validate_archive(partial, self.config['source_commit'])
+                    partial.replace(entry)
+                finally:
+                    if partial.exists():
+                        shutil.rmtree(partial)
+            self.node_update(builder, bundle_archive_path=str(entry), bundle_archived_at=stamp())
+            self.event('Successful browser build archived at ' + str(entry))
+            return entry
+
+    def restore_bundle(self, builder):
+        root = Path(self.config['artifact_archive_dir'])
+        for path in sorted(root.glob(self.config['source_commit'] + '-*')):
+            try:
+                validate_archive(path, self.config['source_commit'])
+            except (ValueError, OSError, json.JSONDecodeError):
+                continue
+            entry = self.config['artifact_cache_dir'] + '/' + self.config['source_commit'] + '-linux-amd64-v1'
+            partial = entry + '.' + uuid.uuid4().hex + '.partial'
+            command = 'if test -e ' + shlex.quote(entry) + '; then echo existing; else mkdir -p ' + shlex.quote(partial + '/bundle') + '; fi'
+            if self.ssh(builder, command).strip() == 'existing':
+                return
+            self.scp(builder, [path / 'bundle' / name for name in BUNDLE_FILES], partial + '/bundle/', timeout=300)
+            self.scp(builder, [path / 'build-receipt.json', path / 'COMPLETED'], partial + '/')
+            self.ssh(builder, 'test ! -e ' + shlex.quote(entry) + ' && mv ' + shlex.quote(partial) + ' ' + shlex.quote(entry))
+            self.node_update(builder, restored_bundle_archive=str(path), bundle_restored_at=stamp())
+            return
+
+    def preserve_rust(self, checks):
+        for key, node in self.read()['nodes'].items():
+            if node.get('phase') == 'check-rust-test' and node.get('status') == 'running' and key in checks:
+                self.event('Retaining in-flight Rust checks under the existing deadline after browser preparation failed')
+                try:
+                    while not checks[key].done():
+                        self.check_deadline()
+                        for other, current in self.read()['nodes'].items():
+                            if (other != key and current.get('status') == 'waiting' and not current.get('deleted_at')
+                                    and (current.get('phase_kind') != 'builder' or current.get('bundle_archived_at'))):
+                                self.retrieve(other)
+                                self.remove(other)
+                        time.sleep(15)
+                    checks[key].result()
+                    self.retrieve(key)
+                except Exception as error:
+                    self.node_update(key, retained_rust_error=str(error))
+
     def read_bundle(self, builder):
         script = '''python3 - <<'PYREMOTE'
 import hashlib,json,pathlib
@@ -617,6 +777,7 @@ systemctl reload ssh
             'sender_nic_tx_bytes_during_transfer':max(0,tx_end-tx_start), 'finished_at':stamp()}))
 
     def browser(self, node_id, builder):
+        self.source_inputs([node_id])
         state = self.read()
         node = state['nodes'][node_id]
         bundle = '/opt/atomic-ci/share/bundle' if node_id == builder else '/opt/atomic-ci/bundle'
@@ -697,6 +858,24 @@ systemctl reload ssh
         with self.lock('resources'):
             self.recover_resources()
         errors = []
+        for key, node in self.read()['nodes'].items():
+            if node.get('phase_kind') == 'builder' and not node.get('phase_results', {}).get('build'):
+                try:
+                    raw = self.ssh(key, 'if test -f /opt/atomic-ci/results/build/result.json; then cat /opt/atomic-ci/results/build/result.json; fi')
+                    if raw.strip():
+                        result = json.loads(raw)
+                        if (result.get('source_commit') == self.config['source_commit']
+                                and result.get('node_id') == key and result.get('batch_key') == self.config['batch_key']):
+                            self.update(lambda state:state['nodes'][key]['phase_results'].update(build=result))
+                            node = self.read()['nodes'][key]
+                except Exception as error:
+                    self.node_update(key, bundle_backup_error=str(error))
+            if node.get('phase_results', {}).get('build', {}).get('status') == 'passed':
+                try:
+                    self.archive_bundle(key)
+                except Exception as error:
+                    self.node_update(key, bundle_backup_error=str(error))
+                    self.event('Successful build backup failed before bounded cleanup: ' + str(error))
         nodes = [key for key, node in self.read()['nodes'].items()
                  if node.get('droplet_id') and not node.get('deleted_at')]
 
@@ -729,7 +908,13 @@ systemctl reload ssh
                         raise RuntimeError('owned SSH key identity mismatch')
                     if owned:
                         self.api.call(account, ['compute', 'ssh-key', 'delete', str(key['id']), '--force'])
-                    if any(item['id'] == key['id'] for item in self.api.call(account, ['compute', 'ssh-key', 'list'])):
+                    for attempt in range(12):
+                        remaining = self.api.call(account, ['compute', 'ssh-key', 'list'])
+                        if not any(item['id'] == key['id'] for item in remaining):
+                            break
+                        if attempt < 11:
+                            time.sleep(2)
+                    else:
                         raise RuntimeError('owned SSH key absence not verified')
                     self.update(lambda value: value['keys'][account['context']].update(deletion_verified=True))
             except Exception as error:
@@ -798,6 +983,7 @@ systemctl reload ssh
             raise ValueError('oci_probe_dir must point to the reviewed portable OCI fixture')
         self.initialize(plan)
         watcher = None
+        checks = {}
         check_pool = cf.ThreadPoolExecutor(max_workers=10)
         browser_pool = cf.ThreadPoolExecutor(max_workers=plan['nodes'])
         try:
@@ -813,6 +999,8 @@ systemctl reload ssh
             self.create(builder)
             self.create(canary)
             self.tiny_probe(builder, canary)
+            self.source_preflight(builder, canary)
+            self.restore_bundle(builder)
             self.phase(builder, 'build', 'builder', ['prepare-browser-bundle', '--source-commit',
                 self.config['source_commit'], 'export', '--path', '/opt/atomic-ci/share/bundle'])
             self._parallel_create(initial[2:])
@@ -823,7 +1011,7 @@ systemctl reload ssh
 
             def check_queue(key):
                 for name, args in queues[key]:
-                    self.phase(key, 'check-' + name, 'check', args, preflight=name == 'js-lint')
+                    self.phase(key, 'check-' + name, 'check', args)
                     self.wait([key])
             checks = {key:check_pool.submit(check_queue, key) for key in check_nodes}
             build = check_pool.submit(self.wait, [builder])
@@ -837,6 +1025,7 @@ systemctl reload ssh
             build.result()
             checks[canary].result()
             self.read_bundle(builder)
+            self.archive_bundle(builder)
             self.share(builder, [canary])
             self.browser(canary, builder)
             self.wait([canary])
@@ -866,9 +1055,14 @@ systemctl reload ssh
             self.update(lambda state: state.update(full_browser_test_count=count,
                                                    validation_passed_at=stamp()))
             self.cleanup('all checks and complete browser suite passed', successful=True)
-        except BaseException:
+        except BaseException as error:
             if self.path.exists():
-                self.cleanup('controller interrupted or a phase failed')
+                self.update(lambda state:state.update(validation_error=str(error)))
+                try:
+                    if not isinstance(error, (KeyboardInterrupt, SystemExit)):
+                        self.preserve_rust(checks)
+                finally:
+                    self.cleanup('controller interrupted or a phase failed')
             raise
         finally:
             check_pool.shutdown(wait=False, cancel_futures=True)

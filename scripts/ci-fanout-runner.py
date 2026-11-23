@@ -88,7 +88,9 @@ def main(config_path):
                '--max-build-jobs', '4'])
     try:
         if config.get('preflight'):
-            commands = [['docker', 'run', '--rm', '-v', str(repo) + ':/repo',
+            commands = [[sys.executable, 'scripts/ci-browser-build.test.py'],
+                        [sys.executable, 'scripts/ci-fanout.test.py'],
+                        ['docker', 'run', '--rm', '-v', str(repo) + ':/repo',
                          '-w', '/repo/.dagger', 'node:22-bookworm', 'sh', '-lc',
                          'corepack pnpm@10.15.1 install --frozen-lockfile && '
                          'corepack pnpm@10.15.1 test && '

@@ -679,6 +679,15 @@ any compiler, install, image-import or browser-runtime graph. Real persistent
 bundle reuse still needs an actual completed-build validation; these fixtures
 do not constitute full-suite CI on a changed commit.
 
+Source-fingerprint recovery adds a regression for generated empty directories
+and a full per-file diagnostic API. A real Linux checkout comparison found
+133 newly downloaded files under `.pnpm-store`, with no other file changes;
+package stores are excluded from declared source inputs. Controller regressions
+require input comparison before any build and a verified local bundle archive
+before the first browser shard. They exercise archive restoration, corruption
+rejection and bounded cleanup after backup failure, while retaining an
+in-flight Rust check only under the existing deadline.
+
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
 integration, and Flutter run on every Main CI job. Automatic Main CI on PR events
 and feature-branch pushes is paused while runner capacity is limited; focused

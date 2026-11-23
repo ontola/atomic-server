@@ -9,6 +9,7 @@ import copy
 import datetime as dt
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -51,6 +52,8 @@ class FakeAPI(fanout.DigitalOcean):
         self.next_id = 100
         self.mutations = []
         self.lose_create = False
+        self.stale_key_reads = {}
+        self.stale_after_key_delete = 0
 
     def raw(self, account, args):
         context = account['context']
@@ -58,6 +61,10 @@ class FakeAPI(fanout.DigitalOcean):
             return [{'team': {'uuid': self.actual[context]}, 'droplet_limit': 100}]
         resource = self.droplets if args[1] == 'droplet' else self.keys
         if args[2] == 'list':
+            stale = self.stale_key_reads.get(context) if args[1] == 'ssh-key' else None
+            if stale and stale[1] > 0:
+                stale[1] -= 1
+                return copy.deepcopy(resource[context] + stale[0])
             return copy.deepcopy(resource[context])
         self.mutations.append((context, list(args)))
         if args[2] in ('import', 'create'):
@@ -74,6 +81,9 @@ class FakeAPI(fanout.DigitalOcean):
                 raise TimeoutError('create response was lost after resource creation')
             return [copy.deepcopy(item)]
         if args[2] == 'delete':
+            if args[1] == 'ssh-key' and self.stale_after_key_delete:
+                removed = [item for item in resource[context] if item['id'] == int(args[3])]
+                self.stale_key_reads[context] = [copy.deepcopy(removed), self.stale_after_key_delete]
             resource[context][:] = [item for item in resource[context] if item['id'] != int(args[3])]
             return None
         raise AssertionError(args)
@@ -84,6 +94,7 @@ class FakeController(fanout.Controller):
         super().__init__(settings, api)
         self.events = []
         self.fail_canary = False
+        self.fail_inputs = False
 
     def event(self, value):
         self.events.append(value)
@@ -114,6 +125,21 @@ class FakeController(fanout.Controller):
     def tiny_probe(self, builder, worker):
         self.events.append('tiny-probe')
         self.update(lambda value: value.update(oci_probe_passed_at=fanout.stamp()))
+
+    def source_inputs(self, nodes):
+        self.events.append(('source-inputs', tuple(nodes)))
+
+    def source_preflight(self, builder, canary):
+        self.events.append('source-preflight')
+        if self.fail_inputs:
+            raise ValueError('Source inputs differ before build/browser: fixture-file')
+
+    def archive_bundle(self, builder):
+        self.events.append(('archive', builder))
+        self.node_update(builder, bundle_archived_at=fanout.stamp())
+
+    def restore_bundle(self, builder):
+        self.events.append(('restore', builder))
 
     def phase(self, node_id, name, kind, args, preflight=False, module=None):
         self.check_deadline()
@@ -235,6 +261,17 @@ class LifecycleTests(unittest.TestCase):
         self.controller.cleanup('second cleanup')
         self.assertEqual(self.api.mutations, mutations)
 
+    def test_ssh_key_deletion_waits_for_stale_listing_without_redeleting(self):
+        self.initialize()
+        self.api.stale_after_key_delete = 2
+        with mock.patch.object(fanout.time, 'sleep') as sleep:
+            self.controller.cleanup('eventually consistent keys')
+        self.assertEqual(sleep.call_count, 4)
+        self.assertEqual(self.controller.read()['status'], 'stopped')
+        deletes = [args for _,args in self.api.mutations if args[:3] == ['compute','ssh-key','delete']]
+        self.assertEqual(len(deletes), 2)
+        self.assertTrue(all(key['deletion_verified'] for key in self.controller.read()['keys'].values()))
+
     def test_lost_create_response_is_recorded_then_removed(self):
         self.initialize()
         self.api.lose_create = True
@@ -259,6 +296,74 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'immutable batch state'):
             fanout.Controller(changed, self.api)
 
+    def test_canonical_input_mismatch_records_changed_paths_and_both_manifests(self):
+        self.initialize()
+        for key in ('node-001','node-002'):
+            (self.controller.root / key).mkdir()
+        original = {'fingerprintVersion':2,'fingerprint':'a'*64,
+                    'files':[['source.ts','file',0,'original']],'directories':[]}
+        changed = {'fingerprintVersion':2,'fingerprint':'b'*64,
+                   'files':[['source.ts','file',0,'changed']],'directories':[]}
+        with mock.patch.object(self.controller, 'ssh', side_effect=[json.dumps(original),json.dumps(changed)]):
+            with self.assertRaisesRegex(ValueError, 'source.ts'):
+                fanout.Controller.source_inputs(self.controller, ['node-001','node-002'])
+        self.assertEqual(self.controller.read()['nodes']['node-002']['source_input_differences'], ['source.ts'])
+        for key in ('node-001','node-002'):
+            self.assertTrue((self.controller.root / key / 'source-inputs.json').is_file())
+
+    def test_setup_byte_change_fails_real_before_after_gate_on_only_two_hosts(self):
+        controller = self.controller
+        source = self.root / 'input.txt'
+        source.write_text('pristine')
+        controller.source_inputs = lambda nodes: fanout.Controller.source_inputs(controller, nodes)
+        controller.source_preflight = lambda builder,canary: fanout.Controller.source_preflight(controller,builder,canary)
+        original_prepare = controller.prepare
+        def prepare(key):
+            original_prepare(key)
+            (controller.root / key).mkdir()
+        original_phase = controller.phase
+        def phase(key,name,kind,args,preflight=False,module=None):
+            original_phase(key,name,kind,args,preflight,module)
+            if preflight:
+                source.write_text('changed during preflight')
+        def inputs(*args,**kwargs):
+            checksum = fanout.file_sha256(source)
+            return json.dumps({'fingerprintVersion':2,'fingerprint':checksum,
+                'files':[['input.txt','file',0,checksum]],'directories':[]})
+        with mock.patch.object(controller,'prepare',side_effect=prepare), mock.patch.object(controller,'phase',side_effect=phase), mock.patch.object(controller,'ssh',side_effect=inputs), mock.patch.object(fanout.subprocess,'Popen') as process:
+            process.return_value.pid = 12345
+            process.return_value.poll.return_value = 0
+            with self.assertRaisesRegex(ValueError,'input.txt'):
+                controller.run()
+        self.assertEqual(controller.read()['nodes']['node-001']['source_input_differences'], ['input.txt'])
+        self.assertEqual(len([args for _,args in self.api.mutations if args[:3] == ['compute','droplet','create']]),2)
+        self.assertFalse(any(isinstance(item,tuple) and item[1]=='build' for item in controller.events))
+
+    def test_running_rust_is_retained_without_extending_the_existing_deadline(self):
+        self.initialize()
+        self.controller.create('node-001')
+        self.controller.node_update('node-001',phase='check-rust-test',status='running')
+        deadline = self.controller.read()['deadline']
+        future = mock.Mock()
+        future.done.return_value = True
+        with mock.patch.object(self.controller,'retrieve') as retrieve:
+            fanout.Controller.preserve_rust(self.controller, {'node-001':future})
+        future.result.assert_called_once_with()
+        retrieve.assert_called_once_with('node-001')
+        self.assertEqual(self.controller.read()['deadline'],deadline)
+
+    def test_input_mismatch_stops_before_expensive_build_and_only_two_hosts_exist(self):
+        self.controller.fail_inputs = True
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'Source inputs differ'):
+                self.controller.run()
+        created = [args for _, args in self.api.mutations if args[:3] == ['compute', 'droplet', 'create']]
+        self.assertEqual(len(created), 2)
+        self.assertFalse(any(isinstance(item, tuple) and item[1] == 'build' for item in self.controller.events))
+        self.assertEqual(sum(len(value) for value in self.api.droplets.values()), 0)
+
     def test_canary_failure_never_provisions_remaining_nine_nodes(self):
         self.controller.fail_canary = True
         with mock.patch.object(fanout.subprocess, 'Popen') as process:
@@ -268,8 +373,68 @@ class LifecycleTests(unittest.TestCase):
                 self.controller.run()
         created = [args for _, args in self.api.mutations if args[:3] == ['compute', 'droplet', 'create']]
         self.assertEqual(len(created), 11)
+        archive = self.controller.events.index(('archive', 'node-001'))
+        browser = self.controller.events.index(('node-002', 'browser'))
+        self.assertLess(archive, browser)
         self.assertEqual(sum(len(value) for value in self.api.droplets.values()), 0)
         self.assertEqual(self.controller.read()['status'], 'stopped')
+
+    def test_archive_preserves_real_payload_and_original_build_evidence_then_restores(self):
+        self.initialize()
+        self.controller.create('node-001')
+        payload = self.root / 'payload'
+        payload.mkdir()
+        for name in fanout.BUNDLE_FILES[1:]:
+            (payload / name).write_text('fixture ' + name)
+        manifest = {'sourceCommit':SHA, 'platform':'linux/amd64',
+                    'files':{name:fanout.file_sha256(payload / name) for name in fanout.BUNDLE_FILES[1:]}}
+        (payload / 'manifest.json').write_text(json.dumps(manifest))
+        result = {'status':'passed', 'source_commit':SHA, 'node_id':'node-001', 'phase':'build',
+                  'batch_key':self.controller.config['batch_key'], 'started_at':'original-start',
+                  'finished_at':'original-finish', 'commands':[{'exit_code':0,'command':['dagger','prepare-browser-bundle']}]}
+        self.controller.update(lambda state:state.update(bundle={'manifest_sha256':fanout.file_sha256(payload / 'manifest.json')}))
+        self.controller.update(lambda state:state['nodes']['node-001']['phase_results'].update(build=result))
+        self.controller.update(lambda state:state.update(deadline=(fanout.utcnow()+dt.timedelta(seconds=10)).isoformat()))
+        def download(node, sources, destination, download=False, timeout=180):
+            self.assertTrue(download)
+            self.assertGreater(timeout,0)
+            self.assertLessEqual(timeout,10)
+            for source in sources:
+                shutil.copy2(payload / Path(source).name, destination)
+        with mock.patch.object(self.controller, 'scp', side_effect=download):
+            archived = fanout.Controller.archive_bundle(self.controller, 'node-001')
+        receipt, recovered = fanout.validate_archive(archived, SHA)
+        self.assertEqual(receipt['build_started_at'], 'original-start')
+        self.assertEqual(receipt['build_finished_at'], 'original-finish')
+        self.assertEqual(recovered, manifest)
+        self.assertEqual((archived / 'bundle/client.oci.tar').read_bytes(), (payload / 'client.oci.tar').read_bytes())
+        with mock.patch.object(self.controller, 'scp') as upload, mock.patch.object(self.controller, 'ssh', return_value=''):
+            fanout.Controller.restore_bundle(self.controller, 'node-001')
+        self.assertEqual(upload.call_count, 2)
+        self.assertEqual(self.controller.read()['nodes']['node-001']['restored_bundle_archive'], str(archived))
+        self.controller.update(lambda state:state.update(deadline=(fanout.utcnow()-dt.timedelta(seconds=1)).isoformat()))
+        with mock.patch.object(self.controller,'scp') as no_copy:
+            self.assertEqual(fanout.Controller.archive_bundle(self.controller,'node-001'),archived)
+            no_copy.assert_not_called()
+            preserved = archived.with_name('preserved-successful-archive')
+            archived.rename(preserved)
+            with self.assertRaisesRegex(TimeoutError,'deadline reached'):
+                fanout.Controller.archive_bundle(self.controller,'node-001')
+            no_copy.assert_not_called()
+            preserved.rename(archived)
+        (archived / 'bundle/client.oci.tar').write_text('corrupt')
+        with self.assertRaisesRegex(ValueError, 'payload hash mismatch'):
+            fanout.validate_archive(archived, SHA)
+
+    def test_failed_backup_is_reported_without_stranding_paid_hosts(self):
+        self.initialize()
+        self.controller.create('node-001')
+        self.controller.update(lambda state:state['nodes']['node-001']['phase_results'].update({'build':{'status':'passed'}}))
+        with mock.patch.object(self.controller, 'archive_bundle', side_effect=TimeoutError('bounded archive copy failed')):
+            self.controller.cleanup('fixture failure')
+        state = self.controller.read()
+        self.assertIn('bounded archive', state['nodes']['node-001']['bundle_backup_error'])
+        self.assertTrue(state['nodes']['node-001']['deletion_verified'])
 
     def test_success_runs_checks_once_and_all_twenty_distinct_shards_then_cleans(self):
         with mock.patch.object(fanout.subprocess, 'Popen') as process:
