@@ -2552,6 +2552,10 @@ export async function pretendToBeTheApp(page: Page) {
   await page.addInitScript(() => {
     (
       window as unknown as { __TAURI_INTERNALS__: unknown }
-    ).__TAURI_INTERNALS__ = {};
+    ).__TAURI_INTERNALS__ = {
+      // Commands such as `adopt_agent` talk to the real shell. Nothing here
+      // needs their answer, so they resolve to nothing instead of failing.
+      invoke: () => Promise.resolve(null),
+    };
   });
 }
