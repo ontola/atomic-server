@@ -553,7 +553,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13852,3 +13852,24 @@ msgstr "Schreibe jemandem, den du eingeladen hast, etwa einer Kollegin oder eine
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Sende hier eine Nachricht"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "Filter value"
+msgstr "Filterwert"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Diese Spalte ist nicht verfügbar."
+
+#: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Spaltenname"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Nicht verfügbare Spalte"

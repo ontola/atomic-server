@@ -553,7 +553,7 @@ msgstr "Ne répond pas"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -13849,3 +13849,24 @@ msgstr "Écrivez à quelqu'un que vous avez invité, comme un collègue ou un am
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Envoyez un message ici"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "Filter value"
+msgstr "Valeur du filtre"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Cette colonne est indisponible."
+
+#: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Nom de la colonne"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Colonne indisponible"

@@ -254,6 +254,26 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+TablePage follow-ups: `useTableViewRename.test.tsx` exercises captured inactive
+tab identity, real asynchronous resource loading, membership/owner checks and
+permission/account changes during loading. `PropertyForm.test.tsx` checks unique
+accessible name/error identities, disabled input, shortnames and resource-scoped
+focus; the existing number-form regression retains explicit text-format saves.
+The application `table-page-derived-compiler.test.tsx` executes the actual hook
+through the production React 19 compiler and changes only engine readiness.
+The production readiness and seasonal-clock fixes already exist on develop.
+
+`TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
+strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests
+cover missing-column removal, unsupported stored operators, deduplicated Add
+choices and retained callbacks after busy/unavailable transitions. Local filters
+remain editable on read-only tables; an optional busy lock is a host capability.
+`DialogGlobalContextProvider.test.tsx` checks that unmounting an open dialog
+restores the underlying rendered and live stack under Strict Mode. The new
+table-view browser journeys exercise numeric repair and inactive renaming through
+the actual application, including reload and desktop/mobile captures. Their
+execution results belong to the exact tested commit's validation report.
+
 Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
 checks the existing date radio choices/previews and uncontrolled precision input,
 including host change/blur callbacks, bounds and error rendering.
