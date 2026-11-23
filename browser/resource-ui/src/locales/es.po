@@ -13772,6 +13772,34 @@ msgstr "Tareas"
 msgid "Sketch"
 msgstr "Boceto"
 
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
+msgstr "Forma: arrastra para dibujar un bloque con texto (toca de nuevo para alternar entre rectángulo y elipse)"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Rectangle tool"
+msgstr "Herramienta de rectángulo"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Ellipse tool"
+msgstr "Herramienta de elipse"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another, or into free space"
+msgstr "Flecha: arrastra de un bloque a otro, o al espacio libre"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow tool"
+msgstr "Herramienta de flecha"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
+msgstr "Forma: arrastra para dibujar un rectángulo o una elipse; toca dos veces (o selecciónala y pulsa <0>Enter</0>) para escribir dentro"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
+msgstr "Flecha: arrastra de un bloque a otro y los sigue cuando se mueven; selecciona una flecha y arrastra su tirador central para curvarla, toca dos veces el tirador para enderezarla"
+
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"
 msgstr "Crea una tabla"

@@ -12,14 +12,32 @@ export type CanvasStroke = {
   width: number;
   path: [number, number][];
   /** Absent for a pen stroke. */
-  kind?: 'text' | 'image';
-  /** `kind: 'text'`: the text, `\n` separates lines. */
+  kind?: 'text' | 'image' | 'shape' | 'arrow';
+  /**
+   * Stable id of a shape or arrow. Elements are otherwise addressed by their
+   * position in the list, which shifts on delete; arrows bind to shapes by id.
+   */
+  id?: string;
+  /** `kind: 'shape'`: the outline. `path[0]` is the top-left corner. */
+  shape?: 'rect' | 'ellipse';
+  /**
+   * `kind: 'arrow'`: `path` is `[start, end]`, the position of each end when
+   * it is not bound to a shape (and the last known one when it is).
+   */
+  from?: string;
+  to?: string;
+  /**
+   * `kind: 'arrow'`: offset of the quadratic control point from the straight
+   * midpoint. Absent for a straight arrow.
+   */
+  bend?: [number, number];
+  /** `kind: 'text'` or `'shape'`: the text, `\n` separates lines. */
   text?: string;
-  /** `kind: 'text'`: font size in canvas units. */
+  /** `kind: 'text'` or `'shape'`: font size in canvas units. */
   size?: number;
   /** `kind: 'image'`: subject of the uploaded File resource. */
   src?: string;
-  /** `kind: 'image'`: drawn size in canvas units. */
+  /** `kind: 'image'` or `'shape'`: drawn size in canvas units. */
   w?: number;
   h?: number;
 };
@@ -28,6 +46,11 @@ export type CanvasStroke = {
 export const ELEMENT_HAIRLINE_WIDTH = 0.01;
 
 export const DEFAULT_STROKE_WIDTH = 10;
+
+/** A short random id for a shape or arrow. */
+export function newCanvasElementId(): string {
+  return Math.random().toString(36).slice(2, 8).padEnd(6, '0');
+}
 
 /**
  * Parse `strokeData` from a resource property.
@@ -72,6 +95,24 @@ export function strokeToJson(stroke: CanvasStroke): JSONObject {
     json.src = stroke.src;
     json.w = stroke.w ?? 100;
     json.h = stroke.h ?? 100;
+  } else if (stroke.kind === 'shape') {
+    json.kind = 'shape';
+    json.shape = stroke.shape === 'ellipse' ? 'ellipse' : 'rect';
+    json.w = stroke.w ?? 100;
+    json.h = stroke.h ?? 100;
+
+    if (stroke.text) json.text = stroke.text;
+    if (stroke.size !== undefined) json.size = stroke.size;
+  } else if (stroke.kind === 'arrow') {
+    json.kind = 'arrow';
+
+    if (stroke.from) json.from = stroke.from;
+    if (stroke.to) json.to = stroke.to;
+    if (stroke.bend) json.bend = stroke.bend;
+  }
+
+  if (stroke.id && (stroke.kind === 'shape' || stroke.kind === 'arrow')) {
+    json.id = stroke.id;
   }
 
   return json;
@@ -134,6 +175,39 @@ function strokeFromJson(item: unknown): CanvasStroke | undefined {
       src: obj.src,
       w: typeof obj.w === 'number' ? obj.w : 100,
       h: typeof obj.h === 'number' ? obj.h : 100,
+    };
+  }
+
+  const id = typeof obj.id === 'string' ? obj.id : undefined;
+
+  if (obj.kind === 'shape') {
+    return {
+      ...base,
+      kind: 'shape',
+      shape: obj.shape === 'ellipse' ? 'ellipse' : 'rect',
+      w: typeof obj.w === 'number' ? obj.w : 100,
+      h: typeof obj.h === 'number' ? obj.h : 100,
+      ...(typeof obj.text === 'string' && obj.text ? { text: obj.text } : {}),
+      ...(typeof obj.size === 'number' ? { size: obj.size } : {}),
+      ...(id ? { id } : {}),
+    };
+  }
+
+  if (obj.kind === 'arrow' && points.length >= 2) {
+    const bend = obj.bend;
+
+    return {
+      ...base,
+      kind: 'arrow',
+      path: points.slice(0, 2),
+      ...(typeof obj.from === 'string' ? { from: obj.from } : {}),
+      ...(typeof obj.to === 'string' ? { to: obj.to } : {}),
+      ...(Array.isArray(bend) &&
+      typeof bend[0] === 'number' &&
+      typeof bend[1] === 'number'
+        ? { bend: [bend[0], bend[1]] as [number, number] }
+        : {}),
+      ...(id ? { id } : {}),
     };
   }
 

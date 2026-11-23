@@ -13767,6 +13767,34 @@ msgstr "Tugas"
 msgid "Sketch"
 msgstr "Sketsa"
 
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
+msgstr "Bentuk: seret untuk menggambar blok dengan teks (ketuk lagi untuk beralih antara persegi panjang dan elips)"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Rectangle tool"
+msgstr "Alat persegi panjang"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Ellipse tool"
+msgstr "Alat elips"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another, or into free space"
+msgstr "Panah: seret dari satu blok ke blok lain, atau ke ruang kosong"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow tool"
+msgstr "Alat panah"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
+msgstr "Bentuk: seret untuk menggambar persegi panjang atau elips; ketuk dua kali (atau pilih lalu tekan <0>Enter</0>) untuk mengetik di dalamnya"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
+msgstr "Panah: seret dari satu blok ke blok lain dan panah mengikuti keduanya saat dipindahkan; pilih panah lalu seret gagang tengahnya untuk melengkungkan, ketuk dua kali gagang untuk meluruskan"
+
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"
 msgstr "Buat tabel"

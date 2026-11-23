@@ -13778,6 +13778,34 @@ msgstr "Tasks"
 msgid "Sketch"
 msgstr "Sketch"
 
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
+msgstr "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Rectangle tool"
+msgstr "Rectangle tool"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Ellipse tool"
+msgstr "Ellipse tool"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another, or into free space"
+msgstr "Arrow: drag from one block to another, or into free space"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow tool"
+msgstr "Arrow tool"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
+msgstr "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
+
+#: ../data-browser/src/views/Canvas/CanvasPage.tsx
+msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
+msgstr "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
+
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"
 msgstr "Make a table"
