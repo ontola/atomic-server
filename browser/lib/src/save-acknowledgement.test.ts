@@ -237,12 +237,19 @@ describe('explicit save acknowledgement', () => {
       month: 'short',
     }).format(new Date(old));
 
+    const lastYear = Date.now() - 400 * 24 * 60 * 60 * 1000;
+    const lastYearDate = new Intl.DateTimeFormat(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(lastYear));
+
     notify('did:ad:old-entry', old);
     notify('did:ad:fresh-entry', Date.now() - 60 * 1000);
-    notify('did:ad:last-year', Date.now() - 400 * 24 * 60 * 60 * 1000);
+    notify('did:ad:last-year', lastYear);
 
     expect(errors).toHaveLength(3);
-    expect(errors[2]).toMatch(/a change from \w+ \d{1,2}, \d{4} was not/);
+    expect(errors[2]).toContain(`a change from ${lastYearDate} was not`);
     expect(errors[0]).toContain(`a change from ${date} was not synced`);
     expect(errors[1]).toContain('a change was not synced');
     expect(errors[1]).not.toContain(' from ');
