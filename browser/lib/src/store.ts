@@ -1836,6 +1836,7 @@ export class Store {
             e instanceof Error ? e.message : String(e),
             entry.blockedNotified === true,
             e instanceof AtomicError ? e.code : undefined,
+            entry.enqueuedAt,
           );
 
           // Remembered across reloads (persisted with the entry), so a write
@@ -5901,6 +5902,22 @@ export class Store {
     return entry.promise;
   }
 
+  /** " from 15 Oct" for an outbox entry queued over an hour ago, else "". */
+  private oldEntryDate(enqueuedAt?: number): string {
+    if (enqueuedAt === undefined || Date.now() - enqueuedAt < 60 * 60 * 1000) {
+      return '';
+    }
+
+    const date = new Date(enqueuedAt);
+    const sameYear = date.getFullYear() === new Date().getFullYear();
+
+    return ` from ${new Intl.DateTimeFormat(undefined, {
+      day: 'numeric',
+      month: 'short',
+      ...(sameYear ? {} : { year: 'numeric' }),
+    }).format(date)}`;
+  }
+
   /**
    * Tell the person a write stopped syncing. The entry stays queued and
    * visible, and a fresh edit re-arms it.
@@ -5916,7 +5933,12 @@ export class Store {
     message: string,
     alreadyAnnounced = false,
     code?: number,
+    enqueuedAt?: number,
   ): boolean {
+    // A write queued more than an hour ago is not what the person is doing
+    // now; say when it was made so they do not blame their current edit.
+    const from = this.oldEntryDate(enqueuedAt);
+
     if (isNotEnrolledRefusal(message, code)) {
       const named = this.refusedDriveOf(message, code);
       const drive =
@@ -5997,7 +6019,7 @@ export class Store {
       const local = this.resources.get(this.normalizeSubject(subject));
       const title =
         local && local.title !== local.subject ? local.title : undefined;
-      const what = title ? `"${title}"` : 'a change';
+      const what = `${title ? `"${title}"` : 'a change'}${from}`;
       // Only the wording differs: a create (`append`) or an edit (`write`).
       const action = message.includes('/properties/append right')
         ? 'add this here'
@@ -6019,7 +6041,7 @@ export class Store {
 
     this.notifyError(
       new Error(
-        `Could not sync ${subject.slice(0, 60)}… — ${message} ` +
+        `Could not sync ${subject.slice(0, 60)}…${from} — ${message} ` +
           `Not retrying; edit again once you have access.`,
       ),
     );
