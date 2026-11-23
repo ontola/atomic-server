@@ -1,5 +1,5 @@
 import { resourceTheme } from '../../theme.js';
-import { Resource } from '@tomic/react';
+import { Resource, server, useNumber, useString } from '@tomic/react';
 import { FaTriangleExclamation } from 'react-icons/fa6';
 import { useFilePreviewSizeLimit } from '../../hooks/useFilePreviewSizeLimit.js';
 import { useFileImageTransitionStyles } from './useFileImageTransitionStyles.js';
@@ -21,19 +21,40 @@ interface FilePreviewThumbnailProps {
 export function FilePreviewThumbnail(
   props: FilePreviewThumbnailProps,
 ): JSX.Element {
+  const { resource } = props;
+  const [downloadUrl] = useString(resource, server.properties.downloadUrl);
+  const [mimeType] = useString(resource, server.properties.mimetype);
+  const [bytes] = useNumber(resource, server.properties.filesize);
+
+  // A File that finished loading without its file properties (404,
+  // unauthorized, another server) cannot be previewed. Say so here instead of
+  // letting `useFileInfo` throw, which would be reported as an error.
+  const unavailable =
+    !resource.loading &&
+    (!!resource.error ||
+      downloadUrl === undefined ||
+      mimeType === undefined ||
+      bytes === undefined);
+
+  if (unavailable) {
+    return <PreviewError />;
+  }
+
   return (
-    <ErrorBoundary
-      FallBackComponent={() => (
-        <TextWrapper error>
-          <Row gap='1ch' center>
-            <FaTriangleExclamation />
-            Could not display file preview.
-          </Row>
-        </TextWrapper>
-      )}
-    >
+    <ErrorBoundary FallBackComponent={PreviewError}>
       <FilePreviewThumbnailInner {...props} />
     </ErrorBoundary>
+  );
+}
+
+function PreviewError(): JSX.Element {
+  return (
+    <TextWrapper error>
+      <Row gap='1ch' center>
+        <FaTriangleExclamation />
+        Could not display file preview.
+      </Row>
+    </TextWrapper>
   );
 }
 
