@@ -11006,7 +11006,7 @@ msgstr "{0} auf diesem Gerät vergessen"
 msgid "Saved {0}, identity …{1}"
 msgstr "Gespeichert {0}, Identität …{1}"
 
-#. 0: candidates[0]
+#. 0: authority ?? candidates[0]
 #: ../data-browser/src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr "Diese Einladung kann hier nicht geöffnet werden: {0} betreibt keinen Server mit diesem Laufwerk. Bitte die einladende Person um einen neuen Link."
@@ -13773,3 +13773,33 @@ msgstr "Aufgaben"
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Sketch"
 msgstr "Skizze"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table"
+msgstr "Tabelle erstellen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Tables with your own columns, like a small database"
+msgstr "Tabellen mit eigenen Spalten, wie eine kleine Datenbank"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table here"
+msgstr "Hier eine Tabelle erstellen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form"
+msgstr "Formular erstellen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Collect answers from anyone with a link"
+msgstr "Antworten von allen mit einem Link sammeln"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form here"
+msgstr "Hier ein Formular erstellen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "More powerful"
+msgstr "Mehr Funktionen"

@@ -16,8 +16,12 @@ vi.mock('@helpers/managed/deviceLink', () => ({}));
 
 import type { OnboardingInput } from './useOnboardingProgress';
 
-const { deriveOnboardingSteps, hasInviteForDrives, isDefaultDriveName } =
-  await import('./useOnboardingProgress');
+const {
+  deriveAdvancedSteps,
+  deriveOnboardingSteps,
+  hasInviteForDrives,
+  isDefaultDriveName,
+} = await import('./useOnboardingProgress');
 
 const base: OnboardingInput = {
   driveName: 'Welcome to Atomic',
@@ -97,5 +101,27 @@ describe('hasInviteForDrives', () => {
     expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a', 'did:ad:b'])).toBe(
       true,
     );
+  });
+});
+
+describe('deriveAdvancedSteps', () => {
+  const adv = (input: Partial<OnboardingInput> = {}) =>
+    Object.fromEntries(
+      deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
+    );
+
+  it('lists table then form, none done for a new drive', () => {
+    expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual(['table', 'form']);
+    expect(adv()).toEqual({ table: false, form: false });
+  });
+
+  it("does not count the Welcome template's Tasks table", () => {
+    expect(adv({ tableCount: 1, templateTableCount: 1 }).table).toBe(false);
+    expect(adv({ tableCount: 2, templateTableCount: 1 }).table).toBe(true);
+    expect(adv({ tableCount: 1, templateTableCount: 0 }).table).toBe(true);
+  });
+
+  it('counts a form once the drive has one', () => {
+    expect(adv({ hasForm: true }).form).toBe(true);
   });
 });

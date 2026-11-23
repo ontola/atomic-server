@@ -3,6 +3,8 @@ import { useEffect } from 'react';
 import {
   contacts,
   core,
+  dataBrowser,
+  forms,
   StoreEvents,
   urls,
   useStore,
@@ -25,7 +27,14 @@ import { usePrivateDrive } from './usePrivateDrive';
 import { usePrivateDriveSync } from './usePrivateDriveSync';
 import { userSettingProps, useUserSetting } from './useUserSetting';
 
-export type OnboardingStepId = 'name' | 'create' | 'ai' | 'invite' | 'save';
+export type OnboardingStepId =
+  | 'name'
+  | 'create'
+  | 'ai'
+  | 'invite'
+  | 'save'
+  | 'table'
+  | 'form';
 
 /** What a step is waiting for before its button can do anything. */
 export type OnboardingNeed = 'ai-source';
@@ -70,6 +79,10 @@ export interface OnboardingInput {
   /** An invite was sent for that drive (not necessarily accepted yet). */
   inviteSent?: boolean;
   accountLinked: boolean;
+  /** Tables among the drive's visible children, and how many its template made. */
+  tableCount?: number;
+  templateTableCount?: number;
+  hasForm?: boolean;
 }
 
 /** The steps in order, each with a derived `done` and, if blocked, why. */
@@ -86,6 +99,17 @@ export function deriveOnboardingSteps(
     },
     { id: 'invite', done: input.otherAgentsOnDrives || !!input.inviteSent },
     { id: 'save', done: input.accountLinked },
+  ];
+}
+
+/** The second round, shown once every basic step is done. */
+export function deriveAdvancedSteps(input: OnboardingInput): OnboardingStep[] {
+  return [
+    {
+      id: 'table',
+      done: (input.tableCount ?? 0) > (input.templateTableCount ?? 0),
+    },
+    { id: 'form', done: !!input.hasForm },
   ];
 }
 
@@ -116,7 +140,11 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
   const accountLinked = useIsLinkedToAccount();
   const { subjects: children } = useVisibleDriveChildren(drive);
   // The Welcome template fills its drive; anything past that is the person's.
-  const templateChildCount = same(drive, welcomeDrive) ? WELCOME_PART_COUNT : 0;
+  const isWelcome = same(drive, welcomeDrive);
+  const templateChildCount = isWelcome ? WELCOME_PART_COUNT : 0;
+  // Already loaded by the children query above, so this adds no requests.
+  const childResources = useResources(children);
+  const childClasses = [...childResources.values()].map(r => r.getClasses());
   // Only the panel's own drive: fetching every saved drive to look for other
   // members hits legacy drives on dead servers on every render.
   const shared = same(drive, privateDrive) ? [] : [drive];
@@ -172,11 +200,20 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     otherAgentsOnDrives: others,
     inviteSent,
     accountLinked,
+    // The Welcome template's Tasks table is not the person's own.
+    tableCount: childClasses.filter(c => c.includes(dataBrowser.classes.table))
+      .length,
+    templateTableCount: isWelcome ? 1 : 0,
+    hasForm: childClasses.some(c => c.includes(forms.classes.form)),
   };
   const steps = deriveOnboardingSteps(input);
+  const advancedSteps = deriveAdvancedSteps(input);
+  const count = (list: OnboardingStep[]) => list.filter(s => s.done).length;
 
   return {
     steps,
-    doneCount: steps.filter(s => s.done).length,
+    doneCount: count(steps),
+    advancedSteps,
+    advancedDoneCount: count(advancedSteps),
   };
 }

@@ -554,7 +554,7 @@ msgstr "Not responding"
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more"
-msgstr "Read more "
+msgstr "Read more"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -11009,7 +11009,7 @@ msgstr "Forget {0} on this device"
 msgid "Saved {0}, identity …{1}"
 msgstr "Saved {0}, identity …{1}"
 
-#. 0: candidates[0]
+#. 0: authority ?? candidates[0]
 #: ../data-browser/src/routes/InviteRoute.tsx
 msgid "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
 msgstr "This invitation cannot be opened here: {0} does not run a server that holds the drive. Ask the person who invited you for a new link."
@@ -13776,3 +13776,33 @@ msgstr "Tasks"
 #: ../data-browser/src/chunks/Templates/welcome.ts
 msgid "Sketch"
 msgstr "Sketch"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table"
+msgstr "Make a table"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Tables with your own columns, like a small database"
+msgstr "Tables with your own columns, like a small database"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a table here"
+msgstr "Make a table here"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form"
+msgstr "Make a form"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Collect answers from anyone with a link"
+msgstr "Collect answers from anyone with a link"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Make a form here"
+msgstr "Make a form here"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "More powerful"
+msgstr "More powerful"

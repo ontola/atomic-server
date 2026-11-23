@@ -73,7 +73,11 @@ function Steps({
   placement: GettingStartedPlacement;
 }): JSX.Element | null {
   const [name] = useString(drive, core.properties.name);
-  const { steps, doneCount } = useOnboardingProgress(drive.subject, name);
+  const progress = useOnboardingProgress(drive.subject, name);
+  // Once the basics are done the panel moves on to the advanced round.
+  const advanced = progress.doneCount === progress.steps.length;
+  const steps = advanced ? progress.advancedSteps : progress.steps;
+  const doneCount = advanced ? progress.advancedDoneCount : progress.doneCount;
   const [panelOpen, setPanelOpen] = useUserSetting<boolean>(
     userSettingProps.onboardingPanelOpen,
     'gettingStartedPanelHeight.open',
@@ -163,6 +167,26 @@ function Steps({
       pointer: 'Save your work here',
       target: 'save-row',
       run: openSaveWorkDialog,
+    },
+    table: {
+      title: 'Make a table',
+      hint: 'Tables with your own columns, like a small database',
+      pointer: 'Make a table here',
+      target: 'new-row',
+      run: () => {
+        closeDrawer('new-row');
+        pointAt('new-row', copy.table.pointer, navigateToNewRoute);
+      },
+    },
+    form: {
+      title: 'Make a form',
+      hint: 'Collect answers from anyone with a link',
+      pointer: 'Make a form here',
+      target: 'new-row',
+      run: () => {
+        closeDrawer('new-row');
+        pointAt('new-row', copy.form.pointer, navigateToNewRoute);
+      },
     },
   };
 
@@ -257,9 +281,14 @@ function Steps({
 
   if (placement === 'page') {
     return (
-      <section aria-label='Getting started' data-testid='getting-started-page'>
+      <section
+        aria-label={advanced ? 'More powerful' : 'Getting started'}
+        data-testid='getting-started-page'
+      >
         <SectionHeading>
-          <SectionTitle>Getting started</SectionTitle>
+          <SectionTitle>
+            {advanced ? 'More powerful' : 'Getting started'}
+          </SectionTitle>
           {count}
         </SectionHeading>
         <PageSteps>{rows}</PageSteps>
@@ -269,7 +298,7 @@ function Steps({
 
   return (
     <SideBarPanel
-      title='Getting started'
+      title={advanced ? 'More powerful' : 'Getting started'}
       heightStorageKey='gettingStartedPanelHeight'
       initialHeight={280}
       open={panelOpen}
