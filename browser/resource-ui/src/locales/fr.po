@@ -13774,31 +13774,31 @@ msgstr "Croquis"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
-msgstr ""
+msgstr "Forme : faites glisser pour dessiner un bloc avec du texte (touchez à nouveau pour alterner entre rectangle et ellipse)"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Rectangle tool"
-msgstr ""
+msgstr "Outil rectangle"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Ellipse tool"
-msgstr ""
+msgstr "Outil ellipse"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another, or into free space"
-msgstr ""
+msgstr "Flèche : faites glisser d'un bloc à un autre, ou dans l'espace libre"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow tool"
-msgstr ""
+msgstr "Outil flèche"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
-msgstr ""
+msgstr "Forme : faites glisser pour dessiner un rectangle ou une ellipse ; touchez deux fois (ou sélectionnez et appuyez sur <0>Entrée</0>) pour écrire à l'intérieur"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
-msgstr ""
+msgstr "Flèche : faites glisser d'un bloc à un autre et elle les suit quand ils bougent ; sélectionnez une flèche et faites glisser sa poignée centrale pour la courber, touchez deux fois la poignée pour la redresser"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"

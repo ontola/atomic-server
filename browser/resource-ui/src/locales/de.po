@@ -13777,31 +13777,31 @@ msgstr "Skizze"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
-msgstr ""
+msgstr "Form: ziehen, um einen Block mit Text zu zeichnen (erneut tippen, um zwischen Rechteck und Ellipse zu wechseln)"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Rectangle tool"
-msgstr ""
+msgstr "Rechteck-Werkzeug"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Ellipse tool"
-msgstr ""
+msgstr "Ellipsen-Werkzeug"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another, or into free space"
-msgstr ""
+msgstr "Pfeil: von einem Block zu einem anderen ziehen oder in den freien Raum"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow tool"
-msgstr ""
+msgstr "Pfeil-Werkzeug"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
-msgstr ""
+msgstr "Form: ziehen, um ein Rechteck oder eine Ellipse zu zeichnen; doppelt tippen (oder auswählen und <0>Enter</0> drücken), um darin zu schreiben"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
-msgstr ""
+msgstr "Pfeil: von einem Block zu einem anderen ziehen, dann folgt er ihnen bei Bewegung; einen Pfeil auswählen und den mittleren Griff ziehen, um ihn zu biegen, den Griff doppelt tippen, um ihn zu begradigen"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"

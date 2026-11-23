@@ -13780,31 +13780,31 @@ msgstr "Schets"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a block with text (tap again to switch between rectangle and ellipse)"
-msgstr ""
+msgstr "Vorm: sleep om een blok met tekst te tekenen (tik nogmaals om te wisselen tussen rechthoek en ellips)"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Rectangle tool"
-msgstr ""
+msgstr "Rechthoekgereedschap"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Ellipse tool"
-msgstr ""
+msgstr "Ellipsgereedschap"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another, or into free space"
-msgstr ""
+msgstr "Pijl: sleep van het ene blok naar het andere, of naar vrije ruimte"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow tool"
-msgstr ""
+msgstr "Pijlgereedschap"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Shape: drag to draw a rectangle or ellipse; double tap it (or select it and press <0>Enter</0>) to type inside"
-msgstr ""
+msgstr "Vorm: sleep om een rechthoek of ellips te tekenen; tik twee keer (of selecteer en druk op <0>Enter</0>) om erin te typen"
 
 #: ../data-browser/src/views/Canvas/CanvasPage.tsx
 msgid "Arrow: drag from one block to another and it follows them when they move; select an arrow and drag its middle handle to bend it, double tap the handle to straighten"
-msgstr ""
+msgstr "Pijl: sleep van het ene blok naar het andere en de pijl volgt ze als ze verplaatst worden; selecteer een pijl en sleep de middelste greep om hem te buigen, tik twee keer op de greep om hem recht te maken"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Make a table"
