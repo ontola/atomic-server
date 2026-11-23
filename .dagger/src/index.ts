@@ -386,6 +386,8 @@ export class AtomicServer {
         '**/node_modules',
         '**/.git',
         '**/.dagger/sdk',
+        '**/__pycache__',
+        '**/*.pyc',
         '**/.github',
         '**/.husky',
         '**/.vscode',
