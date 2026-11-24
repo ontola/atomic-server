@@ -30,7 +30,11 @@ import { ChromeTheme } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
-import { hasOverlayTitleBar, isRunningInTauri } from '../helpers/tauri';
+import {
+  hasOverlayTitleBar,
+  isRunningInTauri,
+  useWindowControlsInset,
+} from '../helpers/tauri';
 import { isEmbedded } from '../helpers/embedMode';
 import { MeetingChatOverlay } from '../embed/MeetingChatOverlay';
 
@@ -171,12 +175,14 @@ const TopBar = React.memo(function TopBar({
   top: boolean;
 }): JSX.Element {
   const resource = useResource(subject);
+  const controlsInset = useWindowControlsInset();
 
   return (
     <ChromeTheme>
       <NavBarStyled
         aria-label='navigation'
         top={top}
+        $inset={controlsInset}
         data-tauri-drag-region={hasOverlayTitleBar() ? 'deep' : undefined}
       >
         <NavBarContent resource={resource} />
@@ -185,7 +191,7 @@ const TopBar = React.memo(function TopBar({
   );
 });
 
-const NavBarStyled = styled.div<{ top: boolean }>`
+const NavBarStyled = styled.div<{ top: boolean; $inset: boolean }>`
   position: fixed;
   ${p => (p.top ? 'top: 0;' : 'bottom: 0;')}
   left: 0;
@@ -198,7 +204,7 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   container-name: nav-bar;
   container-type: inline-size;
   /* Room for the macOS window controls that sit over this bar. */
-  ${p => (p.top && hasOverlayTitleBar() ? 'padding-left: 4.75rem;' : '')}
+  ${p => (p.top && p.$inset ? 'padding-left: 4.75rem;' : '')}
 
   @media print {
     display: none;
