@@ -27,6 +27,14 @@ unsupported operation. Catalog discovery and lens evolution remain follow-ups.
 The `test/providers` fixture supplies portable shell services and the canonical
 shared theme without importing the Atomic application's router or settings.
 
+Saved-tab renaming targets the tab whose menu was opened and checks its current
+table membership, owner, account and write permission after loading. Property
+name inputs provide unique accessible validation feedback while retaining the
+existing save and focus policy. Filter editors retain incomplete numeric drafts
+and unavailable stored choices for repair; unsupported filters remain removable.
+Hosts can lock filter controls during their own pending operations without
+changing the page's existing read-only local filtering policy.
+
 Backend requirements remain explicit. CSV export currently uses Atomic's real
 `/export?format=csv&subject=…` endpoint obtained through `Store.getServerUrl()`;
 uploads, collections, permissions and history likewise retain the existing SDK

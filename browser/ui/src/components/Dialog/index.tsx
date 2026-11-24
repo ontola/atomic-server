@@ -22,6 +22,7 @@ import { timeoutEffect } from '../../helpers/timeoutEffect.js';
 
 export interface InternalDialogProps {
   show: boolean;
+  'aria-busy'?: React.AriaAttributes['aria-busy'];
   feedback?: React.ReactNode;
   /** Avoid offering another feedback dialog inside feedback itself. */
   hideOnboardingFeedback?: boolean;
@@ -97,6 +98,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
   instantClose = false,
   disableLightDismiss = false,
   labelledBy,
+  'aria-busy': ariaBusy,
   onClose,
   onClosed,
 }) => {
@@ -248,6 +250,7 @@ const InnerDialog: React.FC<React.PropsWithChildren<InternalDialogProps>> = ({
       data-top-level={isTopLevel}
       closedby={disableLightDismiss ? 'none' : 'closerequest'}
       aria-labelledby={labelledBy}
+      aria-busy={ariaBusy}
     >
       <StyledInnerDialog ref={innerDialogRef}>
         <PopoverContainer>

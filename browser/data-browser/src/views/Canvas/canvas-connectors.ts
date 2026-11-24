@@ -227,6 +227,50 @@ export function bendFromHandle(p0: Pt, p1: Pt, handle: Pt): Pt | undefined {
   return Math.hypot(bend[0], bend[1]) < BEND_EPSILON ? undefined : bend;
 }
 
+/**
+ * The arrow with one end (0 = start, 1 = end) dragged to `pt`. A shape under
+ * the point (other than the one the other end is bound to) binds the end;
+ * otherwise the end is free at `pt`. The bend turns and scales with the
+ * chord, so the curve keeps its shape as an end moves.
+ */
+export function moveArrowEnd(
+  arrow: CanvasStroke,
+  end: 0 | 1,
+  pt: Pt,
+  list: CanvasStroke[],
+  reach: number,
+): CanvasStroke {
+  const key = end === 0 ? 'from' : 'to';
+  const otherKey = end === 0 ? 'to' : 'from';
+  const [q0, q1] = resolveArrowIn(arrow, list).path;
+  const target = shapeAt(list, pt[0], pt[1], reach, arrow[otherKey]);
+  const { from: _f, to: _t, ...rest } = arrow;
+  const moved: CanvasStroke = {
+    ...rest,
+    path: end === 0 ? [pt, q1] : [q0, pt],
+    ...(arrow[otherKey] ? { [otherKey]: arrow[otherKey] } : {}),
+    ...(target?.id ? { [key]: target.id } : {}),
+  };
+  const [n0, n1] = resolveArrowIn(moved, list).path;
+
+  if (!arrow.bend) return moved;
+
+  const vx = q1[0] - q0[0];
+  const vy = q1[1] - q0[1];
+  const wx = n1[0] - n0[0];
+  const wy = n1[1] - n0[1];
+  const len2 = vx * vx + vy * vy;
+
+  if (len2 < 1e-9) return moved;
+
+  // Complex ratio w / v: the rotation and scale from the old chord to the new.
+  const re = (wx * vx + wy * vy) / len2;
+  const im = (wy * vx - wx * vy) / len2;
+  const [bx, by] = arrow.bend;
+
+  return { ...moved, bend: [bx * re - by * im, bx * im + by * re] };
+}
+
 /** The two wing tips of the arrowhead at the end of the arrow. */
 export function arrowheadPoints(
   p0: Pt,

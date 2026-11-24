@@ -415,7 +415,7 @@ export function drawSelectionOverlay(
   offsetX: number,
   offsetY: number,
   accent: string,
-  /** A lone selected arrow, which gets a handle to bend it. */
+  /** A lone selected arrow: handles on both ends and one to bend it. */
   bendable?: CanvasStroke,
 ): void {
   ctx.save();
@@ -469,6 +469,24 @@ export function drawSelectionOverlay(
   }
 
   if (bendable) {
+    // Solid end handles, hollow bend handle.
+    for (const end of bendable.path) {
+      ctx.beginPath();
+      ctx.arc(
+        end[0] * scale + offsetX,
+        end[1] * scale + offsetY,
+        HANDLE_RADIUS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = accent;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fff';
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+
     drawArrowHandle(
       ctx,
       arrowHandleScreenPosition(bendable, scale, offsetX, offsetY),

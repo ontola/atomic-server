@@ -30,6 +30,13 @@ exclude = ["packages/atomic_store_flutter/rust"]
 [profile.dev]
 debug = "line-tables-only"
 
+# Database bootstrap and signed fixtures dominate Rust test runtime. Optimize
+# their execution while preserving the checks that make the test profile useful.
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
 # The e2e server. Debug is ~7x slower per commit round-trip (36ms vs 5ms
 # measured), and the suite runs four of these servers against a shared box
 # alongside eight browsers — so the debug binary spends CPU the browsers need,

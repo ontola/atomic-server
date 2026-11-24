@@ -254,6 +254,26 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+TablePage follow-ups: `useTableViewRename.test.tsx` exercises captured inactive
+tab identity, real asynchronous resource loading, membership/owner checks and
+permission/account changes during loading. `PropertyForm.test.tsx` checks unique
+accessible name/error identities, disabled input, shortnames and resource-scoped
+focus; the existing number-form regression retains explicit text-format saves.
+The application `table-page-derived-compiler.test.tsx` executes the actual hook
+through the production React 19 compiler and changes only engine readiness.
+The production readiness and seasonal-clock fixes already exist on develop.
+
+`TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
+strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests
+cover missing-column removal, unsupported stored operators, deduplicated Add
+choices and retained callbacks after busy/unavailable transitions. Local filters
+remain editable on read-only tables; an optional busy lock is a host capability.
+`DialogGlobalContextProvider.test.tsx` checks that unmounting an open dialog
+restores the underlying rendered and live stack under Strict Mode. The new
+table-view browser journeys exercise numeric repair and inactive renaming through
+the actual application, including reload and desktop/mobile captures. Their
+execution results belong to the exact tested commit's validation report.
+
 Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
 checks the existing date radio choices/previews and uncontrolled precision input,
 including host change/blur callbacks, bounds and error rendering.
@@ -419,6 +439,17 @@ that the server embeds a real WASI component, including with a custom target dir
 The context-menu E2E flow catches title blur stealing focus from the menu;
 Enter retains its explicit handoff into page content.
 
+Dropdown keyboard modality (#2656):
+`browser/data-browser/src/components/Dropdown/keyboardNavigation.test.tsx`
+renders the canonical shared menu with its real portal and theme. Searchable,
+non-searchable, button, keyboard-opened and touch-primary menus retain selection
+when the pointer retargets without changing viewport coordinates. Actual mouse
+movement switches input mode; the next arrow restores selection, skips disabled
+items and dividers, and Escape closes the menu. These DOM tests synthesize the
+retargeting events; they do not establish which event fired in a past CI trace.
+The Kanban browser test waits for filter focus and distinct non-null selections
+after both arrows, while retaining its Escape assertion.
+
 `node --experimental-strip-types --test browser/e2e/scripts/*.node.mjs`
 checks process-group ownership with concurrent real HTTP servers, ephemeral
 ports, unrelated-service preservation, startup failure and worker disconnect
@@ -431,6 +462,9 @@ CI overrides without mutating the profile or coverage selection.
 `pnpm --dir .dagger test` also exercises the actual Dagger module against a
 recording SDK double: lint must not construct a WASM build, CI validates and
 forwards budget arguments, and E2E applies them to shard and clone settings.
+Rust checks cover the standalone `rust-test --test-threads` override, unchanged
+host defaults and build/retry/coverage arguments, and rejection of invalid
+budgets before constructing containers. Nextest's group limits remain in force.
 These checks run before Dagger in CI and reproduce the incomplete merge in
 `2ccff0976`; they do not substitute for container or browser execution.
 The existing full-snapshot duplicate-import test also covers parent-only resources
@@ -606,15 +640,78 @@ and absent in another:
 
 A flow is only genuinely safe when all three are covered.
 
+### Focused TablePage package CI
+
+`.github/workflows/table-package.yml` runs automatically for matching package
+and dependency changes on PRs and `develop`. It checks TablePage/shared-control
+behavior, package boundaries, application consumer types and packed SDK/locale
+bindings, including the real WASM formula evaluator. This is separate from
+Main CI and does not run server Rust tests or the full browser suite.
+
+`node --test scripts/table-package-cache.test.mjs` executes the real WASM build
+wrapper against a recording Cargo fixture with cold and restored directories.
+It checks both actual private Cargo directories are cached and the build still
+runs when warm. It also protects Rust/toolchain/input cache keys and the
+unconditional behavior/type/packed-locale checks. This fixture does not compile
+WASM or measure a GitHub cache hit; the workflow continues to do the real build.
+
+Rust `cargo test`/nextest uses the workspace's optimized test profile with debug
+assertions and overflow checks enabled. Test selection, nextest concurrency
+groups and retries are unchanged. Native representative before/after timings
+are recorded with the performance PR; they do not establish a full-suite or
+DigitalOcean speedup on their own.
+The broader native macOS `atomic_lib --features db-redb --lib` run passed
+1,138 cases with 16 existing ignores and one failure in
+`db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`.
+That filesystem-allocation-sensitive case also failed in an isolated unoptimized
+baseline run; its isolated optimized rerun passed. The suite is not reported as
+fully green. The startup regression now compares one already-open file's bytes
+around the disabled policy call and verifies exact record measurements on an
+already-open handle. Its enabled fixture separates initial bloat from ordinary
+post-startup growth with an explicit floor, retaining the same-policy no-repeat
+record check without assuming that normal opens preserve physical allocation.
+The production compaction policy is unchanged.
+
 ### Playwright light vs full
 
+Portable browser fan-out uses the same production E2E server and Playwright
+configuration on independent Dagger engines. `scripts/browser-bundle.test.mjs`
+checks portable checkout fingerprints, manifest/source/tool/platform validation
+and imported shard graph behavior. `scripts/ci-fanout.test.py` exercises the
+temporary runner's resource ownership, deadlines, accounting and report gates
+without creating paid resources. These fixtures do not establish real OCI
+transport, regional capacity or full browser acceptance; an actual frozen-commit
+Docker/Dagger fan-out run is required. Its full test inventory and all shard
+reports must reconcile before the controller can report success. Compiler and
+unit suites remain separate from the shared production E2E build.
+
+`scripts/ci-browser-build.test.py` uses a recording builder to verify completed
+host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries
+are rebuilt, failures publish no completion marker, concurrent requests build
+once, and copied volumes materialize regular files for the SFTP chroot. It
+also rejects overlapping cache/output paths and preserves foreign files.
+Validation-only Dagger regressions check copied bundles without constructing
+any compiler, install, image-import or browser-runtime graph. Real persistent
+bundle reuse still needs an actual completed-build validation; these fixtures
+do not constitute full-suite CI on a changed commit.
+
+Source-fingerprint recovery adds a regression for generated empty directories
+and a full per-file diagnostic API. A real Linux checkout comparison found
+133 newly downloaded files under `.pnpm-store`, with no other file changes;
+package stores are excluded from declared source inputs. Controller regressions
+require input comparison before any build and a verified local bundle archive
+before the first browser shard. They exercise archive restoration, corruption
+rejection and bounded cleanup after backup failure, while retaining an
+in-flight Rust check only under the existing deadline.
+
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
-integration, and Flutter run on every Main CI job. Automatic CI on PR events
-and feature-branch pushes is paused while runner capacity is limited.
+integration, and Flutter run on every Main CI job. Automatic Main CI on PR events
+and feature-branch pushes is paused while runner capacity is limited; focused
+package workflows, including Table package above, still run on matching PRs.
 
 | Trigger | Playwright |
 |---|---|
-| PR event or feature-branch push | No automatic repository CI |
+| PR event or feature-branch push | No automatic Main CI; focused package workflows may run |
 | `develop` push | **full**, required (staging) |
 | `v*` tag | **full**, required (release) |
 | Manual `workflow_dispatch` on a temporary branch combining PR heads | **full** |
@@ -1236,9 +1333,22 @@ native clients.
   file through `Db::init_redb_file_with_policy` — overwrites that double in
   size plus throwaway resources deleted mid-file, so the buddy allocator
   cannot reuse the holes — and reopens it: the policy compacts, the file
-  gives back most of the measured free space, every kept resource reads its
-  last value, the record survives the next open, and a disabled policy leaves
-  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  gives back at least 75% of the measured free space, every kept resource
+  reads its last value, and the record survives the next open with the same
+  enabled policy. Deleted 128 KiB payloads put initial bloat above an 8 MiB
+  floor; assertions also require ordinary post-startup growth to remain below
+  that floor, modeling the separation provided by the production 256 MiB floor.
+  Disabled initialization
+  must record no compaction, retain every resource and leave at least 30%
+  reclaimable space. After the normal database open and statistics collection,
+  the test calls the actual disabled startup policy on that same handle and
+  requires `Skip::Disabled` with byte-for-byte unchanged file contents. Physical
+  block allocation across different copied/opened files is not compared.
+  `compaction_record_matches_the_open_files_measurements` verifies exact
+  before/after record accounting on a small real already-open redb handle and
+  checks that its stored value survives. These fixtures do not guarantee that
+  a production store whose ordinary growth still exceeds both configured
+  thresholds will avoid another compaction. Overwrites *alone* leave only ~20% dead
   (freed blocks coalesce and get reused), which is why the test deletes.
   `server::config::tests` cover the `--auto-compact*` flags. Not covered:
   compaction of a store another process holds open (the open itself fails

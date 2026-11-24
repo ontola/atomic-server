@@ -34,12 +34,15 @@ export function SyncProblemBanner({
   notified,
   retrying,
   onTryAgain,
+  onDiscard,
 }: {
   problem: SyncProblem;
   /** Error reporting is on, so "we have been notified" is true. */
   notified: boolean;
   retrying: boolean;
   onTryAgain: () => void;
+  /** Drop the changes named by `problem.subjects`. */
+  onDiscard: () => void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -102,6 +105,25 @@ export function SyncProblemBanner({
                   return (
                     <Button key={action} subtle onClick={reviewSync}>
                       Turn off server sync
+                    </Button>
+                  );
+                case 'discard':
+                  return (
+                    <Button
+                      key={action}
+                      alert
+                      data-testid='sync-problem-discard'
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Discard these changes? They never reached the server, so they will be gone for good.',
+                          )
+                        ) {
+                          onDiscard();
+                        }
+                      }}
+                    >
+                      Discard these changes
                     </Button>
                   );
                 case 'storage':

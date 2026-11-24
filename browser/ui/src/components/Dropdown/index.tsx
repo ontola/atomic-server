@@ -210,6 +210,7 @@ export function DropdownMenu({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const lastPointerPosition = useRef<{ x: number; y: number } | null>(null);
 
   const [isActive, _setIsActive] = useState(false);
   const { inDialog } = useDialogTreeInfo();
@@ -412,6 +413,7 @@ export function DropdownMenu({
       return;
     }
 
+    lastPointerPosition.current = anchorPoint ?? null;
     setQuery('');
     setIsActive(true);
 
@@ -454,17 +456,40 @@ export function DropdownMenu({
 
       reveal();
     });
-  }, [isActive, handleClose, setIsActive, positionMenu, searchable]);
+  }, [
+    isActive,
+    handleClose,
+    setIsActive,
+    positionMenu,
+    searchable,
+    anchorPoint,
+  ]);
 
-  const handleMouseOverMenu = useCallback(() => {
-    setUseKeys(false);
+  const handleMouseMoveMenu = useCallback((event: React.MouseEvent) => {
+    const previous = lastPointerPosition.current;
+    const position = { x: event.clientX, y: event.clientY };
+    lastPointerPosition.current = position;
+
+    // Keyboard scrolling or menu layout can retarget a stationary pointer.
+    // Switch input mode only when its viewport coordinates actually change.
+    if (previous && (previous.x !== position.x || previous.y !== position.y)) {
+      setUseKeys(false);
+    }
   }, []);
 
-  const handleTriggerActivate = useCallback(() => {
-    setUseKeys(true);
-    setSelectedIndex(hasSelectable ? getNewIndex(0, 0) : 0);
-    handleToggle();
-  }, [handleToggle, hasSelectable]);
+  const handleTriggerActivate = useCallback(
+    (event: React.MouseEvent) => {
+      setUseKeys(true);
+      setSelectedIndex(hasSelectable ? getNewIndex(0, 0) : 0);
+      handleToggle();
+      // AutoOpenTrigger clicks programmatically; its real pointer position is
+      // the context-menu anchor. Keyboard clicks have no known mouse position.
+      lastPointerPosition.current =
+        anchorPoint ??
+        (event.detail > 0 ? { x: event.clientX, y: event.clientY } : null);
+    },
+    [handleToggle, hasSelectable, anchorPoint],
+  );
 
   // Close the menu
   useHotkeys('esc', handleClose, { enabled: isActive });
@@ -595,7 +620,7 @@ export function DropdownMenu({
             id={menuId}
             tabIndex={-1}
             onKeyDown={handleMenuKeyDown}
-            onMouseOver={handleMouseOverMenu}
+            onMouseMove={handleMouseMoveMenu}
             onBlur={handleBlur}
             aria-labelledby={triggerId}
             role='menu'

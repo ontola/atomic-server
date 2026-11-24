@@ -13,6 +13,16 @@ import {
   CacheVolume,
 } from '@dagger.io/dagger';
 import { overrideE2eBudget } from './e2e-budget';
+import {
+  BROWSER_BUNDLE_PLATFORM,
+  BROWSER_SOURCE_FINGERPRINT_VERSION,
+  BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+  validateBundleCommit,
+  validateBundleHash,
+  validateBrowserManifest,
+  validateBrowserShard,
+  type BrowserBundleManifest,
+} from './browser-bundle';
 
 /**
  * Bumps the mtime of every mounted workspace source before cargo runs.
@@ -375,7 +385,13 @@ export class AtomicServer {
       defaultPath: '.',
       ignore: [
         '**/node_modules',
+        // Local package downloads are setup outputs, not workspace sources.
+        '**/.pnpm-store',
+        '**/.pnpm-store/**',
         '**/.git',
+        '**/.dagger/sdk',
+        '**/__pycache__',
+        '**/*.pyc',
         '**/.github',
         '**/.husky',
         '**/.vscode',
@@ -640,9 +656,23 @@ export class AtomicServer {
       playwrightRetries,
     );
 
-    // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
-    // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
+    // Cheap static checks (a store.ts oxfmt miss used to burn ~20+ minutes of
+    // rust/e2e compile before jsLint surfaced it). Where memory is tight
+    // (hosted, sequential) they run first as a barrier so a failure costs
+    // nothing else. On mancave they start together with the heavy lanes
+    // instead: the e2e base build no longer waits for lint and typecheck,
+    // and a rejection in the final Promise.all below still fails the call
+    // fast and makes Dagger cancel the other lanes. The tradeoff is some
+    // wasted compile work when a check is red, for a shorter green run.
+    const staticChecks = () => [
+      this.jsLint(),
+      this.jsTypecheck(),
+      this.rustFmt(),
+    ];
+    const overlapStaticChecks = !sequential && this.hostProfile === 'mancave';
+    if (!overlapStaticChecks) {
+      await Promise.all(staticChecks());
+    }
 
     // Defer each lane until scheduled so sequential mode never starts the
     // next build while another lane still holds memory.
@@ -683,6 +713,7 @@ export class AtomicServer {
       // Clippy and tests share a target cache and must remain serialized;
       // every other lane retains its existing parallel scheduling.
       await Promise.all([
+        ...(overlapStaticChecks ? staticChecks() : []),
         ...Object.values(jobs).map(job => job()),
         (async () => {
           await this.rustClippy();
@@ -1898,7 +1929,23 @@ export class AtomicServer {
   }
 
   @func()
-  rustTest(): Promise<string> {
+  rustTest(
+    /** Test execution threads for this invocation; 0 keeps the host profile. */
+    @argument() testThreads: number = 0,
+  ): Promise<string> {
+    if (
+      !Number.isSafeInteger(testThreads) ||
+      testThreads < 0 ||
+      testThreads > 128
+    ) {
+      throw new Error('test-threads must be an integer between 0 and 128');
+    }
+
+    const threads =
+      testThreads === 0
+        ? this.hostKnobs.nextestTestThreads
+        : String(testThreads);
+
     return (
       this.rustChecksContainer()
         .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
@@ -1942,8 +1989,9 @@ export class AtomicServer {
         // don't define a `light` feature and are unaffected.
         //
         // `--build-jobs` / `--test-threads` / `--retries`: from
-        // `--host-profile` (mancave hot / hosted quiet). The toml still
-        // caps `it` at 2 and serializes `iroh_pairing::*`.
+        // `--host-profile` (mancave hot / hosted quiet), with an optional
+        // per-invocation test-thread override. The toml still caps `it` at 2
+        // and serializes `iroh_pairing::*`.
         .withExec([
           'sh',
           '-c',
@@ -1957,7 +2005,7 @@ export class AtomicServer {
             'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
-            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
+            `--test-threads ${threads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
         ])
         .stdout()
@@ -2204,6 +2252,15 @@ export class AtomicServer {
       e2e,
     ).file('/atomic-server-binary');
 
+    return this.atomicServiceFromBinary(atomicServerBinary, e2e, instance);
+  }
+
+  /** Runtime-only path, also used by workers importing the builder's binary. */
+  private atomicServiceFromBinary(
+    atomicServerBinary: File,
+    e2e: boolean,
+    instance: string,
+  ): Service {
     let runtime = dag
       .container()
       .from('alpine:latest')
@@ -2286,9 +2343,9 @@ export class AtomicServer {
    * `atomicService` so 4 servers don't share state.
    */
   private e2eBaseContainer(): Container {
-    // Workspace deps only — SPA assets come from `atomicService(true)` →
-    // `rustBuild(..., e2e=true)` → `jsBuild(true)`.
-    const browserContainer = this.jsBuild();
+    // Match the server's exact graph, including VITE_E2E, so SDK dependencies
+    // reuse its build instead of triggering a second production SPA build.
+    const browserContainer = this.jsBuild(true);
 
     // Reuses the npm-global volume so `netlify-cli` isn't re-downloaded when
     // docs deploy already warmed it.
@@ -2399,14 +2456,21 @@ export class AtomicServer {
   private readonly e2eRunNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   /** One Playwright shard against its own atomic-server service. */
-  private e2eShardContainer(base: Container, shardIndex: number): Container {
-    const shardCount = this.e2eRun.shardCount;
+  private e2eShardContainer(
+    base: Container,
+    shardIndex: number,
+    shardCount: number = this.e2eRun.shardCount,
+    binary?: File,
+  ): Container {
+    const instance = `${this.e2eRunNonce}-${shardIndex}`;
 
     return (
       base
         .withServiceBinding(
           'atomic',
-          this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
+          binary
+            ? this.atomicServiceFromBinary(binary, true, instance)
+            : this.atomicService(true, instance),
         )
         .withExec([
           'sh',
@@ -2428,6 +2492,250 @@ export class AtomicServer {
           e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
         ])
     );
+  }
+
+  /** Actual content hash; Dagger object IDs are not portable across engines. */
+  private async browserArtifactHash(file: File): Promise<string> {
+    const output = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withFile('/artifact', file)
+      .withExec(['sha256sum', '/artifact'])
+      .stdout();
+    const hash = output.trim().split(/\s+/)[0];
+    validateBundleHash(hash);
+    return hash;
+  }
+
+  private async browserSourceFingerprint(): Promise<string> {
+    const fingerprint = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec(['node', '-e', BROWSER_SOURCE_FINGERPRINT_SCRIPT])
+      .stdout();
+    validateBundleHash(fingerprint);
+    return fingerprint;
+  }
+
+  /** Inspect exact filtered build inputs before allocating time to compilation. */
+  @func()
+  browserSourceInputs(): Promise<string> {
+    return dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec([
+        'node',
+        '-e',
+        BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+        '/source',
+        '--manifest',
+      ])
+      .stdout();
+  }
+
+  private async requireBrowserBundlePlatform(): Promise<void> {
+    const platform = await dag.container().from(NODE_IMAGE).platform();
+    if (String(platform) !== BROWSER_BUNDLE_PLATFORM) {
+      throw new Error('Portable browser bundles require a linux/amd64 worker');
+    }
+  }
+
+  /**
+   * Build once on one engine, then export this directory to independent workers.
+   * The controller verifies a clean checkout at sourceCommit before this call.
+   */
+  @func()
+  async prepareBrowserBundle(
+    @argument() sourceCommit: string,
+  ): Promise<Directory> {
+    validateBundleCommit(sourceCommit);
+    await this.requireBrowserBundlePlatform();
+
+    // No service or browser execution is captured in the portable client.
+    const base = this.e2eBaseContainer();
+    const client = base
+      // Cache mounts and their contents are not part of an OCI image. Workers
+      // execute the installed tools and packages, without another install or
+      // Netlify upload; reports are returned directly to the controller.
+      .withoutMount('/opt/npm-global')
+      .withoutMount('/root/.npm')
+      .withoutMount('/app/.pnpm-store');
+    const archive = client.asTarball();
+    const inventory = client
+      .withExec([
+        'sh',
+        '-c',
+        'pnpm exec playwright test --config=./playwright.config.ts --list --reporter=json > /test-inventory.json',
+      ])
+      .file('/test-inventory.json');
+    const binary = this.rustBuild(
+      false,
+      'x86_64-unknown-linux-musl',
+      true,
+    ).file('/atomic-server-binary');
+    const [sourceFingerprint, binaryHash, archiveHash, inventoryHash] =
+      await Promise.all([
+        this.browserSourceFingerprint(),
+        this.browserArtifactHash(binary),
+        this.browserArtifactHash(archive),
+        this.browserArtifactHash(inventory),
+      ]);
+    const manifest: BrowserBundleManifest = {
+      version: 1,
+      sourceCommit,
+      sourceFingerprint,
+      sourceFingerprintVersion: BROWSER_SOURCE_FINGERPRINT_VERSION,
+      platform: BROWSER_BUNDLE_PLATFORM,
+      rustVersion: RUST_VERSION,
+      pnpmVersion: PNPM_VERSION,
+      playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      files: {
+        'atomic-server-binary': binaryHash,
+        'client.oci.tar': archiveHash,
+        'test-inventory.json': inventoryHash,
+      },
+    };
+    return dag
+      .directory()
+      .withFile('atomic-server-binary', binary)
+      .withFile('client.oci.tar', archive)
+      .withFile('test-inventory.json', inventory)
+      .withNewFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+  }
+
+  /** Shared validation constructs no build and imports no executable image. */
+  private async validatedBrowserBundle(
+    bundle: Directory,
+    expectedCommit: string,
+    manifestSha256: string,
+  ): Promise<BrowserBundleManifest> {
+    validateBundleCommit(expectedCommit);
+    validateBundleHash(manifestSha256);
+    await this.requireBrowserBundlePlatform();
+    const manifestFile = bundle.file('manifest.json');
+    if ((await this.browserArtifactHash(manifestFile)) !== manifestSha256) {
+      throw new Error(
+        'Browser bundle manifest SHA256 does not match the builder',
+      );
+    }
+    const manifest = validateBrowserManifest(
+      JSON.parse(await manifestFile.contents()),
+      {
+        sourceCommit: expectedCommit,
+        sourceFingerprint: await this.browserSourceFingerprint(),
+        rustVersion: RUST_VERSION,
+        pnpmVersion: PNPM_VERSION,
+        playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      },
+    );
+    for (const name of [
+      'atomic-server-binary',
+      'client.oci.tar',
+      'test-inventory.json',
+    ] as const) {
+      if (
+        (await this.browserArtifactHash(bundle.file(name))) !==
+        manifest.files[name]
+      ) {
+        throw new Error(
+          `Browser bundle ${name} SHA256 does not match the manifest`,
+        );
+      }
+    }
+    return manifest;
+  }
+
+  /** Validate an existing bundle without executing a build or a browser shard. */
+  @func()
+  async validateBrowserBundle(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 recorded by the original successful builder. */
+    @argument() manifestSha256: string,
+  ): Promise<string> {
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    return JSON.stringify({
+      ...manifest,
+      kind: 'browser-bundle-validation',
+      manifestSha256,
+      validatedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Execute one global shard without rebuilding or installing its dependencies.
+   * Browser assertion failures still return all artifacts; the controller must
+   * gate on test-exit-code and reconcile JSON identities with the full inventory.
+   */
+  @func()
+  async browserShard(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 received directly from the trusted builder, outside the bundle. */
+    @argument() manifestSha256: string,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightRetries: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBrowserShard(
+      shardIndex,
+      shardCount,
+      playwrightWorkers,
+      playwrightRetries,
+    );
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    this.e2eRun = {
+      shardCount,
+      workers: String(playwrightWorkers),
+      retries: String(playwrightRetries),
+      grep: '',
+    };
+    this.e2eCloneSessions = playwrightCloneSessions;
+    const base = dag
+      .container()
+      .import_(bundle.file('client.oci.tar'))
+      .withEnvVariable('PLAYWRIGHT_WORKERS', String(playwrightWorkers))
+      .withEnvVariable('PLAYWRIGHT_RETRIES', String(playwrightRetries))
+      .withEnvVariable(
+        'ATOMIC_E2E_CLONE_SESSION',
+        playwrightCloneSessions ? '1' : '0',
+      );
+    if (String(await base.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser bundle client platform does not match its manifest',
+      );
+    }
+    const run = this.e2eShardContainer(
+      base,
+      shardIndex,
+      shardCount,
+      bundle.file('atomic-server-binary'),
+    );
+    // Startup/configuration errors may leave no HTML or JSON. Keep their log
+    // and exit code as well; a missing JSON report cannot count as a pass.
+    return run
+      .withExec([
+        'sh',
+        '-c',
+        'mkdir -p /browser-results/playwright-report /browser-results/test-results; ' +
+          'cp /test-exit-code /test-output.log /browser-results/; ' +
+          'if [ -f /test-results.json ]; then cp /test-results.json /browser-results/; fi; ' +
+          'if [ -d /app/e2e/playwright-report ]; then cp -a /app/e2e/playwright-report/. /browser-results/playwright-report/; fi; ' +
+          'if [ -d /app/e2e/test-results ]; then cp -a /app/e2e/test-results/. /browser-results/test-results/; fi',
+      ])
+      .directory('/browser-results');
   }
 
   @func()
