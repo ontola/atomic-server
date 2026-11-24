@@ -483,6 +483,9 @@ mod tests {
     const ROUNDS: usize = 3;
     /// Throwaway resources per round; deleted at the end of the fill.
     const THROWAWAY: usize = 24;
+    // Keep the initial bloat above the test's 8 MiB compaction floor while
+    // ordinary startup growth of the compacted live data stays below it.
+    const THROWAWAY_BYTES: usize = 128 * 1024;
 
     fn subject(i: usize) -> String {
         format!("did:ad:compaction-test-{i}")
@@ -527,7 +530,7 @@ mod tests {
                 let mut r = Resource::new(subject.clone());
                 r.set_unsafe(
                     urls::DESCRIPTION.into(),
-                    Value::String(noise(round * THROWAWAY + j, 18_000)),
+                    Value::String(noise(round * THROWAWAY + j, THROWAWAY_BYTES)),
                 )
                 .unwrap();
                 // No index update: the test is about the file, and indexing
@@ -577,11 +580,23 @@ mod tests {
     /// The whole startup path: a store bloated by overwrites is compacted
     /// when reopened through `Db::init_redb_file_with_policy`, shrinks,
     /// reads back every resource, and records what it did; the same file
-    /// opened with the policy disabled is left alone.
+    /// opened with the policy disabled keeps its data and reclaimable space. A
+    /// disabled policy call leaves the already-open file byte-for-byte unchanged.
     #[tokio::test(flavor = "multi_thread")]
     async fn startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource() {
+        let policy = CompactionPolicy {
+            enabled: true,
+            // Model the production floor above normal live-data headroom,
+            // without requiring a production-sized (256 MiB) test store.
+            min_file_bytes: 8 * MIB,
+            min_reclaimable_fraction: 0.30,
+        };
         let dir = temp_store_dir("startup");
-        let (bloated, bloated_disk) = fill(&dir).await;
+        let (_, bloated_disk) = fill(&dir).await;
+        assert!(
+            bloated_disk >= policy.min_file_bytes,
+            "the bloated fixture must exceed the policy floor: {bloated_disk}"
+        );
         {
             // A copy for the disabled case, so both branches see the same
             // bloat rather than one fill each.
@@ -591,37 +606,43 @@ mod tests {
             assert_eq!(store.last_compaction(), None);
             assert_intact(&store).await;
             drop(store);
-            // The open still writes (bootstrap fingerprint, flush sentinel)
-            // and redb may trim a few trailing free pages on those commits,
-            // so the size can move by a page or two either way; what must
-            // not have happened is the reclaim: the dead space is still there.
+            // Copying a file and opening redb need not preserve its physical
+            // allocation: normal startup writes metadata and can trim free tail
+            // pages. Compare the same open file only around the policy call.
             let path = untouched.join("atomic.redb");
-            let db = Database::create(&path).unwrap();
+            let mut db = Database::create(&path).unwrap();
             let still = StoreFileStats::collect(&db, &path).unwrap();
+            let before = std::fs::read(&path).unwrap();
+            assert_eq!(
+                run_startup_policy(
+                    &mut db,
+                    &path,
+                    Duration::ZERO,
+                    &CompactionPolicy::disabled()
+                ),
+                Err(Skip::Disabled)
+            );
+            assert!(
+                std::fs::read(&path).unwrap() == before,
+                "a disabled startup policy must leave the open file byte-for-byte unchanged"
+            );
             drop(db);
             assert!(
                 still.reclaimable_fraction() >= 0.30,
                 "a disabled policy must leave the dead space alone: {still:?}"
             );
-            assert!(
-                still.disk_bytes * 10 >= bloated_disk * 9,
-                "{still:?} vs {bloated_disk}"
-            );
             std::fs::remove_dir_all(&untouched).ok();
         }
 
-        let policy = CompactionPolicy {
-            enabled: true,
-            // Far below the production floor: the test store is a few MiB.
-            min_file_bytes: MIB,
-            min_reclaimable_fraction: 0.30,
-        };
         let store = open(&dir, &policy).await;
         let record = store
             .last_compaction()
             .expect("the startup policy must have compacted this store");
         assert!(record.did_compact, "{record:?}");
-        assert_eq!(record.bytes_before, bloated);
+        assert!(
+            record.disk_bytes_before >= policy.min_file_bytes,
+            "the normal open must leave enough bloat for compaction: {record:?}"
+        );
         assert!(
             record.free_bytes_before * 10 >= record.disk_bytes_before * 3,
             "the fill must leave at least the 30% the policy asks for: {record:?}"
@@ -636,15 +657,60 @@ mod tests {
         assert!(record.bytes_after < record.bytes_before, "{record:?}");
         assert_intact(&store).await;
 
-        // The open that followed the compaction wrote to the store, and redb
-        // grew the file's length again for that (a sparse tail). That is
-        // headroom, not waste: the next open must not compact again, and
-        // must still report the compaction that did run.
+        // Normal initialization writes metadata after compaction and redb
+        // can allocate its growth headroom even on filesystems with sparse
+        // files. The same policy's floor must sit above this ordinary growth,
+        // so reopening preserves the existing record without compacting again.
         drop(store);
+        let (_, reopened_disk) = file_sizes(&dir.join("atomic.redb"));
+        assert!(
+            reopened_disk < policy.min_file_bytes,
+            "ordinary startup growth must stay below the policy floor: {reopened_disk}"
+        );
         let store = open(&dir, &policy).await;
         assert_eq!(store.last_compaction(), Some(record));
         assert_intact(&store).await;
         drop(store);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Account for compaction against the same already-open handle: opening
+    /// redb may first trim free tail pages, independently of our policy.
+    #[test]
+    fn compaction_record_matches_the_open_files_measurements() {
+        use redb::ReadableDatabase;
+
+        let dir = temp_store_dir("record");
+        let path = dir.join("record.redb");
+        let mut db = Database::create(&path).unwrap();
+        const TABLE: redb::TableDefinition<u64, &str> =
+            redb::TableDefinition::new("compaction-record-fixture");
+        let tx = db.begin_write().unwrap();
+        {
+            let mut table = tx.open_table(TABLE).unwrap();
+            table.insert(1, "preserved").unwrap();
+        }
+        tx.commit().unwrap();
+        let before = StoreFileStats::collect(&db, &path).unwrap();
+        let policy = CompactionPolicy {
+            enabled: true,
+            min_file_bytes: 0,
+            min_reclaimable_fraction: 0.0,
+        };
+        let record = run_startup_policy(&mut db, &path, Duration::ZERO, &policy).unwrap();
+        assert_eq!(record.bytes_before, before.file_bytes);
+        assert_eq!(record.disk_bytes_before, before.disk_bytes);
+        assert_eq!(record.free_bytes_before, before.free_bytes());
+        assert_eq!(
+            (record.bytes_after, record.disk_bytes_after),
+            file_sizes(&path)
+        );
+        let read = db.begin_read().unwrap();
+        let table = read.open_table(TABLE).unwrap();
+        assert_eq!(table.get(1).unwrap().unwrap().value(), "preserved");
+        drop(table);
+        drop(read);
+        drop(db);
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -654,7 +654,12 @@ The broader native macOS `atomic_lib --features db-redb --lib` run passed
 `db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`.
 That filesystem-allocation-sensitive case also failed in an isolated unoptimized
 baseline run; its isolated optimized rerun passed. The suite is not reported as
-fully green, and the compaction assertions remain unchanged.
+fully green. The startup regression now compares one already-open file's bytes
+around the disabled policy call and verifies exact record measurements on an
+already-open handle. Its enabled fixture separates initial bloat from ordinary
+post-startup growth with an explicit floor, retaining the same-policy no-repeat
+record check without assuming that normal opens preserve physical allocation.
+The production compaction policy is unchanged.
 
 ### Playwright light vs full
 
@@ -1312,9 +1317,22 @@ native clients.
   file through `Db::init_redb_file_with_policy` — overwrites that double in
   size plus throwaway resources deleted mid-file, so the buddy allocator
   cannot reuse the holes — and reopens it: the policy compacts, the file
-  gives back most of the measured free space, every kept resource reads its
-  last value, the record survives the next open, and a disabled policy leaves
-  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  gives back at least 75% of the measured free space, every kept resource
+  reads its last value, and the record survives the next open with the same
+  enabled policy. Deleted 128 KiB payloads put initial bloat above an 8 MiB
+  floor; assertions also require ordinary post-startup growth to remain below
+  that floor, modeling the separation provided by the production 256 MiB floor.
+  Disabled initialization
+  must record no compaction, retain every resource and leave at least 30%
+  reclaimable space. After the normal database open and statistics collection,
+  the test calls the actual disabled startup policy on that same handle and
+  requires `Skip::Disabled` with byte-for-byte unchanged file contents. Physical
+  block allocation across different copied/opened files is not compared.
+  `compaction_record_matches_the_open_files_measurements` verifies exact
+  before/after record accounting on a small real already-open redb handle and
+  checks that its stored value survives. These fixtures do not guarantee that
+  a production store whose ordinary growth still exceeds both configured
+  thresholds will avoid another compaction. Overwrites *alone* leave only ~20% dead
   (freed blocks coalesce and get reused), which is why the test deletes.
   `server::config::tests` cover the `--auto-compact*` flags. Not covered:
   compaction of a store another process holds open (the open itself fails
