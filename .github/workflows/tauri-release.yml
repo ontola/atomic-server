@@ -72,6 +72,7 @@ jobs:
       upload: ${{ steps.resolve.outputs.upload }}
       sign_apple: ${{ steps.secrets.outputs.sign_apple }}
       notarize: ${{ steps.secrets.outputs.notarize }}
+      sign_updater: ${{ steps.secrets.outputs.sign_updater }}
     steps:
       - name: Resolve tag and whether to upload
         id: resolve
@@ -90,12 +91,14 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
 
           [ -n "$APPLE_CERTIFICATE" ] && emit sign_apple true || emit sign_apple false
           [ -n "$APPLE_ID" ]          && emit notarize   true || emit notarize   false
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && emit sign_updater true || emit sign_updater false
 
       - name: Summarise
         run: |
@@ -106,6 +109,7 @@ jobs:
             echo "|---|---|"
             echo "| macOS code signing | ${{ steps.secrets.outputs.sign_apple }} |"
             echo "| macOS notarization | ${{ steps.secrets.outputs.notarize }} |"
+            echo "| self-update (updater key) | ${{ steps.secrets.outputs.sign_updater }} |"
             echo ""
             echo "Unconfigured platforms still build; their artifacts are unsigned."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -314,13 +318,40 @@ jobs:
             echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
           } >> "$GITHUB_ENV"
 
+      # Self-update, only when the updater key is configured. The build then
+      # signs its update artifacts and includes the updater (`--features
+      # updater`, with the public key in tauri.updater.conf.json). Without the
+      # key the app builds as before and simply never looks for updates.
+      #
+      # Through $GITHUB_ENV for the same reason as the Apple identity above: an
+      # empty value would still count as set.
+      - name: Enable self-update
+        if: needs.preflight.outputs.sign_updater == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # The key is multi-line text on some setups; use a delimiter.
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY<<UPDATER_KEY_EOF"
+            echo "$TAURI_SIGNING_PRIVATE_KEY"
+            echo "UPDATER_KEY_EOF"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          if grep -q REPLACE_WITH_PUBLIC_KEY desktop/tauri.updater.conf.json; then
+            echo "::error::desktop/tauri.updater.conf.json still has the placeholder public key."
+            exit 1
+          fi
+
       - name: Build and bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: desktop
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ needs.preflight.outputs.sign_updater == 'true' && '--features updater --config tauri.updater.conf.json' || '' }}
           # No tagName/releaseId: this must NOT create or publish a release.
           # release.yml owns the release object; artifacts are attached below.
           includeUpdaterJson: false
@@ -336,7 +367,7 @@ jobs:
           # name "atomic.place_0.41.0_x64.dmg".
           find target -type d -name bundle -print0 | while IFS= read -r -d '' bundle; do
             find "$bundle" -type f \
-              \( -name '*.dmg' -o -name '*.app.tar.gz' \
+              \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
               -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
               -o -name '*.msi' -o -name '*.exe' \) -print0 \
             | while IFS= read -r -d '' f; do cp "$f" dist-artifacts/; done
@@ -370,6 +401,25 @@ jobs:
           path: artifacts
           pattern: tauri-*
           merge-multiple: true
+
+      # What the installed apps read to learn that a newer version exists. It
+      # lists only platforms whose update artifact came with a signature, so
+      # with no updater key configured there is nothing to write and the app
+      # builds keep their old behaviour.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/scripts
+      - name: Write latest.json
+        env:
+          TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.preflight.outputs.sign_updater }}" != "true" ]; then
+            echo "No updater key configured; skipping latest.json."
+            exit 0
+          fi
+          node desktop/scripts/make-latest-json.mjs artifacts "$TAG" "$GITHUB_REPOSITORY" > artifacts/latest.json
+          cat artifacts/latest.json
 
       # release.yml creates the release for this tag in parallel with this
       # workflow. It is normally done long before these builds finish, but a

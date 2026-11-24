@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_PUBLIC_KEY_FROM_tauri_signer_generate",
+      "endpoints": [
+        "https://github.com/ontola/atomic-server/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

@@ -13881,3 +13881,16 @@ msgstr "Perubahan ini milik sesuatu yang tidak pernah diterima server ini"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya, atau buang perubahan ini."
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Memasang pembaruan…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Pembaruan tersedia"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Mulai ulang untuk memakai versi {0}"

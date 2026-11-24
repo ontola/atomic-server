@@ -13892,3 +13892,16 @@ msgstr "These changes belong to something this server never received"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "It may exist on another device. Connect that device to send it, or discard these changes."
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Installing the update…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Update available"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Restart to use version {0}"

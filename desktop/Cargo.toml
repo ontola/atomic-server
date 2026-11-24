@@ -82,6 +82,11 @@ crate-type = ["rlib"]
 name = "atomic-server-tauri"
 path = "src/main.rs"
 
+# Release builds only (see tauri.updater.conf.json): the updater refuses to
+# start without the public half of the release signing key.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = { version = "2", optional = true }
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]
@@ -91,3 +96,5 @@ devtools = ["tauri/devtools"]
 # Enables the loopback-only WebView diagnostic bridge in the local acceptance
 # package. Shipping release builds do not enable this feature.
 account-acceptance = []
+# The app looks for, downloads and installs newer releases itself.
+updater = ["dep:tauri-plugin-updater"]

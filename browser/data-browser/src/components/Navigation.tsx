@@ -17,6 +17,7 @@ import { useKeepMainRoom } from './RightPanel/useKeepMainRoom';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { DesktopUpdateNotice } from './Notifications/DesktopUpdateNotice';
 import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
 import { HideInPrint } from '@tomic/ui/components/HideInPrint';
@@ -101,6 +102,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {!hideGlobalChrome && <MeetingMessageToaster />}
             {/* New chat messages, comments and replies: toast or OS notification. */}
             <MessageNotifier />
+            {/* The desktop app has a newer version: offer the restart. */}
+            <DesktopUpdateNotice />
             {!hideGlobalChrome && (
               <TopBar subject={contextualSubject} top={navbarTop} />
             )}
