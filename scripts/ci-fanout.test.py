@@ -96,6 +96,8 @@ class FakeController(fanout.Controller):
         self.events = []
         self.fail_canary = False
         self.fail_inputs = False
+        self.fail_checks = set()
+        self.fail_browser_nodes = set()
 
     def event(self, value):
         self.events.append(value)
@@ -152,6 +154,19 @@ class FakeController(fanout.Controller):
 
     def wait(self, nodes):
         self.check_deadline()
+        for key in nodes:
+            node = self.read()['nodes'][key]
+            if (node.get('phase') in self.fail_checks
+                    or (node.get('phase') == 'browser' and key in self.fail_browser_nodes)):
+                browser = node['phase'] == 'browser'
+                result = dict(node['last_result'], status='failed',
+                    commands=[{'exit_code': 0 if browser else 1}],
+                    error='RuntimeError: browser tests exited 1' if browser else 'RuntimeError: phase command exited 1')
+                if browser:
+                    result['browser_exit_code'] = 1
+                self.update(lambda state: state['nodes'][key]['phase_results'].update({node['phase']: result}))
+                self.node_update(key, last_result=result)
+                raise fanout.PhaseFailure(key, node['phase'], result)
 
     def read_bundle(self, builder):
         bundle = {'inventory': report(range(1, self.plan()['nodes'] + 1)), 'manifest_sha256': 'b' * 64}
@@ -161,11 +176,16 @@ class FakeController(fanout.Controller):
     def share(self, builder, workers, **kwargs):
         self.events.append(('share', tuple(workers)))
 
-    def verify_browser(self, node_id):
+    def verify_browser(self, node_id, allow_failure=False):
         node = self.read()['nodes'][node_id]
         if self.fail_canary and node['shard_index'] == 2:
             raise ValueError('canary exported a failing browser exit code')
-        ids = fanout.report_identities(report([node['shard_index']]))
+        value = report([node['shard_index']], node['shard_index'], self.plan()['nodes'])
+        if node_id in self.fail_browser_nodes:
+            test = value['suites'][0]['specs'][0]['tests'][0]
+            test.update(status='unexpected', results=[{'status': 'failed'}])
+        ids = fanout.verify_browser_report(value, SHA, node['phase_results']['browser'],
+                                           node['shard_index'], self.plan()['nodes'], allow_failure)
         self.node_update(node_id, browser_identities=ids, browser_verified_at=fanout.stamp())
         return ids
 
@@ -255,6 +275,28 @@ class ResourceConfigTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
+    def test_failed_shard_can_prove_coverage_without_becoming_a_pass(self):
+        artifact = report([1], 1)
+        artifact['suites'][0]['specs'][0]['tests'][0].update(
+            status='unexpected', results=[{'status': 'failed'}])
+        result = {'source_commit': SHA, 'status': 'failed', 'browser_exit_code': 1,
+                  'commands': [{'exit_code': 0}], 'error': 'RuntimeError: browser tests exited 1'}
+        self.assertEqual(len(fanout.verify_browser_report(artifact, SHA, result, 1, 20, allow_failure=True)), 1)
+        with self.assertRaises(ValueError):
+            fanout.verify_browser_report(artifact, SHA, result, 1, 20)
+        for change in ('wrong-source', 'wrong-shard', 'global-error', 'interrupted'):
+            candidate, metadata = copy.deepcopy(artifact), copy.deepcopy(result)
+            if change == 'wrong-source':
+                metadata['source_commit'] = 'b' * 40
+            elif change == 'wrong-shard':
+                candidate['config']['shard']['current'] = 2
+            elif change == 'global-error':
+                candidate['errors'] = [{'message': 'worker crashed'}]
+            else:
+                candidate['suites'][0]['specs'][0]['tests'][0]['results'] = [{'status': 'interrupted'}]
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                fanout.verify_browser_report(candidate, SHA, metadata, 1, 20, allow_failure=True)
+
     def test_export_exit_zero_cannot_mask_browser_failure(self):
         result = {'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 1}
         with self.assertRaisesRegex(ValueError, 'not browser success'):
@@ -325,6 +367,115 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
         self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
+
+    def test_only_completed_identical_check_results_are_recoverable(self):
+        self.initialize()
+        node_id = 'node-001'
+        self.controller.node_update(node_id, phase='check-js-lint', phase_kind='check', status='running')
+        result = {'batch_key': self.controller.config['batch_key'], 'source_commit': SHA,
+                  'node_id': node_id, 'phase': 'check-js-lint', 'status': 'failed',
+                  'commands': [{'exit_code': 1}], 'error': 'RuntimeError: phase command exited 1'}
+        with mock.patch.object(self.controller, 'ssh', return_value=json.dumps(result)):
+            with self.assertRaises(fanout.PhaseFailure):
+                fanout.Controller.observe(self.controller, node_id)
+        self.assertEqual(self.controller.read()['nodes'][node_id]['status'], 'waiting')
+        for change in ('source', 'cancelled', 'identity-error', 'no-command', 'preflight'):
+            candidate = copy.deepcopy(result)
+            if change == 'source':
+                candidate['source_commit'] = 'b' * 40
+            elif change == 'cancelled':
+                candidate['status'] = 'cancelled'
+            elif change == 'identity-error':
+                candidate['error'] = 'ValueError: phase source identity differs from clean pinned checkout'
+            elif change == 'no-command':
+                candidate['commands'] = []
+            else:
+                candidate['phase'] = 'source-preflight'
+                self.controller.node_update(node_id, phase='source-preflight')
+            with self.subTest(change=change), mock.patch.object(self.controller, 'ssh', return_value=json.dumps(candidate)):
+                try:
+                    fanout.Controller.observe(self.controller, node_id)
+                except fanout.PhaseFailure:
+                    self.fail('infrastructure/provenance failure was treated as a completed check')
+                except (ValueError, RuntimeError):
+                    pass
+                else:
+                    self.fail('invalid phase unexpectedly passed')
+
+    def test_failed_check_does_not_skip_later_jobs_in_its_queue(self):
+        self.initialize()
+        self.controller.fail_checks = {'check-js-lint'}
+        self.controller.run_check_queue('node-001', [('js-lint', ['js-lint']), ('rust-fmt', ['rust-fmt'])])
+        state = self.controller.read()
+        self.assertIn(('node-001', 'check-rust-fmt'), self.controller.events)
+        self.assertEqual(state['ci_failures'][0]['phase'], 'check-js-lint')
+        self.assertEqual(state['nodes']['node-001']['phase_results']['check-rust-fmt']['status'], 'passed')
+
+    def test_deadline_still_aborts_a_check_queue(self):
+        self.initialize()
+        self.controller.update(lambda state: state.update(deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat()))
+        with self.assertRaises(TimeoutError):
+            self.controller.run_check_queue('node-001', [('js-lint', ['js-lint']), ('rust-fmt', ['rust-fmt'])])
+        self.assertNotIn(('node-001', 'check-rust-fmt'), self.controller.events)
+
+    def test_final_validation_rejects_missing_and_unfinished_checks(self):
+        self.initialize()
+        self.controller.run_check_queue('node-001', fanout.CHECKS[:-1])
+        with self.assertRaisesRegex(ValueError, 'exactly once'):
+            self.controller.finish_validation(['node-001'])
+        self.controller.run_check_queue('node-001', fanout.CHECKS[-1:])
+        self.controller.update(lambda state: state['nodes']['node-001']['phase_results']['check-js-lint'].update(status='running'))
+        with self.assertRaisesRegex(ValueError, 'not complete'):
+            self.controller.finish_validation(['node-001'])
+        self.controller.update(lambda state: state['nodes']['node-001']['phase_results']['check-js-lint'].update(status='failed'))
+        with self.assertRaisesRegex(ValueError, 'not collected'):
+            self.controller.finish_validation(['node-001'])
+        self.assertNotIn('validation_passed_at', self.controller.read())
+        self.assertNotIn('validation_completed_at', self.controller.read())
+
+    def test_failed_browser_retains_stats_and_identities_without_pass_timestamp(self):
+        self.initialize()
+        node_id = 'node-001'
+        result = {'source_commit': SHA, 'status': 'failed', 'browser_exit_code': 1,
+                  'commands': [{'exit_code': 0}], 'error': 'RuntimeError: browser tests exited 1'}
+        self.controller.update(lambda state: state['nodes'][node_id]['phase_results'].update(browser=result))
+        artifact = report([1], 1)
+        artifact['stats'] = {'expected': 0, 'unexpected': 1}
+        artifact['suites'][0]['specs'][0]['tests'][0].update(status='unexpected', results=[{'status': 'failed'}])
+        local = self.root / 'download'
+        (local / 'results/browser/browser').mkdir(parents=True)
+        (local / 'results/browser/result.json').write_text(json.dumps(result))
+        (local / 'results/browser/browser/test-results.json').write_text(json.dumps(artifact))
+        with mock.patch.object(self.controller, 'retrieve', return_value=local):
+            identities = fanout.Controller.verify_browser(self.controller, node_id, allow_failure=True)
+        node = self.controller.read()['nodes'][node_id]
+        self.assertEqual(len(identities), 1)
+        self.assertEqual(node['browser_stats'], artifact['stats'])
+        self.assertFalse(node['browser_passed'])
+        self.assertIsNone(node['browser_verified_at'])
+        self.assertIn('browser_completed_at', node)
+
+    def test_check_and_canary_test_failures_finish_every_check_and_browser_shard_before_aggregate_failure(self):
+        self.controller.fail_checks = {'check-js-lint'}
+        self.controller.fail_browser_nodes = {'node-002'}
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaises(fanout.CIValidationFailure):
+                self.controller.run()
+        state = self.controller.read()
+        self.assertEqual(state['full_browser_test_count'], 20)
+        self.assertIn('validation_completed_at', state)
+        self.assertNotIn('validation_passed_at', state)
+        self.assertEqual([(f['node_id'], f['phase']) for f in state['ci_failures']],
+                         [('node-002', 'browser'), ('node-002', 'check-js-lint')])
+        phases = [item[1] for item in self.controller.events if isinstance(item, tuple)
+                  and isinstance(item[1], str) and item[1].startswith('check-')]
+        self.assertCountEqual(phases, ['check-' + name for name, _ in fanout.CHECKS])
+        browsers = [item[0] for item in self.controller.events if isinstance(item, tuple) and item[1] == 'browser']
+        self.assertEqual(len(set(browsers)), 20)
+        self.assertEqual(state['status'], 'stopped')
+        self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
 
     def test_successful_doctl_delete_can_have_empty_output(self):
         api = fanout.DigitalOcean('/unused')
