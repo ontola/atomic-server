@@ -512,6 +512,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         /* @wc-ignore */ `Steps: ${steps}`,
         /* @wc-ignore */ `Tool calls: ${tools.length ? tools.join(', ') : 'none'}`,
         /* @wc-ignore */ `Last part: ${message.parts.at(-1)?.type ?? 'none'}`,
+        /* @wc-ignore */ `Stopped because: ${message.metadata?.finishReason ?? 'unknown'}`,
+        /* @wc-ignore */ `Output tokens: ${message.metadata?.outputTokensUsed ?? 'unknown'}`,
       ].join('\n');
 
       lastRequestErrorRef.current = reason;

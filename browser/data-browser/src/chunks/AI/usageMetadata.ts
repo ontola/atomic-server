@@ -4,8 +4,8 @@ type Usage = { inputTokens?: number; outputTokens?: number };
 
 /** The stream parts `toUIMessageStream` hands to `messageMetadata`. */
 export type UsagePart =
-  | { type: 'finish-step'; usage: Usage }
-  | { type: 'finish'; totalUsage: Usage }
+  | { type: 'finish-step'; usage: Usage; finishReason?: string }
+  | { type: 'finish'; totalUsage: Usage; finishReason?: string }
   | { type: string };
 
 /**
@@ -21,13 +21,17 @@ export function usageMetadata(
   part: UsagePart,
 ): Partial<MessageMetadata> | undefined {
   if (part.type === 'finish-step' && 'usage' in part) {
-    return { contextTokens: part.usage.inputTokens };
+    return {
+      contextTokens: part.usage.inputTokens,
+      finishReason: part.finishReason,
+    };
   }
 
   if (part.type === 'finish' && 'totalUsage' in part) {
     return {
       inputTokensUsed: part.totalUsage.inputTokens,
       outputTokensUsed: part.totalUsage.outputTokens,
+      finishReason: part.finishReason,
     };
   }
 
