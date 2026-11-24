@@ -1,16 +1,20 @@
-# Publishes the floating `:develop` docker image on demand, without waiting
-# for the main pipeline.
+# Publishes the floating `:develop` docker image.
 #
-# The pipeline is still the normal way `:develop` moves (main-ci.yml's
-# `images` job, gated on a green `ci`). This exists for the case that job
-# cannot reach: the pipeline is red or wedged for reasons that have nothing
-# to do with whether the binary builds, and `:develop` is meanwhile sitting
-# days behind the branch it is supposed to track. That happened between
-# 2026-09-15 and 2026-09-18, and there was no way to ship an image short of
-# running `dagger call` by hand on the runner.
-#
-# Deliberately manual. Nothing triggers this on a push, so publishing an
-# unvalidated image is always someone's decision, on a named commit.
+# Two triggers:
+#   - `workflow_run`: after "Main pipeline: build, lint, test" succeeds on
+#     develop. This used to be main-ci.yml's `images` job, whose ~50 minute
+#     build kept staging, production, atomic.place, TestFlight and Play (all
+#     triggered by that pipeline's completion) waiting. As its own workflow
+#     the image still waits for a green pipeline, but nothing waits for it.
+#     It builds the pipeline's exact head sha and is skipped when that sha is
+#     no longer the develop tip, so an older run finishing late cannot
+#     overwrite a newer `:develop`.
+#   - `workflow_dispatch`: publish without a green pipeline, for when it is
+#     red or wedged for reasons unrelated to whether the binary builds and
+#     `:develop` sits days behind the branch (2026-09-15 to 2026-09-18, when
+#     the only way out was running `dagger call` by hand on the runner).
+#     Publishing an unvalidated image is then always someone's decision, on
+#     a named commit.
 #
 # Versioned tags are not this workflow's business — release.yml publishes
 # those from a `v*` tag, and the guard below refuses `latest` outright.
@@ -32,22 +36,80 @@ on:
         required: false
         default: joepmeneer/atomic-server:develop,ghcr.io/ontola/atomic-server:develop
         type: string
+  workflow_run:
+    workflows: ["Main pipeline: build, lint, test"]
+    branches: [develop]
+    types: [completed]
 
 # Mancave, for the same reason the pipeline prefers it: three musl targets
 # are built here, and a cold cross-compile of all of them on a hosted runner
 # is hours of work Dagger would otherwise have cached.
 jobs:
+  # What to build and whether to. workflow_dispatch inputs are empty on a
+  # workflow_run, so the sha and tags are computed once here and every later
+  # step reads these outputs instead of `inputs.*`.
+  resolve:
+    name: Resolve ref and tags
+    # A red or cancelled pipeline publishes nothing.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ref: ${{ steps.r.outputs.ref }}
+      tags: ${{ steps.r.outputs.tags }}
+      current: ${{ steps.r.outputs.current }}
+    steps:
+      - id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+            echo "tags=$INPUT_TAGS" >> "$GITHUB_OUTPUT"
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ref=$RUN_SHA" >> "$GITHUB_OUTPUT"
+          echo "tags=joepmeneer/atomic-server:develop,ghcr.io/ontola/atomic-server:develop" >> "$GITHUB_OUTPUT"
+          # Same check as deploy_staging.yml: a pipeline that finishes after a
+          # newer develop commit landed must not move `:develop` backwards.
+          tip=$(gh api "repos/$REPO/branches/develop" --jq .commit.sha)
+          if [ "$RUN_SHA" = "$tip" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping image: green run $RUN_SHA was superseded by $tip"
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
     name: Build and publish
+    needs: resolve
+    if: needs.resolve.outputs.current == 'true'
+    # On the job, not the workflow: a workflow-level group would let a skipped
+    # (red pipeline) run replace a pending image build. Never cancel a running
+    # build; a waiting one is replaced by a newer commit, which is what we want.
+    concurrency:
+      group: publish-develop-image
+      cancel-in-progress: false
     runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
     timeout-minutes: 120
     permissions:
       contents: read
       packages: write
+    env:
+      TAGS: ${{ needs.resolve.outputs.tags }}
+      REF: ${{ needs.resolve.outputs.ref }}
     steps:
       - name: Refuse to move a release tag
-        env:
-          TAGS: ${{ inputs.tags }}
         run: |
           set -euo pipefail
           IFS=',' read -ra refs <<< "$TAGS"
@@ -69,7 +131,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve.outputs.ref }}
 
       - name: Isolate Docker credentials for this job
         shell: bash
@@ -99,18 +161,22 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ inputs.tags }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ needs.resolve.outputs.tags }}
 
       - name: Say what shipped
         run: |
           {
             echo "### Published"
             echo
-            echo "Built from \`${{ inputs.ref }}\` and pushed:"
+            echo "Built from \`$REF\` and pushed:"
             echo
             echo '```'
-            echo "${{ inputs.tags }}" | tr ',' '\n'
+            echo "$TAGS" | tr ',' '\n'
             echo '```'
             echo
-            echo "This image did **not** go through the main pipeline."
+            if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+              echo "This image did **not** go through the main pipeline."
+            else
+              echo "Built after the main pipeline succeeded on this commit."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

@@ -656,9 +656,23 @@ export class AtomicServer {
       playwrightRetries,
     );
 
-    // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
-    // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
+    // Cheap static checks (a store.ts oxfmt miss used to burn ~20+ minutes of
+    // rust/e2e compile before jsLint surfaced it). Where memory is tight
+    // (hosted, sequential) they run first as a barrier so a failure costs
+    // nothing else. On mancave they start together with the heavy lanes
+    // instead: the e2e base build no longer waits for lint and typecheck,
+    // and a rejection in the final Promise.all below still fails the call
+    // fast and makes Dagger cancel the other lanes. The tradeoff is some
+    // wasted compile work when a check is red, for a shorter green run.
+    const staticChecks = () => [
+      this.jsLint(),
+      this.jsTypecheck(),
+      this.rustFmt(),
+    ];
+    const overlapStaticChecks = !sequential && this.hostProfile === 'mancave';
+    if (!overlapStaticChecks) {
+      await Promise.all(staticChecks());
+    }
 
     // Defer each lane until scheduled so sequential mode never starts the
     // next build while another lane still holds memory.
@@ -699,6 +713,7 @@ export class AtomicServer {
       // Clippy and tests share a target cache and must remain serialized;
       // every other lane retains its existing parallel scheduling.
       await Promise.all([
+        ...(overlapStaticChecks ? staticChecks() : []),
         ...Object.values(jobs).map(job => job()),
         (async () => {
           await this.rustClippy();
