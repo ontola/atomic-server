@@ -380,6 +380,7 @@ export class AtomicServer {
   private targetCacheSuffix = '';
   private maxBuildJobs = 0;
   private buildJobs = 0;
+  private testRunKey = '';
 
   constructor(
     @argument({
@@ -439,6 +440,8 @@ export class AtomicServer {
     @argument() maxBuildJobs: number = 0,
     /** Explicit Cargo compile width; 0 keeps the selected host profile. */
     @argument() buildJobs: number = 0,
+    /** Optional cache-busting identity applied only when executing tests. */
+    @argument() testRunKey: string = '',
   ) {
     if (!Number.isSafeInteger(maxBuildJobs) || maxBuildJobs < 0) {
       throw new Error('max-build-jobs must be an integer >= 0');
@@ -446,6 +449,14 @@ export class AtomicServer {
     if (!Number.isSafeInteger(buildJobs) || buildJobs < 0 || buildJobs > 128) {
       throw new Error('build-jobs must be an integer between 0 and 128');
     }
+    if (
+      typeof testRunKey !== 'string' ||
+      (testRunKey !== '' &&
+        !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/.test(testRunKey))
+    ) {
+      throw new Error('test-run-key must be empty or a safe identifier');
+    }
+    this.testRunKey = testRunKey;
     this.buildJobs = buildJobs;
     this.maxBuildJobs = maxBuildJobs;
     this.source = source;
@@ -465,6 +476,15 @@ export class AtomicServer {
         ? requested
         : Math.min(requested, this.maxBuildJobs),
     );
+  }
+
+  /** Keep installation/build inputs reusable while explicitly rerunning test bodies. */
+  private testExec(container: Container, args: string[]): Container {
+    const fresh = this.testRunKey
+      ? container.withEnvVariable('ATOMIC_CI_TEST_RUN_KEY', this.testRunKey)
+      : container;
+
+    return fresh.withExec(args);
   }
 
   /** A Rust `target/` cache volume, private to this CI runner. */
@@ -808,17 +828,17 @@ export class AtomicServer {
   async jsTest(): Promise<string> {
     const depsContainer = this.jsBuild();
 
-    return (
-      depsContainer
-        .withWorkdir('/app')
-        .withExec(['pnpm', 'run', 'test'])
-        .withExec([
-          'node',
-          '--test',
-          'data-browser/scripts/integration-mcp.test.mjs',
-        ])
-        .stdout()
-    );
+    const unitTests = this.testExec(depsContainer.withWorkdir('/app'), [
+      'pnpm',
+      'run',
+      'test',
+    ]);
+
+    return this.testExec(unitTests, [
+      'node',
+      '--test',
+      'data-browser/scripts/integration-mcp.test.mjs',
+    ]).stdout();
   }
 
   /**
@@ -841,97 +861,102 @@ export class AtomicServer {
     const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
 
-    return (
-      dag
-        .container()
-        .from(FLUTTER_IMAGE)
-        .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
-        .withEnvVariable('CI', 'true')
-        // Same pin as withCargoHomeCache — flutter's cargokit build would
-        // otherwise see all host CPUs.
-        .withEnvVariable(
-          'CARGO_BUILD_JOBS',
-          this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
-        )
-        // Persist hosted Dart packages across CI runs.
-        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
-        .withMountedCache('/root/.pub-cache', flutterPubCache)
-        // Persist the rustup toolchain so a layer-cache miss doesn't
-        // re-download rustc. Idempotent install below.
-        .withMountedCache('/root/.rustup', flutterRustup)
-        // One layer: a cached `apt-get update` layer can come back without
-        // its package lists, and the install then finds no packages.
-        .withExec([
-          'sh',
-          '-c',
-          APT_UPDATE + ' && apt-get install -y --no-install-recommends ' +
-            'ca-certificates curl git build-essential cmake ninja-build ' +
-            'pkg-config libssl-dev clang',
-        ])
-        .withExec([
-          'sh',
-          '-c',
-          'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
-        ])
-        .withExec([
-          'sh', '-c',
-          `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
-        ])
-        .withDirectory('/workspace/lib', this.source.directory('lib'))
-        .withDirectory('/workspace/flutter', this.source.directory('flutter'))
-        // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
-        .withDirectory(
-          '/workspace/packages',
-          this.source.directory('packages'),
-        )
-        .withMountedCache('/workspace/packages/atomic_store_flutter/rust/target', flutterRustTarget, {
+    const prepared = dag
+      .container()
+      .from(FLUTTER_IMAGE)
+      .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
+      .withEnvVariable('CI', 'true')
+      // Same pin as withCargoHomeCache — flutter's cargokit build would
+      // otherwise see all host CPUs.
+      .withEnvVariable(
+        'CARGO_BUILD_JOBS',
+        this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
+      )
+      // Persist hosted Dart packages across CI runs.
+      .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+      .withMountedCache('/root/.pub-cache', flutterPubCache)
+      // Persist the rustup toolchain so a layer-cache miss doesn't
+      // re-download rustc. Idempotent install below.
+      .withMountedCache('/root/.rustup', flutterRustup)
+      // One layer: a cached `apt-get update` layer can come back without
+      // its package lists, and the install then finds no packages.
+      .withExec([
+        'sh',
+        '-c',
+        APT_UPDATE +
+          ' && apt-get install -y --no-install-recommends ' +
+          'ca-certificates curl git build-essential cmake ninja-build ' +
+          'pkg-config libssl-dev clang',
+      ])
+      .withExec([
+        'sh',
+        '-c',
+        'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
+      ])
+      .withExec([
+        'sh',
+        '-c',
+        `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
+      ])
+      .withDirectory('/workspace/lib', this.source.directory('lib'))
+      .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+      // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
+      .withDirectory('/workspace/packages', this.source.directory('packages'))
+      .withMountedCache(
+        '/workspace/packages/atomic_store_flutter/rust/target',
+        flutterRustTarget,
+        {
           sharing: CacheSharingMode.Locked,
-        })
-        .withWorkdir('/workspace/flutter')
-        .withExec([
-          'bash',
-          '-lc',
-          `${pathPrefix} && flutter --version && flutter pub get`,
-        ])
-        // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
-        // Dart package — analyzing the whole repo without its own pub get fails.
-        .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
-        .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
-        // Mount cargo registry only for the Rust step so Dart work above
-        // never contends for a cache volume.
-        .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
-          sharing: CacheSharingMode.Shared,
-        })
-        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
-        // in CARGO_HOME, outside the shared volume, so two runs on one engine
-        // unpacked the same crate at once and failed with
-        // "failed to unpack package ... .cargo-ok: File exists".
-        .withExec([
-          'ln',
-          '-sf',
-          'registry/.package-cache',
-          '/root/.cargo/.package-cache',
-        ])
-        .withExec([
-          'ln',
-          '-sf',
-          'registry/.package-cache-mutate',
-          '/root/.cargo/.package-cache-mutate',
-        ])
-        // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
-        // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
-        // `flutter test` only runs Dart. Without this step the entire bridge —
-        // including the canvas editing-session cache, where a stale session
-        // duplicates or reverts a peer's stroke — ships untested.
-        .withExec([
-          'bash',
-          '-lc',
-          `${pathPrefix} && ` +
-            'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
-        ])
-        .stdout()
-    );
+        },
+      )
+      .withWorkdir('/workspace/flutter')
+      .withExec([
+        'bash',
+        '-lc',
+        `${pathPrefix} && flutter --version && flutter pub get`,
+      ])
+      // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
+      // Dart package — analyzing the whole repo without its own pub get fails.
+      .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`]);
+    const dartTests = this.testExec(prepared, [
+      'bash',
+      '-lc',
+      `${pathPrefix} && flutter test --no-pub`,
+    ]);
+    const bridgePrepared = dartTests
+      // Mount cargo registry only for the Rust step so Dart work above
+      // never contends for a cache volume.
+      .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
+        sharing: CacheSharingMode.Shared,
+      })
+      // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+      // in CARGO_HOME, outside the shared volume, so two runs on one engine
+      // unpacked the same crate at once and failed with
+      // "failed to unpack package ... .cargo-ok: File exists".
+      .withExec([
+        'ln',
+        '-sf',
+        'registry/.package-cache',
+        '/root/.cargo/.package-cache',
+      ])
+      .withExec([
+        'ln',
+        '-sf',
+        'registry/.package-cache-mutate',
+        '/root/.cargo/.package-cache-mutate',
+      ]);
+    // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
+    // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
+    // `flutter test` only runs Dart. Without this step the entire bridge —
+    // including the canvas editing-session cache, where a stale session
+    // duplicates or reverts a peer's stroke — ships untested.
+    return this.testExec(bridgePrepared, [
+      'bash',
+      '-lc',
+      `${pathPrefix} && ` +
+        'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
+        'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
+    ]).stdout();
   }
 
   /** Builds the WASM bundle (wasm-pack) used by `NodeClientDb` in the
@@ -1156,9 +1181,18 @@ export class AtomicServer {
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
       )
-      .withFile('/repo/browser/ui/package.json', browser.file('ui/package.json'))
-      .withFile('/repo/browser/utils/package.json', browser.file('utils/package.json'))
-      .withFile('/repo/browser/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/repo/browser/ui/package.json',
+        browser.file('ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/utils/package.json',
+        browser.file('utils/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table/package.json',
+        browser.file('table/package.json'),
+      )
       .withFile(
         '/repo/browser/resource-ui/package.json',
         browser.file('resource-ui/package.json'),
@@ -1231,16 +1265,17 @@ export class AtomicServer {
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
-    return withSource
-      .withFile('/repo/target/debug/atomic-server', binary, {
-        permissions: 0o755,
-      })
-      .withDirectory('/repo/wasm/pkg', wasmPkg)
-      .withWorkdir('/repo/browser/utils')
-      .withExec(['pnpm', 'run', 'build'])
-      .withWorkdir('/repo/browser/lib')
-      .withExec(['pnpm', 'run', 'test:integration'])
-      .stdout();
+    return this.testExec(
+      withSource
+        .withFile('/repo/target/debug/atomic-server', binary, {
+          permissions: 0o755,
+        })
+        .withDirectory('/repo/wasm/pkg', wasmPkg)
+        .withWorkdir('/repo/browser/utils')
+        .withExec(['pnpm', 'run', 'build'])
+        .withWorkdir('/repo/browser/lib'),
+      ['pnpm', 'run', 'test:integration'],
+    ).stdout();
   }
 
   @func()
@@ -1957,7 +1992,7 @@ export class AtomicServer {
         ? this.hostKnobs.nextestTestThreads
         : String(testThreads);
 
-    return (
+    return this.testExec(
       this.rustChecksContainer()
         .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
         .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
@@ -1983,44 +2018,43 @@ export class AtomicServer {
         // concurrent run sees either no binary or a complete one.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
-        })
-        // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
-        // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
-        // that aren't installed in the musl-cross CI image.
-        //
-        // `--no-default-features --features light`: `atomic-server`'s
-        // default features include `vector-search`, which pulls in `ort`
-        // with `cuda`/`coreml`/`directml` all requested unconditionally.
-        // `ort` ships no prebuilt binary for musl + cuda, so the workspace
-        // fails to even compile here. Mirrors the existing
-        // `aarch64-unknown-linux-musl` release-build carve-out in
-        // `rustBuild()` (same underlying ort/musl gap, same fix). Verified
-        // locally: `--no-default-features --features light` at `--workspace`
-        // scope only strips `atomic-server`'s own defaults — other members
-        // don't define a `light` feature and are unaffected.
-        //
-        // `--build-jobs` / `--test-threads` / `--retries`: from
-        // `--host-profile` (mancave hot / hosted quiet), with an optional
-        // per-invocation test-thread override. The toml still caps `it` at 2
-        // and serializes `iroh_pairing::*`.
-        .withExec([
-          'sh',
-          '-c',
-          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
-            'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
-            'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
-            'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
-            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
-            'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
-            'rm -rf "$STAGE"; fi && ' +
-            'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light,wasm-plugins ' +
-            `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
-            `--test-threads ${threads} ` +
-            `--retries ${this.hostKnobs.nextestRetries}`,
-        ])
-        .stdout()
-    );
+        }),
+      // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
+      // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
+      // that aren't installed in the musl-cross CI image.
+      //
+      // `--no-default-features --features light`: `atomic-server`'s
+      // default features include `vector-search`, which pulls in `ort`
+      // with `cuda`/`coreml`/`directml` all requested unconditionally.
+      // `ort` ships no prebuilt binary for musl + cuda, so the workspace
+      // fails to even compile here. Mirrors the existing
+      // `aarch64-unknown-linux-musl` release-build carve-out in
+      // `rustBuild()` (same underlying ort/musl gap, same fix). Verified
+      // locally: `--no-default-features --features light` at `--workspace`
+      // scope only strips `atomic-server`'s own defaults — other members
+      // don't define a `light` feature and are unaffected.
+      //
+      // `--build-jobs` / `--test-threads` / `--retries`: from
+      // `--host-profile` (mancave hot / hosted quiet), with an optional
+      // per-invocation test-thread override. The toml still caps `it` at 2
+      // and serializes `iroh_pairing::*`.
+      [
+        'sh',
+        '-c',
+        'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+          'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
+          'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
+          'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
+          'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
+          'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
+          'rm -rf "$STAGE"; fi && ' +
+          'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
+          '--no-default-features --features light,wasm-plugins ' +
+          `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
+          `--test-threads ${threads} ` +
+          `--retries ${this.hostKnobs.nextestRetries}`,
+      ],
+    ).stdout();
   }
 
   @func()

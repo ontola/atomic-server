@@ -286,6 +286,15 @@ shard; its default remains one. Choose these widths for the actual CPU and
 memory budget rather than assuming more parallel tests always finish sooner.
 Standalone Dagger calls can use constructor `--build-jobs N` to override the
 host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+For a warm-cache measurement, optional `cache_namespace` keeps the seeded Cargo
+volume names stable across cloned engines; omitting it retains the per-batch/node
+namespace. Give `test_run_key` a fresh safe identifier that differs from seed and
+previous measurement keys. It reaches only test execution, so matching cached
+test results cannot satisfy the benchmark. Empty keys retain normal CI caching.
+Rust's combined nextest install/compile/run command and Flutter's post-Dart
+bridge tail execute again; their Cargo target volumes can still reuse compiled
+objects. Browser execution already has its own per-invocation nonce.
+
 The tiny cross-engine probe ships with the runner.
 `plan` checks capacity and prices without creating resources; `run` builds and
 runs the checks, then distributes the bundle directly to the browser workers:

@@ -78,6 +78,10 @@ def main(config_path):
         value = config.get(field, default)
         if type(value) is not int or not low <= value <= 128:
             raise ValueError('invalid ' + field)
+    for field in ('test_run_key', 'cache_namespace'):
+        value = config.get(field, '')
+        if not isinstance(value, str) or value and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', value):
+            raise ValueError('invalid ' + field)
     check_identity(config, repo)
     results = ROOT / 'results' / config['phase']
     if results.exists():
@@ -87,10 +91,13 @@ def main(config_path):
     state = {key: config[key] for key in ('batch_key', 'node_id', 'phase', 'source_commit')}
     state.update(status='running', started_at=stamp(), commands=[])
     write_json(results / 'progress.json', state)
+    namespace = config.get('cache_namespace') or config['batch_key'] + '-' + config['node_id']
     prefix = (['dagger', '-m', config['module'], 'call'] if config.get('module') else
-              ['dagger', 'call', '--cache-namespace', config['batch_key'] + '-' + config['node_id'],
+              ['dagger', 'call', '--cache-namespace', namespace,
                '--max-build-jobs', str(config.get('build_jobs', 4)),
                '--build-jobs', str(config.get('build_jobs', 4))])
+    if not config.get('module') and config.get('test_run_key'):
+        prefix += ['--test-run-key', config['test_run_key']]
     try:
         if config.get('preflight'):
             commands = [[sys.executable, 'scripts/ci-browser-build.test.py'],
@@ -108,7 +115,7 @@ def main(config_path):
                 '--cache-root', config.get('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles'),
                 '--output', '/opt/atomic-ci/share/bundle',
                 '--receipt', str(results / 'browser-build-receipt.json'),
-                '--cache-namespace', config['batch_key'] + '-' + config['node_id'],
+                '--cache-namespace', namespace,
                 '--max-build-jobs', str(config.get('build_jobs', 4)),
                 '--build-jobs', str(config.get('build_jobs', 4))])
         else:

@@ -114,6 +114,10 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
+    for field in ('test_run_key', 'cache_namespace'):
+        value = config.setdefault(field, '')
+        if not isinstance(value, str) or value and not safe_slug(value):
+            raise ValueError('invalid ' + field)
     config.setdefault('oci_probe_dir', str(Path(__file__).resolve().parent / 'ci-fanout/oci-smoke'))
     config.setdefault('artifact_archive_dir', str(Path(config['runtime_dir']).parent.parent / 'artifacts/browser-bundles'))
     if not Path(config['artifact_archive_dir']).is_absolute():
@@ -513,7 +517,9 @@ dagger version
                       'preflight': preflight, 'module': module,
                       'artifact_cache_dir': self.config['artifact_cache_dir'],
                       'build_jobs': self.config['build_jobs'],
-                      'rust_test_threads': self.config['rust_test_threads']}
+                      'rust_test_threads': self.config['rust_test_threads'],
+                      'test_run_key': self.config['test_run_key'],
+                      'cache_namespace': self.config['cache_namespace']}
             path = self.root / node_id / (name + '.json')
             path.write_text(json.dumps(config))
             self.scp(node_id, [path], '/opt/atomic-ci/phase.json')
