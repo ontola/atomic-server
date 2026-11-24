@@ -177,7 +177,7 @@ const TopBar = React.memo(function TopBar({
       <NavBarStyled
         aria-label='navigation'
         top={top}
-        data-tauri-drag-region={hasOverlayTitleBar() ? '' : undefined}
+        data-tauri-drag-region={hasOverlayTitleBar() ? 'deep' : undefined}
       >
         <NavBarContent resource={resource} />
       </NavBarStyled>
