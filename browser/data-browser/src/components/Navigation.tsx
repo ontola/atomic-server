@@ -30,7 +30,7 @@ import { ChromeTheme } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
-import { isRunningInTauri } from '../helpers/tauri';
+import { hasOverlayTitleBar, isRunningInTauri } from '../helpers/tauri';
 import { isEmbedded } from '../helpers/embedMode';
 import { MeetingChatOverlay } from '../embed/MeetingChatOverlay';
 
@@ -174,7 +174,11 @@ const TopBar = React.memo(function TopBar({
 
   return (
     <ChromeTheme>
-      <NavBarStyled aria-label='navigation' top={top}>
+      <NavBarStyled
+        aria-label='navigation'
+        top={top}
+        data-tauri-drag-region={hasOverlayTitleBar() ? '' : undefined}
+      >
         <NavBarContent resource={resource} />
       </NavBarStyled>
     </ChromeTheme>
@@ -193,6 +197,8 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   border-${p => (p.top ? 'bottom' : 'top')}: solid 1px ${props => props.theme.colors.bg2};
   container-name: nav-bar;
   container-type: inline-size;
+  /* Room for the macOS window controls that sit over this bar. */
+  ${p => (p.top && hasOverlayTitleBar() ? 'padding-left: 4.75rem;' : '')}
 
   @media print {
     display: none;

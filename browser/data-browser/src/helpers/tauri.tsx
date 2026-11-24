@@ -44,3 +44,13 @@ export function getLocalServerOrigin(): string {
 
   return window.location.origin;
 }
+
+/**
+ * The macOS desktop app draws its window controls over the page (an overlay
+ * title bar, see `desktop/tauri.conf.json`), so the top bar must leave room for
+ * them and act as the drag handle. `/Mac/` as a regex, not a string, so the
+ * translation extractor leaves it alone.
+ */
+export function hasOverlayTitleBar(): boolean {
+  return isRunningInTauri() && /Mac/.test(navigator.platform);
+}
