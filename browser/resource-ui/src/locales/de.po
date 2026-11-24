@@ -13865,3 +13865,11 @@ msgstr "Melde dich bei {0} an, um die enthaltene KI zu nutzen, oder füge einen 
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Nur dieses Gerät kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "Das Modell wurde beendet, ohne eine Antwort zu schreiben."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Details"

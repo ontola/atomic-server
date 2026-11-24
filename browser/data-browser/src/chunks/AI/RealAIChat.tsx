@@ -86,6 +86,7 @@ import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
 import { LiveConversation } from './LiveConversation';
+import { reportUserFacingFailure } from '../../helpers/sentry';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -361,6 +362,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [requestError, setRequestError] = useState<string | undefined>(
     undefined,
   );
+  // What the failed reply held, in words for a bug report: how many steps ran
+  // and which tools, since "nothing" alone gives nobody a place to start.
+  const [requestDetail, setRequestDetail] = useState<string | undefined>(
+    undefined,
+  );
 
   /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
   const providerLabel =
@@ -489,13 +495,40 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       // reply. Without this the chat just ends, which reads as "nothing
       // happened".
       const reason = 'The model finished without writing an answer.';
+      const tools = message.parts
+        .filter(
+          part => part.type.startsWith('tool-') || part.type === 'dynamic-tool',
+        )
+        .map(part =>
+          part.type === 'dynamic-tool'
+            ? part.toolName
+            : part.type.replace(/^tool-/, ''),
+        );
+      const steps = message.parts.filter(
+        part => part.type === 'step-start',
+      ).length;
+      const detail = [
+        /* @wc-ignore */ `Model: ${activeModel.provider} ${String(activeModel.id ?? '')}`.trim(),
+        /* @wc-ignore */ `Steps: ${steps}`,
+        /* @wc-ignore */ `Tool calls: ${tools.length ? tools.join(', ') : 'none'}`,
+        /* @wc-ignore */ `Last part: ${message.parts.at(-1)?.type ?? 'none'}`,
+      ].join('\n');
 
       lastRequestErrorRef.current = reason;
       message.metadata = { ...message.metadata, error: reason };
       setRequestError(reason);
+      setRequestDetail(detail);
+      reportUserFacingFailure(
+        /* @wc-ignore */ 'AI finished without an answer',
+        {
+          detail,
+          provider: activeModel.provider,
+        },
+      );
     } else {
       message.metadata = { ...message.metadata, error: undefined };
       setRequestError(undefined);
+      setRequestDetail(undefined);
     }
 
     setMessages(previous =>
@@ -1022,6 +1055,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <span>
                   {`No answer from ${providerLabel}: ${requestError}`}
                 </span>
+                {requestDetail && (
+                  <details>
+                    <summary>Details</summary>
+                    <pre>{requestDetail}</pre>
+                  </details>
+                )}
                 {creditPurchaseUrl &&
                   /not enough ai credits/i.test(requestError) && (
                     <ButtonLink

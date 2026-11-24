@@ -74,6 +74,7 @@ export function useWindowControlsInset(): boolean {
     void (async () => {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const win = getCurrentWindow();
+
       const check = async () => {
         const full = await win.isFullscreen();
 

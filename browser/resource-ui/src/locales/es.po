@@ -13862,3 +13862,11 @@ msgstr "Inicia sesión en {0} para usar la IA incluida, o añade una clave de AP
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Solo este dispositivo puede abrir tu trabajo. Inicia sesión o regístrate con tu correo, o conecta otro dispositivo, para poder abrirlo en otro lugar y no perder el acceso."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "El modelo terminó sin escribir una respuesta."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Detalles"
