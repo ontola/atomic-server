@@ -3,6 +3,7 @@ import { fetchManagedInfo } from '../../helpers/managedServer';
 import { getManagedEnrollments } from '../../helpers/managed/enrollmentApi';
 import { localAgentIsDisposable } from '../../helpers/managed/reconcile';
 import { getManagedAccount } from '../../helpers/managed/session';
+import { readManagedAccountBinding } from '../../helpers/managed/binding';
 import { prepareDriveSharing } from '../../helpers/managed/prepareDriveSharing';
 import { sameOrigin } from '../../helpers/serverUrl';
 
@@ -24,10 +25,14 @@ export async function prepareTemplateDrive(store: Store): Promise<void> {
   // server copy to verify against: asking the node for its inventory just
   // times out. Its home lives on this device only. A real account without a
   // session still has to sign in: its home may be hosted.
+  // Get started now gives a guest a home too, so "no workspace" no longer
+  // tells a guest from an account. What does is that nothing on this device was
+  // ever linked to an account: no binding either.
   if (
     agent.subject &&
     !(await getManagedAccount()) &&
-    (await localAgentIsDisposable(store, agent.subject))
+    ((await localAgentIsDisposable(store, agent.subject)) ||
+      !readManagedAccountBinding())
   ) {
     store.registerLocalOnlyDrive(home);
 
