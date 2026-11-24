@@ -379,6 +379,7 @@ export class AtomicServer {
   /** Suffix for the Rust `target/` cache volumes, one per CI runner. */
   private targetCacheSuffix = '';
   private maxBuildJobs = 0;
+  private buildJobs = 0;
 
   constructor(
     @argument({
@@ -436,10 +437,16 @@ export class AtomicServer {
     @argument() cacheNamespace: string = '',
     /** Maximum Cargo compile jobs per container; 0 keeps the host profile. */
     @argument() maxBuildJobs: number = 0,
+    /** Explicit Cargo compile width; 0 keeps the selected host profile. */
+    @argument() buildJobs: number = 0,
   ) {
     if (!Number.isSafeInteger(maxBuildJobs) || maxBuildJobs < 0) {
       throw new Error('max-build-jobs must be an integer >= 0');
     }
+    if (!Number.isSafeInteger(buildJobs) || buildJobs < 0 || buildJobs > 128) {
+      throw new Error('build-jobs must be an integer between 0 and 128');
+    }
+    this.buildJobs = buildJobs;
     this.maxBuildJobs = maxBuildJobs;
     this.source = source;
     const namespace = cacheNamespace.trim();
@@ -449,11 +456,15 @@ export class AtomicServer {
         : `-${namespace.replace(/[^A-Za-z0-9_.-]/g, '-')}`;
   }
 
-  /** Apply a local memory limit without increasing the named host budget. */
+  /** An explicit width may raise the profile; the local memory cap still wins. */
   private cappedBuildJobs(configured: string): string {
-    return this.maxBuildJobs === 0
-      ? configured
-      : String(Math.min(Number(configured), this.maxBuildJobs));
+    const requested = this.buildJobs || Number(configured);
+
+    return String(
+      this.maxBuildJobs === 0
+        ? requested
+        : Math.min(requested, this.maxBuildJobs),
+    );
   }
 
   /** A Rust `target/` cache volume, private to this CI runner. */

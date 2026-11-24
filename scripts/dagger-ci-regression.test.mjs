@@ -283,6 +283,36 @@ test('build-job limits reject invalid counts before any work', () => {
   }
 });
 
+test('explicit compile widths override the host profile while the maximum cap still wins', async () => {
+  for (const [override, maximum, expected] of [
+    [0, 0, 4],
+    [64, 0, 64],
+    [64, 48, 48],
+  ]) {
+    const pipeline = new AtomicServer(source(), 'large-runner', maximum, override);
+    resetCalls();
+    await pipeline.rustTest(48);
+    assert.deepEqual(
+      recordedCalls().filter(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+      ),
+      [['withEnvVariable', 'CARGO_BUILD_JOBS', String(expected)]],
+    );
+    assert.match(nextestCommand(), new RegExp(`--build-jobs ${expected} `));
+    assert.match(nextestCommand(), /--test-threads 48 /);
+  }
+});
+
+test('explicit compile widths reject invalid counts before building', () => {
+  for (const count of [-1, 0.5, NaN, Infinity, 129]) {
+    assert.throws(
+      () => new AtomicServer(source(), '', 0, count),
+      /build-jobs must be an integer between 0 and 128/,
+    );
+  }
+});
+
 test('focused Rust tests apply the constructor cap to Cargo and nextest compilation', async () => {
   const pipeline = new AtomicServer(source(), 'test-runner', 1);
   resetCalls();

@@ -106,8 +106,9 @@ def validate_config(config):
             raise ValueError(field + ' must be an absolute path')
     if Path(config['runtime_dir']).is_relative_to(Path(config['worktree'])):
         raise ValueError('runtime_dir must be outside the repository')
-    for field, default, low, high in (('max_hours', 4, .01, 4), ('workers', 1, 1, 4),
-                                     ('retries', 1, 0, 2)):
+    for field, default, low, high in (('max_hours', 4, .01, 4), ('workers', 1, 1, 64),
+                                     ('retries', 1, 0, 2), ('build_jobs', 4, 1, 128),
+                                     ('rust_test_threads', 0, 0, 128)):
         value = config.setdefault(field, default)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
             raise ValueError('invalid ' + field)
@@ -510,7 +511,9 @@ dagger version
             config = {'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
                       'node_id': node_id, 'phase': name, 'kind': kind, 'args': args,
                       'preflight': preflight, 'module': module,
-                      'artifact_cache_dir': self.config['artifact_cache_dir']}
+                      'artifact_cache_dir': self.config['artifact_cache_dir'],
+                      'build_jobs': self.config['build_jobs'],
+                      'rust_test_threads': self.config['rust_test_threads']}
             path = self.root / node_id / (name + '.json')
             path.write_text(json.dumps(config))
             self.scp(node_id, [path], '/opt/atomic-ci/phase.json')

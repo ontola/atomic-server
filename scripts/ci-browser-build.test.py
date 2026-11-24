@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -72,6 +73,29 @@ class CacheTests(unittest.TestCase):
 
     def run_helper(self, source=SHA):
         return helper.ensure_bundle(source, self.cache, self.output, ['fixture-dagger', 'call'], self.fixture)
+
+    def test_cli_compile_override_reaches_build_and_validation(self):
+        for width in [None, 64]:
+            args = ['ci-browser-build.py', '--source-commit', SHA, '--cache-root', str(self.cache),
+                    '--output', str(self.output), '--receipt', str(self.root / 'receipt.json'),
+                    '--cache-namespace', 'fixture', '--max-build-jobs', '48']
+            if width is not None:
+                args += ['--build-jobs', str(width)]
+            with self.subTest(width=width), mock.patch.object(sys, 'argv', args), \
+                 mock.patch.object(helper, 'ensure_bundle', return_value={}) as ensure, mock.patch('builtins.print'):
+                helper.main()
+            prefix = ensure.call_args.args[3]
+            self.assertEqual(prefix[:6], ['dagger', 'call', '--cache-namespace', 'fixture', '--max-build-jobs', '48'])
+            self.assertEqual(prefix[6:], [] if width is None else ['--build-jobs', '64'])
+
+    def test_cli_rejects_invalid_compile_override_without_building(self):
+        args = ['ci-browser-build.py', '--source-commit', SHA, '--cache-root', str(self.cache),
+                '--output', str(self.output), '--receipt', str(self.root / 'receipt.json'),
+                '--cache-namespace', 'fixture', '--build-jobs', '129']
+        with mock.patch.object(sys, 'argv', args), mock.patch.object(helper, 'ensure_bundle') as ensure, \
+             self.assertRaises(SystemExit):
+            helper.main()
+        ensure.assert_not_called()
 
     def test_valid_hit_never_builds_and_preserves_original_success_receipt(self):
         first = self.run_helper()
