@@ -27,6 +27,31 @@ type PeopleTable = {
   birthdayProp: string;
 };
 
+type ViewLinkTestWindow = Window & {
+  pendingTableViewLink?: { waiting: boolean; release: () => void };
+};
+
+/** Hold only this table's first view-link ACK while the person edits again. */
+async function holdInitialViewLink(page: Page, table: string): Promise<void> {
+  await page.evaluate(tableSubject => {
+    const store = window.store;
+    const post = store.postCommit.bind(store);
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const gate = { waiting: false, release: resolve };
+    (window as ViewLinkTestWindow).pendingTableViewLink = gate;
+
+    store.postCommit = async (commit, endpoint) => {
+      if (!gate.waiting && commit.subject === tableSubject) {
+        gate.waiting = true;
+        await promise;
+        store.postCommit = post;
+      }
+
+      return post(commit, endpoint);
+    };
+  }, table);
+}
+
 /**
  * Creates (via the store) a `Person` class with name(string) + age(integer) +
  * birthday(date), a Table of that class, and three rows. Navigates to the
@@ -205,6 +230,71 @@ async function addFilter(
 test.describe('table filtering + views', () => {
   test.beforeEach(before);
   test.slow();
+
+  test('persists the latest filter while the initial view link is waiting', async ({
+    page,
+  }) => {
+    const { table, ageProp } = await createPeopleTable(page);
+    await holdInitialViewLink(page, table);
+    await addFilter(page, 'Age', 'gt', '10');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as ViewLinkTestWindow).pendingTableViewLink?.waiting ===
+            true,
+        ),
+      )
+      .toBe(true);
+
+    await filterChip(page, 'Age').click();
+    await page.getByRole('textbox', { name: 'Filter value' }).fill('30');
+    await closeFilterEditor(page, 'Age', 'gt');
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await page.evaluate(() =>
+      (window as ViewLinkTestWindow).pendingTableViewLink?.release(),
+    );
+    await page.waitForFunction(
+      ({ tableSubject, property }) => {
+        const store = window.store;
+        const viewSubject = store.resources
+          .get(tableSubject)
+          ?.get('https://atomicdata.dev/properties/table-default-view') as
+          | string
+          | undefined;
+        const filters = viewSubject
+          ? store.resources
+              .get(viewSubject)
+              ?.get('https://atomicdata.dev/properties/view-filters')
+          : undefined;
+
+        return (
+          Array.isArray(filters) &&
+          filters.some(
+            filter =>
+              typeof filter === 'object' &&
+              filter !== null &&
+              !Array.isArray(filter) &&
+              filter.property === property &&
+              filter.operator === 'gt' &&
+              filter.value === '30',
+          ) &&
+          store.getSyncStatus().pendingDirtyCount === 0
+        );
+      },
+      { tableSubject: table, property: ageProp },
+    );
+    await page.evaluate(() => window.store.getClientDb()?.flush());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
+  });
 
   test('string operators: starts_with and contains', async ({ page }) => {
     await createPeopleTable(page);
