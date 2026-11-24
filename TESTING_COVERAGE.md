@@ -722,6 +722,20 @@ Docker/Dagger fan-out run is required. Its full test inventory and all shard
 reports must reconcile before the controller can report success. Compiler and
 unit suites remain separate from the shared production E2E build.
 
+The controller regressions also run scheduling through a failed first check
+and failed first browser shard: every remaining check and shard must finish,
+failed reports must retain their counts and inventory identities, and the
+final aggregate must fail. Missing or unfinished checks, cancelled phases,
+source/report mismatches and deadlines cannot become collected test failures.
+These fake-host tests do not measure real-machine CI completion time.
+
+`browser/e2e/tests/canvas-undo.spec.ts` covers tap undo/redo, scrubbing without
+losing redo history, restoring a discarded branch and undo after reload. Each
+case uses the shared hook's one fresh identity. The raw pointer gestures first
+wait for the Undo control to receive events, so the dev-drive toast cannot
+intercept their pointer-down. Strict browser diagnostics remain enabled to
+catch stale requests made under another identity.
+
 `scripts/ci-browser-build.test.py` uses a recording builder to verify completed
 host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries
 are rebuilt, failures publish no completion marker, concurrent requests build

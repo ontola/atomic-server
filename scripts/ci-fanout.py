@@ -43,6 +43,36 @@ BUNDLE_FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'test
 MUTATIONS = {'create', 'delete', 'import'}
 
 
+class PhaseFailure(RuntimeError):
+    """A completed check/test failed; independent scheduled work can continue."""
+
+    def __init__(self, node_id, phase, result):
+        super().__init__(node_id + ': ' + phase + ' failed')
+        self.node_id, self.phase, self.result = node_id, phase, result
+
+
+class CIValidationFailure(RuntimeError):
+    """All selected work completed, with one or more failed checks/tests."""
+
+
+def completed_phase_failure(node, result):
+    """Never turn cancellation, source errors or missing execution into test failures."""
+    if result.get('status') != 'failed':
+        return False
+    commands = result.get('commands', [])
+    if not commands or any(item.get('exit_code') != 0 for item in commands[:-1]):
+        return False
+    exit_code = commands[-1].get('exit_code')
+    if (node.get('phase_kind') == 'check'
+            and node.get('phase') in {'check-' + name for name, _ in CHECKS}):
+        return (type(exit_code) is int and exit_code > 0
+                and result.get('error') == 'RuntimeError: phase command exited ' + str(exit_code))
+    browser_exit = result.get('browser_exit_code')
+    return (node.get('phase_kind') == 'browser' and exit_code == 0
+            and type(browser_exit) is int and browser_exit > 0
+            and result.get('error') == 'RuntimeError: browser tests exited ' + str(browser_exit))
+
+
 def utcnow():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -175,10 +205,11 @@ def report_identities(report):
     return identities
 
 
-def verify_browser_report(report, expected_commit, result, index, count):
-    if result.get('source_commit') != expected_commit or result.get('status') != 'passed':
+def verify_browser_report(report, expected_commit, result, index, count, allow_failure=False):
+    failed = allow_failure and completed_phase_failure({'phase_kind': 'browser'}, result)
+    if result.get('source_commit') != expected_commit or (result.get('status') != 'passed' and not failed):
         raise ValueError('browser phase did not pass on the pinned source')
-    if result.get('browser_exit_code') != 0:
+    if result.get('browser_exit_code') != 0 and not failed:
         raise ValueError('export command success is not browser success')
     if report.get('errors'):
         raise ValueError('browser report contains global errors')
@@ -192,10 +223,17 @@ def verify_browser_report(report, expected_commit, result, index, count):
             specs.extend(suite.get('specs', []))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
+    unexpected = 0
     for spec in specs:
         for test in spec.get('tests', []):
-            if test.get('status') not in ('expected', 'flaky', 'skipped'):
+            if test.get('status') == 'unexpected' and failed:
+                unexpected += 1
+                if not test.get('results') or any(r.get('status') == 'interrupted' for r in test['results']):
+                    raise ValueError('browser report contains an incomplete test')
+            elif test.get('status') not in ('expected', 'flaky', 'skipped'):
                 raise ValueError('browser report contains an unsuccessful test')
+    if failed and not unexpected:
+        raise ValueError('failed browser exit has no completed unsuccessful test')
     return report_identities(report)
 
 
@@ -548,6 +586,8 @@ dagger version
             self.update(lambda value: value['nodes'][node_id]['phase_results'].update({node['phase']: result}))
             self.node_update(node_id, status='waiting', last_result=result)
             if result['status'] != 'passed':
+                if completed_phase_failure(node, result):
+                    raise PhaseFailure(node_id, node['phase'], result)
                 raise RuntimeError(node_id + ': ' + node['phase'] + ' failed')
             self.event(node_id + ': passed ' + node['phase'])
             return True
@@ -566,6 +606,60 @@ dagger version
                         waiting.remove(tasks[future])
             if waiting:
                 time.sleep(15)
+
+    def record_phase_failure(self, error):
+        failure = {'node_id': error.node_id, 'phase': error.phase,
+                   'error': error.result.get('error'), 'finished_at': error.result.get('finished_at')}
+
+        def append(state):
+            failures = state.setdefault('ci_failures', [])
+            if not any((item['node_id'], item['phase']) == (error.node_id, error.phase) for item in failures):
+                failures.append(failure)
+                failures.sort(key=lambda item: (item['node_id'], item['phase']))
+        self.update(append)
+        self.event(str(error) + '; continuing independent checks and browser shards')
+
+    def run_check_queue(self, node_id, jobs):
+        for name, args in jobs:
+            self.phase(node_id, 'check-' + name, 'check', args)
+            try:
+                self.wait([node_id])
+            except PhaseFailure as error:
+                self.record_phase_failure(error)
+
+    def run_browser_shard(self, node_id, builder):
+        self.browser(node_id, builder)
+        try:
+            self.wait([node_id])
+        except PhaseFailure as error:
+            self.record_phase_failure(error)
+            return self.verify_browser(node_id, allow_failure=True)
+        return self.verify_browser(node_id)
+
+    def finish_validation(self, nodes):
+        state = self.read()
+        expected = {'check-' + name for name, _ in CHECKS}
+        checks = [name for node in state['nodes'].values() for name in node['phase_results'] if name in expected]
+        if set(checks) != expected or len(checks) != len(expected):
+            raise ValueError('selected CI checks did not complete exactly once')
+        failures = state.get('ci_failures', [])
+        recorded = {(item['node_id'], item['phase']) for item in failures}
+        for key, node in state['nodes'].items():
+            for name, result in node['phase_results'].items():
+                if name in expected or (key in nodes and name == 'browser'):
+                    if result.get('status') not in ('passed', 'failed'):
+                        raise ValueError('selected CI phase is not complete: ' + key + ': ' + name)
+                    if result['status'] == 'failed' and (key, name) not in recorded:
+                        raise ValueError('selected CI phase failure was not collected: ' + key + ': ' + name)
+        reports = [[tuple(item[:4]) + (tuple(item[4]),)
+                    for item in state['nodes'][key]['browser_identities']] for key in nodes]
+        count = verify_suite_union(state['bundle']['inventory'], reports)
+        self.update(lambda value: value.update(full_browser_test_count=count, validation_completed_at=stamp()))
+        if failures:
+            raise CIValidationFailure('CI completed with failures: ' + '; '.join(
+                item['node_id'] + ': ' + item['phase'] for item in failures))
+        self.update(lambda value: value.update(validation_passed_at=stamp()))
+        return count
 
     def source_inputs(self, nodes):
         reference = self.read().get('source_input_reference')
@@ -817,7 +911,7 @@ systemctl reload ssh
                          artifacts_retrieved_at=stamp())
         return local
 
-    def verify_browser(self, node_id):
+    def verify_browser(self, node_id, allow_failure=False):
         local = self.retrieve(node_id)
         state = self.read()
         node = state['nodes'][node_id]
@@ -826,8 +920,10 @@ systemctl reload ssh
             raise ValueError('retrieved browser result differs from observed result')
         report = json.loads((local / 'results/browser/browser/test-results.json').read_text())
         identities = verify_browser_report(report, self.config['source_commit'], result,
-                                            node['shard_index'], state['plan']['nodes'])
-        self.node_update(node_id, browser_identities=identities, browser_verified_at=stamp())
+                                            node['shard_index'], state['plan']['nodes'], allow_failure)
+        self.node_update(node_id, browser_identities=identities, browser_completed_at=stamp(),
+                         browser_stats=report.get('stats', {}), browser_passed=result['status'] == 'passed',
+                         browser_verified_at=stamp() if result['status'] == 'passed' else None)
         return identities
 
     def remove(self, node_id):
@@ -1018,11 +1114,7 @@ systemctl reload ssh
             for index, job in enumerate(CHECKS):
                 queues[check_nodes[index % len(check_nodes)]].append(job)
 
-            def check_queue(key):
-                for name, args in queues[key]:
-                    self.phase(key, 'check-' + name, 'check', args)
-                    self.wait([key])
-            checks = {key:check_pool.submit(check_queue, key) for key in check_nodes}
+            checks = {key:check_pool.submit(self.run_check_queue, key, queues[key]) for key in check_nodes}
             build = check_pool.submit(self.wait, [builder])
             # Rust may continue while the first imported browser shard validates the transport.
             while not (build.done() and checks[canary].done()):
@@ -1036,9 +1128,7 @@ systemctl reload ssh
             self.read_bundle(builder)
             self.archive_bundle(builder)
             self.share(builder, [canary])
-            self.browser(canary, builder)
-            self.wait([canary])
-            self.verify_browser(canary)
+            self.run_browser_shard(canary, builder)
             self.remove(canary)
             remaining = [key for key in node_ids if key not in initial]
             self._parallel_create(remaining)
@@ -1048,21 +1138,13 @@ systemctl reload ssh
             def run_browser(key):
                 if key in checks:
                     checks[key].result()
-                self.browser(key, builder)
-                self.wait([key])
-                self.verify_browser(key)
+                self.run_browser_shard(key, builder)
                 if key != builder:
                     self.remove(key)
             jobs = [browser_pool.submit(run_browser, key) for key in node_ids if key != canary]
             for future in cf.as_completed(jobs):
                 future.result()
-            reports = []
-            for key in node_ids:
-                reports.append([tuple(item[:4]) + (tuple(item[4]),)
-                                for item in self.read()['nodes'][key]['browser_identities']])
-            count = verify_suite_union(self.read()['bundle']['inventory'], reports)
-            self.update(lambda state: state.update(full_browser_test_count=count,
-                                                   validation_passed_at=stamp()))
+            self.finish_validation(node_ids)
             self.cleanup('all checks and complete browser suite passed', successful=True)
         except BaseException as error:
             if self.path.exists():

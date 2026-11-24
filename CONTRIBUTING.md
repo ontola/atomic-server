@@ -312,7 +312,13 @@ browser reports, and removes its temporary machines and keys. A separate
 watchdog enforces the configured deadline (four hours by default). Completed
 checks are not repeated merely to occupy otherwise idle machines; additional
 browser workers are started after the build is ready. The first imported
-browser shard must succeed before the rest of the fleet is created.
+browser shard must return a complete, source-verified report before the rest
+of the fleet is created. Completed check or browser assertion failures are
+collected while later independent checks and browser shards continue. The
+runner reconciles all ten checks and the complete browser inventory before
+returning an aggregate failure; collecting a failed report never makes it pass.
+Source, build, transport, malformed-report and deadline errors still stop the
+run because the remaining results could not be validated safely.
 Before that first browser shard, the runner also copies the completed bundle
 and its original build receipt to `artifact_archive_dir` on the controller's
 machine. This archive survives Droplet deletion and can restore a verified

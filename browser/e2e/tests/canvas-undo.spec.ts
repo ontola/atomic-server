@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { before, devDrive, getCurrentSubject, newResource } from './test-utils';
+import { before, getCurrentSubject, newResource } from './test-utils';
 
 const CANVAS_CLASS = 'https://atomicdata.dev/ontology/canvas/Canvas';
 const STROKE_DATA = 'https://atomicdata.dev/ontology/canvas/strokeData';
@@ -94,7 +94,6 @@ test.describe('canvas undo', () => {
   test('tap undo and redo step through edits one at a time', async ({
     page,
   }) => {
-    await devDrive(page);
     await newResource(CANVAS_CLASS, page);
     const subject = await getCurrentSubject(page);
 
@@ -126,7 +125,6 @@ test.describe('canvas undo', () => {
   test('dragging the undo button scrubs history, and redo still walks forward after landing', async ({
     page,
   }) => {
-    await devDrive(page);
     await newResource(CANVAS_CLASS, page);
     const subject = await getCurrentSubject(page);
 
@@ -138,6 +136,10 @@ test.describe('canvas undo', () => {
     // Press the undo button and drag left the full scrub width — that
     // sweeps the whole timeline, landing on the initial empty state. The
     // version overlay must show while scrubbing.
+    // Raw mouse input has no actionability checks. Wait for the control to
+    // receive pointer events before measuring it: the dev-drive toast can
+    // still cover this corner on a fast build.
+    await undoButton(page).hover();
     const box = await undoButton(page).boundingBox();
 
     if (!box) throw new Error('undo button has no bounding box');
@@ -168,7 +170,6 @@ test.describe('canvas undo', () => {
   test('drawing after undo archives the abandoned version; holding undo and releasing on its thumbnail restores it', async ({
     page,
   }) => {
-    await devDrive(page);
     await newResource(CANVAS_CLASS, page);
     const subject = await getCurrentSubject(page);
 
@@ -190,6 +191,7 @@ test.describe('canvas undo', () => {
     expect(await strokeCount(page, subject)).toBe(2);
 
     // Hold the undo button: the discarded version appears as a thumbnail.
+    await undoButton(page).hover();
     const box = await undoButton(page).boundingBox();
 
     if (!box) throw new Error('undo button has no bounding box');
@@ -227,7 +229,6 @@ test.describe('canvas undo', () => {
   test('undo works right after a cold reload of a canvas with history', async ({
     page,
   }) => {
-    await devDrive(page);
     await newResource(CANVAS_CLASS, page);
     const subject = await getCurrentSubject(page);
 
