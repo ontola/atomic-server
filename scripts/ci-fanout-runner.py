@@ -74,6 +74,10 @@ def check_identity(config, repo):
 def main(config_path):
     config = json.loads(config_path.read_text())
     repo = ROOT / 'repo'
+    for field, default, low in (('build_jobs', 4, 1), ('rust_test_threads', 0, 0)):
+        value = config.get(field, default)
+        if type(value) is not int or not low <= value <= 128:
+            raise ValueError('invalid ' + field)
     check_identity(config, repo)
     results = ROOT / 'results' / config['phase']
     if results.exists():
@@ -85,7 +89,8 @@ def main(config_path):
     write_json(results / 'progress.json', state)
     prefix = (['dagger', '-m', config['module'], 'call'] if config.get('module') else
               ['dagger', 'call', '--cache-namespace', config['batch_key'] + '-' + config['node_id'],
-               '--max-build-jobs', '4'])
+               '--max-build-jobs', str(config.get('build_jobs', 4)),
+               '--build-jobs', str(config.get('build_jobs', 4))])
     try:
         if config.get('preflight'):
             commands = [[sys.executable, 'scripts/ci-browser-build.test.py'],
@@ -104,9 +109,14 @@ def main(config_path):
                 '--output', '/opt/atomic-ci/share/bundle',
                 '--receipt', str(results / 'browser-build-receipt.json'),
                 '--cache-namespace', config['batch_key'] + '-' + config['node_id'],
-                '--max-build-jobs', '4'])
+                '--max-build-jobs', str(config.get('build_jobs', 4)),
+                '--build-jobs', str(config.get('build_jobs', 4))])
         else:
-            commands.append(prefix + config['args'])
+            args = list(config['args'])
+            threads = config.get('rust_test_threads', 0)
+            if config['kind'] == 'check' and args == ['rust-test'] and threads:
+                args += ['--test-threads', str(threads)]
+            commands.append(prefix + args)
         for index, command in enumerate(commands):
             item = {'command': command, 'started_at': stamp()}
             state['commands'].append(item)

@@ -10,6 +10,7 @@ import datetime as dt
 import importlib.util
 import json
 import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -169,6 +170,76 @@ class FakeController(fanout.Controller):
         return ids
 
 
+class RunnerResourceTests(unittest.TestCase):
+    def test_commands_receive_configured_resources_without_changing_probes(self):
+        spec = importlib.util.spec_from_file_location('runner_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        cases = [('check', None, ['rust-test'], {}, ['--max-build-jobs', '4', '--build-jobs', '4', 'rust-test']),
+                 ('check', None, ['rust-test'], {'build_jobs': 64, 'rust_test_threads': 48},
+                  ['--max-build-jobs', '64', '--build-jobs', '64', 'rust-test', '--test-threads', '48']),
+                 ('check', None, ['rust-clippy'], {'build_jobs': 64, 'rust_test_threads': 48},
+                  ['--max-build-jobs', '64', '--build-jobs', '64', 'rust-clippy']),
+                 ('probe', '/fixture/probe', ['build'], {'build_jobs': 64}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
+        for kind, module, args, widths, expected in cases:
+            with self.subTest(kind=kind, args=args, widths=widths), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                config_path = root / 'config.json'
+                config_path.write_text(json.dumps(dict(batch_key='fixture', node_id='node-001', phase='command',
+                    source_commit=SHA, kind=kind, module=module, args=args, **widths)))
+                calls = []
+                with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_identity'), \
+                     mock.patch.object(runner, 'run', side_effect=lambda command, directory, log: calls.append(command) or 0):
+                    self.assertEqual(runner.main(config_path), 0)
+                self.assertEqual(calls[0][-len(expected):], expected)
+
+    def test_builder_receives_both_compile_width_flags(self):
+        spec = importlib.util.spec_from_file_location('runner_builder_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); config_path = root / 'config.json'
+            config_path.write_text(json.dumps(dict(batch_key='fixture', node_id='node-001', phase='build',
+                source_commit=SHA, kind='builder', args=[], build_jobs=64)))
+            calls = []
+            def run(command, directory, log):
+                calls.append(command)
+                (root / 'results/build/browser-build-receipt.json').write_text('{}')
+                return 0
+            with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_identity'), \
+                 mock.patch.object(runner, 'run', side_effect=run):
+                self.assertEqual(runner.main(config_path), 0)
+            self.assertEqual(calls[0][-4:], ['--max-build-jobs', '64', '--build-jobs', '64'])
+
+    def test_runner_rejects_invalid_width_before_any_command(self):
+        spec = importlib.util.spec_from_file_location('runner_bad_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'config.json'
+            for field, value in [('build_jobs', 0), ('build_jobs', True), ('rust_test_threads', 129)]:
+                path.write_text(json.dumps({field: value}))
+                with self.subTest(field=field), mock.patch.object(runner, 'run') as run, self.assertRaises(ValueError):
+                    runner.main(path)
+                run.assert_not_called()
+
+
+class ResourceConfigTests(unittest.TestCase):
+    def test_default_and_explicit_resource_widths(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = config(Path(temp), 4)
+            self.assertEqual(settings['build_jobs'], 4)
+            self.assertEqual(settings['rust_test_threads'], 0)
+            self.assertEqual(settings['workers'], 1)
+            settings.update(build_jobs=64, rust_test_threads=48, workers=16)
+            self.assertEqual(fanout.validate_config(settings), settings)
+            for field, bad_values in [('build_jobs', [0, -1, 129, 1.5, True]),
+                                      ('rust_test_threads', [-1, 129, 1.5, True]),
+                                      ('workers', [0, 65, 1.5, True])]:
+                for value in bad_values:
+                    with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                        fanout.validate_config(dict(settings, **{field: value}))
+
+
 class CoverageTests(unittest.TestCase):
     def test_export_exit_zero_cannot_mask_browser_failure(self):
         result = {'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 1}
@@ -224,6 +295,20 @@ class LifecycleTests(unittest.TestCase):
     def initialize(self):
         self.controller.initialize(self.controller.plan())
         self.controller.register_keys()
+
+    def test_phase_transport_preserves_explicit_resource_widths(self):
+        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16)
+        self.initialize()
+        self.controller.node_update('node-001', status='ready')
+        self.controller.update(lambda value: value.update(
+            deadline=(fanout.utcnow() + dt.timedelta(hours=1)).isoformat()))
+        actual = fanout.Controller(self.controller.config, self.api)
+        (actual.root / 'node-001').mkdir()
+        with mock.patch.object(actual, 'scp'), mock.patch.object(actual, 'ssh'), mock.patch.object(actual, 'event'):
+            actual.phase('node-001', 'check-rust-test', 'check', ['rust-test'])
+        phase = actual.read()['nodes']['node-001']['phase_config']
+        self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
+        self.assertEqual(phase['args'], ['rust-test'])
 
     def test_successful_doctl_delete_can_have_empty_output(self):
         api = fanout.DigitalOcean('/unused')

@@ -278,7 +278,15 @@ Required keys are `batch_key`, `source_commit`, `worktree`, `runtime_dir` and
 `accounts`; each account supplies `context`, `expected_uuid` and `nodes`.
 Optional `region`, `size`, `expected_hourly_rate`, `max_hours`, `workers` and
 `retries` set the budget. The default is a four-vCPU Amsterdam machine and a
-four-hour deadline. The tiny cross-engine probe ships with the runner.
+four-hour deadline. `build_jobs` (default 4, range 1–128) sets the explicit
+Cargo compilation width for the build and independent checks;
+`rust_test_threads` (default 0, range 0–128) overrides Rust test execution
+threads only when nonzero. `workers` accepts 1–64 Playwright workers per
+shard; its default remains one. Choose these widths for the actual CPU and
+memory budget rather than assuming more parallel tests always finish sooner.
+Standalone Dagger calls can use constructor `--build-jobs N` to override the
+host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+The tiny cross-engine probe ships with the runner.
 `plan` checks capacity and prices without creating resources; `run` builds and
 runs the checks, then distributes the bundle directly to the browser workers:
 

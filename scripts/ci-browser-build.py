@@ -175,9 +175,14 @@ def main():
     parser.add_argument('--receipt', type=Path, required=True)
     parser.add_argument('--cache-namespace', required=True)
     parser.add_argument('--max-build-jobs', type=int, default=4)
+    parser.add_argument('--build-jobs', type=int, default=0)
     args = parser.parse_args()
+    if not 0 <= args.build_jobs <= 128:
+        parser.error('--build-jobs must be between 0 and 128')
     prefix = ['dagger', 'call', '--cache-namespace', args.cache_namespace,
               '--max-build-jobs', str(args.max_build_jobs)]
+    if args.build_jobs:
+        prefix += ['--build-jobs', str(args.build_jobs)]
     receipt = ensure_bundle(args.source_commit, args.cache_root, args.output, prefix)
     args.receipt.parent.mkdir(parents=True, exist_ok=True)
     args.receipt.write_text(json.dumps(receipt, indent=2) + '\n')

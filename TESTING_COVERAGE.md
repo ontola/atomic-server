@@ -679,7 +679,12 @@ configuration on independent Dagger engines. `scripts/browser-bundle.test.mjs`
 checks portable checkout fingerprints, manifest/source/tool/platform validation
 and imported shard graph behavior. `scripts/ci-fanout.test.py` exercises the
 temporary runner's resource ownership, deadlines, accounting and report gates
-without creating paid resources. These fixtures do not establish real OCI
+without creating paid resources. Resource-width fixtures verify default and
+explicit compilation/Rust execution/browser widths, invalid ranges, and exact
+remote runner/build-helper argument propagation without changing probe-module
+calls. Dagger regressions execute an explicit compile override through Cargo
+and nextest and verify that a smaller maximum cap still wins.
+These fixtures do not establish real OCI
 transport, regional capacity or full browser acceptance; an actual frozen-commit
 Docker/Dagger fan-out run is required. Its full test inventory and all shard
 reports must reconcile before the controller can report success. Compiler and
