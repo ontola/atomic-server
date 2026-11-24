@@ -439,6 +439,17 @@ that the server embeds a real WASI component, including with a custom target dir
 The context-menu E2E flow catches title blur stealing focus from the menu;
 Enter retains its explicit handoff into page content.
 
+Dropdown keyboard modality (#2656):
+`browser/data-browser/src/components/Dropdown/keyboardNavigation.test.tsx`
+renders the canonical shared menu with its real portal and theme. Searchable,
+non-searchable, button, keyboard-opened and touch-primary menus retain selection
+when the pointer retargets without changing viewport coordinates. Actual mouse
+movement switches input mode; the next arrow restores selection, skips disabled
+items and dividers, and Escape closes the menu. These DOM tests synthesize the
+retargeting events; they do not establish which event fired in a past CI trace.
+The Kanban browser test waits for filter focus and distinct non-null selections
+after both arrows, while retaining its Escape assertion.
+
 `node --experimental-strip-types --test browser/e2e/scripts/*.node.mjs`
 checks process-group ownership with concurrent real HTTP servers, ephemeral
 ports, unrelated-service preservation, startup failure and worker disconnect
