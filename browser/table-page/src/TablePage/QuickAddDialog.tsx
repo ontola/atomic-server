@@ -10,6 +10,7 @@ import {
   useDialog,
 } from '@tomic/resource-ui/components/Dialog/index';
 import { Button } from '@tomic/ui/components/Button';
+import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
 import {
   QuickAddFields,
   draftFromSpec,
@@ -18,6 +19,7 @@ import {
   type QuickAddDraft,
 } from './QuickAddFields.js';
 import type { QuickAddSpec } from './quickAdd.js';
+import { useDialogSave } from './helpers/useDialogSave.js';
 
 interface Props {
   open: boolean;
@@ -25,7 +27,7 @@ interface Props {
   classProperties: Property[];
   /** The spec being edited, if the view already has one. */
   editing?: QuickAddSpec;
-  onSave: (spec: QuickAddSpec | undefined) => void;
+  onSave: (spec: QuickAddSpec | undefined) => void | Promise<void>;
 }
 
 /**
@@ -43,6 +45,8 @@ export function QuickAddDialog({
   const [draft, setDraft] = useState<QuickAddDraft>(() =>
     draftFromSpec(undefined),
   );
+  const [editingExisting, setEditingExisting] = useState(!!editing);
+  const { busy, error, clearError, submit, cancel } = useDialogSave(hide);
 
   useEffect(() => {
     if (open) {
@@ -56,18 +60,27 @@ export function QuickAddDialog({
     }
 
     setDraft(draftFromSpec(editing));
+    setEditingExisting(!!editing);
+    clearError();
     // Only on open: re-syncing while the dialog is up would overwrite what is
     // being typed every time a commit lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   return (
-    <Dialog {...dialogProps}>
+    <Dialog
+      {...dialogProps}
+      aria-busy={busy}
+      disableLightDismiss={busy}
+      onClose={cancel}
+    >
       <DialogTitle>
-        <h2>{editing ? 'Edit the add button' : 'Add a create button'}</h2>
+        <h2>
+          {editingExisting ? 'Edit the add button' : 'Add a create button'}
+        </h2>
       </DialogTitle>
       <DialogContent>
-        <Fields>
+        <Fields inert={busy}>
           <Intro>
             It sits above the rows and creates one. Everything else about the
             row is edited in the table.
@@ -78,30 +91,28 @@ export function QuickAddDialog({
             classProperties={classProperties}
           />
         </Fields>
+        {error && <ErrorChip role='alert'>{error}</ErrorChip>}
       </DialogContent>
       <DialogActions>
-        {editing && (
+        {editingExisting && (
           <Button
             subtle
+            disabled={busy}
             data-testid='quick-add-config-remove'
-            onClick={() => {
-              onSave(undefined);
-              hide();
-            }}
+            onClick={() => submit(() => onSave(undefined))}
           >
             Remove
           </Button>
         )}
-        <Button subtle onClick={() => hide()}>
+        <Button subtle disabled={busy} onClick={cancel}>
           Cancel
         </Button>
         <Button
           data-testid='quick-add-config-save'
-          disabled={!isQuickAddDraftComplete(draft)}
-          onClick={() => {
-            onSave(specFromDraft(draft));
-            hide();
-          }}
+          disabled={busy || !isQuickAddDraftComplete(draft, classProperties)}
+          onClick={() =>
+            submit(() => onSave(specFromDraft(draft, classProperties)))
+          }
         >
           Save
         </Button>

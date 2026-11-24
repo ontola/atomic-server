@@ -8,6 +8,7 @@ import {
 } from '@tomic/react';
 import { ROW_ACTION_GENERATORS } from './rowActions.js';
 import { withTableRowDefaults } from './rowDefaults.js';
+import { saveTableChange } from './tableSave.js';
 
 /**
  * One value a new row starts with.
@@ -85,7 +86,7 @@ export async function createQuickAddRow(
     // The presets above win over the table's defaults.
     propVals: await withTableRowDefaults(store, table, propVals),
   });
-  await row.save();
+  await saveTableChange(row);
   // Tells the rest of the app a row appeared that it did not ask for — the
   // sidebar, the search index, anything watching the parent.
   store.notifyResourceManuallyCreated(row);

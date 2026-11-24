@@ -34,6 +34,7 @@ import {
   type DerivedColumnSpec,
 } from './derivedColumns.js';
 import { parseColumnOrder } from './columnOrder.js';
+import { saveTableChange } from './tableSave.js';
 import {
   parseAggregates,
   type GroupGranularity,
@@ -163,7 +164,7 @@ export interface UseTableViewResult {
    */
   viewDerivedColumnsSet: boolean;
   /** Persist the derived columns to the active View (lazy-creates it). */
-  setViewDerivedColumns: (specs: DerivedColumnSpec[]) => void;
+  setViewDerivedColumns: (specs: DerivedColumnSpec[]) => Promise<void>;
   /**
    * The display order of this view's columns, by key — property subjects for
    * stored columns, `derived:<id>` / `timer-action` for the ones a view adds.
@@ -186,14 +187,17 @@ export interface UseTableViewResult {
    */
   viewRowActions: RowActionSpec[];
   /** Persist the row actions to the active View (lazy-creates it). */
-  setViewRowActions: (actions: RowActionSpec[]) => void;
+  setViewRowActions: (
+    actions: RowActionSpec[],
+    columnOrder?: string[],
+  ) => Promise<void>;
   /**
    * The button this view offers for creating a row — "Log a feed", "Add item".
    * Undefined when the view offers none.
    */
   viewQuickAdd: QuickAddSpec | undefined;
   /** Persist the quick-add (undefined removes it). */
-  setViewQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  setViewQuickAdd: (spec: QuickAddSpec | undefined) => Promise<void>;
   /** The property the statistics are broken down by, if any. */
   viewGroupByColumn: string | undefined;
   /** Persist the breakdown property (empty string clears it). */
@@ -363,7 +367,9 @@ export function useTableView(
   const hydratedForRef = useRef<string | null>(null);
   const lastPersistedRef = useRef<string>('');
   /** True while lazily creating the View that will hold local state. */
-  const creatingViewRef = useRef(false);
+  const creatingViewRef = useRef<
+    { table: Resource; promise: Promise<Resource> } | undefined
+  >(undefined);
 
   useEffect(() => {
     const key = activeView ?? '__none__';
@@ -375,7 +381,7 @@ export function useTableView(
     // Mid-creation of the View that is about to hold local state — see
     // `ensureView`. Reading it now would hydrate from a View whose config
     // hasn't been written yet and wipe the change that caused the creation.
-    if (creatingViewRef.current) {
+    if (creatingViewRef.current?.table === table) {
       return;
     }
 
@@ -446,7 +452,14 @@ export function useTableView(
       sort: initialSort,
     });
     hydratedForRef.current = key;
-  }, [activeView, viewName, storedFilters, storedSortBy, storedSortDesc]);
+  }, [
+    activeView,
+    viewName,
+    storedFilters,
+    storedSortBy,
+    storedSortDesc,
+    table,
+  ]);
 
   // --- View creation / linking. ---
   /**
@@ -630,8 +643,28 @@ export function useTableView(
 
   // --- Persist (debounced) whenever the local config changes post-hydration. ---
   const ensureView = useCallback(async (): Promise<Resource | undefined> => {
+    if (!canWriteNow.current) return;
+
     if (activeView) {
-      return store.getResourceLoading(activeView);
+      const agent = store.getAgent()?.subject;
+      const target = await store.getResource(activeView);
+      const belongsToTable =
+        table
+          .getSubjects(dataBrowser.properties.tableViews)
+          .includes(activeView) ||
+        table.get(dataBrowser.properties.tableDefaultView) === activeView;
+
+      if (
+        canWriteNow.current &&
+        agent === store.getAgent()?.subject &&
+        belongsToTable &&
+        target.isReady() &&
+        target.get(core.properties.parent) === table.subject
+      ) {
+        return target;
+      }
+
+      return;
     }
 
     // Creating the View flips `activeView` from undefined to its subject, which
@@ -644,17 +677,23 @@ export function useTableView(
     // can land midway through `createViewResource`, so marking it hydrated
     // afterwards is already too late. Without this, adding the first filter to
     // a table silently lost it whenever the re-render won that race.
-    creatingViewRef.current = true;
+    const creating = creatingViewRef.current;
+    if (creating?.table === table) return creating.promise;
+
+    const promise = createViewResource('Default View');
+    creatingViewRef.current = { table, promise };
 
     try {
-      const created = await createViewResource('Default View');
-      hydratedForRef.current = created.subject;
+      const created = await promise;
+      if (creatingViewRef.current?.promise === promise)
+        hydratedForRef.current = created.subject;
 
       return created;
     } finally {
-      creatingViewRef.current = false;
+      if (creatingViewRef.current?.promise === promise)
+        creatingViewRef.current = undefined;
     }
-  }, [activeView, store, createViewResource]);
+  }, [activeView, store, table, createViewResource]);
 
   useEffect(() => {
     if (hydratedForRef.current !== (activeView ?? '__none__') || !canWrite) {
@@ -746,23 +785,23 @@ export function useTableView(
   // --- Column order/visibility + name. Persisted immediately (discrete
   // actions), lazy-creating the View like the filter/sort path. ---
   /**
-   * Run `write` against the active View (lazy-creating it) and save. Fire and
-   * forget: a failure leaves the local state as the user last saw it.
+   * Run `write` against the captured View (lazy-creating it) and await its save.
    */
-  const withView = useCallback(
-    (write: (view: Resource) => void | Promise<void>) => {
-      void (async () => {
-        const v = await ensureView();
+  const persistView = useCallback(
+    async (write: (view: Resource) => void | Promise<void>) => {
+      const v = await ensureView();
+      if (!v) throw new Error('The table view is unavailable for editing.');
 
-        if (!v) {
-          return;
-        }
-
-        await write(v);
-        await v.save();
-      })().catch(() => undefined);
+      await write(v);
+      await saveTableChange(v);
     },
     [ensureView],
+  );
+  const withView = useCallback(
+    (write: (view: Resource) => void | Promise<void>) => {
+      void persistView(write).catch(() => undefined);
+    },
+    [persistView],
   );
 
   const setViewColumns = useCallback(
@@ -851,10 +890,10 @@ export function useTableView(
 
   const setViewDerivedColumns = useCallback(
     (specs: DerivedColumnSpec[]) =>
-      withView(v =>
+      persistView(v =>
         v.set(dataBrowser.properties.viewDerivedColumns, specs, false),
       ),
-    [withView],
+    [persistView],
   );
 
   const setViewColumnOrder = useCallback(
@@ -874,16 +913,22 @@ export function useTableView(
   );
 
   const setViewRowActions = useCallback(
-    (actions: RowActionSpec[]) =>
-      withView(v =>
-        v.set(dataBrowser.properties.viewRowActions, actions, false),
-      ),
-    [withView],
+    (actions: RowActionSpec[], columnOrder?: string[]) =>
+      persistView(async v => {
+        await v.set(dataBrowser.properties.viewRowActions, actions, false);
+        if (columnOrder)
+          await v.set(
+            dataBrowser.properties.viewColumnOrder,
+            columnOrder,
+            false,
+          );
+      }),
+    [persistView],
   );
 
   const setViewQuickAdd = useCallback(
     (spec: QuickAddSpec | undefined) =>
-      withView(async v => {
+      persistView(async v => {
         if (spec === undefined) {
           v.remove(dataBrowser.properties.viewQuickAdd);
         } else {
@@ -892,7 +937,7 @@ export function useTableView(
           await v.set(dataBrowser.properties.viewQuickAdd, spec as never);
         }
       }),
-    [withView],
+    [persistView],
   );
 
   const setViewGroupByColumn = useCallback(

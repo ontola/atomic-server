@@ -1,14 +1,6 @@
 import { resourceTheme } from '@tomic/resource-ui/theme';
+import { Resource, useCanWrite, useResource } from '@tomic/react';
 import {
-  Resource,
-  properties,
-  useCanWrite,
-  useResource,
-  useString,
-  core,
-} from '@tomic/react';
-import {
-  useCallback,
   useContext,
   useImperativeHandle,
   useMemo,
@@ -33,15 +25,7 @@ import {
 import { styled } from 'styled-components';
 import { EditPropertyDialog } from './PropertyForm/EditPropertyDialog.js';
 import { TablePageContext } from './tablePageContext.js';
-import {
-  ConfirmationDialog,
-  ConfirmationDialogTheme,
-} from '@tomic/resource-ui/components/ConfirmationDialog';
-import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
-import { ResourceUsage } from '@tomic/resource-ui/components/ResourceUsage/index';
 import { useResourceNavigation } from '@tomic/resource-ui/ResourceUIHost';
-import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
-import { Column } from '@tomic/ui/components/Row';
 import { useNavigateWithTransition } from '@tomic/resource-ui/ResourceUIHost';
 
 /** Imperative handle so the header can open this menu on right-click. */
@@ -59,20 +43,11 @@ const Trigger = buildDefaultTrigger(
   () => 'Edit column',
 );
 
-const useIsExternalProperty = (property: Resource) => {
-  const { tableClassSubject } = useContext(TablePageContext);
-  const [parent] = useString(property, properties.parent);
-
-  return parent !== tableClassSubject;
-};
-
 export function TableHeadingMenu({
   resource,
   ref,
 }: TableHeadingMenuProps): JSX.Element {
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog_internal] = useState(false);
-  const [fullDelete, setFullDelete] = useState(false);
   // Cursor point of a right-click-opened menu (undefined = closed). Shares its
   // `items` and dialogs with the kebab-triggered menu below.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
@@ -88,58 +63,13 @@ export function TableHeadingMenu({
     [],
   );
 
-  const setShowDeleteDialog = useCallback((show: boolean) => {
-    setShowDeleteDialog_internal(show);
-
-    if (!show) {
-      setFullDelete(false);
-    }
-  }, []);
-
-  const { tableClassSubject, addFilter, hideColumn } =
+  const { tableClassSubject, addFilter, hideColumn, requestColumnRemoval } =
     useContext(TablePageContext);
   const tableClassResource = useResource(tableClassSubject);
   const canWriteClass = useCanWrite(tableClassResource);
   const canWriteProperty = useCanWrite(resource);
   const { constructOpenURL } = useResourceNavigation();
   const navigate = useNavigateWithTransition();
-
-  const isExternalProperty = useIsExternalProperty(resource);
-
-  const removeProperty = useCallback(async () => {
-    const recommends = tableClassResource.getArray(
-      core.properties.recommends,
-    ) as string[];
-    const requires = tableClassResource.getArray(
-      core.properties.requires,
-    ) as string[];
-
-    await tableClassResource.set(
-      core.properties.recommends,
-      recommends.filter(r => r !== resource.subject),
-    );
-
-    await tableClassResource.set(
-      core.properties.requires,
-      requires.filter(r => r !== resource.subject),
-    );
-
-    await tableClassResource.save();
-  }, [tableClassResource, resource]);
-
-  const deleteProperty = useCallback(async () => {
-    await removeProperty();
-
-    resource.destroy();
-  }, [removeProperty, resource]);
-
-  const onConfirm = useCallback(() => {
-    if (isExternalProperty) {
-      removeProperty();
-    } else {
-      deleteProperty();
-    }
-  }, [deleteProperty, removeProperty, isExternalProperty]);
 
   const items = useMemo(
     (): DropdownItem[] => [
@@ -173,7 +103,7 @@ export function TableHeadingMenu({
       {
         id: 'remove',
         label: 'Remove',
-        onClick: () => setShowDeleteDialog(true),
+        onClick: () => requestColumnRemoval(resource),
         icon: <FaXmark />,
         disabled: !canWriteClass,
       },
@@ -185,8 +115,8 @@ export function TableHeadingMenu({
       canWriteProperty,
       navigate,
       constructOpenURL,
-      resource.subject,
-      setShowDeleteDialog,
+      resource,
+      requestColumnRemoval,
     ],
   );
 
@@ -206,26 +136,6 @@ export function TableHeadingMenu({
         showDialog={showEditDialog}
         bindShow={setShowEditDialog}
       />
-      <ConfirmationDialog
-        title={fullDelete ? 'Delete property' : 'Remove column'}
-        confirmLabel={fullDelete ? 'Delete' : 'Remove'}
-        show={showDeleteDialog}
-        bindShow={setShowDeleteDialog}
-        theme={ConfirmationDialogTheme.Alert}
-        onConfirm={onConfirm}
-      >
-        <Column>
-          <p>
-            Remove <ResourceInline subject={resource.subject} /> from{' '}
-            <ResourceInline subject={tableClassSubject} />
-          </p>
-          <ResourceUsage resource={resource} />
-          <CheckboxLabel>
-            <Checkbox checked={fullDelete} onChange={setFullDelete} />
-            Delete property and its children
-          </CheckboxLabel>
-        </Column>
-      </ConfirmationDialog>
     </Wrapper>
   );
 }

@@ -1,4 +1,10 @@
-import { core, useResource, useString, type Property } from '@tomic/react';
+import {
+  core,
+  Datatype,
+  useResource,
+  useString,
+  type Property,
+} from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
 import { TableRowActionFields } from '@tomic/table';
 import {
@@ -9,6 +15,9 @@ import {
   useDialog,
 } from '@tomic/resource-ui/components/Dialog/index';
 import { Button } from '@tomic/ui/components/Button';
+import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
+import { useDialogSave } from './helpers/useDialogSave.js';
+import { parseFloatText, parseInteger } from './EditorCells/numberInput.js';
 import { PropertyOption } from './DerivedColumnDialog.js';
 import {
   ROW_ACTION_GENERATORS,
@@ -26,7 +35,7 @@ interface Props {
   classProperties: Property[];
   /** Set when editing; absent when adding. */
   editing?: RowActionSpec;
-  onSave: (spec: RowActionSpec) => void;
+  onSave: (spec: RowActionSpec) => void | Promise<void>;
 }
 
 /**
@@ -42,6 +51,8 @@ export function RowActionDialog({
   onSave,
 }: Props): JSX.Element {
   const [dialogProps, show, hide, isOpen] = useDialog({ bindShow });
+  const { busy, error, clearError, submit, cancel } = useDialogSave(hide);
+  const [draftId, setDraftId] = useState('');
 
   const [kind, setKind] = useState<RowActionKind>('setNow');
   const [label, setLabel] = useState('');
@@ -59,6 +70,8 @@ export function RowActionDialog({
       return;
     }
 
+    setDraftId(editing?.id ?? crypto.randomUUID());
+    clearError();
     setKind(editing?.kind ?? 'setNow');
     setLabel(editing?.label ?? '');
     setProperty(editing?.property ?? '');
@@ -90,27 +103,40 @@ export function RowActionDialog({
     ),
   }));
 
+  const numeric =
+    valueField?.input === 'number' ||
+    target?.datatype === Datatype.INTEGER ||
+    target?.datatype === Datatype.FLOAT;
+  const parseNumber =
+    target?.datatype === Datatype.INTEGER ? parseInteger : parseFloatText;
+  const literal = numeric ? parseNumber(value) : value;
   const draft: RowActionSpec = {
-    id: editing?.id ?? '',
+    id: draftId,
     label: label || generator.defaultLabel,
     kind,
     property,
-    ...(valueField
-      ? {
-          value:
-            valueField.input === 'number' ? Number(value) : (value as string),
-        }
-      : {}),
+    ...(valueField && typeof literal !== 'symbol' ? { value: literal } : {}),
   };
 
-  const complete = isRowActionComplete(draft) && !!property;
+  const complete =
+    !!target &&
+    generator.accepts(target) &&
+    isRowActionComplete(draft) &&
+    (valueField?.input !== 'select' ||
+      !target.allowsOnly?.length ||
+      target.allowsOnly.includes(value));
 
   return (
-    <Dialog {...dialogProps}>
+    <Dialog
+      {...dialogProps}
+      aria-busy={busy}
+      disableLightDismiss={busy}
+      onClose={cancel}
+    >
       <DialogTitle>
         <h2>{editing ? 'Edit action' : 'Add an action'}</h2>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent inert={busy}>
         <TableRowActionFields
           kinds={kinds}
           kind={kind}
@@ -144,18 +170,16 @@ export function RowActionDialog({
               'This table has no column of the right kind for that yet.',
           }}
         />
+        {error && <ErrorChip role='alert'>{error}</ErrorChip>}
       </DialogContent>
       <DialogActions>
-        <Button subtle onClick={() => hide()}>
+        <Button subtle disabled={busy} onClick={cancel}>
           Cancel
         </Button>
         <Button
           data-testid='action-config-save'
-          disabled={!complete}
-          onClick={() => {
-            onSave(draft);
-            hide();
-          }}
+          disabled={busy || !complete}
+          onClick={() => submit(() => onSave(draft))}
         >
           Save
         </Button>
