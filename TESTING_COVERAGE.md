@@ -711,6 +711,11 @@ explicit compilation/Rust execution/browser widths, invalid ranges, and exact
 remote runner/build-helper argument propagation without changing probe-module
 calls. Dagger regressions execute an explicit compile override through Cargo
 and nextest and verify that a smaller maximum cap still wins.
+Warm-clone regressions compare command sequences with default/two fresh keys,
+verify each nonce is inserted immediately before a test execution after reusable
+setup, and preserve stable namespace/nonce transport without adding either to
+the OCI probe. They establish graph-input differences, not a measured cache hit
+or proof that a specific cloud snapshot was quiescent.
 These fixtures do not establish real OCI
 transport, regional capacity or full browser acceptance; an actual frozen-commit
 Docker/Dagger fan-out run is required. Its full test inventory and all shard

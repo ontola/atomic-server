@@ -180,7 +180,11 @@ class RunnerResourceTests(unittest.TestCase):
                   ['--max-build-jobs', '64', '--build-jobs', '64', 'rust-test', '--test-threads', '48']),
                  ('check', None, ['rust-clippy'], {'build_jobs': 64, 'rust_test_threads': 48},
                   ['--max-build-jobs', '64', '--build-jobs', '64', 'rust-clippy']),
-                 ('probe', '/fixture/probe', ['build'], {'build_jobs': 64}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
+                 ('check', None, ['rust-test'], {'build_jobs': 64, 'rust_test_threads': 48,
+                  'cache_namespace': 'warm-seed', 'test_run_key': 'clone-one'},
+                  ['--cache-namespace', 'warm-seed', '--max-build-jobs', '64', '--build-jobs', '64',
+                   '--test-run-key', 'clone-one', 'rust-test', '--test-threads', '48']),
+                 ('probe', '/fixture/probe', ['build'], {'build_jobs': 64, 'test_run_key': 'clone-one', 'cache_namespace': 'warm-seed'}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
         for kind, module, args, widths, expected in cases:
             with self.subTest(kind=kind, args=args, widths=widths), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -200,7 +204,8 @@ class RunnerResourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); config_path = root / 'config.json'
             config_path.write_text(json.dumps(dict(batch_key='fixture', node_id='node-001', phase='build',
-                source_commit=SHA, kind='builder', args=[], build_jobs=64)))
+                source_commit=SHA, kind='builder', args=[], build_jobs=64,
+                cache_namespace='warm-seed', test_run_key='clone-one')))
             calls = []
             def run(command, directory, log):
                 calls.append(command)
@@ -210,13 +215,16 @@ class RunnerResourceTests(unittest.TestCase):
                  mock.patch.object(runner, 'run', side_effect=run):
                 self.assertEqual(runner.main(config_path), 0)
             self.assertEqual(calls[0][-4:], ['--max-build-jobs', '64', '--build-jobs', '64'])
+            self.assertEqual(calls[0][calls[0].index('--cache-namespace') + 1], 'warm-seed')
+            self.assertNotIn('--test-run-key', calls[0])
 
     def test_runner_rejects_invalid_width_before_any_command(self):
         spec = importlib.util.spec_from_file_location('runner_bad_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
         runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'config.json'
-            for field, value in [('build_jobs', 0), ('build_jobs', True), ('rust_test_threads', 129)]:
+            for field, value in [('build_jobs', 0), ('build_jobs', True), ('rust_test_threads', 129),
+                                 ('test_run_key', 'two words'), ('cache_namespace', '../foreign')]:
                 path.write_text(json.dumps({field: value}))
                 with self.subTest(field=field), mock.patch.object(runner, 'run') as run, self.assertRaises(ValueError):
                     runner.main(path)
@@ -230,6 +238,12 @@ class ResourceConfigTests(unittest.TestCase):
             self.assertEqual(settings['build_jobs'], 4)
             self.assertEqual(settings['rust_test_threads'], 0)
             self.assertEqual(settings['workers'], 1)
+            self.assertEqual(settings['test_run_key'], '')
+            self.assertEqual(settings['cache_namespace'], '')
+            for field in ('test_run_key', 'cache_namespace'):
+                for value in [True, None, 123, '../foreign', 'two words', 'x' * 82]:
+                    with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                        fanout.validate_config(dict(settings, **{field: value}))
             settings.update(build_jobs=64, rust_test_threads=48, workers=16)
             self.assertEqual(fanout.validate_config(settings), settings)
             for field, bad_values in [('build_jobs', [0, -1, 129, 1.5, True]),
@@ -297,7 +311,8 @@ class LifecycleTests(unittest.TestCase):
         self.controller.register_keys()
 
     def test_phase_transport_preserves_explicit_resource_widths(self):
-        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16)
+        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16,
+                                      test_run_key='clone-one', cache_namespace='warm-seed')
         self.initialize()
         self.controller.node_update('node-001', status='ready')
         self.controller.update(lambda value: value.update(
@@ -309,6 +324,7 @@ class LifecycleTests(unittest.TestCase):
         phase = actual.read()['nodes']['node-001']['phase_config']
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
+        self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
 
     def test_successful_doctl_delete_can_have_empty_output(self):
         api = fanout.DigitalOcean('/unused')
