@@ -58,6 +58,7 @@ jobs:
     outputs:
       host: ${{ steps.pick.outputs.host }}
       e2e_mode: ${{ steps.e2e.outputs.mode }}
+      saas_relevant: ${{ steps.saas.outputs.relevant }}
     steps:
       # Light PR gate: unit tests, lint, builds and the @smoke Playwright subset.
       # The full suite (~2h) runs where a regression must not slip through:
@@ -114,6 +115,49 @@ jobs:
           echo "Defaulting heavy CI to Mancave"
           echo "host=mancave" >> "$GITHUB_OUTPUT"
 
+      # Does this commit change anything atomic-saas compiles? This NARROWS when
+      # `downstream-saas` runs (9 to 13 minutes, and it holds the second Mancave
+      # runner): a dispatched ordinary branch that touches only docs, flutter,
+      # planning, .dagger or other workflows skips it. Safe because the skipped
+      # build could not have failed on such a diff, and everything that gates a
+      # release (develop, tags, trekmeester/combined-*, e2e=full) always runs it.
+      # `browser/` is listed because saas embeds the data-browser dist, so a
+      # frontend change that breaks the build must still be caught. Any doubt
+      # (API error, a file list that may be truncated) answers true.
+      - id: saas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          E2E_INPUT: ${{ inputs.e2e || 'auto' }}
+        run: |
+          set -euo pipefail
+          answer() {
+            echo "relevant=$1" >> "$GITHUB_OUTPUT"
+            echo "Downstream atomic-saas build: **$([ "$1" = true ] && echo runs || echo skipped)** ($2)" >> "$GITHUB_STEP_SUMMARY"
+            echo "saas_relevant=$1 ($2)"
+            exit 0
+          }
+          case "$REF" in
+            refs/heads/develop|refs/tags/v*|refs/heads/trekmeester/combined-*)
+              answer true "$REF always builds it" ;;
+          esac
+          [ "$E2E_INPUT" = full ] && answer true "e2e=full requested"
+          if ! files=$(gh api "repos/$REPO/compare/develop...$SHA" --paginate --jq '.files[].filename'); then
+            answer true "could not compare with develop"
+          fi
+          count=$(printf '%s\n' "$files" | grep -c . || true)
+          # The compare API stops listing files at 300.
+          if [ "$count" -ge 300 ]; then
+            answer true "$count or more files changed"
+          fi
+          pattern='^(Cargo\.toml|Cargo\.lock|rust-toolchain\.toml|lib/|server/|wasm/|plugin-runtime/|atomic-host/|atomic-plugin/|cli/|desktop/|tools/|plugin-examples/|\.cargo/|scripts/check-rust-alignment\.py|browser/|\.github/workflows/main\.yml)'
+          if hit=$(printf '%s\n' "$files" | grep -E -m1 "$pattern"); then
+            answer true "$count files changed, including $hit"
+          fi
+          answer false "$count files changed, none that atomic-saas compiles"
+
   mancave:
     name: Main (Mancave)
     needs: pick
@@ -148,6 +192,9 @@ jobs:
   # branch name); otherwise main. atomic-saas's CI applies the same rule in
   # reverse.
   #
+  # Skipped when `pick` finds nothing atomic-saas compiles in a dispatched
+  # branch's diff (see its `saas` step); `Main` accepts a skipped result.
+  #
   # Mancave only. The token can read a private repo, and fork PRs never run
   # here; PR events are routed to GitHub-hosted heavy CI by `pick`, which also
   # keeps this job off them. `clean: false` keeps both target/ dirs warm, the same
@@ -157,6 +204,7 @@ jobs:
     needs: pick
     if: >-
       needs.pick.outputs.host == 'mancave' &&
+      needs.pick.outputs.saas_relevant == 'true' &&
       github.event_name != 'pull_request' &&
       github.event_name != 'pull_request_target'
     runs-on: ${{ fromJSON(vars.CI_RUNNER_OVERRIDE || '["self-hosted", "Linux", "X64"]') }}
@@ -322,7 +370,8 @@ jobs:
           g="${{ needs.github.result }}"
           d="${{ needs.downstream-saas.result }}"
           echo "host=$host mancave=$m github=$g downstream-saas=$d"
-          # The downstream build is skipped on PR events and on hosted runs;
+          # The downstream build is skipped on PR events, on hosted runs and when
+          # the diff touches nothing atomic-saas compiles;
           # when it ran, it has to have passed.
           if [ "$d" = "failure" ] || [ "$d" = "cancelled" ]; then
             echo "atomic-saas no longer builds against this commit — fix it there on a branch with this name, or here."
