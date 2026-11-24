@@ -708,6 +708,8 @@ case uses the shared hook's one fresh identity. The raw pointer gestures first
 wait for the Undo control to receive events, so the dev-drive toast cannot
 intercept their pointer-down. Strict browser diagnostics remain enabled to
 catch stale requests made under another identity.
+The pan and touch gesture specs also use that single fresh identity rather
+than navigating through a second dev-drive setup inside each case.
 
 `scripts/ci-browser-build.test.py` uses a recording builder to verify completed
 host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries

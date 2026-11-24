@@ -1,6 +1,6 @@
 import type { CDPSession } from '@playwright/test';
 import { test, expect, type Page } from './fixtures';
-import { before, devDrive, newResource } from './test-utils';
+import { before, newResource } from './test-utils';
 
 const CANVAS_CLASS = 'https://atomicdata.dev/ontology/canvas/Canvas';
 const STROKE_DATA = 'https://atomicdata.dev/ontology/canvas/strokeData';
@@ -82,7 +82,6 @@ async function drawWithMouse(page: Page, from: Point, to: Point) {
 }
 
 async function openCanvas(page: Page) {
-  await devDrive(page);
   await newResource(CANVAS_CLASS, page);
 
   const canvas = page.locator('canvas').first();
