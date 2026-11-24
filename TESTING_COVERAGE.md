@@ -254,6 +254,26 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+TablePage follow-ups: `useTableViewRename.test.tsx` exercises captured inactive
+tab identity, real asynchronous resource loading, membership/owner checks and
+permission/account changes during loading. `PropertyForm.test.tsx` checks unique
+accessible name/error identities, disabled input, shortnames and resource-scoped
+focus; the existing number-form regression retains explicit text-format saves.
+The application `table-page-derived-compiler.test.tsx` executes the actual hook
+through the production React 19 compiler and changes only engine readiness.
+The production readiness and seasonal-clock fixes already exist on develop.
+
+`TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
+strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests
+cover missing-column removal, unsupported stored operators, deduplicated Add
+choices and retained callbacks after busy/unavailable transitions. Local filters
+remain editable on read-only tables; an optional busy lock is a host capability.
+`DialogGlobalContextProvider.test.tsx` checks that unmounting an open dialog
+restores the underlying rendered and live stack under Strict Mode. The new
+table-view browser journeys exercise numeric repair and inactive renaming through
+the actual application, including reload and desktop/mobile captures. Their
+execution results belong to the exact tested commit's validation report.
+
 Table format controls: `browser/table/src/schema/PropertyFormatFields.test.tsx`
 checks the existing date radio choices/previews and uncontrolled precision input,
 including host change/blur callbacks, bounds and error rendering.
@@ -431,6 +451,9 @@ CI overrides without mutating the profile or coverage selection.
 `pnpm --dir .dagger test` also exercises the actual Dagger module against a
 recording SDK double: lint must not construct a WASM build, CI validates and
 forwards budget arguments, and E2E applies them to shard and clone settings.
+Rust checks cover the standalone `rust-test --test-threads` override, unchanged
+host defaults and build/retry/coverage arguments, and rejection of invalid
+budgets before constructing containers. Nextest's group limits remain in force.
 These checks run before Dagger in CI and reproduce the incomplete merge in
 `2ccff0976`; they do not substitute for container or browser execution.
 The existing full-snapshot duplicate-import test also covers parent-only resources
@@ -634,6 +657,36 @@ baseline run; its isolated optimized rerun passed. The suite is not reported as
 fully green, and the compaction assertions remain unchanged.
 
 ### Playwright light vs full
+
+Portable browser fan-out uses the same production E2E server and Playwright
+configuration on independent Dagger engines. `scripts/browser-bundle.test.mjs`
+checks portable checkout fingerprints, manifest/source/tool/platform validation
+and imported shard graph behavior. `scripts/ci-fanout.test.py` exercises the
+temporary runner's resource ownership, deadlines, accounting and report gates
+without creating paid resources. These fixtures do not establish real OCI
+transport, regional capacity or full browser acceptance; an actual frozen-commit
+Docker/Dagger fan-out run is required. Its full test inventory and all shard
+reports must reconcile before the controller can report success. Compiler and
+unit suites remain separate from the shared production E2E build.
+
+`scripts/ci-browser-build.test.py` uses a recording builder to verify completed
+host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries
+are rebuilt, failures publish no completion marker, concurrent requests build
+once, and copied volumes materialize regular files for the SFTP chroot. It
+also rejects overlapping cache/output paths and preserves foreign files.
+Validation-only Dagger regressions check copied bundles without constructing
+any compiler, install, image-import or browser-runtime graph. Real persistent
+bundle reuse still needs an actual completed-build validation; these fixtures
+do not constitute full-suite CI on a changed commit.
+
+Source-fingerprint recovery adds a regression for generated empty directories
+and a full per-file diagnostic API. A real Linux checkout comparison found
+133 newly downloaded files under `.pnpm-store`, with no other file changes;
+package stores are excluded from declared source inputs. Controller regressions
+require input comparison before any build and a verified local bundle archive
+before the first browser shard. They exercise archive restoration, corruption
+rejection and bounded cleanup after backup failure, while retaining an
+in-flight Rust check only under the existing deadline.
 
 Only the browser suite has light/full modes. Lint, Rust, vitest, JS
 integration, and Flutter run on every Main CI job. Automatic Main CI on PR events

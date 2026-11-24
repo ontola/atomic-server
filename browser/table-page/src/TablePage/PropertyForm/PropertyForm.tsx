@@ -1,5 +1,12 @@
 import { core, Resource, unknownSubject, useString } from '@tomic/react';
-import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  type JSX,
+} from 'react';
 import { styled } from 'styled-components';
 import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
 import { useValidation } from '@tomic/resource-ui/components/forms/formValidation/useValidation';
@@ -16,6 +23,7 @@ interface PropertyFormProps {
   category?: PropertyFormCategory;
   existingProperty?: boolean;
   autoFocusName?: boolean;
+  disabled?: boolean;
 }
 
 export function PropertyForm({
@@ -24,8 +32,11 @@ export function PropertyForm({
   existingProperty,
   category,
   autoFocusName,
+  disabled,
 }: PropertyFormProps): JSX.Element {
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const nameId = useId();
+  const nameErrorId = `${nameId}-error`;
   const {
     error: nameError,
     setError: setNameError,
@@ -58,6 +69,10 @@ export function PropertyForm({
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (disabled) {
+        return;
+      }
+
       const value = e.target.value;
 
       setName(value);
@@ -69,7 +84,7 @@ export function PropertyForm({
         setShortName(stringToSlug((value ?? '').trim()));
       }
     },
-    [setName, setShortName, existingProperty],
+    [setName, setShortName, existingProperty, disabled],
   );
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = useCallback(
@@ -120,8 +135,12 @@ export function PropertyForm({
         <InputWrapper $invalid={!!nameError}>
           <InputStyled
             ref={nameInputRef}
-            id='name-form'
+            id={nameId}
             type='text'
+            aria-label='Column name'
+            aria-invalid={!!nameError}
+            aria-describedby={nameError ? nameErrorId : undefined}
+            disabled={disabled}
             autoFocus={autoFocusName}
             data-dialog-autofocus={autoFocusName ? true : undefined}
             value={name ?? ''}
@@ -131,7 +150,11 @@ export function PropertyForm({
             onBlur={setNameTouched}
           />
         </InputWrapper>
-        {nameError && <ErrorChip>{nameError}</ErrorChip>}
+        {nameError && (
+          <ErrorChip id={nameErrorId} role='alert'>
+            {nameError}
+          </ErrorChip>
+        )}
       </div>
       <CategoryForm resource={resource} existingProperty={existingProperty} />
       {/* Needed for inputs to submit on enter */}

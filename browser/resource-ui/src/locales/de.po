@@ -13853,6 +13853,27 @@ msgstr "Schreibe jemandem, den du eingeladen hast, etwa einer Kollegin oder eine
 msgid "Send a message here"
 msgstr "Sende hier eine Nachricht"
 
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "Filter value"
+msgstr "Filterwert"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Diese Spalte ist nicht verfügbar."
+
+#: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Spaltenname"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Nicht verfügbare Spalte"
+
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Discard these changes"
 msgstr "Änderungen verwerfen"

@@ -1,3 +1,4 @@
+import { ghostButtonStyles } from '@tomic/ui/components/Button';
 import type { ButtonHTMLAttributes, ComponentType, ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { FaCheck, FaTrash, FaXmark } from 'react-icons/fa6';
@@ -38,7 +39,7 @@ export interface TableRowSelectionActionsProps {
   count: number;
   onDelete: () => void;
   onClear: () => void;
-  Button: ComponentType<ButtonHTMLAttributes<HTMLButtonElement>>;
+  Button?: ComponentType<ButtonHTMLAttributes<HTMLButtonElement>>;
   messages?: Partial<{
     label: string;
     count: ReactNode;
@@ -51,7 +52,7 @@ export function TableRowSelectionActions({
   count,
   onDelete,
   onClear,
-  Button,
+  Button = DefaultButton,
   messages,
 }: TableRowSelectionActionsProps) {
   if (count === 0) return null;
@@ -112,4 +113,12 @@ const Box = styled.button`
   &:hover:not([aria-checked='true']) {
     border-color: ${p => tableTheme(p.theme).colors.main};
   }
+`;
+
+const DefaultButton = styled.button`
+  ${ghostButtonStyles}
+  justify-content: center;
+  height: 1.85rem;
+  width: 1.85rem;
+  padding: 0;
 `;

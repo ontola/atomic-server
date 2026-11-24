@@ -1,4 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { styled } from 'styled-components';
 import { FaXmark } from 'react-icons/fa6';
 import { Popover, PopoverTrigger } from '@tomic/ui/components/Popover';
@@ -22,11 +28,15 @@ export interface TableFilterChipProps {
   onValueChange: (value: string) => void;
   onOperatorChange: (operator: TableFilterOperator) => void;
   onRemove: () => void;
+  /** Lock an open editor while its host is performing a conflicting operation. */
+  disabled?: boolean;
+  unavailable?: boolean;
   derivedUnit?: { suffix: string; allowsNow: boolean };
   renderValueInput: (state: {
     value: string;
     onChange: (value: string) => void;
     autoFocus: boolean;
+    disabled?: boolean;
   }) => ReactNode;
   renderValueSummary: (value: string, suffix?: string) => ReactNode;
   hint?: ReactNode;
@@ -36,6 +46,8 @@ export interface TableFilterChipProps {
     compare: string;
     now: string;
     date: string;
+    value: string;
+    unavailable: string;
   }>;
 }
 
@@ -48,6 +60,8 @@ export function TableFilterChip({
   onValueChange,
   onOperatorChange,
   onRemove,
+  disabled,
+  unavailable,
   derivedUnit,
   renderValueInput,
   renderValueSummary,
@@ -61,16 +75,33 @@ export function TableFilterChip({
     compare: 'Compare against',
     now: 'now',
     date: 'a date',
+    value: 'Filter value',
+    unavailable: 'This column is unavailable.',
     ...messages,
   };
+  const supportedOperator = operators.some(
+    operator => operator.value === filter.operator,
+  );
+
+  const changeValue = useFilterValueChange(
+    onValueChange,
+    disabled || unavailable,
+  );
 
   return (
     <Popover
       updatePositionStrategy='always'
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={next => {
+        if (!next || !disabled) setOpen(next);
+      }}
       Trigger={
-        <ChipTrigger $active={filter.value !== ''} data-testid='filter-chip'>
+        <ChipTrigger
+          type='button'
+          disabled={disabled}
+          $active={filter.value !== ''}
+          data-testid='filter-chip'
+        >
           <ChipLabel>{label}</ChipLabel>
           <ChipOperator>{operatorLabel}</ChipOperator>
           <ChipValue>
@@ -87,70 +118,121 @@ export function TableFilterChip({
         <Row center justify='space-between' gap='1rem'>
           <Header>{label}</Header>
           <RemoveButton
-            onClick={() => onRemove()}
+            disabled={disabled}
+            onClick={() => {
+              if (!disabled) onRemove();
+            }}
             title={text.remove}
             type='button'
           >
             <FaXmark />
           </RemoveButton>
         </Row>
-        {operators.length > 1 && (
-          <BasicSelect
-            value={filter.operator}
-            aria-label={text.operator}
-            onChange={event =>
-              onOperatorChange(event.target.value as TableFilterOperator)
-            }
-          >
-            {operators.map(operator => (
-              <option key={operator.value} value={operator.value}>
-                {operator.label}
-              </option>
-            ))}
-          </BasicSelect>
-        )}
-        {derivedUnit ? (
-          <Column gap='0.5rem'>
-            {derivedUnit.allowsNow && (
+        {unavailable ? (
+          <ScopeHint>{text.unavailable}</ScopeHint>
+        ) : (
+          <>
+            {(operators.length > 1 || !supportedOperator) && (
               <BasicSelect
-                aria-label={text.compare}
-                value={filter.value === 'now' ? 'now' : 'date'}
-                onChange={event =>
-                  onValueChange(event.target.value === 'now' ? 'now' : '')
-                }
+                disabled={disabled}
+                value={filter.operator}
+                aria-label={text.operator}
+                onChange={event => {
+                  const operator = operators.find(
+                    option => option.value === event.target.value,
+                  );
+                  if (!disabled && !unavailable && operator)
+                    onOperatorChange(operator.value);
+                }}
               >
-                <option value='now'>{text.now}</option>
-                <option value='date'>{text.date}</option>
+                {!supportedOperator && (
+                  <option value={filter.operator} disabled>
+                    {operatorLabel}
+                  </option>
+                )}
+                {operators.map(operator => (
+                  <option key={operator.value} value={operator.value}>
+                    {operator.label}
+                  </option>
+                ))}
               </BasicSelect>
             )}
-            {filter.value !== 'now' && (
-              <Row center gap='0.5ch'>
-                <InputWrapper>
-                  <InputStyled
-                    autoFocus
-                    data-testid='derived-filter-value'
-                    onChange={event => onValueChange(event.target.value)}
-                    placeholder={derivedUnit.allowsNow ? 'yyyy-mm-dd' : '0'}
-                    step='any'
-                    type={derivedUnit.allowsNow ? 'date' : 'number'}
-                    value={filter.value}
-                  />
-                </InputWrapper>
-                {derivedUnit.suffix && <Suffix>{derivedUnit.suffix}</Suffix>}
-              </Row>
+            {derivedUnit ? (
+              <Column gap='0.5rem'>
+                {derivedUnit.allowsNow && (
+                  <BasicSelect
+                    disabled={disabled}
+                    aria-label={text.compare}
+                    value={filter.value === 'now' ? 'now' : 'date'}
+                    onChange={event =>
+                      changeValue(event.target.value === 'now' ? 'now' : '')
+                    }
+                  >
+                    <option value='now'>{text.now}</option>
+                    <option value='date'>{text.date}</option>
+                  </BasicSelect>
+                )}
+                {!(derivedUnit.allowsNow && filter.value === 'now') && (
+                  <Row center gap='0.5ch'>
+                    <InputWrapper>
+                      <InputStyled
+                        autoFocus
+                        disabled={disabled}
+                        aria-label={text.value}
+                        data-testid='derived-filter-value'
+                        onChange={event => changeValue(event.target.value)}
+                        placeholder={derivedUnit.allowsNow ? 'yyyy-mm-dd' : '0'}
+                        step='any'
+                        type={
+                          derivedUnit.allowsNow
+                            ? 'date'
+                            : filter.value.trim() === '' ||
+                                Number.isFinite(Number(filter.value))
+                              ? 'number'
+                              : 'text'
+                        }
+                        inputMode={
+                          derivedUnit.allowsNow ? undefined : 'decimal'
+                        }
+                        value={filter.value}
+                      />
+                    </InputWrapper>
+                    {derivedUnit.suffix && (
+                      <Suffix>{derivedUnit.suffix}</Suffix>
+                    )}
+                  </Row>
+                )}
+              </Column>
+            ) : (
+              renderValueInput({
+                value: filter.value,
+                onChange: changeValue,
+                autoFocus: true,
+                disabled,
+              })
             )}
-          </Column>
-        ) : (
-          renderValueInput({
-            value: filter.value,
-            onChange: onValueChange,
-            autoFocus: true,
-          })
+            {hint && <ScopeHint>{hint}</ScopeHint>}
+          </>
         )}
-        {hint && <ScopeHint>{hint}</ScopeHint>}
       </PopoverInner>
     </Popover>
   );
+}
+
+/** Hosts can retain an editor callback while their pending operation changes
+ * the controls. Resolve its lock and destination at event time. */
+function useFilterValueChange(
+  onChange: (value: string) => void,
+  disabled?: boolean,
+) {
+  const state = useRef({ onChange, disabled });
+  useLayoutEffect(() => {
+    state.current = { onChange, disabled };
+  }, [onChange, disabled]);
+
+  return useCallback((value: string) => {
+    if (!state.current.disabled) state.current.onChange(value);
+  }, []);
 }
 
 const Suffix = styled.span`

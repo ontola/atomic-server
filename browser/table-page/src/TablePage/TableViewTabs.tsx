@@ -97,7 +97,7 @@ interface TableViewTabsProps {
   /** Persist a new tab order. */
   reorderViews: (views: string[]) => void;
   viewName: string;
-  renameView: (name: string) => void;
+  renameView: (name: string, subject?: string) => void;
   allColumns: Property[];
   columns: Property[];
   /** The view's computed columns — filterable, like the stored ones. */
@@ -208,7 +208,7 @@ function TableViewTabsContent({
                 fallbackName={subject ? undefined : viewName}
                 canWrite={canWrite}
                 onSelect={() => subject && setActiveView(subject)}
-                onRename={renameView}
+                onRename={name => renameView(name, subject)}
                 createView={createView}
                 setViewKind={setViewKind}
                 canChangeType={

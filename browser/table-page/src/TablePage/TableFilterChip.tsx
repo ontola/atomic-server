@@ -30,12 +30,14 @@ interface TableFilterChipProps {
   column?: Property;
   /** The computed column this constrains instead. Exactly one of the two. */
   derived?: DerivedColumnSpec;
+  disabled?: boolean;
 }
 
 export function TableFilterChip({
   filter,
   column,
   derived,
+  disabled,
 }: TableFilterChipProps): JSX.Element {
   const { setFilterValue, setFilterOperator, removeFilter, viewKind } =
     useContext(TablePageContext);
@@ -44,13 +46,21 @@ export function TableFilterChip({
   const [name] = useString(propResource, core.properties.name);
   const key = filterKey(filter);
 
-  const label = derived ? derived.label : columnLabel(name, column!.shortname);
+  const unavailable = !column && !derived;
+  const label = derived
+    ? derived.label
+    : column
+      ? columnLabel(name, column.shortname)
+      : 'Unavailable column';
   const operators = derived
     ? DERIVED_FILTER_OPERATORS
-    : operatorsForDatatype(column!.datatype);
-  const chipOperator = derived
-    ? operatorLabel(filter.operator)
-    : operatorLabelForColumn(filter.operator, column!.datatype);
+    : column
+      ? operatorsForDatatype(column.datatype)
+      : [];
+  const chipOperator =
+    derived || unavailable
+      ? operatorLabel(filter.operator)
+      : operatorLabelForColumn(filter.operator, column!.datatype);
   const unit = derived ? derivedFilterUnit(derived) : undefined;
 
   return (
@@ -64,12 +74,14 @@ export function TableFilterChip({
           ? operatorLabel(value)
           : operatorLabelForColumn(value, column!.datatype),
       }))}
+      disabled={disabled}
+      unavailable={unavailable}
       onValueChange={value => setFilterValue(key, value)}
       onOperatorChange={operator => setFilterOperator(key, operator)}
       onRemove={() => removeFilter(key)}
       derivedUnit={derived ? unit : undefined}
       renderValueInput={state => (
-        <TableFilterValueInput property={column!} {...state} />
+        <TableFilterValueInput property={column!} {...state} normalizeNumbers />
       )}
       renderValueSummary={(value, suffix) => (
         <FilterValueSummary value={value} suffix={suffix} />
@@ -80,6 +92,8 @@ export function TableFilterChip({
         compare: 'Compare against',
         now: /* @wc-include */ 'now',
         date: /* @wc-include */ 'a date',
+        value: 'Filter value',
+        unavailable: 'This column is unavailable.',
       }}
       hint={
         viewKind === 'calendar' &&

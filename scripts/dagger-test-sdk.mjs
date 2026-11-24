@@ -1,7 +1,14 @@
 const calls = [];
+let response;
+
+/** Supply individual SDK responses without replacing the module under test. */
+export function setChainResponse(resolver) {
+  response = resolver;
+}
 
 export function resetCalls() {
   calls.length = 0;
+  response = undefined;
 }
 
 export function recordedCalls() {
@@ -14,8 +21,13 @@ export function makeChain(label = 'chain') {
     {
       get(target, property) {
         if (property === 'then') return undefined;
-        if (property === 'stdout') return async () => '';
-        if (property === 'contents') return async () => '';
+        if (['stdout', 'contents', 'platform'].includes(property))
+          return async (...args) => {
+            const supplied = response?.(target.label, property, args);
+            if (supplied !== undefined) return supplied;
+
+            return property === 'platform' ? 'linux/amd64' : '';
+          };
         if (property === 'directory' || property === 'file')
           return (...args) => {
             calls.push([String(property), ...args]);
@@ -32,6 +44,7 @@ export function makeChain(label = 'chain') {
 
 export const dag = {
   container: () => makeChain('container'),
+  directory: () => makeChain('directory'),
   cacheVolume: name => ({ name }),
 };
 

@@ -105,7 +105,10 @@ export function useDialogGlobalContext(open: boolean) {
 
   useEffect(() => {
     setDialogOpen(id, open);
-  }, [open, id]);
+
+    // A page-owned dialog can unmount before its open state changes.
+    return () => setDialogOpen(id, false);
+  }, [open, id, setDialogOpen]);
 
   return {
     isTopLevel,

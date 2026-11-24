@@ -13856,6 +13856,27 @@ msgstr "Schrijf iemand die je hebt uitgenodigd, zoals een collega of vriend"
 msgid "Send a message here"
 msgstr "Stuur hier een bericht"
 
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table-page/src/TablePage/TableFilterValueInput.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "Filter value"
+msgstr "Filterwaarde"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+#: ../table/src/filters/FilterChip.tsx
+msgid "This column is unavailable."
+msgstr "Deze kolom is niet beschikbaar."
+
+#: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
+msgid "Column name"
+msgstr "Kolomnaam"
+
+#: ../table-page/src/TablePage/TableFilterChip.tsx
+msgid "Unavailable column"
+msgstr "Kolom niet beschikbaar"
+
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Discard these changes"
 msgstr "Wijzigingen weggooien"

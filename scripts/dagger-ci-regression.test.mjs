@@ -303,6 +303,84 @@ test('focused Rust tests apply the constructor cap to Cargo and nextest compilat
   assert.match(nextest?.[1][2], /--test-threads 2 /);
 });
 
+function nextestCommand() {
+  const command = recordedCalls().find(
+    ([name, args]) =>
+      name === 'withExec' && args[2]?.includes('cargo nextest run'),
+  );
+  assert.ok(command, 'Rust tests must execute cargo nextest');
+
+  return command[1][2];
+}
+
+test('Rust test thread defaults retain both host budgets and existing CI calls', async () => {
+  for (const [profile, threads] of [
+    ['hosted', 2],
+    ['mancave', 12],
+  ]) {
+    const pipeline = new AtomicServer(source());
+    stubCi(pipeline);
+    const rustArguments = [];
+    pipeline.rustTest = async (...args) => rustArguments.push(args);
+    await pipeline.ci('token', false, profile);
+    assert.deepEqual(rustArguments, [[]]);
+
+    resetCalls();
+    await AtomicServer.prototype.rustTest.call(pipeline);
+    const implicit = nextestCommand();
+    assert.match(implicit, new RegExp(`--test-threads ${threads} `));
+
+    resetCalls();
+    await AtomicServer.prototype.rustTest.call(pipeline, 0);
+    assert.equal(nextestCommand(), implicit);
+  }
+});
+
+test('explicit Rust test threads reach nextest without changing compile jobs or coverage', async () => {
+  const pipeline = new AtomicServer(source(), 'isolated-rust', 4);
+  resetCalls();
+  await pipeline.rustTest();
+  const defaults = nextestCommand();
+
+  for (const threads of [4, 1, 128]) {
+    resetCalls();
+    await pipeline.rustTest(threads);
+    assert.equal(
+      nextestCommand(),
+      defaults.replace('--test-threads 2 ', `--test-threads ${threads} `),
+    );
+    assert.deepEqual(
+      recordedCalls().filter(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+      ),
+      [['withEnvVariable', 'CARGO_BUILD_JOBS', '4']],
+    );
+  }
+});
+
+test('Rust test threads reject invalid budgets before constructing any containers', () => {
+  const pipeline = new AtomicServer(source());
+
+  for (const threads of [
+    -1,
+    0.5,
+    129,
+    NaN,
+    Infinity,
+    -Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    '4; echo unexpected',
+  ]) {
+    resetCalls();
+    assert.throws(
+      () => pipeline.rustTest(threads),
+      /test-threads must be an integer between 0 and 128/,
+    );
+    assert.deepEqual(recordedCalls(), []);
+  }
+});
+
 test('CI caps both host profiles without raising limits or changing uncapped defaults', async () => {
   for (const [profile, limit, cargo, nextest] of [
     ['hosted', 0, '4', '4'],

@@ -1,3 +1,4 @@
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import type { ComponentType, InputHTMLAttributes, ReactNode } from 'react';
 import { styled } from 'styled-components';
 import type { RowActionKind, TableRowActionKind } from './rowActionTypes.js';
@@ -153,13 +154,7 @@ const Hint = styled.span`
   color: ${p => tableTheme(p.theme).colors.textLight};
 `;
 
-const Select = styled.select`
-  padding: 0.4rem;
-  border: 1px solid ${p => tableTheme(p.theme).colors.bg2};
-  border-radius: ${p => tableTheme(p.theme).radius};
-  background-color: ${p => tableTheme(p.theme).colors.bg};
-  color: ${p => tableTheme(p.theme).colors.text};
-`;
+const Select = BasicSelect;
 
 function DefaultInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
