@@ -37,6 +37,7 @@ import {
 } from './canvas-draw';
 import {
   bendFromHandle,
+  moveArrowEnd,
   deleteElements,
   edgePoint,
   nearShapeOutline,
@@ -196,7 +197,9 @@ type TextEdit = {
 
 type TransformGesture = {
   pointerId: number;
-  mode: 'move' | 'scale' | 'bend';
+  mode: 'move' | 'scale' | 'bend' | 'end';
+  /** Which end of the arrow an `end` gesture drags. */
+  end?: 0 | 1;
   start: [number, number];
   anchor: [number, number];
   corner: [number, number];
@@ -688,7 +691,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     drawSelectionOverlay(
       ctx,
       lassoPathRef.current,
-      selected,
+      only?.kind === 'arrow' ? null : selected,
       scaleRef.current,
       offsetRef.current.x,
       offsetRef.current.y,
@@ -1455,6 +1458,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       const arrow = picked.length === 1 ? placed[picked[0]] : undefined;
 
       if (arrow?.kind === 'arrow') {
+        for (const end of [0, 1] as const) {
+          const [ex, ey] = arrow.path[end];
+
+          if (
+            Math.hypot(
+              sx - (ex * s + offsetRef.current.x),
+              sy - (ey * s + offsetRef.current.y),
+            ) <= HANDLE_HIT_RADIUS
+          ) {
+            transformRef.current = {
+              pointerId: e.pointerId,
+              mode: 'end',
+              end,
+              start: [x, y],
+              anchor: [x, y],
+              corner: [x, y],
+              base: list,
+              selection: picked,
+              moved: false,
+            };
+            el.setPointerCapture(e.pointerId);
+
+            return;
+          }
+        }
+
         const [hx, hy] = arrowHandleScreenPosition(
           arrow,
           s,
@@ -1497,13 +1526,17 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         [bounds.minX, bounds.maxY],
         [bounds.maxX, bounds.maxY],
       ];
-      const cornerIndex = corners.findIndex(
-        ([cx, cy]) =>
-          Math.hypot(
-            sx - (cx * s + offsetRef.current.x),
-            sy - (cy * s + offsetRef.current.y),
-          ) <= HANDLE_HIT_RADIUS,
-      );
+      // A lone arrow has end handles instead of a resize box.
+      const cornerIndex =
+        arrow?.kind === 'arrow'
+          ? -1
+          : corners.findIndex(
+              ([cx, cy]) =>
+                Math.hypot(
+                  sx - (cx * s + offsetRef.current.x),
+                  sy - (cy * s + offsetRef.current.y),
+                ) <= HANDLE_HIT_RADIUS,
+            );
       const pad = 8 / s;
       const inside =
         x >= bounds.minX - pad &&
@@ -1565,6 +1598,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
       return g.base.map((el, i) =>
         i === g.selection[0] ? withBend(el, bend) : el,
+      );
+    }
+
+    if (g.mode === 'end') {
+      const i = g.selection[0];
+
+      return g.base.map((el, j) =>
+        j === i
+          ? moveArrowEnd(el, g.end ?? 1, [x, y], g.base, 6 / scaleRef.current)
+          : el,
       );
     }
 
@@ -2118,7 +2161,17 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     if (gesture && gesture.pointerId === e.pointerId) {
       gesture.moved = true;
-      setPreviewStrokes(transformedStrokes(gesture, x, y));
+
+      const next = transformedStrokes(gesture, x, y);
+
+      if (gesture.mode === 'end') {
+        // Outline the block the end would bind to.
+        const arrow = next[gesture.selection[0]];
+
+        setHoverId((gesture.end === 0 ? arrow.from : arrow.to) ?? null);
+      }
+
+      setPreviewStrokes(next);
 
       return;
     }
@@ -2236,6 +2289,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
       const next = previewStrokesRef.current;
       setPreviewStrokes(null);
+      setHoverId(null);
 
       // A release without a drag leaves the strokes as they were.
       if (gesture.moved && next && e.type !== 'pointercancel') {

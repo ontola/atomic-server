@@ -9,6 +9,7 @@ import {
   duplicateElements,
   edgePoint,
   handlePosition,
+  moveArrowEnd,
   nearShapeOutline,
   pointInShape,
   resolveArrows,
@@ -315,5 +316,63 @@ describe('layoutShapeText', () => {
       'a',
       'b',
     ]);
+  });
+});
+
+describe('moveArrowEnd', () => {
+  const a = shape('a', 0, 0); // centre (50, 30)
+  const b = shape('b', 300, 0);
+  const c = shape('c', 300, 200);
+  const bound = arrow({ from: 'a', to: 'b' });
+
+  it('binds the dragged end to the block under the point', () => {
+    const moved = moveArrowEnd(bound, 1, [350, 230], [a, b, c, bound], 0);
+
+    expect(moved.to).toBe('c');
+    expect(moved.from).toBe('a');
+  });
+
+  it('unbinds in empty space and keeps the free point', () => {
+    const moved = moveArrowEnd(bound, 1, [600, 500], [a, b, c, bound], 0);
+
+    expect(moved.to).toBeUndefined();
+    expect(moved.from).toBe('a');
+    expect(moved.path[1]).toEqual([600, 500]);
+  });
+
+  it('keeps the other end where it was drawn when it was free', () => {
+    const free = arrow({
+      path: [
+        [20, 20],
+        [200, 20],
+      ],
+    });
+    const moved = moveArrowEnd(free, 0, [40, 90], [free], 0);
+
+    expect(moved.path).toEqual([
+      [40, 90],
+      [200, 20],
+    ]);
+  });
+
+  it('does not bind both ends to the same block', () => {
+    const moved = moveArrowEnd(bound, 1, [50, 30], [a, b, bound], 0);
+
+    expect(moved.to).toBeUndefined();
+  });
+
+  it('turns and scales the bend with the chord', () => {
+    const free = arrow({
+      path: [
+        [0, 0],
+        [100, 0],
+      ],
+      bend: [0, 40],
+    });
+    const moved = moveArrowEnd(free, 1, [0, 200], [free], 0);
+
+    // Chord rotated 90 degrees and doubled: the bend does the same.
+    expect(moved.bend?.[0]).toBeCloseTo(-80);
+    expect(moved.bend?.[1]).toBeCloseTo(0);
   });
 });
