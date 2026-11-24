@@ -254,6 +254,14 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+First saved-view drafts: `useTableView.debounce.test.tsx` holds initial view
+creation/table linking while later filter edits arrive, then verifies the latest
+owned draft is saved. It also covers coalesced creation, table/view navigation,
+empty-table hydration and rejected saves. The gated-commit browser case in
+`table-views-filters.spec.ts` checks the repaired value through a real save and
+reload. Initial link rejection is reported without claiming success; automatic
+link retry and broader SDK persistence recovery remain outside this repair.
+
 TablePage follow-ups: `useTableViewRename.test.tsx` exercises captured inactive
 tab identity, real asynchronous resource loading, membership/owner checks and
 permission/account changes during loading. `PropertyForm.test.tsx` checks unique
