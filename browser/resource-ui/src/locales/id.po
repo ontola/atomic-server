@@ -553,7 +553,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13019,10 +13019,6 @@ msgid "Unlock your backup"
 msgstr "Buka cadangan Anda"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Go back to your device."
-msgstr "Kembali ke perangkat Anda."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not send your identity"
 msgstr "Tidak dapat mengirim identitas Anda"
 
@@ -13898,4 +13894,9 @@ msgstr ""
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy atomic: URL"
+msgstr ""
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Go back to {0}."
 msgstr ""

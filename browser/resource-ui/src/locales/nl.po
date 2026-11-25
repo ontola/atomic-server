@@ -553,7 +553,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -13022,10 +13022,6 @@ msgid "Unlock your backup"
 msgstr "Je back-up ontgrendelen"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Go back to your device."
-msgstr "Ga terug naar je apparaat."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not send your identity"
 msgstr "Kan je identiteit niet verzenden"
 
@@ -13910,3 +13906,8 @@ msgstr "Kopieer je identiteits-URL ({0})"
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy atomic: URL"
 msgstr "Kopieer atomic: URL"
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Go back to {0}."
+msgstr "Ga terug naar {0}."

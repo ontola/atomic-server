@@ -61,7 +61,7 @@ type Phase =
       methods: UnlockMethod[];
     }
   | { name: 'sending' }
-  | { name: 'done' }
+  | { name: 'done'; deviceName: string }
   | { name: 'failed'; message: string };
 
 /**
@@ -172,7 +172,7 @@ function SendIdentityPage() {
 
     try {
       await sendIdentity(code, link, recovery, secret);
-      setPhase({ name: 'done' });
+      setPhase({ name: 'done', deviceName: link.deviceName });
     } catch (err) {
       setPhase({
         name: 'failed',
@@ -399,7 +399,7 @@ function SendIdentityPage() {
             {phase.name === 'done' ? (
               <>
                 <CardTitle>Done</CardTitle>
-                <CardSubtitle>Go back to your device.</CardSubtitle>
+                <CardSubtitle>Go back to {phase.deviceName}.</CardSubtitle>
               </>
             ) : null}
 

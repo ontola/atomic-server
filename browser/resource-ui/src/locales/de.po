@@ -553,7 +553,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13019,10 +13019,6 @@ msgid "Unlock your backup"
 msgstr "Deine Sicherung entsperren"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Go back to your device."
-msgstr "Kehre zu deinem Gerät zurück."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not send your identity"
 msgstr "Deine Identität konnte nicht gesendet werden"
 
@@ -13906,4 +13902,9 @@ msgstr ""
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy atomic: URL"
+msgstr ""
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Go back to {0}."
 msgstr ""
