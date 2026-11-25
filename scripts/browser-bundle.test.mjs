@@ -16,6 +16,7 @@ import {
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -32,6 +33,12 @@ import {
   validateBrowserShard,
 } from '../.dagger/src/browser-bundle.ts';
 import { AtomicServer } from '../.dagger/src/index.ts';
+import {
+  BROWSER_RETRY_LIST_CHECK_SCRIPT,
+  BROWSER_RETRY_LIST_SCRIPT,
+  BROWSER_RETRY_RUN_SCRIPT,
+  validateBrowserRetryInput,
+} from '../.dagger/src/browser-retry.ts';
 
 const COMMIT = 'a'.repeat(40);
 const HASH = 'b'.repeat(64);
@@ -819,6 +826,7 @@ mkdir -p "$FAKE_E2E_DIR/playwright-report" "$FAKE_E2E_DIR/test-results/failed"
 printf '%s' '{"stats":{"expected":0,"unexpected":1,"flaky":0,"skipped":0},"suites":[]}' > "$PLAYWRIGHT_JSON_OUTPUT_NAME"
 printf '%s' 'failure report' > "$FAKE_E2E_DIR/playwright-report/index.html"
 printf '%s' 'trace bytes' > "$FAKE_E2E_DIR/test-results/failed/trace.zip"
+printf '%s' '{"status":"failed","failedTests":["failed-id"]}' > "$FAKE_E2E_DIR/test-results/.last-run.json"
 printf '%s\\n' 'Synthetic failing browser test'
 exit 1
 `,
@@ -830,10 +838,11 @@ exit 1
       '/test-exit-code': join(temp, 'test-exit-code'),
       '/test-output.log': join(temp, 'test-output.log'),
       '/test-results.json': join(temp, 'test-results.json'),
+      '/retry-last-run.json': join(temp, 'retry-last-run.json'),
     };
     const relocate = script =>
       script.replace(
-        /\/app\/e2e|\/browser-results|\/test-exit-code|\/test-output\.log|\/test-results\.json/g,
+        /\/app\/e2e|\/browser-results|\/test-exit-code|\/test-output\.log|\/test-results\.json|\/retry-last-run\.json/g,
         original => map[original],
       );
     execFileSync('/bin/bash', ['-c', relocate(browserScript)], {
@@ -869,6 +878,21 @@ exit 1
       readFileSync(join(results, 'test-results/failed/trace.zip'), 'utf8'),
       'trace bytes',
     );
+    const receipt = JSON.parse(readFileSync(join(results, 'browser-run.json'), 'utf8'));
+    assert.equal(receipt.sourceCommit, COMMIT);
+    assert.equal(receipt.manifestSha256, bundle.manifestHash);
+    assert.equal(receipt.reportSha256, sha256(readFileSync(join(results, 'test-results.json'))));
+    assert.equal(receipt.lastRunSha256, sha256(readFileSync(join(results, 'test-results/.last-run.json'))));
+    const originalLastRun = readFileSync(join(e2e, 'test-results/.last-run.json'));
+    // --last-failed-file writes its updated result at the explicit path,
+    // outside Playwright's output directory. Export that updated file too.
+    writeFileSync(map['/retry-last-run.json'], '{"status":"passed","failedTests":[]}');
+    execFileSync('sh', ['-c', relocate(copyScript)], { cwd: e2e });
+    assert.deepEqual(readFileSync(join(results, 'test-results/.last-run.json')), readFileSync(map['/retry-last-run.json']));
+    assert.deepEqual(readFileSync(join(e2e, 'test-results/.last-run.json')), originalLastRun);
+    assert.equal(JSON.parse(readFileSync(join(results, 'browser-run.json'), 'utf8')).lastRunSha256,
+      sha256(readFileSync(map['/retry-last-run.json'])));
+    rmSync(map['/retry-last-run.json']);
 
     // Configuration errors happen before a JSON/HTML reporter is created.
     // A fresh imported image has no earlier test artifacts to fall back on.
@@ -901,6 +925,417 @@ exit 1
     assert.equal(existsSync(join(results, 'test-results.json')), false);
     assert.equal(existsSync(join(results, 'playwright-report')), true);
     assert.equal(existsSync(join(results, 'test-results')), true);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+function retryFixture(change = () => {}) {
+  const spec = (id, status, expectedStatus, result) => ({
+    id,
+    title: id,
+    file: 'tests/retry.spec.ts',
+    line: 1,
+    column: 1,
+    tests: [
+      {
+        projectName: 'chromium',
+        status,
+        expectedStatus,
+        results: result ? [{ status: result, retry: 0 }] : [],
+      },
+    ],
+  });
+  const report = {
+    config: {
+      shard: { current: 1, total: 3 },
+      projects: [{ name: 'chromium', retries: 0 }],
+    },
+    errors: [],
+    suites: [
+      {
+        title: 'tests/retry.spec.ts',
+        specs: [
+          spec('failed-id', 'unexpected', 'passed', 'failed'),
+          spec('passed-id', 'expected', 'passed', 'passed'),
+          spec('blocked-id', 'skipped', 'passed'),
+          spec('skipped-id', 'skipped', 'skipped', 'skipped'),
+        ],
+      },
+    ],
+  };
+  const lastRun = {
+    status: 'failed',
+    failedTests: ['failed-id', 'blocked-id'],
+  };
+  change(report, lastRun);
+  const bundle = bundleFixture();
+  bundle.files['test-inventory.json'].bytes = Buffer.from(
+    JSON.stringify(report),
+  );
+  const metadata = JSON.parse(bundle.files['manifest.json'].bytes);
+  metadata.files['test-inventory.json'] = sha256(
+    bundle.files['test-inventory.json'].bytes,
+  );
+  bundle.files['manifest.json'].bytes = Buffer.from(JSON.stringify(metadata));
+  bundle.manifestHash = sha256(bundle.files['manifest.json'].bytes);
+  const texts = {
+    'test-results.json': JSON.stringify(report),
+    'test-results/.last-run.json': JSON.stringify(lastRun),
+    'test-exit-code': '1\n',
+  };
+  const receipt = {
+    version: 1,
+    kind: 'browser-first-pass',
+    sourceCommit: COMMIT,
+    manifestSha256: bundle.manifestHash,
+    shardIndex: 1,
+    shardCount: 3,
+    playwrightRetries: 0,
+    reportSha256: sha256(texts['test-results.json']),
+    lastRunSha256: sha256(texts['test-results/.last-run.json']),
+    exitCodeSha256: sha256(texts['test-exit-code']),
+  };
+  texts['browser-run.json'] = JSON.stringify(receipt);
+  const firstRun = {
+    file(name) {
+      assert.ok(Object.hasOwn(texts, name), `missing first-run ${name}`);
+      return {
+        bytes: Buffer.from(texts[name]),
+        contents: async () => texts[name],
+      };
+    },
+  };
+  const input = () => ({
+    report,
+    inventory: report,
+    lastRun,
+    receipt: JSON.parse(texts['browser-run.json']),
+    exitCode: texts['test-exit-code'],
+    sourceCommit: COMMIT,
+    manifestSha256: bundle.manifestHash,
+    shardIndex: 1,
+    shardCount: 3,
+    reportSha256: sha256(texts['test-results.json']),
+    lastRunSha256: sha256(texts['test-results/.last-run.json']),
+    exitCodeSha256: sha256(texts['test-exit-code']),
+  });
+  return { report, lastRun, bundle, firstRun, texts, receipt, input };
+}
+
+test('deferred retries narrow native last-run IDs to actual completed failures', () => {
+  const fixture = retryFixture();
+  const before = JSON.stringify(fixture);
+  const selection = validateBrowserRetryInput(fixture.input());
+  assert.deepEqual(selection.failedTestIds, ['failed-id']);
+  assert.deepEqual(selection.excludedLastRunTestIds, ['blocked-id']);
+  assert.equal(selection.firstReportSha256, fixture.receipt.reportSha256);
+  assert.equal(
+    JSON.stringify(fixture),
+    before,
+    'original failure evidence is immutable',
+  );
+});
+
+test('malformed, broadened and non-failure retry inputs fail before an image/service is imported', async () => {
+  const cases = [
+    fixture => {
+      delete fixture.texts['test-results/.last-run.json'];
+    },
+    fixture => {
+      fixture.texts['test-results/.last-run.json'] = '{';
+    },
+    fixture => {
+      delete fixture.texts['browser-run.json'];
+    },
+    fixture => {
+      fixture.texts['browser-run.json'] = JSON.stringify({
+        ...fixture.receipt,
+        sourceCommit: 'c'.repeat(40),
+      });
+    },
+    fixture => {
+      fixture.texts['browser-run.json'] = JSON.stringify({
+        ...fixture.receipt,
+        reportSha256: 'c'.repeat(64),
+      });
+    },
+    fixture => {
+      fixture.texts['browser-run.json'] = JSON.stringify({
+        ...fixture.receipt,
+        lastRunSha256: 'c'.repeat(64),
+      });
+    },
+  ];
+  for (const mutate of cases) {
+    const fixture = retryFixture();
+    mutate(fixture);
+    const pipeline = pipelineWithoutBuilds();
+    pipeline.browserSourceFingerprint = async () => HASH;
+    pipeline.browserArtifactHash = async file => sha256(file.bytes);
+    resetCalls();
+    await assert.rejects(() =>
+      pipeline.browserRetry(
+        fixture.bundle,
+        COMMIT,
+        fixture.bundle.manifestHash,
+        fixture.firstRun,
+        1,
+        3,
+        4,
+      ),
+    );
+    assert.equal(
+      recordedCalls().some(([name]) => name === 'import_'),
+      false,
+    );
+    assert.equal(
+      recordedCalls().some(([name]) => name === 'withServiceBinding'),
+      false,
+    );
+  }
+  const invalidReports = [
+    report => {
+      report.errors.push({ message: 'global failure' });
+    },
+    report => {
+      report.config.shard.current = 2;
+    },
+    report => {
+      report.config.projects[0].retries = 1;
+    },
+    report => {
+      report.config.projects.push({ name: 'other', retries: 0 });
+    },
+    report => {
+      report.suites[0].specs[0].tests[0].results[0].status = 'interrupted';
+    },
+    report => {
+      report.suites[0].specs[0].tests[0].expectedStatus = 'failed';
+    },
+    report => {
+      report.suites[0].specs[0].tests[0].results[0].retry = 1;
+    },
+    (_report, lastRun) => {
+      lastRun.failedTests.push('passed-id');
+    },
+    (_report, lastRun) => {
+      lastRun.failedTests.pop();
+    },
+    (_report, lastRun) => {
+      lastRun.failedTests.push('failed-id');
+    },
+  ];
+  for (const mutate of invalidReports) {
+    const fixture = retryFixture(mutate);
+    assert.throws(() => validateBrowserRetryInput(fixture.input()));
+  }
+});
+
+test('retry graph imports the same bundle, verifies selection before service start and runs no shard/immediate retry', async () => {
+  const fixture = retryFixture();
+  const pipeline = pipelineWithoutBuilds();
+  pipeline.browserSourceFingerprint = async () => HASH;
+  pipeline.browserArtifactHash = async file => sha256(file.bytes);
+  resetCalls();
+  await pipeline.browserRetry(
+    fixture.bundle,
+    COMMIT,
+    fixture.bundle.manifestHash,
+    fixture.firstRun,
+    1,
+    3,
+    8,
+  );
+  const calls = recordedCalls();
+  assert.equal(calls.filter(([name]) => name === 'import_').length, 1);
+  const selected = JSON.parse(
+    calls.find(
+      ([name, path]) =>
+        name === 'withNewFile' && path === '/retry-last-run.json',
+    )[2],
+  );
+  assert.deepEqual(selected.failedTests, ['failed-id']);
+  const listIndex = calls.findIndex(
+    ([name, args]) =>
+      name === 'withExec' && args[2] === BROWSER_RETRY_LIST_CHECK_SCRIPT,
+  );
+  const serviceIndex = calls.findIndex(
+    ([name]) => name === 'withServiceBinding',
+  );
+  assert.ok(listIndex >= 0 && listIndex < serviceIndex);
+  const scripts = calls
+    .filter(([name, args]) => name === 'withExec' && args[0] === '/bin/bash')
+    .map(([, args]) => args[2]);
+  assert.ok(scripts.includes(BROWSER_RETRY_LIST_SCRIPT));
+  assert.ok(scripts.includes(BROWSER_RETRY_RUN_SCRIPT));
+  for (const script of scripts) {
+    assert.match(script, /--last-failed/);
+    assert.match(script, /--retries=0/);
+    assert.match(script, /--no-deps/);
+    assert.doesNotMatch(script, /--shard/);
+    assert.doesNotMatch(script, /install|cargo|build/);
+  }
+  assert.ok(
+    calls.some(
+      ([name, variable, value]) =>
+        name === 'withEnvVariable' &&
+        variable === 'PLAYWRIGHT_RETRIES' &&
+        value === '0',
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([name, variable]) =>
+        name === 'withEnvVariable' && variable === 'E2E_RUN_NONCE',
+    ),
+  );
+  const receipt = JSON.parse(
+    calls.findLast(
+      ([name, path]) =>
+        name === 'withNewFile' && path === 'retry-selection.json',
+    )[2],
+  );
+  assert.deepEqual(receipt.failedTestIds, ['failed-id']);
+});
+
+test('pinned Playwright actually lists and retries only failed IDs while original evidence stays intact', () => {
+  const require = createRequire(
+    new URL('../browser/e2e/package.json', import.meta.url),
+  );
+  const cli = require.resolve('@playwright/test/cli');
+  const library = require.resolve('@playwright/test');
+  assert.equal(require('@playwright/test/package.json').version, '1.63.0');
+  const temp = mkdtempSync(join(tmpdir(), 'atomic-deferred-retry-'));
+  try {
+    const report = join(temp, 'first-report.json');
+    const retriedReport = join(temp, 'retry-report.json');
+    const lastRun = join(temp, 'original-last-run.json');
+    const narrowed = join(temp, 'selected-last-run.json');
+    const list = join(temp, 'retry-test-list.json');
+    const calls = join(temp, 'calls.txt');
+    const ready = join(temp, 'ready');
+    const config = join(temp, 'playwright.config.cjs');
+    writeFileSync(
+      config,
+      `module.exports = ${JSON.stringify({
+        testDir: temp,
+        outputDir: join(temp, 'artifacts'),
+        retries: 0,
+        workers: 1,
+        projects: [{ name: 'chromium' }],
+        reporter: [['json']],
+        timeout: 2000,
+      })};\n`,
+    );
+    writeFileSync(
+      join(temp, 'retry.spec.cjs'),
+      `
+const { test, expect } = require(${JSON.stringify(library)});
+const fs = require('node:fs');
+test('passing test with › separator', () => fs.appendFileSync(${JSON.stringify(calls)}, 'passed\\n'));
+test('failed until next round', () => {
+  fs.appendFileSync(${JSON.stringify(calls)}, 'failed\\n');
+  expect(fs.existsSync(${JSON.stringify(ready)})).toBe(true);
+});
+test('unrelated passing test', () => fs.appendFileSync(${JSON.stringify(calls)}, 'other\\n'));
+test.skip('existing skip', () => {});
+`,
+    );
+    const run = (args, output) =>
+      execFileSync(process.execPath, [cli, 'test', '-c', config, ...args], {
+        cwd: temp,
+        env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: output },
+        stdio: 'pipe',
+      });
+    assert.throws(
+      () => run(['--shard=1/1', '--last-failed-file', lastRun], report),
+      error => error.status === 1,
+    );
+    const originalReport = readFileSync(report, 'utf8');
+    const originalLastRun = readFileSync(lastRun, 'utf8');
+    const failures = JSON.parse(originalLastRun).failedTests;
+    assert.equal(failures.length, 1);
+    const identity = {
+      version: 1,
+      kind: 'browser-first-pass',
+      sourceCommit: COMMIT,
+      manifestSha256: HASH,
+      shardIndex: 1,
+      shardCount: 1,
+      playwrightRetries: 0,
+      reportSha256: sha256(originalReport),
+      lastRunSha256: sha256(originalLastRun),
+      exitCodeSha256: sha256('1\n'),
+    };
+    const selection = validateBrowserRetryInput({
+      report: JSON.parse(originalReport),
+      inventory: JSON.parse(originalReport),
+      lastRun: JSON.parse(originalLastRun),
+      receipt: identity,
+      exitCode: '1\n',
+      sourceCommit: COMMIT,
+      manifestSha256: HASH,
+      shardIndex: 1,
+      shardCount: 1,
+      reportSha256: identity.reportSha256,
+      lastRunSha256: identity.lastRunSha256,
+      exitCodeSha256: identity.exitCodeSha256,
+    });
+    assert.deepEqual(selection.failedTestIds, failures);
+    writeFileSync(
+      narrowed,
+      JSON.stringify({ status: 'failed', failedTests: failures }),
+    );
+    const flags = [
+      '--retries=0',
+      '--no-deps',
+      '--last-failed',
+      '--last-failed-file',
+      narrowed,
+    ];
+    run([...flags, '--list', '--reporter=json'], list);
+    execFileSync(process.execPath, [
+      '-e',
+      BROWSER_RETRY_LIST_CHECK_SCRIPT.replaceAll(
+        '/retry-last-run.json',
+        narrowed,
+      ).replaceAll('/retry-test-list.json', list),
+    ]);
+    // A broadened native list is rejected before executing any test body.
+    const broad = JSON.parse(readFileSync(list, 'utf8'));
+    broad.suites[0].specs.push({
+      ...broad.suites[0].specs[0],
+      id: 'unexpected-other-id',
+    });
+    writeFileSync(list, JSON.stringify(broad));
+    assert.throws(() =>
+      execFileSync(
+        process.execPath,
+        [
+          '-e',
+          BROWSER_RETRY_LIST_CHECK_SCRIPT.replaceAll(
+            '/retry-last-run.json',
+            narrowed,
+          ).replaceAll('/retry-test-list.json', list),
+        ],
+        { stdio: 'pipe' },
+      ),
+    );
+    writeFileSync(ready, 'ready');
+    run(flags, retriedReport);
+    const retried = JSON.parse(readFileSync(retriedReport, 'utf8'));
+    assert.equal(retried.config.shard, null);
+    assert.deepEqual(retried.stats.expected, 1);
+    assert.equal(retried.stats.unexpected, 0);
+    assert.deepEqual(readFileSync(calls, 'utf8').trim().split('\n'), [
+      'passed',
+      'failed',
+      'other',
+      'failed',
+    ]);
+    assert.equal(readFileSync(report, 'utf8'), originalReport);
+    assert.equal(readFileSync(lastRun, 'utf8'), originalLastRun);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

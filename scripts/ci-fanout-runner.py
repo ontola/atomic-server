@@ -82,6 +82,15 @@ def main(config_path):
         value = config.get(field, '')
         if not isinstance(value, str) or value and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', value):
             raise ValueError('invalid ' + field)
+    if config.get('kind') == 'browser':
+        args = config.get('args', [])
+        if config.get('phase') == 'browser':
+            if (not args or args[0] != 'browser-shard' or '--playwright-retries' not in args
+                    or args[args.index('--playwright-retries') + 1:][:1] != ['0']):
+                raise ValueError('the first browser pass must disable immediate Playwright retries')
+        elif config.get('phase') == 'browser-retry':
+            if not args or args[0] != 'browser-retry' or '--playwright-retries' in args:
+                raise ValueError('the final retry uses the failed-only zero-retry browser entry point')
     check_identity(config, repo)
     results = ROOT / 'results' / config['phase']
     if results.exists():

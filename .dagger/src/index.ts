@@ -23,6 +23,13 @@ import {
   validateBrowserShard,
   type BrowserBundleManifest,
 } from './browser-bundle';
+import {
+  BROWSER_RETRY_LIST_CHECK_SCRIPT,
+  BROWSER_RETRY_LIST_SCRIPT,
+  BROWSER_RETRY_RUN_SCRIPT,
+  BROWSER_RUN_RECEIPT_SCRIPT,
+  validateBrowserRetryInput,
+} from './browser-retry';
 
 /**
  * Bumps the mtime of every mounted workspace source before cargo runs.
@@ -2506,6 +2513,7 @@ export class AtomicServer {
     shardIndex: number,
     shardCount: number = this.e2eRun.shardCount,
     binary?: File,
+    runScript?: string,
   ): Container {
     const instance = `${this.e2eRunNonce}-${shardIndex}`;
 
@@ -2534,7 +2542,8 @@ export class AtomicServer {
         .withExec([
           '/bin/bash',
           '-c',
-          e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
+          runScript ??
+            e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
         ])
     );
   }
@@ -2770,6 +2779,23 @@ export class AtomicServer {
     );
     // Startup/configuration errors may leave no HTML or JSON. Keep their log
     // and exit code as well; a missing JSON report cannot count as a pass.
+    return this.exportBrowserRun(run, {
+      version: 1,
+      kind: 'browser-first-pass',
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      playwrightRetries,
+    });
+  }
+
+  /** Keep raw first/retry artifacts separate and bind each export to its inputs. */
+  private exportBrowserRun(
+    run: Container,
+    identity: Record<string, string | number>,
+  ): Directory {
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
     return run
       .withExec([
         'sh',
@@ -2778,9 +2804,119 @@ export class AtomicServer {
           'cp /test-exit-code /test-output.log /browser-results/; ' +
           'if [ -f /test-results.json ]; then cp /test-results.json /browser-results/; fi; ' +
           'if [ -d /app/e2e/playwright-report ]; then cp -a /app/e2e/playwright-report/. /browser-results/playwright-report/; fi; ' +
-          'if [ -d /app/e2e/test-results ]; then cp -a /app/e2e/test-results/. /browser-results/test-results/; fi',
+          'if [ -d /app/e2e/test-results ]; then cp -a /app/e2e/test-results/. /browser-results/test-results/; fi; ' +
+          'if [ -f /retry-last-run.json ]; then cp /retry-last-run.json /browser-results/test-results/.last-run.json; fi; ' +
+          `node -e ${quote(BROWSER_RUN_RECEIPT_SCRIPT)} ${quote(JSON.stringify(identity))}`,
       ])
       .directory('/browser-results');
+  }
+
+  /** One unsharded, zero-immediate-retry round for completed first-pass failures. */
+  @func()
+  async browserRetry(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    @argument() manifestSha256: string,
+    @argument() firstRun: Directory,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBrowserShard(shardIndex, shardCount, playwrightWorkers, 0);
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    const reportFile = firstRun.file('test-results.json');
+    const lastRunFile = firstRun.file('test-results/.last-run.json');
+    const exitFile = firstRun.file('test-exit-code');
+    const [
+      report,
+      inventory,
+      lastRun,
+      receipt,
+      exitCode,
+      reportSha256,
+      lastRunSha256,
+      exitCodeSha256,
+    ] = await Promise.all([
+      reportFile.contents().then(JSON.parse),
+      bundle.file('test-inventory.json').contents().then(JSON.parse),
+      lastRunFile.contents().then(JSON.parse),
+      firstRun.file('browser-run.json').contents().then(JSON.parse),
+      exitFile.contents(),
+      this.browserArtifactHash(reportFile),
+      this.browserArtifactHash(lastRunFile),
+      this.browserArtifactHash(exitFile),
+    ]);
+    const selection = validateBrowserRetryInput({
+      report,
+      inventory,
+      lastRun,
+      receipt,
+      exitCode,
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      reportSha256,
+      lastRunSha256,
+      exitCodeSha256,
+    });
+    this.e2eRun = {
+      shardCount,
+      workers: String(playwrightWorkers),
+      retries: '0',
+      grep: '',
+    };
+    this.e2eCloneSessions = playwrightCloneSessions;
+    const base = dag
+      .container()
+      .import_(bundle.file('client.oci.tar'))
+      .withEnvVariable('PLAYWRIGHT_WORKERS', String(playwrightWorkers))
+      .withEnvVariable('PLAYWRIGHT_RETRIES', '0')
+      .withEnvVariable(
+        'ATOMIC_E2E_CLONE_SESSION',
+        playwrightCloneSessions ? '1' : '0',
+      )
+      // Never ask Playwright to infer a selection from a missing/stale file:
+      // its native --last-failed implementation falls back to the full suite.
+      .withNewFile(
+        '/retry-last-run.json',
+        JSON.stringify({
+          status: 'failed',
+          failedTests: selection.failedTestIds,
+        }),
+      );
+    if (String(await base.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser bundle client platform does not match its manifest',
+      );
+    }
+    const selected = base
+      .withExec(['/bin/bash', '-c', BROWSER_RETRY_LIST_SCRIPT])
+      .withExec(['node', '-e', BROWSER_RETRY_LIST_CHECK_SCRIPT]);
+    const run = this.e2eShardContainer(
+      selected,
+      shardIndex,
+      shardCount,
+      bundle.file('atomic-server-binary'),
+      BROWSER_RETRY_RUN_SCRIPT,
+    );
+    return this.exportBrowserRun(run, {
+      version: 1,
+      kind: 'browser-deferred-retry',
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      playwrightRetries: 0,
+    }).withNewFile(
+      'retry-selection.json',
+      JSON.stringify(selection, null, 2) + '\n',
+    );
   }
 
   @func()
