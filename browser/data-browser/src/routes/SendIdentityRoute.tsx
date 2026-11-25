@@ -83,6 +83,7 @@ function SendIdentityPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [codeInput, setCodeInput] = useState('');
+  const [secretInput, setSecretInput] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -226,17 +227,11 @@ function SendIdentityPage() {
         return;
       }
 
-      const rest = methods.filter(m => m !== 'assisted');
-
-      if (rest.length === 0) {
-        setPhase({
-          name: 'failed',
-          message:
-            'This backup cannot be opened here. Restore it in the web app first.',
-        });
-
-        return;
-      }
+      // Pasting the secret always works, even when no other way is left.
+      const rest: UnlockMethod[] = [
+        ...methods.filter(m => m !== 'assisted'),
+        'secret',
+      ];
 
       setPhase({ name: 'unlock', link, recovery, methods: rest });
     } catch (err) {
@@ -258,6 +253,14 @@ function SendIdentityPage() {
       p.methods.includes('password') ? 'password' : 'code',
       codeInput,
     );
+  }
+
+  function handleSecret(e: FormEvent, p: Extract<Phase, { name: 'unlock' }>) {
+    e.preventDefault();
+
+    if (!secretInput.trim()) return;
+
+    void unlockStep(p, 'secret', secretInput);
   }
 
   const onSignedIn = () => {
@@ -366,6 +369,29 @@ function SendIdentityPage() {
                     </Column>
                   </form>
                 ) : null}
+                <form onSubmit={e => handleSecret(e, phase)}>
+                  <Column gap='1rem'>
+                    <InputWrapper>
+                      <InputStyled
+                        value={secretInput}
+                        onChange={e => setSecretInput(e.target.value)}
+                        type='password'
+                        autoComplete='off'
+                        spellCheck={false}
+                        disabled={busy}
+                        placeholder='Your secret'
+                        aria-label='Your secret'
+                      />
+                    </InputWrapper>
+                    <Button
+                      type='submit'
+                      subtle
+                      disabled={busy || !secretInput.trim()}
+                    >
+                      Send with my secret
+                    </Button>
+                  </Column>
+                </form>
                 {error ? <CardError role='alert'>{error}</CardError> : null}
               </>
             ) : null}

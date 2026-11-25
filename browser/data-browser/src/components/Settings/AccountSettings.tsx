@@ -17,6 +17,7 @@ import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { paths } from '../../routes/paths';
 import { signOutEverywhere } from '../../helpers/managed/signOut';
 import { clearHeartbeat } from '../../helpers/deviceLock';
+import toast from 'react-hot-toast';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
@@ -117,6 +118,15 @@ export function AccountSettings() {
       .catch(() => undefined);
   }
 
+  async function copyAgentUrl(subject: string) {
+    try {
+      await navigator.clipboard.writeText(subject);
+      toast.success('Identity URL copied');
+    } catch (e) {
+      store.notifyError(e as Error);
+    }
+  }
+
   if (!effectiveAgent) {
     return (
       <SettingsSection
@@ -153,6 +163,14 @@ export function AccountSettings() {
               onClick={() => navigate(editURL(effectiveAgent.subject!))}
             >
               More profile fields
+            </Button>
+            <Button
+              subtle
+              title={`Copy your identity URL (${effectiveAgent.subject})`}
+              onClick={() => void copyAgentUrl(effectiveAgent.subject!)}
+              data-test='copy-agent-url'
+            >
+              Copy atomic: URL
             </Button>
             <Button
               subtle

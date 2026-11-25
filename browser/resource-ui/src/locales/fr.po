@@ -553,7 +553,7 @@ msgstr "Ne répond pas"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -12982,10 +12982,6 @@ msgid "This account has no backup yet. Create it in the web app first."
 msgstr "Ce compte n’a pas encore de sauvegarde. Créez-la d’abord dans l’application web."
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "This backup cannot be opened here. Restore it in the web app first."
-msgstr "Cette sauvegarde ne peut pas être ouverte ici. Restaurez-la d’abord dans l’application web."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not read your backup."
 msgstr "Impossible de lire votre sauvegarde."
 
@@ -13886,3 +13882,25 @@ msgstr "Ces modifications concernent un élément que ce serveur n’a jamais re
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Il existe peut-être sur un autre appareil. Connectez cet appareil pour l’envoyer, ou abandonnez ces modifications."
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Your secret"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Send with my secret"
+msgstr ""
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Identity URL copied"
+msgstr ""
+
+#. 0: effectiveAgent.subject
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy your identity URL ({0})"
+msgstr ""
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy atomic: URL"
+msgstr ""

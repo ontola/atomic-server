@@ -102,3 +102,13 @@ describe('describeLink and depositSealedIdentity', () => {
     );
   });
 });
+
+describe('unlockBackup with a pasted secret', () => {
+  it('rejects a secret that is not the backup agent', async () => {
+    const { unlockBackup } = await import('./sendIdentity');
+
+    await expect(
+      unlockBackup(backup(['recovery-code']), 'secret', '  not-a-secret '),
+    ).rejects.toThrow();
+  });
+});

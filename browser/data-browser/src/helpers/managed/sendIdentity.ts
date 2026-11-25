@@ -80,7 +80,12 @@ export async function depositSealedIdentity(
   if (!response.ok) throw new Error('Could not send your identity.');
 }
 
-export type UnlockMethod = 'assisted' | 'passkey' | 'code' | 'password';
+export type UnlockMethod =
+  | 'assisted'
+  | 'passkey'
+  | 'code'
+  | 'password'
+  | 'secret';
 
 /**
  * The ways this backup opens, best first. Assisted needs the account that owns
@@ -113,13 +118,15 @@ export async function unlockBackup(
   input = '',
 ): Promise<string> {
   const secret =
-    method === 'assisted'
-      ? await decryptEnvelopeWithAssisted(recovery)
-      : method === 'passkey'
-        ? await decryptEnvelopeWithPasskey(recovery)
-        : method === 'code'
-          ? await decryptEnvelopeV2(recovery, input.trim())
-          : await decryptRecoverySecret(recovery, input.trim());
+    method === 'secret'
+      ? input.trim()
+      : method === 'assisted'
+        ? await decryptEnvelopeWithAssisted(recovery)
+        : method === 'passkey'
+          ? await decryptEnvelopeWithPasskey(recovery)
+          : method === 'code'
+            ? await decryptEnvelopeV2(recovery, input.trim())
+            : await decryptRecoverySecret(recovery, input.trim());
 
   await assertSecretIsBackupAgent(secret, recovery.agent_subject);
 
