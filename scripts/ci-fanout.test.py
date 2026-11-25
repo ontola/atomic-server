@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -22,6 +23,16 @@ SPEC.loader.exec_module(fanout)
 SHA = 'a' * 40
 UUIDS = {'default': '11111111-1111-1111-1111-111111111111',
          'personal': '22222222-2222-2222-2222-222222222222'}
+
+
+def prepared_bundle(root):
+    root.mkdir()
+    for name in fanout.BUNDLE_FILES[1:]:
+        (root / name).write_text('fixture ' + name)
+    manifest = {'version': 2, 'sourceCommit': SHA, 'platform': 'linux/amd64',
+                'files': {name: fanout.file_sha256(root / name) for name in fanout.BUNDLE_FILES[1:]}}
+    (root / 'manifest.json').write_text(json.dumps(manifest))
+    return manifest
 
 
 def config(root, count=20):
@@ -53,6 +64,9 @@ class FakeAPI(fanout.DigitalOcean):
         self.next_id = 100
         self.mutations = []
         self.lose_create = False
+        self.lose_import = False
+        self.hidden_droplets = set()
+        self.hidden_keys = set()
         self.stale_key_reads = {}
         self.stale_after_key_delete = 0
 
@@ -62,6 +76,8 @@ class FakeAPI(fanout.DigitalOcean):
             return [{'team': {'uuid': self.actual[context]}, 'droplet_limit': 100}]
         resource = self.droplets if args[1] == 'droplet' else self.keys
         if args[2] == 'list':
+            if context in (self.hidden_droplets if args[1] == 'droplet' else self.hidden_keys):
+                return []
             stale = self.stale_key_reads.get(context) if args[1] == 'ssh-key' else None
             if stale and stale[1] > 0:
                 stale[1] -= 1
@@ -77,6 +93,9 @@ class FakeAPI(fanout.DigitalOcean):
             else:
                 item.update(fingerprint='fixture-fingerprint', public_key='ssh-ed25519 FIXTURE')
             resource[context].append(item)
+            if self.lose_import and args[1] == 'ssh-key':
+                self.lose_import = False
+                raise TimeoutError('import response was lost after key creation')
             if self.lose_create and args[1] == 'droplet':
                 self.lose_create = False
                 raise TimeoutError('create response was lost after resource creation')
@@ -175,12 +194,18 @@ class FakeController(fanout.Controller):
                 raise fanout.PhaseFailure(key, node['phase'], result)
 
     def read_bundle(self, builder):
+        self.events.append(('bundle-ready', builder))
         bundle = {'inventory': report(range(1, self.plan()['nodes'] + 1)), 'manifest_sha256': 'b' * 64}
         self.update(lambda state: state.update(bundle=bundle, builder=builder))
+        self.node_update(builder, prepared_bundle={'path': '/opt/atomic-ci/share/bundle',
+                         'source_commit': SHA, 'manifest_sha256': 'b' * 64})
         return bundle
 
     def share(self, builder, workers, **kwargs):
         self.events.append(('share', tuple(workers)))
+        for key in workers:
+            self.node_update(key, prepared_bundle={'path': '/opt/atomic-ci/bundle',
+                             'source_commit': SHA, 'manifest_sha256': 'b' * 64})
 
     def verify_browser(self, node_id, allow_failure=False):
         node = self.read()['nodes'][node_id]
@@ -247,6 +272,69 @@ class FakeController(fanout.Controller):
 
 
 class RunnerResourceTests(unittest.TestCase):
+    def test_failed_warm_runner_preflight_prevents_expensive_dagger_setup(self):
+        spec = importlib.util.spec_from_file_location('warm_preflight_runner', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / 'config.json'
+            path.write_text(json.dumps({'batch_key': 'fixture', 'source_commit': SHA, 'node_id': 'node-001',
+                'phase': 'source-preflight', 'kind': 'check', 'preflight': True, 'args': ['browser-source-inputs']}))
+            calls = []
+            def execute(command, directory, log):
+                calls.append(command)
+                return 1 if command[-1] == 'scripts/ci-fanout-warm.test.py' else 0
+            with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_identity'), \
+                 mock.patch.object(runner, 'run', side_effect=execute):
+                self.assertEqual(runner.main(path), 1)
+            self.assertEqual(calls[-1][-1], 'scripts/ci-fanout-warm.test.py')
+            self.assertFalse(any(command[0] in ('docker', 'dagger') for command in calls))
+            result = json.loads((root / 'results/source-preflight/result.json').read_text())
+            self.assertEqual(result['status'], 'failed')
+            self.assertEqual(result['commands'][-1]['exit_code'], 1)
+
+    def test_prepared_checks_require_complete_matching_artifacts_before_any_dagger_call(self):
+        spec = importlib.util.spec_from_file_location('prepared_runner_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for change in ('valid', 'missing', 'corrupt', 'wrong-source', 'old-version', 'missing-key', 'direct-rebuild'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                bundle = root / 'bundle'
+                manifest = prepared_bundle(bundle)
+                if change == 'missing':
+                    (bundle / 'checks.oci.tar').unlink()
+                elif change == 'corrupt':
+                    (bundle / 'checks.oci.tar').write_text('changed bytes')
+                elif change in ('wrong-source', 'old-version', 'missing-key'):
+                    if change == 'wrong-source':
+                        manifest['sourceCommit'] = 'b' * 40
+                    elif change == 'old-version':
+                        manifest['version'] = 1
+                    else:
+                        manifest['files'].pop('checks.oci.tar')
+                    (bundle / 'manifest.json').write_text(json.dumps(manifest))
+                args = ['bundle-check', '--bundle', str(bundle), '--expected-commit', SHA,
+                        '--manifest-sha256', fanout.file_sha256(bundle / 'manifest.json'), '--check-name', 'js-test']
+                if change == 'direct-rebuild':
+                    args = ['js-test']
+                path = root / 'config.json'
+                path.write_text(json.dumps({'source_commit': SHA, 'batch_key': 'fixture', 'node_id': 'node-001',
+                    'phase': 'check-js-test', 'kind': 'check', 'args': args, 'test_run_key': 'fresh-execution'}))
+                with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_identity'), \
+                     mock.patch.object(runner, 'run', return_value=0) as run:
+                    if change == 'valid':
+                        self.assertEqual(runner.main(path), 0)
+                        command = run.call_args.args[0]
+                        self.assertIn('bundle-check', command)
+                        self.assertIn('fresh-execution', command)
+                        self.assertEqual(command[-len(args):], args)
+                    else:
+                        with self.assertRaises(ValueError):
+                            runner.main(path)
+                        run.assert_not_called()
+
     def test_browser_runner_requires_a_zero_retry_first_pass_and_reads_phase_specific_retry_export(self):
         spec = importlib.util.spec_from_file_location('runner_browser_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
         runner = importlib.util.module_from_spec(spec)
@@ -517,6 +605,47 @@ class LifecycleTests(unittest.TestCase):
         self.controller.initialize(self.controller.plan())
         self.controller.register_keys()
 
+    def test_artifact_transfer_cap_does_not_extend_deadline_or_bypass_normal_stop(self):
+        self.initialize()
+        deadline = (fanout.utcnow() + dt.timedelta(hours=1)).isoformat()
+        self.controller.update(lambda state: state.update(deadline=deadline))
+        self.assertEqual(self.controller.artifact_transfer_timeout(), 900)
+        shorter = (fanout.utcnow() + dt.timedelta(seconds=30)).isoformat()
+        self.controller.update(lambda state: state.update(deadline=shorter))
+        self.assertGreater(self.controller.artifact_transfer_timeout(), 0)
+        self.assertLessEqual(self.controller.artifact_transfer_timeout(), 30)
+        self.controller.update(lambda state: state.update(stop_requested=True))
+        with self.assertRaisesRegex(RuntimeError, 'stop requested'):
+            self.controller.artifact_transfer_timeout()
+        self.assertLessEqual(self.controller.artifact_transfer_timeout(allow_stopped=True), 30)
+        self.assertEqual(self.controller.read()['deadline'], shorter)
+        self.controller.update(lambda state: state.update(deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat()))
+        with self.assertRaisesRegex(TimeoutError, 'deadline reached'):
+            self.controller.artifact_transfer_timeout(allow_stopped=True)
+
+    def test_restore_rechecks_remaining_budget_between_payload_and_publication(self):
+        self.controller.config['artifact_archive_dir'] = str(self.root / 'archives')
+        self.initialize()
+        archive = self.root / 'archives' / (SHA + '-fixture')
+        archive.mkdir(parents=True)
+        prepared_bundle(archive / 'bundle')
+        receipt = {'version': 1, 'source_commit': SHA, 'build_exit_code': 0,
+                   'manifest_sha256': fanout.file_sha256(archive / 'bundle/manifest.json')}
+        (archive / 'build-receipt.json').write_text(json.dumps(receipt))
+        (archive / 'COMPLETED').write_text(fanout.file_sha256(archive / 'build-receipt.json'))
+        self.controller.update(lambda state: state.update(deadline=(fanout.utcnow() + dt.timedelta(hours=1)).isoformat()))
+        def upload(node_id, files, destination, timeout):
+            self.assertEqual(timeout, 900)
+            self.assertEqual(len(files), len(fanout.BUNDLE_FILES))
+            self.controller.update(lambda state: state.update(deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat()))
+        with mock.patch.object(self.controller, 'ssh', return_value='') as ssh, \
+             mock.patch.object(self.controller, 'scp', side_effect=upload) as scp:
+            with self.assertRaisesRegex(TimeoutError, 'deadline reached'):
+                fanout.Controller.restore_bundle(self.controller, 'node-001')
+        self.assertEqual(scp.call_count, 1)
+        self.assertEqual(ssh.call_count, 1)
+        self.assertNotIn('restored_bundle_archive', self.controller.read()['nodes']['node-001'])
+
     def test_phase_transport_preserves_explicit_resource_widths(self):
         self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16,
                                       test_run_key='clone-one', cache_namespace='warm-seed')
@@ -532,6 +661,75 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
         self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
+
+    def test_shared_check_generator_remains_lazy_and_finite_queues_prioritize_independent_checks(self):
+        self.initialize()
+        def jobs():
+            yield ('js-lint', ['js-lint'])
+            self.assertIn(('node-001', 'check-js-lint'), self.controller.events)
+            yield ('rust-fmt', ['rust-fmt'])
+        self.controller.run_check_queue('node-001', jobs())
+        self.controller.read_bundle('node-001')
+        self.controller.run_check_queue('node-001', [('js-test', ['js-test']), ('rust-clippy', ['rust-clippy'])])
+        self.assertLess(self.controller.events.index(('node-001', 'check-rust-clippy')),
+                        self.controller.events.index(('node-001', 'check-js-test')))
+
+    def test_bundle_check_readiness_waits_and_wrong_source_cannot_fall_back_to_a_build(self):
+        self.initialize()
+        with mock.patch.object(fanout.time, 'sleep', side_effect=lambda _: self.controller.read_bundle('node-001')) as sleep:
+            args = self.controller.bundle_check_args('node-001', 'js-test-integration')
+        sleep.assert_called_once_with(1)
+        self.assertEqual(args[:3], ['bundle-check', '--bundle', '/opt/atomic-ci/share/bundle'])
+        self.assertEqual(args[args.index('--check-name') + 1], 'js-test-integration')
+        self.controller.node_update('node-001', prepared_bundle={'path': '/wrong', 'source_commit': 'b' * 40,
+                                   'manifest_sha256': 'b' * 64})
+        with self.assertRaisesRegex(ValueError, 'pinned source'):
+            self.controller.run_check_queue('node-001', [('js-test', ['js-test'])])
+        self.assertNotIn(('node-001', 'check-js-test'), self.controller.events)
+
+    def test_dynamic_checks_overlap_the_build_and_all_four_shared_jobs_wait_for_verified_delivery(self):
+        self.controller = FakeController(config(self.root, 4), self.api)
+        independent = threading.Event()
+        phase, wait = self.controller.phase, self.controller.wait
+        shared_args = {}
+        def record_phase(node_id, name, kind, args, **kwargs):
+            if name.startswith('check-'):
+                check = name.removeprefix('check-')
+                if check in fanout.BUNDLE_CHECKS:
+                    self.assertIn('prepared_bundle', self.controller.read()['nodes'][node_id])
+                    self.assertEqual(args[0], 'bundle-check')
+                    shared_args[check] = args
+                else:
+                    independent.set()
+            return phase(node_id, name, kind, args, **kwargs)
+        def wait_for_build(nodes):
+            if nodes == ['node-001'] and self.controller.read()['nodes']['node-001'].get('phase') == 'build':
+                self.assertTrue(independent.wait(5), 'independent checks did not start while the build was running')
+            return wait(nodes)
+        with mock.patch.object(self.controller, 'phase', side_effect=record_phase), \
+             mock.patch.object(self.controller, 'wait', side_effect=wait_for_build), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            self.controller.run()
+        self.assertEqual(set(shared_args), set(fanout.BUNDLE_CHECKS))
+        checks = [event[1] for event in self.controller.events if isinstance(event, tuple)
+                  and isinstance(event[1], str) and event[1].startswith('check-')]
+        self.assertCountEqual(checks, ['check-' + name for name, _ in fanout.CHECKS])
+        self.assertEqual(self.controller.read()['status'], 'passed')
+
+    def test_twenty_four_workers_reach_both_browser_rounds_without_changing_the_default(self):
+        self.assertEqual(self.controller.config['workers'], 1)
+        self.controller.config['workers'] = 24
+        self.initialize()
+        self.controller.read_bundle('node-001')
+        with mock.patch.object(self.controller, 'phase') as phase:
+            self.controller.browser('node-001', 'node-001')
+            first = phase.call_args.args[3]
+            self.controller.browser_retry('node-001', 'node-001')
+            retry = phase.call_args.args[3]
+        for args in (first, retry):
+            self.assertEqual(args[args.index('--playwright-workers') + 1], '24')
 
     def test_retry_budget_is_zero_or_one_and_first_pass_never_retries_immediately(self):
         for value in (2, -1, True, .5):
@@ -716,6 +914,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_final_validation_rejects_missing_and_unfinished_checks(self):
         self.initialize()
+        self.controller.read_bundle('node-001')
         self.controller.run_check_queue('node-001', fanout.CHECKS[:-1])
         with self.assertRaisesRegex(ValueError, 'exactly once'):
             self.controller.finish_validation(list(self.controller.read()['nodes']))
@@ -763,8 +962,16 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(state['full_browser_test_count'], 20)
         self.assertIn('validation_completed_at', state)
         self.assertNotIn('validation_passed_at', state)
-        self.assertEqual([(f['node_id'], f['phase']) for f in state['ci_failures']],
-                         [('node-002', 'browser'), ('node-002', 'check-js-lint')])
+        self.assertCountEqual([failure['phase'] for failure in state['ci_failures']],
+                              ['browser', 'check-js-lint'])
+        browser_failure = next(failure for failure in state['ci_failures'] if failure['phase'] == 'browser')
+        lint_failure = next(failure for failure in state['ci_failures'] if failure['phase'] == 'check-js-lint')
+        self.assertEqual(browser_failure['node_id'], 'node-002')
+        lint_owners = [event[0] for event in self.controller.events
+                       if isinstance(event, tuple) and event[1] == 'check-js-lint']
+        self.assertEqual(lint_owners, [lint_failure['node_id']])
+        self.assertEqual(state['nodes'][lint_failure['node_id']]['phase_results']['check-js-lint']['status'], 'failed')
+        self.assertEqual([failure['phase'] for failure in state['unresolved_ci_failures']], ['check-js-lint'])
         phases = [item[1] for item in self.controller.events if isinstance(item, tuple)
                   and isinstance(item[1], str) and item[1].startswith('check-')]
         self.assertCountEqual(phases, ['check-' + name for name, _ in fanout.CHECKS])
@@ -828,6 +1035,165 @@ class LifecycleTests(unittest.TestCase):
         self.assertIsNotNone(self.controller.read()['nodes']['node-001'].get('droplet_id'))
         self.controller.cleanup('lost response')
         self.assertEqual(self.api.droplets['default'], [])
+
+    def test_late_visible_lost_create_keeps_evidence_and_watchdog_removes_it_after_deadline(self):
+        self.initialize()
+        for name in ('operator-key', 'doctl.yaml'):
+            (self.controller.root / name).write_text('fixture')
+        self.controller.create('node-011')
+        self.api.hidden_droplets.add('default')
+        self.api.lose_create = True
+        with self.assertRaises(TimeoutError):
+            self.controller.create('node-001')
+        deadline = self.controller.read()['deadline']
+        with self.assertRaisesRegex(RuntimeError, 'pending provider reconciliation'):
+            self.controller.cleanup('lost response')
+        state = self.controller.read()
+        self.assertIsNone(state['finished_at'])
+        self.assertEqual(state['status'], 'cleanup_failed')
+        self.assertTrue(state['nodes']['node-011']['deletion_verified'])
+        self.assertEqual(len(self.api.droplets['default']), 1)
+        for name in ('operator-key', 'operator-key.pub', 'doctl.yaml'):
+            self.assertTrue((self.controller.root / name).exists())
+        # Cleanup is allowed after the original deadline, but no new work is.
+        self.api.hidden_droplets.clear()
+        later = dt.datetime.fromisoformat(deadline) + dt.timedelta(seconds=1)
+        with mock.patch.object(fanout, 'utcnow', return_value=later):
+            self.assertTrue(self.controller.watchdog_step())
+        state = self.controller.read()
+        self.assertEqual(state['deadline'], deadline)
+        self.assertTrue(state['nodes']['node-001']['deletion_verified'])
+        self.assertTrue(state['finished_at'])
+        self.assertEqual(self.api.droplets['default'], [])
+        self.assertFalse((self.controller.root / 'doctl.yaml').exists())
+
+    def test_known_create_hidden_before_delete_remains_pending_until_visible(self):
+        self.initialize()
+        self.controller.create('node-001')
+        self.api.hidden_droplets.add('default')
+        with self.assertRaisesRegex(RuntimeError, 'absence pending provider reconciliation'):
+            self.controller.cleanup('bootstrap failure before list visibility')
+        node = self.controller.read()['nodes']['node-001']
+        self.assertNotIn('deleted_at', node)
+        self.assertIsNone(self.controller.read()['finished_at'])
+        self.assertEqual(len(self.api.droplets['default']), 1)
+        self.api.hidden_droplets.clear()
+        self.assertTrue(self.controller.watchdog_step())
+        self.assertEqual(self.api.droplets['default'], [])
+        self.assertTrue(self.controller.read()['nodes']['node-001']['deletion_verified'])
+
+    def test_unknown_absent_create_requires_fresh_list_after_reconciliation_grace(self):
+        self.initialize()
+        self.api.lose_create = True
+        self.api.hidden_droplets.add('default')
+        with self.assertRaises(TimeoutError):
+            self.controller.create('node-001')
+        # The provider eventually confirms it never retained a resource.
+        self.api.droplets['default'].clear()
+        with self.assertRaisesRegex(RuntimeError, 'pending provider reconciliation'):
+            self.controller.cleanup('unknown outcome')
+        attempted = dt.datetime.fromisoformat(self.controller.read()['nodes']['node-001']['creation_attempted_at'])
+        with mock.patch.object(fanout, 'utcnow', return_value=attempted + dt.timedelta(seconds=119)):
+            with self.assertRaisesRegex(RuntimeError, 'pending provider reconciliation'):
+                self.controller.watchdog_step()
+        with mock.patch.object(fanout, 'utcnow', return_value=attempted + dt.timedelta(seconds=121)):
+            self.assertTrue(self.controller.watchdog_step())
+        node = self.controller.read()['nodes']['node-001']
+        self.assertTrue(node['creation_absence_reconciled_at'])
+        self.assertNotIn('droplet_id', node)
+
+    def test_lost_key_import_retains_public_key_until_late_key_is_deleted(self):
+        self.controller.initialize(self.controller.plan())
+        self.api.hidden_keys.add('default')
+        self.api.lose_import = True
+        with self.assertRaises(TimeoutError):
+            self.controller.register_keys()
+        with self.assertRaisesRegex(RuntimeError, 'SSH key import outcome pending'):
+            self.controller.cleanup('lost key response')
+        self.assertIsNone(self.controller.read()['finished_at'])
+        self.assertTrue((self.controller.root / 'operator-key.pub').exists())
+        self.assertEqual(len(self.api.keys['default']), 1)
+        self.api.hidden_keys.clear()
+        self.assertTrue(self.controller.watchdog_step())
+        self.assertEqual(self.api.keys['default'], [])
+        self.assertFalse((self.controller.root / 'operator-key.pub').exists())
+
+    def test_unknown_absent_key_import_requires_fresh_list_after_grace(self):
+        self.controller.initialize(self.controller.plan())
+        self.api.hidden_keys.add('default')
+        self.api.lose_import = True
+        with self.assertRaises(TimeoutError):
+            self.controller.register_keys()
+        self.api.keys['default'].clear()
+        with self.assertRaisesRegex(RuntimeError, 'SSH key import outcome pending'):
+            self.controller.cleanup('unknown import')
+        attempted = dt.datetime.fromisoformat(self.controller.read()['keys']['default']['creation_attempted_at'])
+        with mock.patch.object(fanout, 'utcnow', return_value=attempted + dt.timedelta(seconds=121)):
+            self.assertTrue(self.controller.watchdog_step())
+        self.assertTrue(self.controller.read()['keys']['default']['creation_absence_reconciled_at'])
+
+    def test_known_key_hidden_before_delete_retains_cleanup_until_visible(self):
+        self.initialize()
+        self.api.hidden_keys.add('default')
+        with self.assertRaisesRegex(RuntimeError, 'owned SSH key absence pending'):
+            self.controller.cleanup('key list delayed')
+        self.assertIsNone(self.controller.read()['finished_at'])
+        self.assertFalse(self.controller.read()['keys']['default'].get('deletion_verified'))
+        self.api.hidden_keys.clear()
+        self.assertTrue(self.controller.watchdog_step())
+        self.assertEqual(self.api.keys['default'], [])
+
+    def test_preexisting_names_and_old_same_name_resources_are_not_adopted(self):
+        self.initialize()
+        name = self.controller.read()['nodes']['node-001']['name']
+        foreign = {'id': 900, 'name': name, 'created_at': '2020-01-01T00:00:00+00:00'}
+        self.api.droplets['default'].append(foreign)
+        mutations = list(self.api.mutations)
+        with self.assertRaisesRegex(RuntimeError, 'pre-existing Droplet'):
+            self.controller.create('node-001')
+        self.assertEqual(mutations, self.api.mutations)
+        self.api.droplets['default'].clear()
+        self.api.hidden_droplets.add('default')
+        self.api.lose_create = True
+        with self.assertRaises(TimeoutError):
+            self.controller.create('node-001')
+        # An unrelated old same-name resource is never sufficient ownership.
+        self.api.droplets['default'][:] = [foreign]
+        self.api.hidden_droplets.clear()
+        with self.assertRaisesRegex(RuntimeError, 'lacks verified creation ownership'):
+            self.controller.cleanup('foreign same-name resource')
+        self.assertEqual(self.api.droplets['default'], [foreign])
+        self.assertIsNone(self.controller.read()['finished_at'])
+
+    def test_watchdog_survives_cleanup_error_and_retries_until_verified(self):
+        self.initialize()
+        self.controller.update(lambda state: state.update(stop_requested=True))
+        step = self.controller.watchdog_step
+        calls = []
+        def delayed_cleanup():
+            calls.append(True)
+            if len(calls) == 1:
+                raise RuntimeError('temporary provider list failure')
+            return step()
+        with mock.patch.object(self.controller, 'watchdog_step', side_effect=delayed_cleanup), mock.patch.object(fanout.time, 'sleep'):
+            self.controller.watchdog()
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(self.controller.read()['finished_at'])
+
+    def test_run_leaves_watchdog_alive_when_lost_create_cleanup_is_pending(self):
+        self.api.hidden_droplets.add('default')
+        self.api.lose_create = True
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = None
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(RuntimeError, 'cleanup incomplete'):
+                self.controller.run()
+            process.return_value.terminate.assert_not_called()
+            process.return_value.kill.assert_not_called()
+        self.assertIsNone(self.controller.read()['finished_at'])
+        self.api.hidden_droplets.clear()
+        self.assertTrue(self.controller.watchdog_step())
+        self.assertEqual(sum(map(len, self.api.droplets.values())), 0)
 
     def test_identity_mismatch_refuses_deletion(self):
         self.initialize()
@@ -934,7 +1300,7 @@ class LifecycleTests(unittest.TestCase):
         payload.mkdir()
         for name in fanout.BUNDLE_FILES[1:]:
             (payload / name).write_text('fixture ' + name)
-        manifest = {'sourceCommit':SHA, 'platform':'linux/amd64',
+        manifest = {'version': 2, 'sourceCommit':SHA, 'platform':'linux/amd64',
                     'files':{name:fanout.file_sha256(payload / name) for name in fanout.BUNDLE_FILES[1:]}}
         (payload / 'manifest.json').write_text(json.dumps(manifest))
         result = {'status':'passed', 'source_commit':SHA, 'node_id':'node-001', 'phase':'build',

@@ -52,13 +52,14 @@ const EXPECTED = Object.freeze({
 
 function manifest() {
   return {
-    version: 1,
+    version: 2,
     sourceFingerprintVersion: 2,
     ...EXPECTED,
     platform: 'linux/amd64',
     files: {
       'atomic-server-binary': '1'.repeat(64),
       'client.oci.tar': '2'.repeat(64),
+      'checks.oci.tar': '4'.repeat(64),
       'test-inventory.json': '3'.repeat(64),
     },
   };
@@ -85,7 +86,7 @@ test('portable manifest requires the exact checkout, platform and tool versions'
     [],
     'manifest',
     {},
-    { ...manifest(), version: 2 },
+    { ...manifest(), version: 1 },
     { ...manifest(), sourceFingerprintVersion: undefined },
     { ...manifest(), sourceFingerprintVersion: 1 },
     { ...manifest(), platform: 'linux/arm64' },
@@ -292,6 +293,7 @@ function bundleFixture(changeManifest = () => {}) {
     [
       ['atomic-server-binary', 'binary bytes'],
       ['client.oci.tar', 'OCI image bytes'],
+      ['checks.oci.tar', 'prepared complete Node workspace OCI image bytes'],
       ['test-inventory.json', '{"suites":[]}'],
     ].map(([name, bytes]) => [name, { name, bytes: Buffer.from(bytes) }]),
   );
@@ -320,6 +322,7 @@ function bundleFixture(changeManifest = () => {}) {
 function importFixtureResponse({
   platform = 'linux/amd64',
   fingerprint = HASH,
+  checkOutput,
 } = {}) {
   setChainResponse((_label, property) => {
     if (property === 'platform') return platform;
@@ -338,6 +341,7 @@ function importFixtureResponse({
     ) {
       return fingerprint;
     }
+    if (checkOutput !== undefined) return checkOutput;
     throw new Error(`Unexpected fixture command: ${JSON.stringify(command)}`);
   });
 }
@@ -346,7 +350,9 @@ function pipelineWithoutBuilds() {
   const pipeline = new AtomicServer(makeChain('checkout'));
   for (const name of [
     'rustBuild',
+    'rustBuildSlim',
     'jsBuild',
+    'jsSource',
     'wasmBuild',
     'e2eBaseContainer',
   ]) {
@@ -456,6 +462,7 @@ test('validation-only checks reject incomplete, corrupt and untrusted cache entr
     'manifest.json',
     'atomic-server-binary',
     'client.oci.tar',
+    'checks.oci.tar',
     'test-inventory.json',
   ]) {
     for (const failure of ['missing', 'corrupt']) {
@@ -532,6 +539,7 @@ test('tampered manifest and every corrupted artifact are rejected before executa
     'manifest.json',
     'atomic-server-binary',
     'client.oci.tar',
+    'checks.oci.tar',
     'test-inventory.json',
   ]) {
     const bundle = bundleFixture();
@@ -758,11 +766,12 @@ test('builder exports a service-free client, complete inventory and the optimize
   resetCalls();
   await pipeline.prepareBrowserBundle(COMMIT);
   assert.deepEqual(built, [
+    ['js', false],
     ['js', true],
     ['rust', false, 'x86_64-unknown-linux-musl', true],
   ]);
   const calls = recordedCalls();
-  assert.equal(calls.filter(([name]) => name === 'asTarball').length, 1);
+  assert.equal(calls.filter(([name]) => name === 'asTarball').length, 2);
   assert.equal(
     calls.some(([name]) => name === 'withServiceBinding'),
     false,
@@ -792,8 +801,265 @@ test('builder exports a service-free client, complete inventory and the optimize
       .filter(([name]) => name === 'withoutMount')
       .map(([, path]) => path)
       .sort(),
-    ['/app/.pnpm-store', '/opt/npm-global', '/root/.npm'],
+    ['/app/.pnpm-store', '/app/.pnpm-store', '/opt/npm-global', '/root/.npm'],
   );
+});
+
+test('builder shares one WASM graph while exporting separate complete production checks and E2E images', async () => {
+  const pipeline = new AtomicServer(makeChain('checkout'));
+  pipeline.rustBuild = () => makeChain('native-binary');
+  pipeline.browserSourceFingerprint = async () => HASH;
+  pipeline.browserArtifactHash = async () => HASH;
+  resetCalls();
+  await pipeline.prepareBrowserBundle(COMMIT);
+  const calls = recordedCalls();
+  assert.equal(
+    calls.filter(
+      ([name, args]) =>
+        name === 'withExec' && args.join(' ').includes('wasm-pack build'),
+    ).length,
+    1,
+  );
+  assert.equal(calls.filter(([name]) => name === 'asTarball').length, 2);
+  assert.ok(
+    calls.some(
+      ([name, path]) =>
+        name === 'withDirectory' && path === '/atomic-ci/wasm/pkg',
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([name, path]) => name === 'withDirectory' && path === '/lib/defaults',
+    ),
+  );
+  const productionArchive = calls.findIndex(([name]) => name === 'asTarball');
+  const e2eFlag = calls.findIndex(
+    ([name, variable, value]) =>
+      name === 'withEnvVariable' && variable === 'VITE_E2E' && value === 'true',
+  );
+  assert.ok(productionArchive >= 0 && e2eFlag > productionArchive);
+  assert.equal(
+    calls.some(([name]) => name === 'withServiceBinding'),
+    false,
+  );
+  assert.equal(pipeline.bundleWasm, undefined);
+  const metadata = JSON.parse(
+    calls.find(
+      ([name, path]) => name === 'withNewFile' && path === 'manifest.json',
+    )[2],
+  );
+  assert.equal(metadata.version, 2);
+  assert.ok(metadata.files['checks.oci.tar']);
+});
+
+test('verified imported workspaces execute every unit, type and TypeDoc check without rebuilding or installing', async () => {
+  const expected = {
+    'js-test': [
+      ['pnpm', 'run', 'test'],
+      ['node', '--test', 'data-browser/scripts/integration-mcp.test.mjs'],
+    ],
+    'js-typecheck': [
+      [
+        'pnpm',
+        '--filter=!@tomic/data-browser',
+        'run',
+        '-r',
+        '--parallel',
+        'typecheck',
+      ],
+      [
+        'pnpm',
+        '--filter',
+        '@tomic/data-browser',
+        'exec',
+        'tsc',
+        '--noEmit',
+        '-p',
+        '/browser/data-browser/tsconfig.json',
+      ],
+    ],
+    'typedoc-publish': [['pnpm', 'run', 'typedoc-publish']],
+  };
+  for (const [checkName, commands] of Object.entries(expected)) {
+    const nonces = [];
+    for (let invocation = 0; invocation < 2; invocation++) {
+      const bundle = bundleFixture();
+      resetCalls();
+      importFixtureResponse({ checkOutput: 'checks executed' });
+      assert.equal(
+        await pipelineWithoutBuilds().bundleCheck(
+          bundle,
+          COMMIT,
+          bundle.manifestHash,
+          checkName,
+          'token',
+        ),
+        'checks executed',
+      );
+      const calls = recordedCalls();
+      const imported = calls.findIndex(([name]) => name === 'import_');
+      assert.equal(calls[imported][1], bundle.files['checks.oci.tar']);
+      const runtime = calls.slice(imported);
+      assert.deepEqual(
+        runtime.filter(([name]) => name === 'withExec').map(([, args]) => args),
+        commands,
+      );
+      assert.equal(
+        calls.some(([name]) => name === 'withServiceBinding'),
+        false,
+      );
+      assert.equal(
+        runtime.some(
+          ([name, variable]) =>
+            name === 'withEnvVariable' && variable === 'VITE_E2E',
+        ),
+        false,
+      );
+      const nonce = runtime.findIndex(
+        ([name, variable]) =>
+          name === 'withEnvVariable' &&
+          variable === 'ATOMIC_BUNDLE_CHECK_NONCE',
+      );
+      assert.ok(
+        nonce >= 0 &&
+          nonce < runtime.findIndex(([name]) => name === 'withExec'),
+      );
+      nonces.push(runtime[nonce][2]);
+      if (checkName === 'js-typecheck') {
+        assert.ok(
+          runtime.some(
+            ([name, variable, value]) =>
+              name === 'withEnvVariable' &&
+              variable === 'NODE_OPTIONS' &&
+              value === '--max-old-space-size=4096',
+          ),
+        );
+      }
+      if (checkName === 'typedoc-publish') {
+        assert.ok(
+          runtime.some(
+            ([name, variable, value]) =>
+              name === 'withSecretVariable' &&
+              variable === 'NETLIFY_AUTH_TOKEN' &&
+              value === 'token',
+          ),
+        );
+        assert.ok(
+          runtime.some(
+            ([name, variable, value]) =>
+              name === 'withEnvVariable' &&
+              variable === 'NETLIFY_PROD' &&
+              value === '',
+          ),
+        );
+      }
+    }
+    assert.notEqual(...nonces);
+  }
+});
+
+test('prepared integration checks share only WASM and retain their separate native server and original fixture paths', async () => {
+  const bundle = bundleFixture();
+  const pipeline = pipelineWithoutBuilds();
+  const binary = { name: 'native-debug-glibc' };
+  let nativeBuilds = 0;
+  pipeline.rustBuildSlim = () => {
+    nativeBuilds++;
+    return binary;
+  };
+  resetCalls();
+  importFixtureResponse({ checkOutput: 'integration executed' });
+  assert.equal(
+    await pipeline.bundleCheck(
+      bundle,
+      COMMIT,
+      bundle.manifestHash,
+      'js-test-integration',
+      'token',
+    ),
+    'integration executed',
+  );
+  assert.equal(nativeBuilds, 1);
+  const calls = recordedCalls();
+  assert.ok(
+    calls.some(
+      ([name, path]) => name === 'directory' && path === '/atomic-ci/wasm/pkg',
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([name, path]) => name === 'withDirectory' && path === '/repo/wasm/pkg',
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([name, path, file]) =>
+        name === 'withFile' &&
+        path === '/repo/target/debug/atomic-server' &&
+        file === binary,
+    ),
+  );
+  assert.ok(
+    calls.some(
+      ([name, path]) => name === 'withWorkdir' && path === '/repo/browser/lib',
+    ),
+  );
+  assert.equal(
+    calls.some(
+      ([name, args]) =>
+        name === 'withExec' && args.join(' ').includes('wasm-pack'),
+    ),
+    false,
+  );
+  assert.deepEqual(calls.findLast(([name]) => name === 'withExec')[1], [
+    'pnpm',
+    'run',
+    'test:integration',
+  ]);
+  const nonce = calls.findLastIndex(
+    ([name, variable]) =>
+      name === 'withEnvVariable' && variable === 'ATOMIC_BUNDLE_CHECK_NONCE',
+  );
+  assert.equal(calls[nonce + 1][0], 'withExec');
+});
+
+test('prepared checks reject unsupported names and corrupt/incomplete workspace payloads before importing any image', async () => {
+  for (const name of ['', 'rust-test', 'js-test; echo unsafe']) {
+    resetCalls();
+    await assert.rejects(
+      () =>
+        pipelineWithoutBuilds().bundleCheck(
+          bundleFixture(),
+          COMMIT,
+          HASH,
+          name,
+          'token',
+        ),
+      /Unsupported/,
+    );
+    assert.deepEqual(recordedCalls(), []);
+  }
+  for (const mode of ['missing', 'corrupt']) {
+    const bundle = bundleFixture();
+    if (mode === 'missing') delete bundle.files['checks.oci.tar'];
+    else
+      bundle.files['checks.oci.tar'].bytes = Buffer.from('corrupt workspace');
+    resetCalls();
+    importFixtureResponse();
+    await assert.rejects(() =>
+      pipelineWithoutBuilds().bundleCheck(
+        bundle,
+        COMMIT,
+        bundle.manifestHash,
+        'js-test',
+        'token',
+      ),
+    );
+    assert.equal(
+      recordedCalls().some(([name]) => name === 'import_'),
+      false,
+    );
+  }
 });
 
 test('an actual failed browser shell still exports its exit code, report and trace bytes', async () => {

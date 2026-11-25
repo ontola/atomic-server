@@ -695,6 +695,23 @@ Docker/Dagger fan-out run is required. Its full test inventory and all shard
 reports must reconcile before the controller can report success. Compiler and
 unit suites remain separate from the shared production E2E build.
 
+Bundle ABI 2 adds a complete production-mode Node checks image. Portable-bundle
+fixtures verify one shared WASM build graph, unchanged unit/type/doc commands,
+fresh execution after import, and integration reuse of only WASM while retaining
+the native debug server and original fixture layout. Controller/runner and host
+cache regressions require the checks image and all payload hashes, reject old
+or incomplete bundles without a rebuild fallback, and schedule all ten checks
+once with independent work overlapping preparation. These graph/fixture tests
+do not establish a real prepared application image's full-suite acceptance or
+the wall-time improvement; that needs a new frozen-candidate CI run.
+
+`scripts/ci-fanout-warm.test.py` checks the reusable warm wrapper with fake
+provider responses: read-only snapshot/budget planning, ledger-before-create,
+lost creation/deletion responses, account drift, foreign/attached volume
+preservation, immutable deadlines, mount configuration, parent-death watchdogs
+and cleanup despite key failures. It creates no paid resources. Real snapshot
+restore and full warm-fleet acceptance remain separate from those fixtures.
+
 The controller regressions also run scheduling through a failed first check
 and failed first browser shard: every remaining check and shard must finish,
 failed reports must retain their counts and inventory identities, and the

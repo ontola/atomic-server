@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,8 @@ import time
 
 ROOT = Path('/opt/atomic-ci')
 PROCESS = None
+BUNDLE_CHECKS = frozenset(('js-test', 'js-typecheck', 'typedoc-publish', 'js-test-integration'))
+BUNDLE_FILES = frozenset(('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'checks.oci.tar', 'test-inventory.json'))
 
 
 def stamp():
@@ -71,6 +74,40 @@ def check_identity(config, repo):
         raise ValueError('phase source identity differs from clean pinned checkout')
 
 
+def check_prepared_bundle(config):
+    name = config.get('phase', '').removeprefix('check-')
+    if config.get('kind') != 'check' or name not in BUNDLE_CHECKS:
+        return
+    args = config.get('args', [])
+    if not args or args[0] != 'bundle-check':
+        raise ValueError('dependent CI checks require the verified prepared workspace; rebuilding is not a fallback')
+
+    def option(flag):
+        if args.count(flag) != 1 or args.index(flag) + 1 == len(args):
+            raise ValueError('missing or duplicate prepared-workspace argument: ' + flag)
+        return args[args.index(flag) + 1]
+
+    bundle = Path(option('--bundle'))
+    expected_hash = option('--manifest-sha256')
+    if (not bundle.is_absolute() or bundle.is_symlink() or option('--expected-commit') != config['source_commit']
+            or option('--check-name') != name or not re.fullmatch(r'[a-f0-9]{64}', expected_hash)):
+        raise ValueError('prepared-workspace path or source identity differs from the scheduled check')
+    if any(not (bundle / name).is_file() or (bundle / name).is_symlink() for name in BUNDLE_FILES):
+        raise ValueError('prepared workspace is missing a regular required artifact')
+    def sha256(path):
+        checksum = hashlib.sha256()
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                checksum.update(chunk)
+        return checksum.hexdigest()
+    manifest = json.loads((bundle / 'manifest.json').read_text())
+    if (sha256(bundle / 'manifest.json') != expected_hash or manifest.get('version') != 2
+            or manifest.get('sourceCommit') != config['source_commit'] or manifest.get('platform') != 'linux/amd64'
+            or set(manifest.get('files', {})) != BUNDLE_FILES - {'manifest.json'}
+            or any(sha256(bundle / artifact) != checksum for artifact, checksum in manifest['files'].items())):
+        raise ValueError('prepared-workspace manifest or required artifact hash mismatch')
+
+
 def main(config_path):
     config = json.loads(config_path.read_text())
     repo = ROOT / 'repo'
@@ -92,6 +129,7 @@ def main(config_path):
             if not args or args[0] != 'browser-retry' or '--playwright-retries' in args:
                 raise ValueError('the final retry uses the failed-only zero-retry browser entry point')
     check_identity(config, repo)
+    check_prepared_bundle(config)
     results = ROOT / 'results' / config['phase']
     if results.exists():
         raise ValueError('a phase result directory already exists; use a fresh phase')
@@ -111,6 +149,7 @@ def main(config_path):
         if config.get('preflight'):
             commands = [[sys.executable, 'scripts/ci-browser-build.test.py'],
                         [sys.executable, 'scripts/ci-fanout.test.py'],
+                        [sys.executable, 'scripts/ci-fanout-warm.test.py'],
                         ['docker', 'run', '--rm', '-v', str(repo) + ':/repo',
                          '-w', '/repo/.dagger', 'node:22-bookworm', 'sh', '-lc',
                          'corepack pnpm@10.15.1 install --frozen-lockfile && '

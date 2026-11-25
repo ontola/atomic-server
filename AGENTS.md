@@ -413,6 +413,12 @@ Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport i
 
 ## Testing
 
+When the user requests CI on DigitalOcean, read
+[`docs/skills/atomic-do-ci/SKILL.md`](docs/skills/atomic-do-ci/SKILL.md). It points
+to the repository runner, snapshot/cache procedure, ownership/deadline guards,
+report/cost accounting and measured results. Check that the runner APIs match
+the pinned source; old private benchmark scripts are historical evidence.
+
 [`TESTING_COVERAGE.md`](./TESTING_COVERAGE.md) maps which flows are tested at
 which layer, and — more usefully — which are not. Read it before deciding where
 a new test belongs, and update it when you add one or discover a gap.
