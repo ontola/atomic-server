@@ -33,11 +33,11 @@ def config(root, count=20):
 
 
 def report(indices, index=None, total=20):
-    value = {'config': {}, 'errors': [], 'suites': [{'title': 'feature.spec.ts', 'file': 'feature.spec.ts',
-        'specs': [{'title': 'case ' + str(number), 'file': 'feature.spec.ts',
+    value = {'config': {'projects': [{'name': 'chromium', 'retries': 0}]}, 'errors': [], 'suites': [{'title': 'feature.spec.ts', 'file': 'feature.spec.ts',
+        'specs': [{'title': 'case ' + str(number), 'file': 'feature.spec.ts', 'id': 'case-' + str(number),
                    'line': number, 'column': 1,
-                   'tests': [{'projectName': 'chromium', 'status': 'expected',
-                              'results': [{'status': 'passed'}]}]}
+                   'tests': [{'projectName': 'chromium', 'status': 'expected', 'expectedStatus': 'passed',
+                              'results': [{'status': 'passed', 'retry': 0}]}]}
                   for number in indices]}]}
     if index is not None:
         value['config']['shard'] = {'current': index, 'total': total}
@@ -98,6 +98,10 @@ class FakeController(fanout.Controller):
         self.fail_inputs = False
         self.fail_checks = set()
         self.fail_browser_nodes = set()
+        self.fail_retry_nodes = set()
+        self.retry_reports = {}
+        self.retry_global_error = False
+        self.retry_selection_patch = {}
 
     def event(self, value):
         self.events.append(value)
@@ -146,7 +150,8 @@ class FakeController(fanout.Controller):
 
     def phase(self, node_id, name, kind, args, preflight=False, module=None):
         self.check_deadline()
-        result = {'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 0}
+        result = {'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 0,
+                  'commands': [{'exit_code': 0}], 'finished_at': fanout.stamp()}
         self.node_update(node_id, status='waiting', phase=name, phase_kind=kind,
                          last_result=result)
         self.update(lambda state: state['nodes'][node_id]['phase_results'].update({name: result}))
@@ -157,8 +162,9 @@ class FakeController(fanout.Controller):
         for key in nodes:
             node = self.read()['nodes'][key]
             if (node.get('phase') in self.fail_checks
-                    or (node.get('phase') == 'browser' and key in self.fail_browser_nodes)):
-                browser = node['phase'] == 'browser'
+                    or (node.get('phase') == 'browser' and key in self.fail_browser_nodes)
+                    or (node.get('phase') == 'browser-retry' and key in self.fail_retry_nodes)):
+                browser = node['phase'] in ('browser', 'browser-retry')
                 result = dict(node['last_result'], status='failed',
                     commands=[{'exit_code': 0 if browser else 1}],
                     error='RuntimeError: browser tests exited 1' if browser else 'RuntimeError: phase command exited 1')
@@ -187,10 +193,86 @@ class FakeController(fanout.Controller):
         ids = fanout.verify_browser_report(value, SHA, node['phase_results']['browser'],
                                            node['shard_index'], self.plan()['nodes'], allow_failure)
         self.node_update(node_id, browser_identities=ids, browser_verified_at=fanout.stamp())
+        self.write_browser_export(node_id, 'browser', value)
         return ids
+
+    def write_browser_export(self, node_id, phase, value):
+        node = self.read()['nodes'][node_id]
+        root = self.root / node_id / 'results' / phase
+        (root / 'browser/test-results').mkdir(parents=True, exist_ok=True)
+        result = node['phase_results'][phase]
+        (root / 'result.json').write_text(json.dumps(result))
+        (root / 'browser/test-results.json').write_text(json.dumps(value))
+        (root / 'browser/test-exit-code').write_text(str(result['browser_exit_code']))
+        ids = [spec['id'] for _, spec, test in fanout.report_cases(value) if test['status'] == 'unexpected']
+        (root / 'browser/test-results/.last-run.json').write_text(json.dumps({'status': 'failed' if ids else 'passed', 'failedTests': ids}))
+        receipt = {'version': 1, 'kind': 'browser-first-pass' if phase == 'browser' else 'browser-deferred-retry',
+                   'sourceCommit': SHA, 'manifestSha256': 'b' * 64, 'shardIndex': node['shard_index'],
+                   'shardCount': self.plan()['nodes'], 'playwrightRetries': 0}
+        for field, name in [('reportSha256', 'test-results.json'),
+                            ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
+            receipt[field] = fanout.file_sha256(root / 'browser' / name)
+        (root / 'browser/browser-run.json').write_text(json.dumps(receipt))
+        return receipt
+
+    def run_browser_retry(self, node_id, builder):
+        # The ordinary fake still exercises the real retry verifier and merger.
+        super().run_browser_retry(node_id, builder)
+
+    def browser_retry(self, node_id, builder):
+        if self.read()['nodes'][node_id].get('deleted_at'):
+            raise RuntimeError('failed node was deleted before its final retry')
+        self.events.append(('retry-barrier', len([item for item in self.events if isinstance(item, tuple) and item[1] == 'browser'])))
+        super().browser_retry(node_id, builder)
+
+    def retrieve(self, node_id):
+        node = self.read()['nodes'][node_id]
+        if node.get('phase') == 'browser-retry':
+            value = self.retry_reports.get(node_id) or report([node['shard_index']])
+            if node_id in self.fail_retry_nodes:
+                value['suites'][0]['specs'][0]['tests'][0].update(status='unexpected', results=[{'status': 'failed', 'retry': 0}])
+            if self.retry_global_error:
+                value['errors'] = [{'message': 'worker crashed'}]
+            self.write_browser_export(node_id, 'browser-retry', value)
+            first = self.verify_browser_receipt(node_id, 'browser', 'browser-first-pass')
+            selection = {'version': 1, 'kind': 'browser-deferred-retry-selection', 'sourceCommit': SHA,
+                         'manifestSha256': 'b' * 64, 'shardIndex': node['shard_index'], 'shardCount': self.plan()['nodes'],
+                         'firstReportSha256': first['reportSha256'], 'firstLastRunSha256': first['lastRunSha256'],
+                         'firstExitCodeSha256': first['exitCodeSha256'],
+                         'failedTestIds': list(fanout.failed_browser_cases(self.read_browser_report(node_id)).values())}
+            selection.update(self.retry_selection_patch)
+            path = self.root / node_id / 'results/browser-retry/browser/retry-selection.json'
+            path.write_text(json.dumps(selection))
+        return self.root / node_id
 
 
 class RunnerResourceTests(unittest.TestCase):
+    def test_browser_runner_requires_a_zero_retry_first_pass_and_reads_phase_specific_retry_export(self):
+        spec = importlib.util.spec_from_file_location('runner_browser_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / 'config.json'
+            settings = dict(batch_key='fixture', node_id='node-001', source_commit=SHA,
+                            kind='browser', phase='browser', args=['browser-shard', '--playwright-retries', '1'])
+            path.write_text(json.dumps(settings))
+            with mock.patch.object(runner, 'run') as run, self.assertRaisesRegex(ValueError, 'disable immediate'):
+                runner.main(path)
+            run.assert_not_called()
+            settings.update(phase='browser-retry', args=['browser-retry', '--first-run', '/original'])
+            path.write_text(json.dumps(settings))
+            def execute(command, directory, log):
+                exported = root / 'results/browser-retry/browser'
+                exported.mkdir()
+                (exported / 'test-results.json').write_text('{"errors":[]}')
+                (exported / 'test-exit-code').write_text('0')
+                return 0
+            with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_identity'), \
+                 mock.patch.object(runner, 'run', side_effect=execute):
+                self.assertEqual(runner.main(path), 0)
+            self.assertEqual(json.loads((root / 'results/browser-retry/result.json').read_text())['status'], 'passed')
+
     def test_commands_receive_configured_resources_without_changing_probes(self):
         spec = importlib.util.spec_from_file_location('runner_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
         runner = importlib.util.module_from_spec(spec)
@@ -335,6 +417,89 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(len(fanout.verify_browser_report(value, SHA, result, 1, 20)), 1)
 
 
+class DeferredRetryCoverageTests(unittest.TestCase):
+    def first(self, indices=(1,)):
+        value = report(indices, 1)
+        value['suites'][0]['specs'][0]['tests'][0].update(
+            status='unexpected', results=[{'status': 'failed', 'retry': 0, 'duration': 20}])
+        return value
+
+    def result(self, failed=False):
+        return {'source_commit': SHA, 'status': 'failed' if failed else 'passed',
+                'commands': [{'exit_code': 0}], 'browser_exit_code': 1 if failed else 0,
+                **({'error': 'RuntimeError: browser tests exited 1'} if failed else {})}
+
+    def test_recovered_test_is_flaky_and_both_attempts_are_retained(self):
+        first = self.first((1, 2))
+        original = copy.deepcopy(first)
+        retry = report([1])
+        first['stats'] = {'startTime': '2026-11-25T00:00:00Z', 'duration': 1000}
+        original['stats'] = dict(first['stats'])
+        retry['stats'] = {'startTime': '2026-11-25T00:01:00Z', 'duration': 2000}
+        merged, recovered = fanout.merge_browser_retry(first, retry, self.result(), SHA)
+        self.assertEqual(first, original)
+        tests = [test for _, _, test in fanout.report_cases(merged)]
+        self.assertEqual([test['status'] for test in tests], ['flaky', 'expected'])
+        self.assertEqual([attempt['retry'] for attempt in tests[0]['results']], [0, 1])
+        self.assertEqual(tests[0]['results'][1]['fanoutPhase'], 'browser-retry')
+        self.assertEqual(tests[1], original['suites'][0]['specs'][1]['tests'][0])
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(merged['stats']['duration'], 62000)
+
+    def test_persistent_failure_remains_red(self):
+        first = self.first()
+        retry = self.first()
+        retry['config'].pop('shard')
+        merged, recovered = fanout.merge_browser_retry(first, retry, self.result(True), SHA)
+        self.assertEqual(recovered, [])
+        self.assertEqual(fanout.browser_stats(merged)['unexpected'], 1)
+        self.assertEqual(len(fanout.report_cases(merged)[0][2]['results']), 2)
+
+    def test_retry_rejects_missing_extra_skipped_unrun_unknown_project_and_global_errors(self):
+        for change in ('missing', 'extra', 'skipped', 'unrun', 'wrong-project', 'multi-project',
+                       'sharded', 'expected-failure', 'interrupted', 'immediate-retry', 'global-error', 'source'):
+            retry, result = report([1]), self.result()
+            test = retry['suites'][0]['specs'][0]['tests'][0]
+            if change == 'missing':
+                retry['suites'][0]['specs'] = []
+            elif change == 'extra':
+                retry = report([1, 2])
+            elif change == 'skipped':
+                test.update(status='skipped', expectedStatus='skipped', results=[{'status': 'skipped', 'retry': 0}])
+            elif change == 'unrun':
+                test['results'] = []
+            elif change == 'wrong-project':
+                test['projectName'] = 'firefox'
+            elif change == 'multi-project':
+                retry['config']['projects'].append({'name': 'firefox', 'retries': 0})
+            elif change == 'sharded':
+                retry['config']['shard'] = {'current': 1, 'total': 20}
+            elif change == 'expected-failure':
+                test['expectedStatus'] = 'failed'
+            elif change == 'interrupted':
+                test['results'][0]['status'] = 'interrupted'
+            elif change == 'immediate-retry':
+                test['results'].append({'status': 'passed', 'retry': 1})
+            elif change == 'global-error':
+                retry['errors'] = [{'message': 'worker disappeared'}]
+            else:
+                result['source_commit'] = 'b' * 40
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                fanout.merge_browser_retry(self.first(), retry, result, SHA)
+
+    def test_unexpected_pass_and_blocked_cases_cannot_be_recovered(self):
+        first = self.first((1, 2, 3, 4))
+        tests = [test for _, _, test in fanout.report_cases(first)]
+        tests[1].update(status='unexpected', expectedStatus='failed')
+        tests[2].update(status='skipped', results=[])
+        tests[3].update(status='skipped', expectedStatus='skipped', results=[{'status': 'skipped'}])
+        self.assertEqual(list(fanout.failed_browser_cases(first).values()), ['case-1'])
+        self.assertEqual(len(fanout.unrun_browser_cases(first)), 1)
+        merged, _ = fanout.merge_browser_retry(first, report([1]), self.result(), SHA)
+        self.assertEqual(fanout.browser_stats(merged), {'expected': 0, 'flaky': 1, 'unexpected': 1, 'skipped': 2})
+        self.assertEqual(len(fanout.unrun_browser_cases(merged)), 1)
+
+
 class LifecycleTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -367,6 +532,137 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
         self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
+
+    def test_retry_budget_is_zero_or_one_and_first_pass_never_retries_immediately(self):
+        for value in (2, -1, True, .5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                fanout.validate_config(dict(self.controller.config, retries=value))
+        self.initialize()
+        self.controller.read_bundle('node-001')
+        self.controller.browser('node-001', 'node-001')
+        # Inspect the actual browser scheduler's args, independently of its fake phase executor.
+        with mock.patch.object(self.controller, 'phase') as phase:
+            self.controller.browser('node-001', 'node-001')
+        args = phase.call_args.args[3]
+        self.assertEqual(args[args.index('--playwright-retries') + 1], '0')
+
+    def test_final_retry_runs_after_every_first_pass_and_recovers_without_erasing_first_failure(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            self.controller.run()
+        state = self.controller.read()
+        self.assertEqual(state['status'], 'passed')
+        self.assertEqual(state['browser_result_stats'], {'expected': 19, 'flaky': 1, 'unexpected': 0, 'skipped': 0})
+        self.assertEqual(state['ci_failures'][0]['phase'], 'browser')
+        self.assertEqual(state['unresolved_ci_failures'], [])
+        self.assertEqual(len(state['browser_flaky_identities']), 1)
+        self.assertEqual(state['browser_retry_nodes'], ['node-002'])
+        self.assertEqual([event for event in self.controller.events if isinstance(event, tuple) and event[0] == 'retry-barrier'],
+                         [('retry-barrier', 20)])
+        phases = [event for event in self.controller.events if isinstance(event, tuple) and event[1] == 'browser-retry']
+        self.assertEqual(phases, [('node-002', 'browser-retry')])
+        self.assertTrue(Path(state['browser_merged_report_path']).is_file())
+        before = list(self.controller.events)
+        self.controller.finish_validation(list(state['nodes']))
+        self.assertEqual(self.controller.events, before)
+
+    def test_nonbrowser_failure_stays_red_even_when_all_browser_failures_recover(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        self.controller.fail_checks = {'check-rust-fmt'}
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaises(fanout.CIValidationFailure):
+                self.controller.run()
+        state = self.controller.read()
+        self.assertEqual(state['browser_result_stats']['flaky'], 1)
+        self.assertEqual([failure['phase'] for failure in state['unresolved_ci_failures']], ['check-rust-fmt'])
+        self.assertNotIn('validation_passed_at', state)
+
+    def test_persistent_retry_failure_and_disabled_retry_keep_failures_visible(self):
+        for retries in (0, 1):
+            with self.subTest(retries=retries), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                (root / 'probe').mkdir()
+                (root / 'probe/dagger.json').write_text('{}')
+                settings = config(root, 4)
+                settings['retries'] = retries
+                controller = FakeController(settings, FakeAPI())
+                controller.fail_browser_nodes = {'node-002'}
+                controller.fail_retry_nodes = {'node-002'}
+                with mock.patch.object(fanout.subprocess, 'Popen') as process:
+                    process.return_value.poll.return_value = 0
+                    process.return_value.pid = 12345
+                    with self.assertRaises(fanout.CIValidationFailure):
+                        controller.run()
+                state = controller.read()
+                self.assertEqual(state['browser_result_stats']['unexpected'], 1)
+                self.assertEqual(len(state['browser_remaining_failed_identities']), 1)
+                self.assertEqual(state['browser_retry_nodes'], ['node-002'] if retries else [])
+                self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
+
+    def test_retry_global_errors_are_fatal_and_cleanup_still_runs(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        self.controller.retry_global_error = True
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'global errors'):
+                self.controller.run()
+        state = self.controller.read()
+        self.assertNotIn('validation_passed_at', state)
+        self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
+
+    def test_corrupt_first_receipt_stops_before_retry_execution(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        original = self.controller.verify_browser
+        def corrupt(node_id, allow_failure=False):
+            result = original(node_id, allow_failure)
+            if node_id == 'node-002':
+                path = self.controller.root / node_id / 'results/browser/browser/browser-run.json'
+                receipt = json.loads(path.read_text())
+                receipt['manifestSha256'] = 'c' * 64
+                path.write_text(json.dumps(receipt))
+            return result
+        with mock.patch.object(self.controller, 'verify_browser', side_effect=corrupt), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'receipt identity'):
+                self.controller.run()
+        self.assertFalse(any(isinstance(event, tuple) and event[1] == 'browser-retry' for event in self.controller.events))
+        self.assertTrue(all(node.get('deletion_verified') for node in self.controller.read()['nodes'].values()))
+
+    def test_unknown_retry_selection_receipt_cannot_approve_recovery(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        self.controller.retry_selection_patch = {'failedTestIds': ['case-2', 'case-unknown']}
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'selection receipt'):
+                self.controller.run()
+        self.assertNotIn('validation_passed_at', self.controller.read())
+
+    def test_deadline_at_barrier_prevents_final_retry_launch_and_keeps_cleanup(self):
+        self.controller.fail_browser_nodes = {'node-002'}
+        original = self.controller.validate_first_pass
+        def expire(nodes):
+            value = original(nodes)
+            self.controller.update(lambda state: state.update(deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat()))
+            return value
+        with mock.patch.object(self.controller, 'validate_first_pass', side_effect=expire), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaises(TimeoutError):
+                self.controller.run()
+        state = self.controller.read()
+        self.assertIn('first_pass_completed_at', state)
+        self.assertNotIn('browser_retry_started_at', state)
+        self.assertNotIn('validation_passed_at', state)
+        self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
 
     def test_only_completed_identical_check_results_are_recoverable(self):
         self.initialize()
@@ -422,14 +718,14 @@ class LifecycleTests(unittest.TestCase):
         self.initialize()
         self.controller.run_check_queue('node-001', fanout.CHECKS[:-1])
         with self.assertRaisesRegex(ValueError, 'exactly once'):
-            self.controller.finish_validation(['node-001'])
+            self.controller.finish_validation(list(self.controller.read()['nodes']))
         self.controller.run_check_queue('node-001', fanout.CHECKS[-1:])
         self.controller.update(lambda state: state['nodes']['node-001']['phase_results']['check-js-lint'].update(status='running'))
         with self.assertRaisesRegex(ValueError, 'not complete'):
-            self.controller.finish_validation(['node-001'])
+            self.controller.finish_validation(list(self.controller.read()['nodes']))
         self.controller.update(lambda state: state['nodes']['node-001']['phase_results']['check-js-lint'].update(status='failed'))
         with self.assertRaisesRegex(ValueError, 'not collected'):
-            self.controller.finish_validation(['node-001'])
+            self.controller.finish_validation(list(self.controller.read()['nodes']))
         self.assertNotIn('validation_passed_at', self.controller.read())
         self.assertNotIn('validation_completed_at', self.controller.read())
 

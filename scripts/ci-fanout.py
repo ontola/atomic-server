@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import copy
 import contextlib
 import datetime as dt
 import fcntl
@@ -137,7 +138,7 @@ def validate_config(config):
     if Path(config['runtime_dir']).is_relative_to(Path(config['worktree'])):
         raise ValueError('runtime_dir must be outside the repository')
     for field, default, low, high in (('max_hours', 4, .01, 4), ('workers', 1, 1, 64),
-                                     ('retries', 1, 0, 2), ('build_jobs', 4, 1, 128),
+                                     ('retries', 1, 0, 1), ('build_jobs', 4, 1, 128),
                                      ('rust_test_threads', 0, 0, 128)):
         value = config.setdefault(field, default)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
@@ -250,6 +251,138 @@ def verify_suite_union(inventory, reports):
     if seen != expected:
         raise ValueError('browser shards do not exactly cover the full inventory')
     return len(expected)
+
+
+def report_cases(report):
+    """Return stable identities and mutable test nodes, rejecting duplicates."""
+    cases = []
+
+    def walk(suites, parents=()):
+        for suite in suites:
+            path = parents + (suite.get('title', ''),)
+            for spec in suite.get('specs', []):
+                file = spec.get('file', suite.get('file', '')).replace('\\', '/').split('/tests/', 1)[-1]
+                for test in spec.get('tests', []):
+                    identity = (test.get('projectName') or test.get('projectId'), file,
+                                spec.get('line'), spec.get('column'), path[1:] + (spec['title'],))
+                    cases.append((identity, spec, test))
+            walk(suite.get('suites', []), path)
+    walk(report.get('suites', []))
+    if [item[0] for item in cases] != report_identities(report):
+        raise ValueError('browser report identities are inconsistent')
+    return cases
+
+
+def zero_retry_project(report):
+    projects = report.get('config', {}).get('projects', [])
+    if len(projects) != 1 or projects[0].get('retries') != 0:
+        raise ValueError('fan-out requires exactly one browser project with zero immediate retries')
+    name = projects[0].get('name') or projects[0].get('id')
+    if not name or any(identity[0] != name for identity, _, _ in report_cases(report)):
+        raise ValueError('browser report project identity differs from its configuration')
+    return name
+
+
+def failed_browser_cases(report):
+    """Select actual completed ordinary failures, never unexpected passes or unrun tests."""
+    zero_retry_project(report)
+    if report.get('errors'):
+        raise ValueError('browser report contains global errors')
+    failed = {}
+    ids = set()
+    for identity, spec, test in report_cases(report):
+        results = test.get('results', [])
+        if any(result.get('status') == 'interrupted' for result in results):
+            raise ValueError('browser execution was interrupted')
+        if (test.get('status') == 'flaky' or len(results) > 1
+                or any(result.get('retry', 0) != 0 for result in results)):
+            raise ValueError('first browser pass contains an immediate retry')
+        if (test.get('status') == 'unexpected' and test.get('expectedStatus') == 'passed'
+                and len(results) == 1 and results[0].get('status') in ('failed', 'timedOut')):
+            test_id = spec.get('id')
+            if not isinstance(test_id, str) or not test_id or test_id in ids:
+                raise ValueError('failed browser cases lack unambiguous native test IDs')
+            ids.add(test_id)
+            failed[identity] = test_id
+    return failed
+
+
+def unrun_browser_cases(report):
+    result = []
+    for identity, _, test in report_cases(report):
+        intentional_skip = (test.get('expectedStatus') == 'skipped'
+                            or any(item.get('type') in ('skip', 'fixme') for item in test.get('annotations', [])))
+        if ((test.get('status') == 'skipped' and not intentional_skip)
+                or (test.get('status') != 'skipped' and not test.get('results'))):
+            result.append(identity)
+    return result
+
+
+def browser_stats(report):
+    counts = dict(expected=0, flaky=0, unexpected=0, skipped=0)
+    for _, _, test in report_cases(report):
+        status = test.get('status')
+        if status not in counts:
+            raise ValueError('browser report has an unknown final test status')
+        counts[status] += 1
+    return counts
+
+
+def combined_browser_timing(reports):
+    bounds = []
+    for report in reports:
+        stats = report.get('stats', {})
+        if 'startTime' in stats and 'duration' in stats:
+            began = dt.datetime.fromisoformat(stats['startTime'].replace('Z', '+00:00'))
+            bounds.append((began, began + dt.timedelta(milliseconds=stats['duration'])))
+    if not bounds:
+        return {}
+    began, ended = min(item[0] for item in bounds), max(item[1] for item in bounds)
+    return {'startTime': began.isoformat(), 'duration': (ended - began).total_seconds() * 1000}
+
+
+def merge_browser_retry(first, retry, result, source_commit):
+    """Preserve both executions; a recovery is flaky, never a first-pass success."""
+    selected = failed_browser_cases(first)
+    zero_retry_project(retry)
+    if retry.get('config', {}).get('shard') is not None:
+        raise ValueError('deferred retry must not apply a shard to the failed-test selection')
+    if retry.get('errors') or result.get('source_commit') != source_commit:
+        raise ValueError('retry report global errors or source provenance mismatch')
+    if result.get('status') == 'passed':
+        if result.get('browser_exit_code') != 0:
+            raise ValueError('retry export success is not browser success')
+    elif not completed_phase_failure({'phase_kind': 'browser'}, result):
+        raise ValueError('deferred retry did not complete normally')
+    cases = report_cases(retry)
+    if not selected or {identity for identity, _, _ in cases} != set(selected):
+        raise ValueError('deferred retry identities differ from the exact failed-test selection')
+    output = copy.deepcopy(first)
+    targets = {identity: (spec, test) for identity, spec, test in report_cases(output)}
+    recovered = []
+    for identity, _, test in cases:
+        attempts = test.get('results', [])
+        if (test.get('expectedStatus') != 'passed' or len(attempts) != 1
+                or attempts[0].get('retry', 0) != 0
+                or attempts[0].get('status') not in ('passed', 'failed', 'timedOut')):
+            raise ValueError('deferred retry skipped, retried or did not execute a selected test')
+        passed = test.get('status') == 'expected' and attempts[0]['status'] == 'passed'
+        failed = test.get('status') == 'unexpected' and attempts[0]['status'] in ('failed', 'timedOut')
+        if not passed and not failed:
+            raise ValueError('deferred retry test status does not match its actual execution')
+        spec, original = targets[identity]
+        attempt = copy.deepcopy(attempts[0])
+        attempt.update(retry=1, fanoutPhase='browser-retry')
+        original['results'].append(attempt)
+        original['status'] = 'flaky' if passed else 'unexpected'
+        if passed:
+            recovered.append(identity)
+        spec['ok'] = all(item.get('status') in ('expected', 'flaky', 'skipped') for item in spec.get('tests', []))
+    stats = browser_stats(output)
+    if (result['status'] == 'passed') != (browser_stats(retry)['unexpected'] == 0):
+        raise ValueError('retry exit code and reported outcomes disagree')
+    output['stats'] = dict(output.get('stats', {}), **stats, **combined_browser_timing([first, retry]))
+    return output, recovered
 
 
 class DigitalOcean:
@@ -636,8 +769,11 @@ dagger version
             return self.verify_browser(node_id, allow_failure=True)
         return self.verify_browser(node_id)
 
-    def finish_validation(self, nodes):
+    def validate_first_pass(self, nodes):
+        """Barrier: all independent checks and every original browser shard finished."""
         state = self.read()
+        if len(set(nodes)) != state['plan']['nodes'] or len(nodes) != len(set(nodes)):
+            raise ValueError('first-pass barrier requires all distinct scheduled browser shards')
         expected = {'check-' + name for name, _ in CHECKS}
         checks = [name for node in state['nodes'].values() for name in node['phase_results'] if name in expected]
         if set(checks) != expected or len(checks) != len(expected):
@@ -654,12 +790,184 @@ dagger version
         reports = [[tuple(item[:4]) + (tuple(item[4]),)
                     for item in state['nodes'][key]['browser_identities']] for key in nodes]
         count = verify_suite_union(state['bundle']['inventory'], reports)
-        self.update(lambda value: value.update(full_browser_test_count=count, validation_completed_at=stamp()))
-        if failures:
-            raise CIValidationFailure('CI completed with failures: ' + '; '.join(
-                item['node_id'] + ': ' + item['phase'] for item in failures))
-        self.update(lambda value: value.update(validation_passed_at=stamp()))
+        first_failed, unrun = [], []
+        for key in nodes:
+            node = state['nodes'][key]
+            report = self.read_browser_report(key)
+            verify_browser_report(report, self.config['source_commit'], node['phase_results']['browser'],
+                                  node['shard_index'], state['plan']['nodes'], allow_failure=True)
+            failed_browser_cases(report)
+            first_failed.extend(identity for identity, _, test in report_cases(report) if test['status'] == 'unexpected')
+            unrun.extend(unrun_browser_cases(report))
+        def record(value):
+            value.update(full_browser_test_count=count, browser_first_failed_identities=first_failed,
+                         browser_unrun_identities=unrun)
+            value.setdefault('first_pass_completed_at', stamp())
+        self.update(record)
         return count
+
+    def read_browser_report(self, node_id, phase='browser'):
+        path = self.root / node_id / 'results' / phase / 'browser/test-results.json'
+        return json.loads(path.read_text())
+
+    def verify_browser_receipt(self, node_id, phase, kind):
+        state = self.read()
+        node = state['nodes'][node_id]
+        root = self.root / node_id / 'results' / phase / 'browser'
+        receipt = json.loads((root / 'browser-run.json').read_text())
+        expected = {'version': 1, 'kind': kind, 'sourceCommit': self.config['source_commit'],
+                    'manifestSha256': state['bundle']['manifest_sha256'], 'shardIndex': node['shard_index'],
+                    'shardCount': state['plan']['nodes'], 'playwrightRetries': 0}
+        if any(receipt.get(key) != value for key, value in expected.items()):
+            raise ValueError('browser execution receipt identity differs from the scheduled run')
+        for field, name in [('reportSha256', 'test-results.json'),
+                            ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
+            if receipt.get(field) != file_sha256(root / name):
+                raise ValueError('browser execution receipt artifact hash mismatch: ' + name)
+        result = node['phase_results'][phase]
+        if int((root / 'test-exit-code').read_text()) != result.get('browser_exit_code'):
+            raise ValueError('browser execution exit artifact differs from observed phase result')
+        return receipt
+
+    def browser_retry(self, node_id, builder):
+        self.source_inputs([node_id])
+        state = self.read()
+        node = state['nodes'][node_id]
+        if 'browser-retry' in node['phase_results']:
+            raise ValueError('the final browser retry round has already been attempted')
+        bundle = '/opt/atomic-ci/share/bundle' if node_id == builder else '/opt/atomic-ci/bundle'
+        self.phase(node_id, 'browser-retry', 'browser', [
+            'browser-retry', '--bundle', bundle, '--expected-commit', self.config['source_commit'],
+            '--manifest-sha256', state['bundle']['manifest_sha256'],
+            '--first-run', '/opt/atomic-ci/results/browser/browser',
+            '--shard-index', str(node['shard_index']), '--shard-count', str(state['plan']['nodes']),
+            '--playwright-workers', str(self.config['workers']),
+            'export', '--path', '/opt/atomic-ci/results/browser-retry/browser'])
+
+    def run_browser_retry(self, node_id, builder):
+        self.verify_browser_receipt(node_id, 'browser', 'browser-first-pass')
+        self.browser_retry(node_id, builder)
+        try:
+            self.wait([node_id])
+        except PhaseFailure as error:
+            self.record_phase_failure(error)
+        self.retrieve(node_id)
+        state = self.read()
+        node = state['nodes'][node_id]
+        root = self.root / node_id / 'results/browser-retry'
+        result = json.loads((root / 'result.json').read_text())
+        if result != node['phase_results']['browser-retry']:
+            raise ValueError('retrieved retry result differs from observed phase result')
+        first_receipt = self.verify_browser_receipt(node_id, 'browser', 'browser-first-pass')
+        self.verify_browser_receipt(node_id, 'browser-retry', 'browser-deferred-retry')
+        first = self.read_browser_report(node_id)
+        retry = self.read_browser_report(node_id, 'browser-retry')
+        selection = json.loads((root / 'browser/retry-selection.json').read_text())
+        expected = {'version': 1, 'kind': 'browser-deferred-retry-selection',
+                    'sourceCommit': self.config['source_commit'], 'manifestSha256': state['bundle']['manifest_sha256'],
+                    'shardIndex': node['shard_index'], 'shardCount': state['plan']['nodes'],
+                    'firstReportSha256': first_receipt['reportSha256'],
+                    'firstLastRunSha256': first_receipt['lastRunSha256'],
+                    'firstExitCodeSha256': first_receipt['exitCodeSha256']}
+        selected = selection.get('failedTestIds', [])
+        if (any(selection.get(key) != value for key, value in expected.items())
+                or not isinstance(selected, list) or any(not isinstance(item, str) for item in selected)
+                or len(selected) != len(set(selected))
+                or set(selected) != set(failed_browser_cases(first).values())):
+            raise ValueError('deferred retry selection receipt differs from the original failed tests')
+        merged, recovered = merge_browser_retry(first, retry, result, self.config['source_commit'])
+        merged_root = self.root / node_id / 'results/browser-merged'
+        merged_root.mkdir(exist_ok=True)
+        (merged_root / 'test-results.json').write_text(json.dumps(merged, indent=2) + '\n')
+        self.node_update(node_id, browser_recovered_identities=recovered,
+                         browser_retry_report_path=str(root / 'browser/test-results.json'),
+                         browser_merged_report_path=str(merged_root / 'test-results.json'))
+        self.event(node_id + ': final browser retry recovered ' + str(len(recovered)) + ' test(s) as flaky')
+
+    def retry_failed_browser_shards(self, nodes, builder=None):
+        self.validate_first_pass(nodes)
+        state = self.read()
+        if state.get('browser_retry_finished_at'):
+            return
+        if state.get('browser_retry_started_at'):
+            raise ValueError('an interrupted final retry round cannot be started again')
+        retry_nodes = [key for key in nodes if failed_browser_cases(self.read_browser_report(key))]
+        if not self.config['retries']:
+            retry_nodes = []
+        if retry_nodes:
+            self.check_deadline()
+        selected = [identity for key in retry_nodes for identity in failed_browser_cases(self.read_browser_report(key))]
+        self.update(lambda value: value.update(browser_retry_started_at=stamp(), browser_retry_nodes=retry_nodes,
+                                              browser_retry_attempted_identities=selected))
+        with cf.ThreadPoolExecutor(max_workers=max(1, len(retry_nodes))) as pool:
+            jobs = [pool.submit(self.run_browser_retry, key, builder or state['builder']) for key in retry_nodes]
+            for job in cf.as_completed(jobs):
+                job.result()
+        self.update(lambda value: value.update(browser_retry_finished_at=stamp()))
+
+    def finish_validation(self, nodes):
+        self.retry_failed_browser_shards(nodes)
+        state = self.read()
+        merged = None
+        completed_reports = []
+        flaky, remaining, unrun = [], [], []
+        failed_nodes = set()
+        counts = dict(expected=0, flaky=0, unexpected=0, skipped=0)
+        for key in nodes:
+            node = state['nodes'][key]
+            path = node.get('browser_merged_report_path')
+            report = json.loads(Path(path).read_text()) if path else self.read_browser_report(key)
+            completed_reports.append(report)
+            cases = report_cases(report)
+            flaky.extend(identity for identity, _, test in cases if test['status'] == 'flaky')
+            remaining.extend(identity for identity, _, test in cases if test['status'] == 'unexpected')
+            unrun.extend(unrun_browser_cases(report))
+            if browser_stats(report)['unexpected']:
+                failed_nodes.add(key)
+            for _, _, test in cases:
+                for attempt in test.get('results', []):
+                    phase = attempt.get('fanoutPhase', 'browser')
+                    raw = self.root / key / 'results' / phase / 'browser'
+                    attempt.update(fanoutPhase=phase, fanoutReportPath=str(raw / 'test-results.json'))
+                    for attachment in attempt.get('attachments', []):
+                        original = attachment.get('path', '')
+                        if '/test-results/' in original:
+                            candidate = raw / 'test-results' / original.split('/test-results/', 1)[1]
+                            if candidate.is_file():
+                                attachment['path'] = str(candidate)
+            local = self.root / key / 'results/browser-merged'
+            local.mkdir(exist_ok=True)
+            local_path = local / 'test-results.json'
+            local_path.write_text(json.dumps(report, indent=2) + '\n')
+            self.node_update(key, browser_merged_report_path=str(local_path))
+            for name, count in browser_stats(report).items():
+                counts[name] += count
+            if merged is None:
+                merged = copy.deepcopy(report)
+                merged['suites'] = []
+                merged['config']['shard'] = None
+            merged['suites'].extend(copy.deepcopy(report['suites']))
+        merged['stats'] = dict(merged.get('stats', {}), **counts, **combined_browser_timing(completed_reports))
+        merged['fanout'] = {'sourceCommit': self.config['source_commit'],
+                            'manifestSha256': state['bundle']['manifest_sha256'],
+                            'firstPassCompletedAt': state['first_pass_completed_at'],
+                            'retryCompletedAt': state['browser_retry_finished_at'],
+                            'timing': 'wall-clock span of all browser attempts, including time waiting for the final-round barrier',
+                            'rawReportsPreserved': True, 'unrunIdentities': unrun}
+        path = self.root / 'browser-merged.json'
+        path.write_text(json.dumps(merged, indent=2) + '\n')
+        unresolved = [item for item in state.get('ci_failures', [])
+                      if item['phase'] not in ('browser', 'browser-retry') or item['node_id'] in failed_nodes]
+        self.update(lambda value: value.update(browser_result_stats=counts, browser_flaky_identities=flaky,
+                    browser_remaining_failed_identities=remaining, browser_unrun_identities=unrun,
+                    browser_merged_report_path=str(path), unresolved_ci_failures=unresolved,
+                    validation_completed_at=stamp()))
+        if unresolved or remaining or unrun:
+            raise CIValidationFailure('CI completed with failures: ' + '; '.join(
+                item['node_id'] + ': ' + item['phase'] for item in unresolved)
+                + ('; unexecuted browser tests=' + str(len(unrun)) if unrun else ''))
+        self.update(lambda value: value.update(validation_passed_at=stamp()))
+        return state['full_browser_test_count']
 
     def source_inputs(self, nodes):
         reference = self.read().get('source_input_reference')
@@ -888,7 +1196,7 @@ systemctl reload ssh
                 '--manifest-sha256', state['bundle']['manifest_sha256'],
                 '--shard-index', str(node['shard_index']), '--shard-count', str(state['plan']['nodes']),
                 '--playwright-workers', str(self.config['workers']),
-                '--playwright-retries', str(self.config['retries']),
+                '--playwright-retries', '0',
                 'export', '--path', '/opt/atomic-ci/results/browser/browser']
         self.phase(node_id, 'browser', 'browser', args)
 
@@ -1129,7 +1437,8 @@ systemctl reload ssh
             self.archive_bundle(builder)
             self.share(builder, [canary])
             self.run_browser_shard(canary, builder)
-            self.remove(canary)
+            if not self.config['retries'] or self.read()['nodes'][canary]['phase_results']['browser']['status'] == 'passed':
+                self.remove(canary)
             remaining = [key for key in node_ids if key not in initial]
             self._parallel_create(remaining)
             workers = [key for key in node_ids if key not in (builder, canary)]
@@ -1139,7 +1448,8 @@ systemctl reload ssh
                 if key in checks:
                     checks[key].result()
                 self.run_browser_shard(key, builder)
-                if key != builder:
+                if (key != builder and (not self.config['retries']
+                        or self.read()['nodes'][key]['phase_results']['browser']['status'] == 'passed')):
                     self.remove(key)
             jobs = [browser_pool.submit(run_browser, key) for key in node_ids if key != canary]
             for future in cf.as_completed(jobs):

@@ -282,7 +282,9 @@ four-hour deadline. `build_jobs` (default 4, range 1–128) sets the explicit
 Cargo compilation width for the build and independent checks;
 `rust_test_threads` (default 0, range 0–128) overrides Rust test execution
 threads only when nonzero. `workers` accepts 1–64 Playwright workers per
-shard; its default remains one. Choose these widths for the actual CPU and
+shard; its default remains one. `retries` is either 0 (no retry) or 1 (the
+default: one final browser retry round). Both browser attempts disable
+Playwright's immediate retries. Choose these widths for the actual CPU and
 memory budget rather than assuming more parallel tests always finish sooner.
 Standalone Dagger calls can use constructor `--build-jobs N` to override the
 host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
@@ -316,7 +318,22 @@ browser shard must return a complete, source-verified report before the rest
 of the fleet is created. Completed check or browser assertion failures are
 collected while later independent checks and browser shards continue. The
 runner reconciles all ten checks and the complete browser inventory before
-returning an aggregate failure; collecting a failed report never makes it pass.
+starting the final retry round. Only completed, unexpected browser failures
+are selected again, using the same verified bundle and a fresh isolated server.
+Passing and intentionally skipped tests are not rerun. Retry selection is
+validated before execution; a missing or corrupt selection cannot fall back
+to running the whole suite. Failed workers remain available until this round,
+within the original deadline; workers that passed can be removed earlier.
+The original reports and traces remain available alongside the retry reports.
+The combined JSON report classifies a recovered failure as `flaky`, preserving
+both attempts. Read the validated aggregate at `runtime_dir/browser-merged.json`
+or each worker's `results/browser-merged/test-results.json`; the original
+`results/browser/browser/test-results.json` deliberately keeps the first pass.
+Custom schedulers call `finish_validation` after all first-pass futures finish;
+it validates coverage and performs the final round before the aggregate gate.
+A failed check, persistent browser failure, missing test or
+unexpectedly skipped/interrupted retry keeps the result red. Other CI checks
+are not automatically repeated as whole suites.
 Source, build, transport, malformed-report and deadline errors still stop the
 run because the remaining results could not be validated safely.
 Before that first browser shard, the runner also copies the completed bundle

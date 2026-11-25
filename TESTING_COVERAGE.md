@@ -702,6 +702,19 @@ final aggregate must fail. Missing or unfinished checks, cancelled phases,
 source/report mismatches and deadlines cannot become collected test failures.
 These fake-host tests do not measure real-machine CI completion time.
 
+Deferred browser retry regressions require all independent first-pass checks
+and browser shards to finish before one selective retry round. They check
+zero immediate retries, exact failed-test selection, preservation of the first
+failure and traces, recovered `flaky` classification, and final failure for a
+failed independent check or an incomplete/unsuccessful retry. Bundle and
+first-run receipts must match before retry execution. Missing or corrupt
+selection must not fall back to the full suite. Passing and intentionally
+skipped tests are never part of the retry selection. These checks validate
+the fan-out runner, not the separate Main CI retry policy.
+The portable-bundle regressions also execute pinned Playwright against a small
+process-only fixture: native listing and the retry select only the failed ID,
+leave both passing bodies untouched and preserve the original report bytes.
+
 `browser/e2e/tests/canvas-undo.spec.ts` covers tap undo/redo, scrubbing without
 losing redo history, restoring a discarded branch and undo after reload. Each
 case uses the shared hook's one fresh identity. The raw pointer gestures first
