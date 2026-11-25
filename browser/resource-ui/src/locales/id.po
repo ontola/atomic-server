@@ -13842,10 +13842,6 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Gunakan passkey, kode pemulihan, atau kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your atomic.place account"
-msgstr "Akun atomic.place-mu"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Tempel kunci rahasiamu."
 

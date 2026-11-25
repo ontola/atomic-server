@@ -509,11 +509,7 @@ export function GettingStartedFlow({
           <CardSubtitle>
             Sign in again to open your account on this device.
           </CardSubtitle>
-        ) : (
-          // The panel both signs in and signs up; here it is for an account
-          // that already exists.
-          <AccountHeading>Your atomic.place account</AccountHeading>
-        )}
+        ) : null}
         {/* The same options either way; an app that cannot hold the
             account cookie finishes each one in the system browser. */}
         {canHoldProviderCookie(knownPortalUrl) ? (

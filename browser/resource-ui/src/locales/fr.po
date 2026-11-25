@@ -13847,10 +13847,6 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Utilisez votre passkey, votre code de récupération ou votre secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your atomic.place account"
-msgstr "Votre compte atomic.place"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Collez votre secret."
 
