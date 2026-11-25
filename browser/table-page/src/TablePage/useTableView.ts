@@ -390,6 +390,11 @@ export function useTableView(
       }
     | undefined
   >(undefined);
+  // A failed first link is already visible locally. Retry that same View's
+  // table commit instead of creating another View or losing its local draft.
+  const pendingInitialLinksRef = useRef(
+    new WeakMap<Resource, { view: Resource; save?: Promise<void> }>(),
+  );
 
   useEffect(() => {
     const key = activeView ?? '__none__';
@@ -538,7 +543,15 @@ export function useTableView(
         );
       }
 
-      await table.save();
+      try {
+        await saveTableChange(table);
+      } catch (error) {
+        if (makeDefault) {
+          pendingInitialLinksRef.current.set(table, { view: created });
+        }
+
+        throw error;
+      }
 
       return created;
     },
@@ -678,26 +691,57 @@ export function useTableView(
   const ensureView = useCallback(async (): Promise<Resource | undefined> => {
     if (!canWriteNow.current) return;
 
-    if (activeView) {
-      const agent = store.getAgent()?.subject;
-      const target = await store.getResource(activeView);
-      const belongsToTable =
-        table
-          .getSubjects(dataBrowser.properties.tableViews)
-          .includes(activeView) ||
-        table.get(dataBrowser.properties.tableDefaultView) === activeView;
+    const preserveCreatedDraft = (created: Resource) => {
+      const current = latestConfigRef.current;
 
       if (
+        current &&
+        current.table === table &&
+        (!current.activeView || current.activeView === created.subject)
+      ) {
+        hydratedForRef.current = { table, key: created.subject };
+      }
+    };
+
+    const pendingLink = pendingInitialLinksRef.current.get(table);
+    const targetSubject = activeView ?? pendingLink?.view.subject;
+
+    if (targetSubject) {
+      const agent = store.getAgent()?.subject;
+      const target = await store.getResource(targetSubject);
+      const canUseTarget = () =>
         canWriteNow.current &&
         agent === store.getAgent()?.subject &&
-        belongsToTable &&
+        (table
+          .getSubjects(dataBrowser.properties.tableViews)
+          .includes(targetSubject) ||
+          table.get(dataBrowser.properties.tableDefaultView) ===
+            targetSubject) &&
         target.isReady() &&
-        target.get(core.properties.parent) === table.subject
-      ) {
-        return target;
+        target.get(core.properties.parent) === table.subject;
+
+      if (!canUseTarget()) return;
+
+      if (pendingLink?.view === target) {
+        // Concurrent configuration writes share this retry. A completion for
+        // an older attempt must not discard a newer table's pending link.
+        const retry = (pendingLink.save ??= saveTableChange(table));
+
+        try {
+          await retry;
+
+          if (pendingInitialLinksRef.current.get(table) === pendingLink) {
+            pendingInitialLinksRef.current.delete(table);
+          }
+        } finally {
+          if (pendingLink.save === retry) pendingLink.save = undefined;
+        }
+
+        if (!canUseTarget()) return;
+        preserveCreatedDraft(target);
       }
 
-      return;
+      return target;
     }
 
     // Creating the View flips `activeView` from undefined to its subject, which
@@ -731,17 +775,19 @@ export function useTableView(
 
     try {
       const created = await promise;
-      const current = latestConfigRef.current;
-
-      if (
-        current &&
-        current.table === table &&
-        (!current.activeView || current.activeView === created.subject)
-      ) {
-        hydratedForRef.current = { table, key: created.subject };
-      }
+      preserveCreatedDraft(created);
 
       return created;
+    } catch (error) {
+      const failedLink = pendingInitialLinksRef.current.get(table);
+
+      if (failedLink && failedLink.view.subject === creating.view.subject) {
+        // Keep the unsaved baseline and the latest draft. Hydration skipped
+        // this locally linked View while its first commit was in flight.
+        preserveCreatedDraft(failedLink.view);
+      }
+
+      throw error;
     } finally {
       if (creatingViewRef.current?.promise === promise) {
         creatingViewRef.current = undefined;

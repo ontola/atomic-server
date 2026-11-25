@@ -256,7 +256,7 @@ it('retains a failed draft and retries it on the next edit instead of marking it
   ]);
 });
 
-it('surfaces a rejected initial table link without claiming the draft was saved', async () => {
+it('retries a rejected initial table link and latest draft on the next edit', async () => {
   const state = await setup();
   const failure = new Error('The table link failed');
   const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -273,4 +273,101 @@ it('surfaces a rejected initial table link without claiming the draft was saved'
   ]);
   expect(state.view.get(dataBrowser.properties.viewFilters)).toBeUndefined();
   expect(state.viewSave).toHaveBeenCalledOnce();
+
+  state.tableSave
+    .mockRejectedValueOnce(Error('The retry also failed'))
+    .mockResolvedValue('persisted');
+  await act(async () => state.result.current.setFilterValue(property, '40'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(600);
+  });
+  expect(state.tableSave).toHaveBeenCalledTimes(2);
+  expect(state.result.current.filters[0]?.value).toBe('40');
+  expect(state.viewSave).toHaveBeenCalledOnce();
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toBeUndefined();
+
+  await act(async () => state.result.current.setFilterValue(property, '50'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(600);
+  });
+  expect(state.tableSave).toHaveBeenCalledTimes(3);
+  expect(state.newResource).toHaveBeenCalledOnce();
+  expect(state.viewSave).toHaveBeenCalledTimes(2);
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+    { property, operator: 'eq', value: '50' },
+  ]);
+});
+
+for (const differentTable of [false, true]) {
+  it(`does not transfer a rejected initial link into a newer ${differentTable ? 'table' : 'view'} draft`, async () => {
+    const state = await setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await beginFilter(state);
+    const table = differentTable
+      ? await state.makeResource({
+          subject: '_new:later-table',
+          noParent: true,
+        })
+      : state.table;
+    const view = await state.makeResource({
+      subject: '_new:later-view',
+      noParent: true,
+    });
+    await view.set(core.properties.parent, table.subject, false);
+    await view.set(core.properties.name, 'Later View', false);
+    await view.set(
+      dataBrowser.properties.viewFilters,
+      [{ property, operator: 'eq', value: '77' }],
+      false,
+    );
+    await table.set(
+      dataBrowser.properties.tableViews,
+      differentTable ? [view.subject] : [state.view.subject, view.subject],
+      false,
+    );
+    const save = vi.spyOn(view, 'save').mockResolvedValue('persisted');
+    await act(async () =>
+      state.rerender({ table, viewOverride: view.subject }),
+    );
+    await act(async () => state.result.current.setFilterValue(property, '88'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(save).toHaveBeenCalledOnce();
+
+    await act(async () => state.linked.reject(Error('Old table link failed')));
+    expect(state.result.current.filters[0]?.value).toBe('88');
+    await act(async () => state.result.current.setFilterValue(property, '99'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(view.get(dataBrowser.properties.viewFilters)).toEqual([
+      { property, operator: 'eq', value: '99' },
+    ]);
+    expect(state.tableSave).toHaveBeenCalledOnce();
+    expect(state.view.get(dataBrowser.properties.viewFilters)).toBeUndefined();
+  });
+}
+
+it('does not treat an in-memory queued initial link as persisted before retry', async () => {
+  const state = await setup();
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  state.tableSave
+    .mockResolvedValueOnce('queued')
+    .mockResolvedValue('persisted');
+  await beginFilter(state);
+  expect(error).toHaveBeenCalled();
+  expect(state.viewSave).toHaveBeenCalledOnce();
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toBeUndefined();
+
+  await act(async () => state.result.current.setFilterValue(property, '30'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(600);
+  });
+  expect(state.tableSave).toHaveBeenCalledTimes(2);
+  expect(state.newResource).toHaveBeenCalledOnce();
+  expect(state.view.get(dataBrowser.properties.viewFilters)).toEqual([
+    { property, operator: 'eq', value: '30' },
+  ]);
 });
