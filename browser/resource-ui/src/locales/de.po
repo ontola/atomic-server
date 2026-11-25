@@ -6315,6 +6315,7 @@ msgid "Could not update your passkey. Please try again."
 msgstr "Dein Passkey konnte nicht aktualisiert werden. Bitte versuche es erneut."
 
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Anderes Konto verwenden"

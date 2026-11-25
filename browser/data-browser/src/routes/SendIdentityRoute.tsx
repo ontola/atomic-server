@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { Button } from '@tomic/ui/components/Button';
-import { Column } from '@tomic/ui/components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   InputStyled,
   InputWrapper,
@@ -25,6 +25,7 @@ import {
 } from '../helpers/managed/sendIdentity';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import { useSettings } from '../helpers/AppSettings';
+import { signOutEverywhere } from '../helpers/managed/signOut';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
@@ -40,6 +41,7 @@ import {
 } from '../views/getting-started/chrome';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
+import { styled } from 'styled-components';
 
 export const SendIdentityRoute = createRoute({
   path: pathNames.sendIdentity,
@@ -49,6 +51,15 @@ export const SendIdentityRoute = createRoute({
     code: typeof search.code === 'string' ? search.code.trim() : '',
   }),
 });
+
+/** The onboarding card centers its text for the welcome screens; a dialog
+ * with fields and choices reads better left-aligned, like the rest of the app. */
+const LeftAlignedCard = styled(OnboardingCard)`
+  & h2,
+  & p {
+    text-align: left;
+  }
+`;
 
 type Phase =
   | { name: 'loading' }
@@ -74,7 +85,7 @@ type Phase =
  */
 function SendIdentityPage() {
   const { code } = SendIdentityRoute.useSearch();
-  const { baseURL } = useSettings();
+  const { baseURL, agent, setAgent } = useSettings();
   const [phase, setPhase] = useState<Phase>({ name: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [portalUrl, setPortalUrl] = useState<string | null>(() =>
@@ -263,6 +274,20 @@ function SendIdentityPage() {
     void unlockStep(p, 'secret', secretInput);
   }
 
+  /** One sign-in, so one sign-out: the account and this browser's identity
+   * both go, then the page asks for a sign-in again. */
+  async function switchAccount() {
+    setBusy(true);
+
+    try {
+      await signOutEverywhere({ agentSubject: agent?.subject });
+      setAgent(undefined);
+      setPhase({ name: 'sign-in' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const onSignedIn = () => {
     setPhase({ name: 'loading' });
     setAttempt(n => n + 1);
@@ -271,7 +296,7 @@ function SendIdentityPage() {
   return (
     <Shell>
       <OnboardingWrap>
-        <OnboardingCard>
+        <LeftAlignedCard>
           <Column gap='1rem'>
             {phase.name === 'loading' || phase.name === 'sending' ? (
               <CardSubtitle>
@@ -315,12 +340,23 @@ function SendIdentityPage() {
                   Signed in as {accountAddress(phase.account)}.
                 </CardSubtitle>
                 {error ? <CardError role='alert'>{error}</CardError> : null}
-                <CtaButton
-                  disabled={busy}
-                  onClick={() => void handleSend(phase.link, phase.account)}
-                >
-                  {busy ? 'Signing in…' : `Sign in to ${phase.link.deviceName}`}
-                </CtaButton>
+                <Row wrapItems>
+                  <CtaButton
+                    disabled={busy}
+                    onClick={() => void handleSend(phase.link, phase.account)}
+                  >
+                    {busy
+                      ? 'Signing in…'
+                      : `Sign in to ${phase.link.deviceName}`}
+                  </CtaButton>
+                  <Button
+                    subtle
+                    disabled={busy}
+                    onClick={() => void switchAccount()}
+                  >
+                    Use another account
+                  </Button>
+                </Row>
               </>
             ) : null}
 
@@ -410,7 +446,7 @@ function SendIdentityPage() {
               </>
             ) : null}
           </Column>
-        </OnboardingCard>
+        </LeftAlignedCard>
       </OnboardingWrap>
     </Shell>
   );
