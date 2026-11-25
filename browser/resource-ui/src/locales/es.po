@@ -312,6 +312,7 @@ msgstr "Ollama"
 
 #: ../data-browser/src/chunks/AI/AISetupPanel.tsx
 #: ../data-browser/src/components/AI/LocalNetworkNotice.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Continue"
 msgstr "Continuar"
 
@@ -1011,7 +1012,6 @@ msgstr "Entrada de chat"
 
 #: ../data-browser/src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr "Enviar"
@@ -1916,15 +1916,15 @@ msgstr "Iniciar sesión"
 msgid "Could not parse that secret."
 msgstr "No se pudo analizar ese secreto."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Secreto del agente"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signing in…"
 msgstr "Iniciando sesión..."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3375,12 +3375,6 @@ msgstr "No se ha podido guardar una copia de seguridad de tu secreto. Aún puede
 msgid "Back up your secret?"
 msgstr "¿Guardar una copia de seguridad de tu secreto?"
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Recovery password"
-msgstr "Contraseña de recuperación"
-
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Skip, I'll save it myself"
@@ -3390,32 +3384,13 @@ msgstr "Omitir, lo guardaré por mi cuenta"
 msgid "Could not restore your account."
 msgstr "No se ha podido restaurar tu cuenta."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Restaurar cuenta"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Introduce la contraseña de recuperación que estableciste para {0}."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
 msgstr "Restaurando…"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore & sign in"
-msgstr "Restaurar e iniciar sesión"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Introduce el secreto de tu agente para desbloquear esta unidad en este dispositivo."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Comprobando tu cuenta de {0}…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4497,19 +4472,10 @@ msgstr "Reposicionar"
 msgid "Drag to reposition · release to save"
 msgstr "Arrastra para reposicionar · suelta para guardar"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Introduce el código de recuperación que guardaste para {0}."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
 msgstr "Código de recuperación"
 
@@ -4569,16 +4535,11 @@ msgid "Checking what this device supports…"
 msgstr "Comprobando qué admite este dispositivo…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "Esperando tu clave de acceso…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Usar un código de recuperación en su lugar"
 
@@ -4591,16 +4552,6 @@ msgstr "Cuenta de Atomic"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "No se ha podido desbloquear con tu clave de acceso."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Desbloquear con tu clave de acceso"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your passkey instead"
-msgstr "Usar tu clave de acceso en su lugar"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4616,7 +4567,6 @@ msgstr "No se ha podido mostrar tu secreto."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Unlocking…"
 msgstr "Desbloqueando…"
 
@@ -4680,11 +4630,6 @@ msgstr "<0>Entonces todo depende de ti.</0> A continuación te mostraremos tu se
 msgid "This <0>is</0> your account — anyone holding it is you, on any device, forever. It can't be changed or revoked, and it's the only thing that still works if {0}{1} disappears. Store it like a passport, not a password."
 msgstr "Esto <0>es</0> tu cuenta: cualquiera que lo tenga será tú, en cualquier dispositivo y para siempre. No se puede cambiar ni revocar, y es lo único que seguirá funcionando si {0}{1} desaparece. Guárdalo como un pasaporte, no como una contraseña."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your fingerprint, face, or screen lock."
-msgstr "Desbloquea {0} con tu huella, tu rostro o el bloqueo de pantalla."
-
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Hemos sustituido tu antigua contraseña de recuperación por un código generado más seguro. Guárdalo en un lugar seguro: lo necesitarás, junto con tu correo, para volver a entrar. No podemos volver a mostrarlo, pero puedes generar uno nuevo desde Ajustes en cualquier momento."
@@ -4720,11 +4665,6 @@ msgid "Add a picture"
 msgstr "Añadir una foto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Usa tu huella, tu rostro o el bloqueo de pantalla."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "o inicia sesión de otra forma"
 
@@ -4748,10 +4688,6 @@ msgstr "Continuar como"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "No se ha podido acceder a tu copia de seguridad. Vuelve a intentarlo."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Pega el secreto de tu agente"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5665,11 +5601,6 @@ msgstr "Usa tu huella, tu rostro o el bloqueo de pantalla: el mismo que desbloqu
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Guárdalo en un lugar seguro. Lo necesitarás, junto con tu correo, para volver a entrar. No podemos volver a mostrarlo, pero puedes generar uno nuevo desde Ajustes cuando quieras."
 
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "¿Lo has olvidado? Restaurar desde {0}"
-
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
 msgid "Cannot {0} this resource."
@@ -5789,7 +5720,9 @@ msgstr "Tu cuenta de {0} conserva tu copia de seguridad. Inicia sesión en ella 
 msgid "Signing in restores who you are. Your workspace still lives on the device you made it with."
 msgstr "Iniciar sesión restaura tu identidad. Tu espacio de trabajo sigue estando en el dispositivo donde lo creaste."
 
+#. 0: phase.link.deviceName
 #. 0: PRODUCT_NAME
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Sign in to {0}"
 msgstr "Iniciar sesión en {0}"
@@ -6311,6 +6244,7 @@ msgid "Could not update your passkey. Please try again."
 msgstr "No se ha podido actualizar tu clave de acceso. Vuelve a intentarlo."
 
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Usar otra cuenta"
@@ -8204,7 +8138,6 @@ msgstr "<0/> Copiar enlace"
 
 #: ../data-browser/src/chunks/FormBuilder/ConditionsEditor.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Hecho"
@@ -8474,7 +8407,6 @@ msgid "Add a note for the people you're inviting"
 msgstr "Añade una nota para las personas a las que estás invitando"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sending…"
 msgstr "Enviando…"
 
@@ -11351,11 +11283,6 @@ msgstr "Buscar de nuevo"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "Has iniciado sesión como {0}, pero este navegador necesita la clave de tu cuenta para abrir esta unidad privada. Pega el secreto de agente que guardaste a continuación. No hay ninguna copia de seguridad de recuperación de la cuenta disponible."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "No se ha encontrado ninguna copia de seguridad de recuperación para {0}. La recuperación de la cuenta solo funciona si la activaste antes."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> El modelo seleccionado no es compatible con el uso de herramientas."
@@ -12982,10 +12909,6 @@ msgid "This account has no backup yet. Create it in the web app first."
 msgstr "Esta cuenta aún no tiene copia de seguridad. Créala primero en la aplicación web."
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "This backup cannot be opened here. Restore it in the web app first."
-msgstr "Esta copia de seguridad no se puede abrir aquí. Restáurala primero en la aplicación web."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not read your backup."
 msgstr "No se ha podido leer tu copia de seguridad."
 
@@ -12996,36 +12919,6 @@ msgstr "No se conoce ningún servicio de cuentas aquí."
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to continue"
 msgstr "Inicia sesión para continuar"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Sign in to your account to send your identity to your device."
-msgstr "Inicia sesión en tu cuenta para enviar tu identidad a tu dispositivo."
-
-#. 0: phase.link.deviceName
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send your identity to {0}?"
-msgstr "¿Enviar tu identidad a {0}?"
-
-#. 0: code
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Only continue if you started this on your own device just now and it shows code {0}."
-msgstr "Continúa solo si acabas de iniciar esto en tu propio dispositivo y muestra el código {0}."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send with this code"
-msgstr "Enviar con este código"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Unlock your backup"
-msgstr "Desbloquea tu copia de seguridad"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Go back to your device."
-msgstr "Vuelve a tu dispositivo."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Could not send your identity"
-msgstr "No se ha podido enviar tu identidad"
 
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
@@ -13886,3 +13779,93 @@ msgstr "Estos cambios pertenecen a algo que este servidor nunca recibió"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Puede que exista en otro dispositivo. Conecta ese dispositivo para enviarlo, o descarta estos cambios."
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Identity URL copied"
+msgstr "URL de identidad copiada"
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Go back to {0}."
+msgstr "Vuelve a {0}."
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy your atomic: URL"
+msgstr "Copia tu URL atomic:"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to your account to continue on your other device."
+msgstr "Inicia sesión en tu cuenta para continuar en tu otro dispositivo."
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to {0}?"
+msgstr "¿Iniciar sesión en {0}?"
+
+#. 0: phase.link.deviceName; 1: code
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
+msgstr "{0} quiere usar tu cuenta. Continúa solo si acabas de iniciar esto en tu propio dispositivo y muestra el código {1}."
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Use your passkey"
+msgstr "Usar tu passkey"
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Paste your secret"
+msgstr "Pega tu secreto"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Confirm it’s you"
+msgstr "Confirma que eres tú"
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Signed in to {0}"
+msgstr "Sesión iniciada en {0}"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Could not finish signing in"
+msgstr "No se pudo completar el inicio de sesión"
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Choose how to finish signing in to {0}."
+msgstr "Elige cómo terminar de iniciar sesión en {0}."
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Recovery password or secret"
+msgstr "Contraseña de recuperación o secreto"
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Recovery code or secret"
+msgstr "Código de recuperación o secreto"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use your passkey, recovery code or secret."
+msgstr "Usa tu passkey, código de recuperación o secreto."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your atomic.place account"
+msgstr "Tu cuenta de atomic.place"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
+msgstr "Inicia sesión con tu cuenta de atomic.place, o usa tu passkey, código de recuperación o secreto."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or paste your secret."
+msgstr "Inicia sesión con tu cuenta de atomic.place, o pega tu secreto."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste your secret."
+msgstr "Pega tu secreto."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or use your passkey, code or secret"
+msgstr "o usa tu passkey, código o secreto"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
+msgstr "o pega tu secreto"

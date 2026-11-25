@@ -1,30 +1,30 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { Button } from '@tomic/ui/components/Button';
-import { Column } from '@tomic/ui/components/Row';
-import {
-  InputStyled,
-  InputWrapper,
-} from '@tomic/ui/components/forms/InputStyles';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   accountAddress,
-  getManagedAccount,
+  getManagedAccountOrNull,
   type ManagedAccount,
 } from '../helpers/managed/session';
 import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
 import { canHoldProviderCookie } from '../helpers/managed/deviceLink';
-import { getUnlockableRecoverySecret } from '../helpers/managed/recovery';
-import type { RecoverySecret } from '../helpers/managed/recovery';
+import {
+  getUnlockableRecoverySecret,
+  tryAutoUnlock,
+  unlockBackup,
+  type RecoverySecret,
+  type UnlockMethod,
+} from '../helpers/managed/recovery';
 import {
   describeLink,
   sendIdentity,
-  unlockBackup,
-  unlockMethods,
   type LinkDescription,
-  type UnlockMethod,
 } from '../helpers/managed/sendIdentity';
+import { UnlockBackupForm } from '../components/UnlockBackupForm';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import { useSettings } from '../helpers/AppSettings';
+import { useSignOut } from '../hooks/useSignOut';
 import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
@@ -40,6 +40,7 @@ import {
 } from '../views/getting-started/chrome';
 import { pathNames } from './paths';
 import { appRoute } from './RootRoutes';
+import { styled } from 'styled-components';
 
 export const SendIdentityRoute = createRoute({
   path: pathNames.sendIdentity,
@@ -49,6 +50,15 @@ export const SendIdentityRoute = createRoute({
     code: typeof search.code === 'string' ? search.code.trim() : '',
   }),
 });
+
+/** The onboarding card centers its text for the welcome screens; a dialog
+ * with fields and choices reads better left-aligned, like the rest of the app. */
+const LeftAlignedCard = styled(OnboardingCard)`
+  & h2,
+  & p {
+    text-align: left;
+  }
+`;
 
 type Phase =
   | { name: 'loading' }
@@ -61,7 +71,7 @@ type Phase =
       methods: UnlockMethod[];
     }
   | { name: 'sending' }
-  | { name: 'done' }
+  | { name: 'done'; deviceName: string }
   | { name: 'failed'; message: string };
 
 /**
@@ -75,6 +85,7 @@ type Phase =
 function SendIdentityPage() {
   const { code } = SendIdentityRoute.useSearch();
   const { baseURL } = useSettings();
+  const signOutAndReset = useSignOut();
   const [phase, setPhase] = useState<Phase>({ name: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [portalUrl, setPortalUrl] = useState<string | null>(() =>
@@ -82,7 +93,6 @@ function SendIdentityPage() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [codeInput, setCodeInput] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +119,7 @@ function SendIdentityPage() {
     }
 
     void (async () => {
-      const account = await getManagedAccount().catch(() => null);
+      const account = await getManagedAccountOrNull();
 
       if (cancelled) return;
 
@@ -142,36 +152,19 @@ function SendIdentityPage() {
   }, [code, attempt]);
 
   /**
-   * Unlock, then seal and deposit. False when the unlock failed (the caller
-   * decides whether to say so); a failed deposit ends the page instead, since
+   * Seal and deposit an unlocked secret. A failed deposit ends the page, since
    * the person cannot fix it from here.
    */
-  async function finish(
+  async function deliver(
     link: LinkDescription,
     recovery: RecoverySecret,
-    method: UnlockMethod,
-    input?: string,
-    quiet = false,
-  ): Promise<boolean> {
-    let secret: string;
-
-    try {
-      secret = await unlockBackup(recovery, method, input);
-    } catch (err) {
-      if (!quiet) {
-        setError(
-          err instanceof Error ? err.message : 'Could not unlock your backup.',
-        );
-      }
-
-      return false;
-    }
-
+    secret: string,
+  ) {
     setPhase({ name: 'sending' });
 
     try {
       await sendIdentity(code, link, recovery, secret);
-      setPhase({ name: 'done' });
+      setPhase({ name: 'done', deviceName: link.deviceName });
     } catch (err) {
       setPhase({
         name: 'failed',
@@ -179,8 +172,6 @@ function SendIdentityPage() {
           err instanceof Error ? err.message : 'Could not send your identity.',
       });
     }
-
-    return true;
   }
 
   async function unlockStep(
@@ -192,7 +183,15 @@ function SendIdentityPage() {
     setError(undefined);
 
     try {
-      await finish(p.link, p.recovery, method, input);
+      await deliver(
+        p.link,
+        p.recovery,
+        await unlockBackup(p.recovery, method, input),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not unlock your backup.',
+      );
     } finally {
       setBusy(false);
     }
@@ -215,30 +214,14 @@ function SendIdentityPage() {
         return;
       }
 
-      const methods = unlockMethods(recovery, account.email);
+      // The account alone, then the passkey on this same press; otherwise ask.
+      const outcome = await tryAutoUnlock(recovery, account.email);
 
-      // The account alone opens it when it can; otherwise ask for the passkey
-      // or code below.
-      if (
-        methods[0] === 'assisted' &&
-        (await finish(link, recovery, 'assisted', undefined, true))
-      ) {
-        return;
+      if ('secret' in outcome) {
+        await deliver(link, recovery, outcome.secret);
+      } else {
+        setPhase({ name: 'unlock', link, recovery, methods: outcome.methods });
       }
-
-      const rest = methods.filter(m => m !== 'assisted');
-
-      if (rest.length === 0) {
-        setPhase({
-          name: 'failed',
-          message:
-            'This backup cannot be opened here. Restore it in the web app first.',
-        });
-
-        return;
-      }
-
-      setPhase({ name: 'unlock', link, recovery, methods: rest });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Could not read your backup.',
@@ -248,16 +231,17 @@ function SendIdentityPage() {
     }
   }
 
-  function handleCode(e: FormEvent, p: Extract<Phase, { name: 'unlock' }>) {
-    e.preventDefault();
+  /** One sign-in, so one sign-out: the account and this browser's identity
+   * both go, then the page asks for a sign-in again. */
+  async function switchAccount() {
+    setBusy(true);
 
-    if (!codeInput.trim()) return;
-
-    void unlockStep(
-      p,
-      p.methods.includes('password') ? 'password' : 'code',
-      codeInput,
-    );
+    try {
+      await signOutAndReset();
+      setPhase({ name: 'sign-in' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   const onSignedIn = () => {
@@ -268,11 +252,11 @@ function SendIdentityPage() {
   return (
     <Shell>
       <OnboardingWrap>
-        <OnboardingCard>
+        <LeftAlignedCard>
           <Column gap='1rem'>
             {phase.name === 'loading' || phase.name === 'sending' ? (
               <CardSubtitle>
-                {phase.name === 'sending' ? 'Sending…' : 'Loading…'}
+                {phase.name === 'sending' ? 'Signing in…' : 'Loading…'}
               </CardSubtitle>
             ) : null}
 
@@ -280,7 +264,7 @@ function SendIdentityPage() {
               <>
                 <CardTitle>Sign in to continue</CardTitle>
                 <CardSubtitle>
-                  Sign in to your account to send your identity to your device.
+                  Sign in to your account to continue on your other device.
                 </CardSubtitle>
                 {portalUrl && canHoldProviderCookie(portalUrl) ? (
                   <AccountSignInPanel
@@ -302,89 +286,68 @@ function SendIdentityPage() {
 
             {phase.name === 'confirm' ? (
               <>
-                <CardTitle>
-                  Send your identity to {phase.link.deviceName}?
-                </CardTitle>
+                <CardTitle>Sign in to {phase.link.deviceName}?</CardTitle>
                 <CardSubtitle>
-                  Only continue if you started this on your own device just now
-                  and it shows code {code}.
+                  {phase.link.deviceName} asks to use your account. Only
+                  continue if you started this on your own device just now and
+                  it shows code {code}.
                 </CardSubtitle>
                 <CardSubtitle>
                   Signed in as {accountAddress(phase.account)}.
                 </CardSubtitle>
                 {error ? <CardError role='alert'>{error}</CardError> : null}
-                <CtaButton
-                  disabled={busy}
-                  onClick={() => void handleSend(phase.link, phase.account)}
-                >
-                  {busy ? 'Unlocking…' : 'Send'}
-                </CtaButton>
+                <Row wrapItems>
+                  <CtaButton
+                    disabled={busy}
+                    onClick={() => void handleSend(phase.link, phase.account)}
+                  >
+                    {busy
+                      ? 'Signing in…'
+                      : `Sign in to ${phase.link.deviceName}`}
+                  </CtaButton>
+                  <Button
+                    subtle
+                    disabled={busy}
+                    onClick={() => void switchAccount()}
+                  >
+                    Use another account
+                  </Button>
+                </Row>
               </>
             ) : null}
 
             {phase.name === 'unlock' ? (
               <>
-                <CardTitle>Unlock your backup</CardTitle>
-                {phase.methods.includes('passkey') ? (
-                  <Button
-                    type='button'
-                    disabled={busy}
-                    onClick={() => void unlockStep(phase, 'passkey')}
-                  >
-                    {busy
-                      ? 'Waiting for your passkey…'
-                      : 'Unlock with your passkey'}
-                  </Button>
-                ) : null}
-                {phase.methods.includes('code') ||
-                phase.methods.includes('password') ? (
-                  <form onSubmit={e => handleCode(e, phase)}>
-                    <Column gap='1rem'>
-                      <InputWrapper>
-                        <InputStyled
-                          value={codeInput}
-                          onChange={e => setCodeInput(e.target.value)}
-                          type='password'
-                          autoComplete='off'
-                          spellCheck={false}
-                          disabled={busy}
-                          placeholder={
-                            phase.methods.includes('password')
-                              ? 'Recovery password'
-                              : 'Recovery code'
-                          }
-                          aria-label='Recovery code'
-                        />
-                      </InputWrapper>
-                      <Button
-                        type='submit'
-                        subtle
-                        disabled={busy || !codeInput.trim()}
-                      >
-                        Send with this code
-                      </Button>
-                    </Column>
-                  </form>
-                ) : null}
-                {error ? <CardError role='alert'>{error}</CardError> : null}
+                <CardTitle>Confirm it’s you</CardTitle>
+                <CardSubtitle>
+                  Choose how to finish signing in to {phase.link.deviceName}.
+                </CardSubtitle>
+                <UnlockBackupForm
+                  methods={phase.methods}
+                  busy={busy}
+                  error={error}
+                  onUnlock={(method, input) =>
+                    void unlockStep(phase, method, input)
+                  }
+                />
               </>
             ) : null}
 
             {phase.name === 'done' ? (
               <>
-                <CardTitle>Done</CardTitle>
-                <CardSubtitle>Go back to your device.</CardSubtitle>
+                <CardTitle>Signed in to {phase.deviceName}</CardTitle>
+                <CardSubtitle>Go back to {phase.deviceName}.</CardSubtitle>
               </>
             ) : null}
 
             {phase.name === 'failed' ? (
               <>
-                <CardTitle>Could not send your identity</CardTitle>
+                <CardTitle>Could not finish signing in</CardTitle>
                 <CardError role='alert'>{phase.message}</CardError>
               </>
             ) : null}
           </Column>
-        </OnboardingCard>
+        </LeftAlignedCard>
       </OnboardingWrap>
     </Shell>
   );

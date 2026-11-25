@@ -312,6 +312,7 @@ msgstr "Ollama"
 
 #: ../data-browser/src/chunks/AI/AISetupPanel.tsx
 #: ../data-browser/src/components/AI/LocalNetworkNotice.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Continue"
 msgstr "Lanjutkan"
 
@@ -1011,7 +1012,6 @@ msgstr "Input obrolan"
 
 #: ../data-browser/src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr "Kirim"
@@ -1916,15 +1916,15 @@ msgstr "Masuk"
 msgid "Could not parse that secret."
 msgstr "Tidak dapat mengurai kunci rahasia tersebut."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Kunci rahasia agen"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signing in…"
 msgstr "Sedang masuk…"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3373,12 +3373,6 @@ msgstr "Tidak dapat mencadangkan kunci rahasia Anda. Anda tetap dapat menyimpann
 msgid "Back up your secret?"
 msgstr "Cadangkan kunci rahasia Anda?"
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Recovery password"
-msgstr "Kata sandi pemulihan"
-
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Skip, I'll save it myself"
@@ -3388,32 +3382,13 @@ msgstr "Lewati, saya akan menyimpannya sendiri"
 msgid "Could not restore your account."
 msgstr "Tidak dapat memulihkan akun Anda."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Pulihkan akun"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Masukkan kata sandi pemulihan yang Anda tetapkan untuk {0}."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
 msgstr "Memulihkan…"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore & sign in"
-msgstr "Pulihkan & masuk"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Masukkan kunci rahasia agen Anda untuk membuka drive ini di perangkat ini."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Memeriksa akun {0} Anda…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4501,19 +4476,10 @@ msgstr "Atur posisi"
 msgid "Drag to reposition · release to save"
 msgstr "Seret untuk mengatur posisi · lepaskan untuk menyimpan"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Masukkan kode pemulihan yang Anda simpan untuk {0}."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
 msgstr "Kode pemulihan"
 
@@ -4573,16 +4539,11 @@ msgid "Checking what this device supports…"
 msgstr "Memeriksa dukungan perangkat ini…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "Menunggu kunci sandi Anda…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Gunakan kode pemulihan sebagai gantinya"
 
@@ -4595,16 +4556,6 @@ msgstr "Akun Atomic"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "Tidak dapat membuka dengan kunci sandi Anda."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Buka dengan kunci sandi Anda"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your passkey instead"
-msgstr "Gunakan kunci sandi Anda sebagai gantinya"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4620,7 +4571,6 @@ msgstr "Tidak dapat menampilkan kunci rahasia Anda."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Unlocking…"
 msgstr "Membuka…"
 
@@ -4684,11 +4634,6 @@ msgstr "<0>Maka semuanya menjadi tanggung jawab Anda.</0> Berikutnya kami akan m
 msgid "This <0>is</0> your account — anyone holding it is you, on any device, forever. It can't be changed or revoked, and it's the only thing that still works if {0}{1} disappears. Store it like a passport, not a password."
 msgstr "Ini <0>adalah</0> akun Anda — siapa pun yang memegangnya adalah Anda, di perangkat apa pun, selamanya. Ini tidak dapat diubah atau dicabut, dan satu-satunya yang tetap berfungsi jika {0}{1} tidak ada lagi. Simpan seperti paspor, bukan kata sandi."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your fingerprint, face, or screen lock."
-msgstr "Buka {0} dengan sidik jari, wajah, atau kunci layar Anda."
-
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
 msgstr "Kami telah mengganti kata sandi pemulihan lama Anda dengan kode yang dibuat lebih kuat. Simpan di tempat aman — Anda memerlukannya, beserta email Anda, untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
@@ -4724,11 +4669,6 @@ msgid "Add a picture"
 msgstr "Tambahkan foto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Gunakan sidik jari, wajah, atau kunci layar Anda."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "atau masuk dengan cara lain"
 
@@ -4752,10 +4692,6 @@ msgstr "Lanjutkan sebagai"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "Tidak dapat mengakses cadangan Anda. Coba lagi."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Tempel kunci rahasia agen Anda"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5669,11 +5605,6 @@ msgstr "Gunakan sidik jari, wajah, atau kunci layar — yang sama untuk membuka 
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Simpan di tempat aman. Anda memerlukannya — beserta email Anda — untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
 
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "Lupa? Pulihkan dari {0}"
-
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
 msgid "Cannot {0} this resource."
@@ -5793,7 +5724,9 @@ msgstr "Cadangan Anda disimpan oleh akun {0} Anda. Masuk ke akun tersebut dan ca
 msgid "Signing in restores who you are. Your workspace still lives on the device you made it with."
 msgstr "Masuk memulihkan identitas Anda. Ruang kerja Anda tetap berada di perangkat yang Anda gunakan untuk membuatnya."
 
+#. 0: phase.link.deviceName
 #. 0: PRODUCT_NAME
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Sign in to {0}"
 msgstr "Masuk ke {0}"
@@ -6315,6 +6248,7 @@ msgid "Could not update your passkey. Please try again."
 msgstr "Tidak dapat memperbarui kunci sandi Anda. Silakan coba lagi."
 
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ErrorPage.tsx
 msgid "Use another account"
 msgstr "Gunakan akun lain"
@@ -8208,7 +8142,6 @@ msgstr "<0/> Salin tautan"
 
 #: ../data-browser/src/chunks/FormBuilder/ConditionsEditor.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Selesai"
@@ -8478,7 +8411,6 @@ msgid "Add a note for the people you're inviting"
 msgstr "Tambahkan catatan untuk orang yang Anda undang"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sending…"
 msgstr "Mengirim…"
 
@@ -11354,11 +11286,6 @@ msgstr "Cari lagi"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "Anda masuk sebagai {0}, tetapi browser ini memerlukan kunci akun Anda untuk membuka drive pribadi ini. Tempel kunci rahasia agen yang Anda simpan di bawah. Cadangan pemulihan akun tidak tersedia."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "Cadangan pemulihan untuk {0} tidak ditemukan. Pemulihan akun hanya berfungsi jika Anda mengaktifkannya sebelumnya."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> Model yang dipilih tidak mendukung penggunaan alat."
@@ -12985,10 +12912,6 @@ msgid "This account has no backup yet. Create it in the web app first."
 msgstr "Akun ini belum memiliki cadangan. Buat terlebih dahulu di aplikasi web."
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "This backup cannot be opened here. Restore it in the web app first."
-msgstr "Cadangan ini tidak dapat dibuka di sini. Pulihkan terlebih dahulu di aplikasi web."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not read your backup."
 msgstr "Tidak dapat membaca cadangan Anda."
 
@@ -12999,36 +12922,6 @@ msgstr "Tidak ada layanan akun yang dikenal di sini."
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to continue"
 msgstr "Masuk untuk melanjutkan"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Sign in to your account to send your identity to your device."
-msgstr "Masuk ke akun Anda untuk mengirim identitas ke perangkat Anda."
-
-#. 0: phase.link.deviceName
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send your identity to {0}?"
-msgstr "Kirim identitas Anda ke {0}?"
-
-#. 0: code
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Only continue if you started this on your own device just now and it shows code {0}."
-msgstr "Lanjutkan hanya jika Anda baru saja memulai ini di perangkat Anda sendiri dan perangkat menampilkan kode {0}."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send with this code"
-msgstr "Kirim dengan kode ini"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Unlock your backup"
-msgstr "Buka cadangan Anda"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Go back to your device."
-msgstr "Kembali ke perangkat Anda."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Could not send your identity"
-msgstr "Tidak dapat mengirim identitas Anda"
 
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
@@ -13881,3 +13774,93 @@ msgstr "Perubahan ini milik sesuatu yang tidak pernah diterima server ini"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya, atau buang perubahan ini."
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Identity URL copied"
+msgstr "URL identitas disalin"
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Go back to {0}."
+msgstr "Kembali ke {0}."
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy your atomic: URL"
+msgstr "Salin URL atomic: kamu"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to your account to continue on your other device."
+msgstr "Masuk ke akunmu untuk melanjutkan di perangkat lainmu."
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to {0}?"
+msgstr "Masuk ke {0}?"
+
+#. 0: phase.link.deviceName; 1: code
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
+msgstr "{0} meminta untuk menggunakan akunmu. Lanjutkan hanya jika kamu baru saja memulai ini di perangkatmu sendiri dan perangkat itu menampilkan kode {1}."
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Use your passkey"
+msgstr "Gunakan passkey-mu"
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Paste your secret"
+msgstr "Tempel kunci rahasiamu"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Confirm it’s you"
+msgstr "Konfirmasi bahwa ini kamu"
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Signed in to {0}"
+msgstr "Masuk ke {0}"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Could not finish signing in"
+msgstr "Tidak dapat menyelesaikan proses masuk"
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Choose how to finish signing in to {0}."
+msgstr "Pilih cara menyelesaikan proses masuk ke {0}."
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Recovery password or secret"
+msgstr "Kata sandi pemulihan atau kunci rahasia"
+
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+msgid "Recovery code or secret"
+msgstr "Kode pemulihan atau kunci rahasia"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Use your passkey, recovery code or secret."
+msgstr "Gunakan passkey, kode pemulihan, atau kunci rahasiamu."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your atomic.place account"
+msgstr "Akun atomic.place-mu"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
+msgstr "Masuk dengan akun atomic.place-mu, atau gunakan passkey, kode pemulihan, atau kunci rahasiamu."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or paste your secret."
+msgstr "Masuk dengan akun atomic.place-mu, atau tempel kunci rahasiamu."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste your secret."
+msgstr "Tempel kunci rahasiamu."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or use your passkey, code or secret"
+msgstr "atau gunakan passkey, kode, atau kunci rahasiamu"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
+msgstr "atau tempel kunci rahasiamu"

@@ -71,18 +71,27 @@ const NO_PROVIDERS: AccountProviders = {
  * portal's sign-in page: Google, Apple, GitHub, passkey, email link. `onSignedIn` runs once
  * this browser holds an account session, however it got one.
  */
+type SignInPanelProps = {
+  portalUrl: string;
+  disabled?: boolean;
+  onSignedIn: () => void;
+  /** The address a cached backup names, so the email link is one tap. */
+  initialEmail?: string;
+  /** This screen already offers the backup's own passkey; a second passkey
+   * button for the account would look like the same thing twice. */
+  hidePasskey?: boolean;
+};
+
 export function AccountSignInPanel({
   portalUrl,
   disabled,
   onSignedIn,
-}: {
-  portalUrl: string;
-  disabled?: boolean;
-  onSignedIn: () => void;
-}) {
+  initialEmail,
+  hidePasskey,
+}: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -209,7 +218,7 @@ export function AccountSignInPanel({
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
         onSecret={secret => void handleSecret(secret)}
-        passkeySupported={passkeys === true}
+        passkeySupported={passkeys === true && !hidePasskey}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => void handleEmail(e)}
@@ -261,14 +270,12 @@ export function AccountSignInViaBrowser({
   portalUrl,
   disabled,
   onSignedIn,
-}: {
-  portalUrl: string;
-  disabled?: boolean;
-  onSignedIn: () => void;
-}) {
+  initialEmail,
+  hidePasskey,
+}: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -400,6 +407,7 @@ export function AccountSignInViaBrowser({
         githubHref={null}
         onGitHub={providers.github ? () => void open('github') : undefined}
         onPasskey={() => void open('passkey')}
+        passkeySupported={!hidePasskey}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => {

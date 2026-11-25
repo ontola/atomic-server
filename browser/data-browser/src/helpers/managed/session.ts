@@ -109,6 +109,12 @@ if (typeof window !== 'undefined') {
  * wait for a sign-in to land pass `fresh` (or call `noteManagedSessionChanged`
  * once it did).
  */
+export async function getManagedAccountOrNull(
+  options: { fresh?: boolean } = {},
+): Promise<ManagedAccount | null> {
+  return getManagedAccount(options).catch(() => null);
+}
+
 export async function getManagedAccount(
   options: { fresh?: boolean } = {},
 ): Promise<ManagedAccount | null> {
