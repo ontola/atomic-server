@@ -357,6 +357,7 @@ function selectComponent(klass: string | undefined) {
     case dataBrowser.classes.importer:
       return ImporterPage;
     case dataBrowser.classes.folder:
+    case dataBrowser.classes.anchor:
       return FolderPage;
     case dataBrowser.classes.article:
       return ArticlePage;

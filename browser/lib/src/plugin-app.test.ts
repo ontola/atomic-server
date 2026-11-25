@@ -148,6 +148,50 @@ describe('createApp', () => {
     expect(resources.get(second.agent)?.[core.properties.parent]).toBe(folder);
   });
 
+  it('makes the identities folder an Anchor, so it is hidden by class', async () => {
+    const { store, resources } = fakeStore();
+    const { agent } = await createApp(store, {
+      drive: 'drive',
+      name: 'Habits',
+      source: SOURCE,
+    });
+    const folder = resources.get(agent)?.[core.properties.parent] as string;
+
+    expect(resources.get(folder)?.[core.properties.isA]).toEqual([
+      dataBrowser.classes.anchor,
+    ]);
+  });
+
+  it('moves its agent under the folder that won a first-use race', async () => {
+    const { store, resources } = fakeStore();
+    const newResource = store.newResource;
+
+    // Another agent's folder wins the pointer while this agent is being made.
+    store.newResource = async opts => {
+      const resource = await newResource(opts);
+
+      if (opts.isA.includes(core.classes.agent)) {
+        const drive = resources.get('drive') ?? {};
+        const pointer = Object.keys(drive).find(
+          key =>
+            resources.get(drive[key] as string)?.[core.properties.name] ===
+            'App identities',
+        );
+        resources.set('drive', { ...drive, [pointer!]: 'winner' });
+      }
+
+      return resource;
+    };
+
+    const { agent } = await createApp(store, {
+      drive: 'drive',
+      name: 'Habits',
+      source: SOURCE,
+    });
+
+    expect(resources.get(agent)?.[core.properties.parent]).toBe('winner');
+  });
+
   it('gives the app its own ontology, not the drive’s', async () => {
     const { store, resources } = fakeStore();
 

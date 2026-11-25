@@ -2,10 +2,13 @@ import { ai, dataBrowser, isAgentSubject, server } from '@tomic/lib';
 
 /**
  * Classes kept out of child lists (the AI sidebar reaches them), with the
- * plural label Space usage bundles them under. Meetings are listed: a past
+ * plural label Space usage bundles them under. Anchors are hidden by class, so
+ * the legacy per-folder drive pointers are only needed for folders that predate it. Meetings are listed: a past
  * meeting has no other place to be found.
  */
 export const HIDDEN_CLASS_LABELS: Record<string, string> = {
+  // Rights anchors (App identities, ...): system containers, not user folders.
+  [dataBrowser.classes.anchor]: 'Anchors',
   [ai.classes.aiChat]: 'AI chats',
   // Records of apps that use the drive; listed in Drive settings instead.
   [server.classes.externalApp]: 'App records',

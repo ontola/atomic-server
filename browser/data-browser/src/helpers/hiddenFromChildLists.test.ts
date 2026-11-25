@@ -10,6 +10,11 @@ describe('isHiddenFromChildLists', () => {
     expect(isHiddenFromChildLists([dataBrowser.classes.meeting])).toBe(false);
   });
 
+  it('hides anchors, not folders', () => {
+    expect(isHiddenFromChildLists([dataBrowser.classes.anchor])).toBe(true);
+    expect(isHiddenFromChildLists([dataBrowser.classes.folder])).toBe(false);
+  });
+
   it('hides app records (ExternalApp)', () => {
     expect(isHiddenFromChildLists([server.classes.externalApp])).toBe(true);
   });

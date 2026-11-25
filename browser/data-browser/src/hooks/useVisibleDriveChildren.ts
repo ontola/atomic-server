@@ -23,7 +23,7 @@ import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
  * sidebar) the Inbox (opens from Notifications in the app menu) and the Trash folder
  * (reached from the account menu at the bottom of the sidebar).
  * Ontologies the user creates themselves still show. AI chats are hidden by
- * class, and agent notes (a PlainText `about` an agent) are hidden too,
+ * class, as are Anchors (the App identities folder), and agent notes (a PlainText `about` an agent) are hidden too,
  * wherever they sit (the AI sidebar and the agent's page reach them), which
  * also covers legacy drives whose chats sit in a folder. Meetings show.
  *

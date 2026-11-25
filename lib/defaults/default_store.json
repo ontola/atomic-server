@@ -1329,6 +1329,21 @@
     "https://atomicdata.dev/properties/shortname": "folder"
   },
   {
+    "@id": "https://atomicdata.dev/classes/Anchor",
+    "https://atomicdata.dev/properties/description": "A system resource that exists to hold rights for the resources under it (Comments, AI chats, app identities). Kept out of child lists; people never file their own work here, which is what a Folder is for.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "anchor"
+  },
+  {
     "@id": "https://atomicdata.dev/class/Bookmark",
     "https://atomicdata.dev/properties/description": "A named reference to a web page. Can include a markdown version of the HTML document.",
     "https://atomicdata.dev/properties/isA": [

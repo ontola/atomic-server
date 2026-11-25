@@ -1,7 +1,6 @@
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
-import { classes } from './urls.js';
 import { issueAccessAgent } from './issue-access-agent.js';
 import type { Store } from './store.js';
 import {
@@ -223,6 +222,22 @@ export async function createApp(
     parent: await appIdentitiesFolder(store, options.drive, schema),
   });
 
+  // Two agents creating their first app at once each make a folder, and the
+  // drive pointer keeps one. The server finds app agents under the pointed
+  // folder, so move this agent under whichever won.
+  const identities = (await store.getResource(options.drive)).get(
+    schema.properties['app-identities'],
+  );
+  const agent = await store.getResource(key.subject);
+
+  if (
+    typeof identities === 'string' &&
+    identities !== agent.get(core.properties.parent)
+  ) {
+    await agent.set(core.properties.parent, identities);
+    await agent.save();
+  }
+
   return {
     app: app.subject,
     ontology: ontology.subject,
@@ -246,7 +261,7 @@ export async function createApp(
  * So: one folder, outside every app's subtree, holding all of them. It is the
  * place to look before revoking something.
  *
- * Found by a pointer on the drive rather than by name, the way the drive
+ * An Anchor, not a Folder: it is hidden from child lists by class. Found by a pointer on the drive rather than by name, the way the drive
  * already points at its default ontology, so renaming the folder does not
  * silently start a second one.
  */
@@ -264,12 +279,11 @@ async function appIdentitiesFolder(
 
   const folder = await store.newResource({
     parent: drive,
-    isA: [dataBrowser.classes.folder],
+    isA: [dataBrowser.classes.anchor],
     propVals: {
       [core.properties.name]: 'App identities',
       [core.properties.description]:
         'The agents apps on this drive write as. Removing one from a resource\u2019s rights revokes that app.',
-      [dataBrowser.properties.displayStyle]: classes.displayStyles.list,
     },
   });
   await folder.save();
