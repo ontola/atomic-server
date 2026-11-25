@@ -1466,12 +1466,23 @@ test('retry graph imports the same bundle, verifies selection before service sta
 });
 
 test('pinned Playwright actually lists and retries only failed IDs while original evidence stays intact', () => {
+  // Source preflight installs only the Dagger module, not the browser workspace.
+  // Own this fixture's CLI here, while checking it matches the real E2E pin.
   const require = createRequire(
-    new URL('../browser/e2e/package.json', import.meta.url),
+    new URL('../.dagger/package.json', import.meta.url),
   );
   const cli = require.resolve('@playwright/test/cli');
   const library = require.resolve('@playwright/test');
-  assert.equal(require('@playwright/test/package.json').version, '1.63.0');
+  const browserPackage = JSON.parse(
+    readFileSync(
+      new URL('../browser/e2e/package.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(
+    require('@playwright/test/package.json').version,
+    browserPackage.devDependencies['@playwright/test'],
+  );
   const temp = mkdtempSync(join(tmpdir(), 'atomic-deferred-retry-'));
   try {
     const report = join(temp, 'first-report.json');
