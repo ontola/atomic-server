@@ -13867,6 +13867,14 @@ msgstr "Filterwert"
 msgid "This column is unavailable."
 msgstr "Diese Spalte ist nicht verfügbar."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Warte, bis das Entfernen der Spalte synchronisiert ist, bevor du fortfährst."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Diese Eigenschaft kann nicht mehr gelöscht werden."
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Spaltenname"
@@ -13890,11 +13898,3 @@ msgstr "Diese Änderungen gehören zu etwas, das dieser Server nie erhalten hat"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Es existiert vielleicht auf einem anderen Gerät. Verbinde dieses Gerät, um es zu senden, oder verwirf diese Änderungen."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "Wait for the column removal to sync before continuing."
-msgstr "Warte, bis das Entfernen der Spalte synchronisiert ist, bevor du fortfährst."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "This property is no longer available for deletion."
-msgstr "Diese Eigenschaft kann nicht mehr gelöscht werden."

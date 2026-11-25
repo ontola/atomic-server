@@ -13859,6 +13859,14 @@ msgstr "Nilai filter"
 msgid "This column is unavailable."
 msgstr "Kolom ini tidak tersedia."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Tunggu sampai penghapusan kolom tersinkronisasi sebelum melanjutkan."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Properti ini tidak lagi dapat dihapus."
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Nama kolom"
@@ -13882,11 +13890,3 @@ msgstr "Perubahan ini milik sesuatu yang tidak pernah diterima server ini"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya, atau buang perubahan ini."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "Wait for the column removal to sync before continuing."
-msgstr "Tunggu sampai penghapusan kolom tersinkronisasi sebelum melanjutkan."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "This property is no longer available for deletion."
-msgstr "Properti ini tidak lagi dapat dihapus."
