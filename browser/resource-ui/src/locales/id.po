@@ -312,6 +312,7 @@ msgstr "Ollama"
 
 #: ../data-browser/src/chunks/AI/AISetupPanel.tsx
 #: ../data-browser/src/components/AI/LocalNetworkNotice.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Continue"
 msgstr "Lanjutkan"
 
@@ -3374,7 +3375,6 @@ msgstr "Tidak dapat mencadangkan kunci rahasia Anda. Anda tetap dapat menyimpann
 msgid "Back up your secret?"
 msgstr "Cadangkan kunci rahasia Anda?"
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery password"
@@ -4511,8 +4511,6 @@ msgstr "Masukkan kode pemulihan yang Anda simpan untuk {0}."
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
@@ -13848,10 +13846,6 @@ msgstr "Perubahan ini milik sesuatu yang tidak pernah diterima server ini"
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya, atau buang perubahan ini."
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Your secret"
-msgstr ""
-
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
 msgstr ""
@@ -13884,15 +13878,7 @@ msgid "Use your passkey"
 msgstr ""
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Continue with recovery code"
-msgstr ""
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Paste your secret"
-msgstr ""
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Continue with secret"
 msgstr ""
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
@@ -13911,4 +13897,13 @@ msgstr ""
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Recovery password or secret"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Recovery code or secret"
 msgstr ""

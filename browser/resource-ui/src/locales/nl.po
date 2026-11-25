@@ -312,6 +312,7 @@ msgstr "Ollama"
 
 #: ../data-browser/src/chunks/AI/AISetupPanel.tsx
 #: ../data-browser/src/components/AI/LocalNetworkNotice.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Continue"
 msgstr "Doorgaan"
 
@@ -3376,7 +3377,6 @@ msgstr "Kan geen back-up van je geheime sleutel maken. Je kunt deze nog wel zelf
 msgid "Back up your secret?"
 msgstr "Back-up van je geheime sleutel maken?"
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery password"
@@ -4513,8 +4513,6 @@ msgstr "Voer de herstelcode in die je voor {0} hebt opgeslagen."
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
@@ -13859,10 +13857,6 @@ msgstr "Deze wijzigingen horen bij iets wat deze server nooit heeft ontvangen"
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Het bestaat misschien op een ander apparaat. Verbind dat apparaat om het te versturen, of gooi deze wijzigingen weg."
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Your secret"
-msgstr "Je geheime sleutel"
-
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
 msgstr "Identiteits-URL gekopieerd"
@@ -13895,16 +13889,8 @@ msgid "Use your passkey"
 msgstr "Gebruik je passkey"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Continue with recovery code"
-msgstr "Ga verder met herstelcode"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Paste your secret"
 msgstr "Plak je geheime sleutel"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Continue with secret"
-msgstr "Ga verder met geheime sleutel"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Confirm it’s you"
@@ -13923,3 +13909,12 @@ msgstr "Inloggen kon niet worden afgerond"
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
 msgstr "Kies hoe je het inloggen bij {0} afrondt."
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Recovery password or secret"
+msgstr "Herstelwachtwoord of geheime sleutel"
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Recovery code or secret"
+msgstr "Herstelcode of geheime sleutel"

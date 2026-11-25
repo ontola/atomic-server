@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoute } from '@tanstack/react-router';
+import { decodeSecret } from '@tomic/react';
 import { Button } from '@tomic/ui/components/Button';
 import { Column, Row } from '@tomic/ui/components/Row';
 import {
@@ -61,6 +62,16 @@ const LeftAlignedCard = styled(OnboardingCard)`
   }
 `;
 
+function isSecret(value: string): boolean {
+  try {
+    decodeSecret(value.trim());
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 type Phase =
   | { name: 'loading' }
   | { name: 'sign-in' }
@@ -93,8 +104,7 @@ function SendIdentityPage() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [codeInput, setCodeInput] = useState('');
-  const [secretInput, setSecretInput] = useState('');
+  const [keyInput, setKeyInput] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -244,6 +254,16 @@ function SendIdentityPage() {
         'secret',
       ];
 
+      // The press that got us here still counts as a gesture, so ask for the
+      // passkey straight away. Cancelled or refused (Safari can, after the
+      // network round trips), and the choices below stay.
+      if (
+        rest[0] === 'passkey' &&
+        (await finish(link, recovery, 'passkey', undefined, true))
+      ) {
+        return;
+      }
+
       setPhase({ name: 'unlock', link, recovery, methods: rest });
     } catch (err) {
       setError(
@@ -254,24 +274,18 @@ function SendIdentityPage() {
     }
   }
 
-  function handleCode(e: FormEvent, p: Extract<Phase, { name: 'unlock' }>) {
-    e.preventDefault();
+  /** One field takes either a recovery code (or v1 password) or the secret
+   * itself; a secret is recognisable, so nobody has to pick which. */
+  function submitKey(p: Extract<Phase, { name: 'unlock' }>, value: string) {
+    if (!value.trim() || busy) return;
 
-    if (!codeInput.trim()) return;
+    const method: UnlockMethod = isSecret(value)
+      ? 'secret'
+      : p.methods.includes('password')
+        ? 'password'
+        : 'code';
 
-    void unlockStep(
-      p,
-      p.methods.includes('password') ? 'password' : 'code',
-      codeInput,
-    );
-  }
-
-  function handleSecret(e: FormEvent, p: Extract<Phase, { name: 'unlock' }>) {
-    e.preventDefault();
-
-    if (!secretInput.trim()) return;
-
-    void unlockStep(p, 'secret', secretInput);
+    void unlockStep(p, method, value);
   }
 
   /** One sign-in, so one sign-out: the account and this browser's identity
@@ -375,57 +389,47 @@ function SendIdentityPage() {
                     {busy ? 'Waiting for your passkey…' : 'Use your passkey'}
                   </Button>
                 ) : null}
-                {phase.methods.includes('code') ||
-                phase.methods.includes('password') ? (
-                  <form onSubmit={e => handleCode(e, phase)}>
-                    <Column gap='1rem'>
-                      <InputWrapper>
-                        <InputStyled
-                          value={codeInput}
-                          onChange={e => setCodeInput(e.target.value)}
-                          type='password'
-                          autoComplete='off'
-                          spellCheck={false}
-                          disabled={busy}
-                          placeholder={
-                            phase.methods.includes('password')
-                              ? 'Recovery password'
-                              : 'Recovery code'
-                          }
-                          aria-label='Recovery code'
-                        />
-                      </InputWrapper>
-                      <Button
-                        type='submit'
-                        subtle
-                        disabled={busy || !codeInput.trim()}
-                      >
-                        Continue with recovery code
-                      </Button>
-                    </Column>
-                  </form>
-                ) : null}
-                <form onSubmit={e => handleSecret(e, phase)}>
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    submitKey(phase, keyInput);
+                  }}
+                >
                   <Column gap='1rem'>
                     <InputWrapper>
                       <InputStyled
-                        value={secretInput}
-                        onChange={e => setSecretInput(e.target.value)}
+                        value={keyInput}
+                        onChange={e => setKeyInput(e.target.value)}
+                        // A pasted code or secret is complete: go on without
+                        // a second press. A wrong one just shows the error.
+                        onPaste={e => {
+                          const pasted = e.clipboardData.getData('text');
+
+                          if (pasted.trim()) {
+                            e.preventDefault();
+                            setKeyInput(pasted);
+                            submitKey(phase, pasted);
+                          }
+                        }}
                         type='password'
                         autoComplete='off'
                         spellCheck={false}
                         disabled={busy}
-                        placeholder='Paste your secret'
-                        aria-label='Your secret'
+                        placeholder={
+                          phase.methods.includes('password')
+                            ? 'Recovery password or secret'
+                            : phase.methods.includes('code')
+                              ? 'Recovery code or secret'
+                              : 'Paste your secret'
+                        }
+                        aria-label='Recovery code or secret'
                       />
                     </InputWrapper>
-                    <Button
-                      type='submit'
-                      subtle
-                      disabled={busy || !secretInput.trim()}
-                    >
-                      Continue with secret
-                    </Button>
+                    {keyInput.trim() ? (
+                      <Button type='submit' subtle disabled={busy}>
+                        Continue
+                      </Button>
+                    ) : null}
                   </Column>
                 </form>
                 {error ? <CardError role='alert'>{error}</CardError> : null}
