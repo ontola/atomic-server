@@ -312,7 +312,7 @@ msgstr "Ollama"
 
 #: ../data-browser/src/chunks/AI/AISetupPanel.tsx
 #: ../data-browser/src/components/AI/LocalNetworkNotice.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Continue"
 msgstr "Continuer"
 
@@ -3377,11 +3377,6 @@ msgstr "Impossible de sauvegarder votre secret. Vous pouvez toujours l’enregis
 msgid "Back up your secret?"
 msgstr "Sauvegarder votre secret ?"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Recovery password"
-msgstr "Mot de passe de récupération"
-
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Skip, I'll save it myself"
@@ -3401,13 +3396,8 @@ msgid "Enter the recovery password you set for {0}."
 msgstr "Saisissez le mot de passe de récupération défini pour {0}."
 
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
 msgstr "Restauration…"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore & sign in"
-msgstr "Restaurer et se connecter"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
@@ -4507,8 +4497,6 @@ msgstr "Saisissez le code de récupération enregistré pour {0}."
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Recovery code"
 msgstr "Code de récupération"
 
@@ -4568,15 +4556,12 @@ msgid "Checking what this device supports…"
 msgstr "Vérification des fonctionnalités de cet appareil…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "En attente de votre clé d’accès…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Utiliser un code de récupération à la place"
@@ -4592,13 +4577,8 @@ msgid "Could not unlock with your passkey."
 msgstr "Impossible de déverrouiller avec votre clé d’accès."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Unlock with your passkey"
 msgstr "Déverrouiller avec votre clé d’accès"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your passkey instead"
-msgstr "Utiliser votre clé d’accès à la place"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4676,11 +4656,6 @@ msgstr "<0>Vous en assumez alors toute la responsabilité.</0> Nous allons vous 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "This <0>is</0> your account — anyone holding it is you, on any device, forever. It can't be changed or revoked, and it's the only thing that still works if {0}{1} disappears. Store it like a passport, not a password."
 msgstr "Ceci <0>est</0> votre compte : quiconque le détient est vous, sur n’importe quel appareil, pour toujours. Il ne peut être ni modifié ni révoqué, et c’est le seul moyen qui fonctionnera encore si {0}{1} disparaît. Conservez-le comme un passeport, pas comme un mot de passe."
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your fingerprint, face, or screen lock."
-msgstr "Déverrouillez {0} avec votre empreinte digitale, votre visage ou le verrouillage de votre écran."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "We've replaced your old recovery password with a stronger generated code. Keep it somewhere safe — you'll need it, plus your email, to get back in. We can't show it again, but you can generate a new one from Settings any time."
@@ -13878,11 +13853,11 @@ msgstr ""
 msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
 msgstr ""
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Use your passkey"
 msgstr ""
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Paste your secret"
 msgstr ""
 
@@ -13904,11 +13879,16 @@ msgstr ""
 msgid "Choose how to finish signing in to {0}."
 msgstr ""
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery password or secret"
 msgstr ""
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery code or secret"
+msgstr ""
+
+#. 0: restore.email
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Unlock {0} with your passkey or the recovery code you saved."
 msgstr ""

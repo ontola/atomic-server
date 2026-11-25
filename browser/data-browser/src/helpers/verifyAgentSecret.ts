@@ -1,4 +1,16 @@
-import { Agent, agentSubject } from '@tomic/react';
+import { Agent, agentSubject, decodeSecret } from '@tomic/react';
+import { canonicalIdentifier } from '@tomic/lib';
+
+/** Whether `value` parses as an agent secret (no key is imported). */
+export function isAgentSecret(value: string): boolean {
+  try {
+    decodeSecret(value.trim());
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Thrown when a valid secret belongs to another agent than the expected one. */
 export class OtherAgentSecretError extends Error {
@@ -14,7 +26,8 @@ export class OtherAgentSecretError extends Error {
  * Parse `secret` and check that its key is the one of `expectedSubject`.
  *
  * Compares the agent derived from the secret's public key, not the subject the
- * secret claims: that field is free text inside the secret.
+ * secret claims: that field is free text inside the secret. Legacy spellings
+ * of the same agent count as equal.
  */
 export async function agentFromOwnSecret(
   secret: string,
@@ -23,7 +36,7 @@ export async function agentFromOwnSecret(
   const agent = await Agent.fromSecret(secret);
   const derived = agentSubject(await agent.getPublicKey());
 
-  if (derived !== expectedSubject) {
+  if (canonicalIdentifier(derived) !== canonicalIdentifier(expectedSubject)) {
     throw new OtherAgentSecretError();
   }
 

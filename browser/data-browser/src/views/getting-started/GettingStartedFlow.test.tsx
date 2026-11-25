@@ -85,6 +85,9 @@ vi.mock('../../helpers/managed', () => ({
   clearManagedAccountBinding: vi.fn(),
   logoutManagedSession: vi.fn(),
 }));
+vi.mock('../../helpers/managed/signOut', () => ({
+  endAccountSession: () => logoutManagedSession(),
+}));
 vi.mock('../../helpers/managed/cloudSync', () => ({
   getAccountServiceUrl: () => state.portal,
 }));
@@ -93,6 +96,7 @@ vi.mock('../../helpers/managed/deviceLink', () => ({
 }));
 vi.mock('../../helpers/managed/session', () => ({
   getManagedAccount: async () => state.account,
+  getManagedAccountOrNull: async () => state.account,
   accountAddress: (account: { email: string; address?: string }) =>
     account.address ?? account.email,
 }));
@@ -111,6 +115,7 @@ vi.mock('../../helpers/managed/recovery', () => ({
   getRecoverySecret: () => state.recovery(),
   readUnlockableCachedBackups: () => [],
   envelopeWrapperKinds: () => ({ hasPasskey: true, hasCode: false }),
+  unlockMethods: () => [],
   secretAccountConflict: (
     stored: { owner_email: string; agent_subject: string } | null,
     secretAgent: string,
@@ -122,6 +127,10 @@ vi.mock('../../helpers/managed/recovery', () => ({
           secretAgent,
         }
       : null,
+}));
+// The tests sign in with placeholder secrets; Agent.fromSecret is stubbed below.
+vi.mock('../../helpers/verifyAgentSecret', () => ({
+  isAgentSecret: () => true,
 }));
 vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
   ensureVaultBackup: vi.fn(),

@@ -1,15 +1,5 @@
-import { Agent } from '@tomic/lib';
 import { managedFetch } from './api';
-import {
-  decryptEnvelopeV2,
-  decryptEnvelopeWithAssisted,
-  decryptEnvelopeWithPasskey,
-  decryptRecoverySecret,
-  envelopeWrapperKinds,
-  hasAssistedWrapper,
-  sameAgent,
-  type RecoverySecret,
-} from './recovery';
+import type { RecoverySecret } from './recovery';
 import {
   isValidAppKey,
   sealIdentity,
@@ -80,72 +70,7 @@ export async function depositSealedIdentity(
   if (!response.ok) throw new Error('Could not send your identity.');
 }
 
-export type UnlockMethod =
-  | 'assisted'
-  | 'passkey'
-  | 'code'
-  | 'password'
-  | 'secret';
-
-/**
- * The ways this backup opens, best first. Assisted needs the account that owns
- * the backup to be the one signed in; a v1 backup only knows its password.
- */
-export function unlockMethods(
-  recovery: RecoverySecret,
-  accountEmail: string | undefined,
-): UnlockMethod[] {
-  if (recovery.format_version < 2) return ['password'];
-
-  const { hasPasskey, hasCode } = envelopeWrapperKinds(recovery);
-  const methods: UnlockMethod[] = [];
-
-  if (hasAssistedWrapper(recovery) && accountEmail === recovery.owner_email) {
-    methods.push('assisted');
-  }
-
-  if (hasPasskey) methods.push('passkey');
-
-  if (hasCode) methods.push('code');
-
-  return methods;
-}
-
-/** Open the backup. Passkey and code unlocks also add the assisted wrapper. */
-export async function unlockBackup(
-  recovery: RecoverySecret,
-  method: UnlockMethod,
-  input = '',
-): Promise<string> {
-  const secret =
-    method === 'secret'
-      ? input.trim()
-      : method === 'assisted'
-        ? await decryptEnvelopeWithAssisted(recovery)
-        : method === 'passkey'
-          ? await decryptEnvelopeWithPasskey(recovery)
-          : method === 'code'
-            ? await decryptEnvelopeV2(recovery, input.trim())
-            : await decryptRecoverySecret(recovery, input.trim());
-
-  await assertSecretIsBackupAgent(secret, recovery.agent_subject);
-
-  return secret;
-}
-
-/** The unlocked agent has to be the one the backup says it holds. */
-export async function assertSecretIsBackupAgent(
-  secret: string,
-  backupSubject: string,
-): Promise<void> {
-  const agent = await Agent.fromSecret(secret);
-
-  if (!agent.subject || !sameAgent(agent.subject, backupSubject)) {
-    throw new Error('This backup holds a different identity than expected.');
-  }
-}
-
-/** Unlock, seal to the app's key and deposit. */
+/** Seal the unlocked secret to the app's key and deposit. */
 export async function sendIdentity(
   code: string,
   link: LinkDescription,

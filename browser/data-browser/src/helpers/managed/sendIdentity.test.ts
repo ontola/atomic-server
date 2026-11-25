@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { unlockMethods } from './sendIdentity';
-import type { RecoverySecret } from './recovery';
+import { unlockMethods, type RecoverySecret } from './recovery';
 
 const managedFetch = vi.fn();
 
@@ -105,7 +104,7 @@ describe('describeLink and depositSealedIdentity', () => {
 
 describe('unlockBackup with a pasted secret', () => {
   it('rejects a secret that is not the backup agent', async () => {
-    const { unlockBackup } = await import('./sendIdentity');
+    const { unlockBackup } = await import('./recovery');
 
     await expect(
       unlockBackup(backup(['recovery-code']), 'secret', '  not-a-secret '),

@@ -2,17 +2,16 @@ import { HostingHint } from '../../components/HostingHint';
 import { Spinner } from '../../components/Spinner';
 import { resumeInviteUrl } from '../../helpers/inviteSignup';
 import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
+import { endAccountSession } from '../../helpers/managed/signOut';
 import { WorkspaceLoading } from './WorkspaceLoading';
-import {
-  PRODUCT_NAME,
-  clearManagedAccountBinding,
-  logoutManagedSession,
-} from '../../helpers/managed';
+import { PRODUCT_NAME } from '../../helpers/managed';
 import toast from 'react-hot-toast';
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Agent, decodeSecret } from '@tomic/lib';
+import { UnlockBackupForm } from '../../components/UnlockBackupForm';
+import { isAgentSecret } from '../../helpers/verifyAgentSecret';
 import { parseReturnPath } from '../../helpers/returnPath';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
@@ -41,6 +40,7 @@ import { NewIdentitySection } from '../../components/NewIdentitySection';
 import {
   accountAddress,
   getManagedAccount,
+  getManagedAccountOrNull,
 } from '../../helpers/managed/session';
 import { getAccountServiceUrl } from '../../helpers/managed/cloudSync';
 import { safePortalUrl } from '../../helpers/managed/api';
@@ -60,18 +60,16 @@ import {
   buildEnvelopeV2,
   buildEnvelopeWithAssisted,
   buildEnvelopeWithPasskeyAndCode,
-  decryptEnvelopeWithAssisted,
   FreshSignInRequiredError,
-  hasAssistedWrapper,
   saveRecoverySecret,
   getRecoverySecret,
   getUnlockableRecoverySecret,
   forgetCachedRecoverySecret,
   readUnlockableCachedBackups,
-  decryptRecoverySecret,
-  decryptEnvelopeV2,
-  decryptEnvelopeWithPasskey,
   envelopeWrapperKinds,
+  unlockBackup,
+  unlockMethods,
+  type UnlockMethod,
   secretAccountConflict,
   upgradeToEnvelopeV2,
   type RecoverySecret,
@@ -423,7 +421,6 @@ export function GettingStartedFlow({
       createTarget?.kind === 'portal' ||
       restore.phase === 'ready' ||
       restore.phase === 'no-backup');
-  const [restoreCodeInput, setRestoreCodeInput] = useState('');
   // Set when a v1 (password-only) backup is lazily upgraded to envelope v2
   // during a restore — the user must save this new code before continuing,
   // same reveal-once treatment as onboarding's recovery-backup step.
@@ -441,23 +438,12 @@ export function GettingStartedFlow({
 
     setKnownAccounts(readUnlockableCachedBackups());
   }, [step]);
-  // Set when the user explicitly picks code entry over the passkey prompt
-  // (e.g. they're on a device their passkeys don't sync to).
-  const [preferCodeEntry, setPreferCodeEntry] = useState(false);
-
   // Which unlock affordances this particular backup supports. A v1 blob has
   // neither wrapper kind, so it falls through to the password input.
   const restoreUnlock =
     restore.phase === 'ready'
-      ? (() => {
-          const kinds = envelopeWrapperKinds(restore.secret);
-
-          return {
-            ...kinds,
-            showPasskey: kinds.hasPasskey && !preferCodeEntry,
-          };
-        })()
-      : { hasPasskey: false, hasCode: false, showPasskey: false };
+      ? envelopeWrapperKinds(restore.secret)
+      : { hasPasskey: false, hasCode: false };
 
   // Check for a managed session + stored backup on both the restore step and
   // the sign-in step: a returning user with a passkey should be offered it
@@ -554,8 +540,7 @@ export function GettingStartedFlow({
     conflict: SecretAccountConflict,
   ) {
     try {
-      clearManagedAccountBinding();
-      await logoutManagedSession();
+      await endAccountSession();
       toast(`Signed out of ${conflict.email}.`);
     } catch {
       // Already gone, or the control plane is unreachable: nothing to release.
@@ -813,7 +798,7 @@ export function GettingStartedFlow({
         // passkey alone gets the user back in — no email, no network. Only
         // when there's nothing to unlock does the portal session matter.
         const [account, secret] = await Promise.all([
-          getManagedAccount().catch(() => null),
+          getManagedAccountOrNull(),
           getUnlockableRecoverySecret(),
         ]);
 
@@ -828,14 +813,11 @@ export function GettingStartedFlow({
               : (secret.owner_address ?? secret.owner_email),
           });
 
-          if (
-            account?.email === secret.owner_email &&
-            hasAssistedWrapper(secret)
-          ) {
+          if (unlockMethods(secret, account?.email)[0] === 'assisted') {
             setAssistedUnlock('trying');
 
             try {
-              const plaintext = await decryptEnvelopeWithAssisted(secret);
+              const plaintext = await unlockBackup(secret, 'assisted');
               if (cancelled) return;
               await handleSignInWithSecret(plaintext);
             } catch (err) {
@@ -878,7 +860,7 @@ export function GettingStartedFlow({
     setError(undefined);
 
     try {
-      const secret = await decryptEnvelopeWithPasskey(backup);
+      const secret = await unlockBackup(backup, 'passkey');
       await handleSignInWithSecret(secret);
 
       return true;
@@ -893,11 +875,6 @@ export function GettingStartedFlow({
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleRestoreWithPasskey() {
-    if (restore.phase !== 'ready') return;
-    await unlockWithPasskey(restore.secret);
   }
 
   /**
@@ -956,27 +933,24 @@ export function GettingStartedFlow({
     setStep('signin');
   }
 
-  async function handleRestore(e: FormEvent) {
-    e.preventDefault();
-
+  async function handleRestore(method: UnlockMethod, input?: string) {
     if (restore.phase !== 'ready' || loading) return;
 
-    const input = restoreCodeInput.trim();
+    if (method === 'passkey') {
+      await unlockWithPasskey(restore.secret);
 
-    if (!input) return;
+      return;
+    }
 
     setLoading(true);
     setError(undefined);
 
     try {
-      const isEnvelopeV2 = restore.secret.format_version >= 2;
-      // v2 codes are normalized inside decryptEnvelopeV2, so the raw input is
+      // v2 codes are normalized inside the decrypt, so the raw input is
       // passed through; a v1 password is used verbatim (it's user-chosen).
-      const secret = isEnvelopeV2
-        ? await decryptEnvelopeV2(restore.secret, input)
-        : await decryptRecoverySecret(restore.secret, input);
+      const secret = await unlockBackup(restore.secret, method, input);
 
-      if (isEnvelopeV2) {
+      if (method !== 'password') {
         // Reuse the normal sign-in path: parses the secret, sets the agent,
         // and navigates to the user's home drive.
         await handleSignInWithSecret(secret);
@@ -1044,9 +1018,7 @@ export function GettingStartedFlow({
       return;
     }
 
-    try {
-      await Agent.fromSecret(trimmed);
-    } catch {
+    if (!isAgentSecret(trimmed)) {
       setSecretError(
         showError ? 'That doesn’t look like a valid agent secret.' : undefined,
       );
@@ -1138,7 +1110,7 @@ export function GettingStartedFlow({
                 <CardTitle key='title'>
                   {nextDrive ? 'Unlock this drive' : 'Sign in'}
                 </CardTitle>
-                {nextDrive && !restoreUnlock.showPasskey ? (
+                {nextDrive && !restoreUnlock.hasPasskey ? (
                   <CardSubtitle key='subtitle'>
                     {restore.phase === 'no-backup' ? (
                       <>
@@ -1218,7 +1190,7 @@ export function GettingStartedFlow({
                     The agent secret stays available below, but it's the
                     advanced path — see the recovery hierarchy in
                     planning/BACKUP_SECURITY.md. */}
-                {knownAccounts.length <= 1 && restoreUnlock.showPasskey ? (
+                {knownAccounts.length <= 1 && restoreUnlock.hasPasskey ? (
                   <Column key='passkey' gap='0.75rem'>
                     <CardSubtitle>
                       Use your fingerprint, face, or screen lock.
@@ -1229,7 +1201,7 @@ export function GettingStartedFlow({
                     <Button
                       type='button'
                       disabled={loading}
-                      onClick={handleRestoreWithPasskey}
+                      onClick={() => void handleRestore('passkey')}
                     >
                       {loading
                         ? 'Waiting for your passkey…'
@@ -1242,7 +1214,6 @@ export function GettingStartedFlow({
                         disabled={loading}
                         onClick={() => {
                           setError(undefined);
-                          setPreferCodeEntry(true);
                           setStep('restore');
                         }}
                       >
@@ -1279,15 +1250,14 @@ export function GettingStartedFlow({
                         aria-label='Agent secret'
                         disabled={loading}
                         autoFocus={
-                          !restoreUnlock.showPasskey &&
-                          knownAccounts.length <= 1
+                          !restoreUnlock.hasPasskey && knownAccounts.length <= 1
                         }
                       />
                     </InputWrapper>
                     {/* Rendered by the passkey/account block above when one of
                         those is shown, so it never appears twice. */}
                     {(secretError || error) &&
-                    !restoreUnlock.showPasskey &&
+                    !restoreUnlock.hasPasskey &&
                     knownAccounts.length <= 1 ? (
                       <CardError key='error' role='alert'>
                         {secretError ?? error?.message}
@@ -1306,8 +1276,6 @@ export function GettingStartedFlow({
                         onClick={() => {
                           setError(undefined);
                           setSecretError(undefined);
-                          setRestoreCodeInput('');
-                          setPreferCodeEntry(false);
                           setStep('restore');
                         }}
                       >
@@ -1447,100 +1415,28 @@ export function GettingStartedFlow({
                       recovery only works if you enabled it earlier.
                     </p>
                   )
-                ) : restoreUnlock.showPasskey ? (
-                  <Column key='ready-passkey' gap='1rem'>
-                    <p key='copy'>
-                      Unlock {restore.email} with your fingerprint, face, or
-                      screen lock.
-                    </p>
-                    {error ? (
-                      <CardError key='error' role='alert'>
-                        {error.message}
-                      </CardError>
-                    ) : null}
-                    <Button
-                      key='passkey'
-                      type='button'
-                      disabled={loading}
-                      onClick={handleRestoreWithPasskey}
-                    >
-                      {loading
-                        ? 'Waiting for your passkey…'
-                        : 'Unlock with your passkey'}
-                    </Button>
-                    {restoreUnlock.hasCode ? (
-                      <Button
-                        key='use-code'
-                        type='button'
-                        subtle
-                        disabled={loading}
-                        onClick={() => {
-                          setError(undefined);
-                          setPreferCodeEntry(true);
-                        }}
-                      >
-                        Use a recovery code instead
-                      </Button>
-                    ) : (
-                      <PasskeyOnlyHint key='passkey-only' />
-                    )}
-                  </Column>
                 ) : (
-                  <form key='ready' onSubmit={handleRestore}>
-                    <Column gap='1rem'>
-                      <p key='copy'>
-                        {restore.secret.format_version >= 2
-                          ? `Enter the recovery code you saved for ${restore.email}.`
-                          : `Enter the recovery password you set for ${restore.email}.`}
-                      </p>
-                      <InputWrapper key='input' hasPrefix>
-                        <FaKey />
-                        <InputStyled
-                          value={restoreCodeInput}
-                          onChange={e => setRestoreCodeInput(e.target.value)}
-                          type='password'
-                          autoComplete='current-password'
-                          placeholder={
-                            restore.secret.format_version >= 2
-                              ? 'Recovery code'
-                              : 'Recovery password'
-                          }
-                          aria-label={
-                            restore.secret.format_version >= 2
-                              ? 'Recovery code'
-                              : 'Recovery password'
-                          }
-                          autoFocus
-                        />
-                      </InputWrapper>
-                      {error ? (
-                        <CardError key='error' role='alert'>
-                          {error.message}
-                        </CardError>
-                      ) : null}
-                      <Button
-                        key='submit'
-                        type='submit'
-                        disabled={loading || !restoreCodeInput.trim()}
-                      >
-                        {loading ? 'Restoring…' : 'Restore & sign in'}
-                      </Button>
-                      {restoreUnlock.hasPasskey ? (
-                        <Button
-                          key='use-passkey'
-                          type='button'
-                          subtle
-                          disabled={loading}
-                          onClick={() => {
-                            setError(undefined);
-                            setPreferCodeEntry(false);
-                          }}
-                        >
-                          Use your passkey instead
-                        </Button>
-                      ) : null}
-                    </Column>
-                  </form>
+                  <Column key='ready' gap='1rem'>
+                    <p key='copy'>
+                      {restore.secret.format_version < 2
+                        ? `Enter the recovery password you set for ${restore.email}.`
+                        : restoreUnlock.hasPasskey
+                          ? `Unlock ${restore.email} with your passkey or the recovery code you saved.`
+                          : `Enter the recovery code you saved for ${restore.email}.`}
+                    </p>
+                    <UnlockBackupForm
+                      key='form'
+                      methods={unlockMethods(restore.secret, undefined)}
+                      busy={loading}
+                      error={error?.message}
+                      onUnlock={(method, input) =>
+                        void handleRestore(method, input)
+                      }
+                    />
+                    {restoreUnlock.hasPasskey && !restoreUnlock.hasCode ? (
+                      <PasskeyOnlyHint key='passkey-only' />
+                    ) : null}
+                  </Column>
                 )}
               </Column>
             </OnboardingCard>
@@ -1551,7 +1447,6 @@ export function GettingStartedFlow({
                 subtle
                 onClick={() => {
                   setError(undefined);
-                  setRestoreCodeInput('');
                   setStep('signin');
                 }}
               >
