@@ -554,7 +554,7 @@ msgstr "Ne répond pas"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -1916,17 +1916,15 @@ msgstr "Se connecter"
 msgid "Could not parse that secret."
 msgstr "Impossible de décoder ce secret."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Secret d'agent"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Connexion en cours…"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3386,15 +3384,6 @@ msgstr "Ignorer, je l’enregistrerai moi-même"
 msgid "Could not restore your account."
 msgstr "Impossible de restaurer votre compte."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Restaurer le compte"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Saisissez le mot de passe de récupération défini pour {0}."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restoring…"
 msgstr "Restauration…"
@@ -3402,11 +3391,6 @@ msgstr "Restauration…"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Saisissez le secret de votre agent pour déverrouiller ce lecteur sur cet appareil."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Vérification de votre compte {0}…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4488,11 +4472,6 @@ msgstr "Repositionner"
 msgid "Drag to reposition · release to save"
 msgstr "Faites glisser pour repositionner · relâchez pour enregistrer"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Saisissez le code de récupération enregistré pour {0}."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
@@ -4557,12 +4536,10 @@ msgstr "Vérification des fonctionnalités de cet appareil…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "En attente de votre clé d’accès…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Utiliser un code de récupération à la place"
 
@@ -4575,10 +4552,6 @@ msgstr "Compte Atomic"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "Impossible de déverrouiller avec votre clé d’accès."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Déverrouiller avec votre clé d’accès"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4692,11 +4665,6 @@ msgid "Add a picture"
 msgstr "Ajouter une photo"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Utilisez votre empreinte digitale, votre visage ou le verrouillage de votre écran."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "ou connectez-vous autrement"
 
@@ -4720,10 +4688,6 @@ msgstr "Continuer en tant que"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "Impossible d’accéder à votre sauvegarde. Réessayez."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Collez le secret de votre agent"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5636,11 +5600,6 @@ msgstr "Utilisez votre empreinte digitale, votre visage ou le verrouillage de vo
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Conservez-le en lieu sûr. Vous en aurez besoin, ainsi que de votre e-mail, pour retrouver l’accès. Nous ne pourrons plus l’afficher, mais vous pourrez en générer un nouveau dans les paramètres quand vous le souhaitez."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "Vous l’avez oublié ? Restaurer depuis {0}"
 
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
@@ -11324,11 +11283,6 @@ msgstr "Rechercher à nouveau"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "Vous êtes connecté en tant que {0}, mais ce navigateur a besoin de la clé de votre compte pour ouvrir ce lecteur privé. Collez le secret d’agent enregistré ci-dessous. Aucune sauvegarde de récupération du compte n’est disponible."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "Aucune sauvegarde de récupération trouvée pour {0}. La récupération du compte fonctionne uniquement si vous l’avez activée auparavant."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> Le modèle sélectionné ne prend pas en charge l'utilisation d'outils."
@@ -13888,7 +13842,14 @@ msgstr ""
 msgid "Recovery code or secret"
 msgstr ""
 
-#. 0: restore.email
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your passkey or the recovery code you saved."
+msgid "Use your passkey, recovery code or secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your account, or paste your secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
 msgstr ""

@@ -554,7 +554,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -1916,17 +1916,15 @@ msgstr "Masuk"
 msgid "Could not parse that secret."
 msgstr "Tidak dapat mengurai kunci rahasia tersebut."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Kunci rahasia agen"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Sedang masuk…"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3384,15 +3382,6 @@ msgstr "Lewati, saya akan menyimpannya sendiri"
 msgid "Could not restore your account."
 msgstr "Tidak dapat memulihkan akun Anda."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Pulihkan akun"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Masukkan kata sandi pemulihan yang Anda tetapkan untuk {0}."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restoring…"
 msgstr "Memulihkan…"
@@ -3400,11 +3389,6 @@ msgstr "Memulihkan…"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Masukkan kunci rahasia agen Anda untuk membuka drive ini di perangkat ini."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Memeriksa akun {0} Anda…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4492,11 +4476,6 @@ msgstr "Atur posisi"
 msgid "Drag to reposition · release to save"
 msgstr "Seret untuk mengatur posisi · lepaskan untuk menyimpan"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Masukkan kode pemulihan yang Anda simpan untuk {0}."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
@@ -4561,12 +4540,10 @@ msgstr "Memeriksa dukungan perangkat ini…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "Menunggu kunci sandi Anda…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Gunakan kode pemulihan sebagai gantinya"
 
@@ -4579,10 +4556,6 @@ msgstr "Akun Atomic"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "Tidak dapat membuka dengan kunci sandi Anda."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Buka dengan kunci sandi Anda"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4696,11 +4669,6 @@ msgid "Add a picture"
 msgstr "Tambahkan foto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Gunakan sidik jari, wajah, atau kunci layar Anda."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "atau masuk dengan cara lain"
 
@@ -4724,10 +4692,6 @@ msgstr "Lanjutkan sebagai"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "Tidak dapat mengakses cadangan Anda. Coba lagi."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Tempel kunci rahasia agen Anda"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5640,11 +5604,6 @@ msgstr "Gunakan sidik jari, wajah, atau kunci layar — yang sama untuk membuka 
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Simpan di tempat aman. Anda memerlukannya — beserta email Anda — untuk masuk kembali. Kami tidak dapat menampilkannya lagi, tetapi Anda dapat membuat kode baru dari Pengaturan kapan saja."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "Lupa? Pulihkan dari {0}"
 
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
@@ -11327,11 +11286,6 @@ msgstr "Cari lagi"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "Anda masuk sebagai {0}, tetapi browser ini memerlukan kunci akun Anda untuk membuka drive pribadi ini. Tempel kunci rahasia agen yang Anda simpan di bawah. Cadangan pemulihan akun tidak tersedia."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "Cadangan pemulihan untuk {0} tidak ditemukan. Pemulihan akun hanya berfungsi jika Anda mengaktifkannya sebelumnya."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> Model yang dipilih tidak mendukung penggunaan alat."
@@ -13883,7 +13837,14 @@ msgstr ""
 msgid "Recovery code or secret"
 msgstr ""
 
-#. 0: restore.email
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your passkey or the recovery code you saved."
+msgid "Use your passkey, recovery code or secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your account, or paste your secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
 msgstr ""

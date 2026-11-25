@@ -6,7 +6,7 @@ import { endAccountSession } from '../../helpers/managed/signOut';
 import { WorkspaceLoading } from './WorkspaceLoading';
 import { PRODUCT_NAME } from '../../helpers/managed';
 import toast from 'react-hot-toast';
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { styled, keyframes } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Agent, decodeSecret } from '@tomic/lib';
@@ -81,11 +81,7 @@ import {
   AccountSignInPanel,
   AccountSignInViaBrowser,
 } from './AccountSignInPanel';
-import {
-  InputStyled,
-  InputWrapper,
-} from '@tomic/ui/components/forms/InputStyles';
-import { FaArrowLeft, FaKey, FaXmark } from 'react-icons/fa6';
+import { FaArrowLeft, FaXmark } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
 import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
@@ -106,7 +102,6 @@ type Step =
   | 'welcome'
   | 'signin'
   | 'create'
-  | 'restore'
   | 'restore-upgraded'
   | 'secret-conflict'
   | 'bring-along'
@@ -240,11 +235,9 @@ export function GettingStartedFlow({
   const [step, setStep] = useState<Step>(
     fromManaged
       ? 'create'
-      : inviteToken
-        ? 'restore'
-        : nextDrive || returnPath || signInRequested
-          ? 'signin'
-          : initialStep,
+      : inviteToken || nextDrive || returnPath || signInRequested
+        ? 'signin'
+        : initialStep,
   );
   // Welcome is also the destination for lock, sign-out, recovery and resource
   // guards. A portal configuration is not a reason to leave an unlock flow.
@@ -262,7 +255,6 @@ export function GettingStartedFlow({
     string | undefined
   >();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
-  const [secretValue, setSecretValue] = useState('');
   /** A pasted secret for another agent, held until the user says which wins. */
   const [secretConflict, setSecretConflict] = useState<
     (SecretAccountConflict & { secret: string }) | null
@@ -445,8 +437,16 @@ export function GettingStartedFlow({
       ? envelopeWrapperKinds(restore.secret)
       : { hasPasskey: false, hasCode: false };
 
-  // Check for a managed session + stored backup on both the restore step and
-  // the sign-in step: a returning user with a passkey should be offered it
+  /** What the shared unlock form offers for the one backup this device can
+   * open. Assisted unlock runs by itself, so it is not a choice. Undefined
+   * without such a backup, or when several accounts ask which one first. */
+  const unlockOptions =
+    restore.phase === 'ready' && knownAccounts.length <= 1
+      ? unlockMethods(restore.secret, undefined)
+      : undefined;
+
+  // Check for a managed session + stored backup on the sign-in step:
+  // a returning user with a passkey should be offered it
   // straight away, not asked to paste an agent secret with recovery hidden
   // behind "Forgot your secret?".
   /**
@@ -786,7 +786,7 @@ export function GettingStartedFlow({
   }
 
   useEffect(() => {
-    if (step !== 'restore' && step !== 'signin') return;
+    if (step !== 'signin') return;
     let cancelled = false;
     setRestore({ phase: 'checking' });
     setError(undefined);
@@ -922,7 +922,6 @@ export function GettingStartedFlow({
    */
   async function handleSignInClick() {
     setError(undefined);
-    setSecretValue('');
 
     const unlockable = readUnlockableCachedBackups();
 
@@ -1030,11 +1029,6 @@ export function GettingStartedFlow({
     await handleSignInWithSecret(trimmed);
   }
 
-  async function handleSubmitSignIn(e: FormEvent) {
-    e.preventDefault();
-    await trySecret(secretValue, true);
-  }
-
   return (
     <Shell>
       {step === 'welcome' && !createTarget ? (
@@ -1110,9 +1104,9 @@ export function GettingStartedFlow({
                 <CardTitle key='title'>
                   {nextDrive ? 'Unlock this drive' : 'Sign in'}
                 </CardTitle>
-                {nextDrive && !restoreUnlock.hasPasskey ? (
-                  <CardSubtitle key='subtitle'>
-                    {restore.phase === 'no-backup' ? (
+                <CardSubtitle key='subtitle'>
+                  {nextDrive && !restoreUnlock.hasPasskey ? (
+                    restore.phase === 'no-backup' ? (
                       <>
                         You’re signed in as {restore.email}, but this browser
                         needs your account key to open this private drive. Paste
@@ -1124,9 +1118,13 @@ export function GettingStartedFlow({
                         Enter your agent secret to unlock this drive on this
                         device.
                       </>
-                    )}
-                  </CardSubtitle>
-                ) : null}
+                    )
+                  ) : unlockOptions ? (
+                    'Use your passkey, recovery code or secret.'
+                  ) : (
+                    'Sign in with your account, or paste your secret.'
+                  )}
+                </CardSubtitle>
 
                 {accountSignIn()}
 
@@ -1135,9 +1133,6 @@ export function GettingStartedFlow({
                 {knownAccounts.length > 1 ? (
                   <Column key='accounts' gap='0.75rem'>
                     <CardSubtitle>Continue as</CardSubtitle>
-                    {error ? (
-                      <CardError role='alert'>{error.message}</CardError>
-                    ) : null}
                     {knownAccounts.map(account => {
                       const address =
                         account.owner_address ?? account.owner_email;
@@ -1186,141 +1181,87 @@ export function GettingStartedFlow({
                   </Column>
                 ) : null}
 
-                {/* A backup this browser can open right now: lead with it.
-                    The agent secret stays available below, but it's the
-                    advanced path — see the recovery hierarchy in
-                    planning/BACKUP_SECURITY.md. */}
-                {knownAccounts.length <= 1 && restoreUnlock.hasPasskey ? (
-                  <Column key='passkey' gap='0.75rem'>
-                    <CardSubtitle>
-                      Use your fingerprint, face, or screen lock.
-                    </CardSubtitle>
-                    {error ? (
-                      <CardError role='alert'>{error.message}</CardError>
-                    ) : null}
+                {restore.phase === 'no-backup' && inviteToken ? (
+                  // The portal sends an invitee here whenever it cannot rule
+                  // out an earlier identity. With nothing to restore, the
+                  // invitation still wants an account to land in.
+                  <Column key='no-backup-invite' gap='0.75rem'>
+                    <p key='copy'>
+                      {`There is nothing to restore for ${restore.email} yet. Create your account to accept the invitation.`}
+                    </p>
                     <Button
+                      key='create-invited'
                       type='button'
-                      disabled={loading}
-                      onClick={() => void handleRestore('passkey')}
+                      onClick={() => {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('from_portal', 'true');
+                        url.searchParams.set('email', restore.email);
+                        // A reload, because the managed create flow is read
+                        // from the URL on mount.
+                        window.location.assign(url.toString());
+                      }}
                     >
-                      {loading
-                        ? 'Waiting for your passkey…'
-                        : 'Unlock with your passkey'}
+                      Create account and accept
                     </Button>
-                    {restoreUnlock.hasCode ? (
-                      <Button
-                        type='button'
-                        subtle
-                        disabled={loading}
-                        onClick={() => {
-                          setError(undefined);
-                          setStep('restore');
-                        }}
-                      >
-                        Use a recovery code instead
-                      </Button>
-                    ) : (
-                      <PasskeyOnlyHint />
-                    )}
-                    <OtherWaysLabel>or sign in another way</OtherWaysLabel>
                   </Column>
                 ) : null}
 
-                <form key='form' onSubmit={handleSubmitSignIn}>
-                  <Column gap='1rem'>
-                    <InputWrapper key='input' hasPrefix>
-                      <FaKey />
-                      <InputStyled
-                        value={secretValue}
-                        // A secret either parses or it doesn't, so there's
-                        // nothing to confirm with a button: signing in the
-                        // moment it's valid covers typing and pasting alike.
-                        onChange={e => {
-                          setSecretValue(e.target.value);
-                          void trySecret(e.target.value);
-                        }}
-                        onBlur={() => void trySecret(secretValue, true)}
-                        type='password'
-                        name='secret'
-                        autoComplete='current-password'
-                        spellCheck={false}
-                        placeholder={
-                          loading ? 'Signing in…' : 'Paste your agent secret'
-                        }
-                        aria-label='Agent secret'
-                        disabled={loading}
-                        autoFocus={
-                          !restoreUnlock.hasPasskey && knownAccounts.length <= 1
-                        }
-                      />
-                    </InputWrapper>
-                    {/* Rendered by the passkey/account block above when one of
-                        those is shown, so it never appears twice. */}
-                    {(secretError || error) &&
-                    !restoreUnlock.hasPasskey &&
-                    knownAccounts.length <= 1 ? (
-                      <CardError key='error' role='alert'>
-                        {secretError ?? error?.message}
-                      </CardError>
-                    ) : null}
-                    {/* Native installs need a way to link the portal before
-                        the backup check can succeed. Once linked, the restore
-                        step checks whether this account has a backup. */}
-                    {knownAccounts.length === 0 &&
-                    knownPortalUrl &&
-                    restore.phase === 'ready' ? (
-                      <Button
-                        key='forgot'
-                        type='button'
-                        subtle
-                        onClick={() => {
-                          setError(undefined);
-                          setSecretError(undefined);
-                          setStep('restore');
-                        }}
-                      >
-                        {`Forgot it? Restore from ${PRODUCT_NAME}`}
-                      </Button>
-                    ) : null}
-                    {nextDrive && !returnToPortal ? (
-                      // The sign-in guard (ErrorPage → here with `next`) can't
-                      // tell a returning user on a new device from a total
-                      // stranger who's never had an account — both hit an
-                      // unauthorized private resource the same way. Without
-                      // this, a stranger has no visible path forward besides
-                      // "Back" (not obvious it leads to account creation).
-                      <Button
-                        key='create'
-                        type='button'
-                        subtle
-                        disabled={
-                          !createTarget || createTarget.kind === 'unavailable'
-                        }
-                        onClick={() => {
-                          if (
-                            !createTarget ||
-                            createTarget.kind === 'unavailable'
-                          )
-                            return;
-                          setError(undefined);
+                {/* The same passkey button and code-or-secret field as the
+                    send-identity page. Without a backup this device can open,
+                    it is just the field, for the agent secret. */}
+                {unlockOptions ? null : (
+                  <OtherWaysLabel key='or-secret'>
+                    or paste your secret
+                  </OtherWaysLabel>
+                )}
+                <UnlockBackupForm
+                  key='unlock'
+                  methods={unlockOptions ?? ['secret']}
+                  busy={loading}
+                  error={secretError ?? error?.message}
+                  onUnlock={(method, input) =>
+                    unlockOptions && method !== 'secret'
+                      ? void handleRestore(method, input)
+                      : void trySecret(input ?? '', true)
+                  }
+                />
+                {restoreUnlock.hasPasskey && !restoreUnlock.hasCode ? (
+                  <PasskeyOnlyHint key='passkey-only' />
+                ) : null}
+                {nextDrive && !returnToPortal ? (
+                  // The sign-in guard (ErrorPage → here with `next`) can't
+                  // tell a returning user on a new device from a total
+                  // stranger who's never had an account — both hit an
+                  // unauthorized private resource the same way. Without
+                  // this, a stranger has no visible path forward besides
+                  // "Back" (not obvious it leads to account creation).
+                  <Button
+                    key='create'
+                    type='button'
+                    subtle
+                    disabled={
+                      !createTarget || createTarget.kind === 'unavailable'
+                    }
+                    onClick={() => {
+                      if (!createTarget || createTarget.kind === 'unavailable')
+                        return;
+                      setError(undefined);
 
-                          if (createTarget.kind === 'portal') {
-                            const url = safePortalUrl(createTarget.url);
+                      if (createTarget.kind === 'portal') {
+                        const url = safePortalUrl(createTarget.url);
 
-                            if (url) {
-                              if (isRunningInTauri()) void openExternal(url);
-                              else window.location.assign(url);
-                            }
-                          } else {
-                            setStep('create');
-                          }
-                        }}
-                      >
-                        Create account
-                      </Button>
-                    ) : null}
-                  </Column>
-                </form>
+                        if (url) {
+                          if (isRunningInTauri()) void openExternal(url);
+                          else window.location.assign(url);
+                        }
+                      } else {
+                        setStep('create');
+                      }
+                    }}
+                  >
+                    Create account
+                  </Button>
+                ) : null}
               </Column>
             </OnboardingCard>
             <FooterBar key='footer'>
@@ -1330,7 +1271,6 @@ export function GettingStartedFlow({
                 subtle
                 onClick={() => {
                   setError(undefined);
-                  setSecretValue('');
 
                   if (returnToPortal && knownPortalUrl && !isRunningInTauri()) {
                     window.location.assign(
@@ -1372,93 +1312,6 @@ export function GettingStartedFlow({
             }}
           />
         </Swap>
-      ) : step === 'restore' ? (
-        <Swap key='restore'>
-          <OnboardingWrap>
-            <OnboardingCard key='card'>
-              <Column gap='1rem'>
-                <CardTitle key='title'>Restore account</CardTitle>
-                {/* Signed out, this is the whole step: the portal's options,
-                    finished in the system browser where this app cannot hold
-                    the account cookie. */}
-                {accountSignIn()}
-                {restore.phase === 'checking' ? (
-                  <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
-                ) : restore.phase === 'no-session' ? null : restore.phase ===
-                  'no-backup' ? (
-                  inviteToken ? (
-                    // The portal sends an invitee here whenever it cannot rule
-                    // out an earlier identity. With nothing to restore, the
-                    // invitation still wants an account to land in.
-                    <Column key='no-backup-invite' gap='0.75rem'>
-                      <p key='copy'>
-                        {`There is nothing to restore for ${restore.email} yet. Create your account to accept the invitation.`}
-                      </p>
-                      <Button
-                        key='create'
-                        type='button'
-                        onClick={() => {
-                          const url = new URL(window.location.href);
-                          url.searchParams.set('from_portal', 'true');
-                          url.searchParams.set('email', restore.email);
-                          // A reload, because the managed create flow is read
-                          // from the URL on mount.
-                          window.location.assign(url.toString());
-                        }}
-                      >
-                        Create account and accept
-                      </Button>
-                    </Column>
-                  ) : (
-                    <p key='no-backup'>
-                      No recovery backup was found for {restore.email}. Account
-                      recovery only works if you enabled it earlier.
-                    </p>
-                  )
-                ) : (
-                  <Column key='ready' gap='1rem'>
-                    <p key='copy'>
-                      {restore.secret.format_version < 2
-                        ? `Enter the recovery password you set for ${restore.email}.`
-                        : restoreUnlock.hasPasskey
-                          ? `Unlock ${restore.email} with your passkey or the recovery code you saved.`
-                          : `Enter the recovery code you saved for ${restore.email}.`}
-                    </p>
-                    <UnlockBackupForm
-                      key='form'
-                      methods={unlockMethods(restore.secret, undefined)}
-                      busy={loading}
-                      error={error?.message}
-                      onUnlock={(method, input) =>
-                        void handleRestore(method, input)
-                      }
-                    />
-                    {restoreUnlock.hasPasskey && !restoreUnlock.hasCode ? (
-                      <PasskeyOnlyHint key='passkey-only' />
-                    ) : null}
-                  </Column>
-                )}
-              </Column>
-            </OnboardingCard>
-            <FooterBar key='footer'>
-              <Button
-                key='back'
-                type='button'
-                subtle
-                onClick={() => {
-                  setError(undefined);
-                  setStep('signin');
-                }}
-              >
-                <BackLabel>
-                  <FaArrowLeft key='icon' aria-hidden />
-                  Back
-                </BackLabel>
-              </Button>
-              <StepDotsSlot key='dots' ref={stepDotsSlotRef} />
-            </FooterBar>
-          </OnboardingWrap>
-        </Swap>
       ) : step === 'secret-conflict' && secretConflict ? (
         <Swap key='secret-conflict'>
           <OnboardingWrap>
@@ -1485,7 +1338,6 @@ export function GettingStartedFlow({
                   data-test='secret-conflict-keep'
                   onClick={() => {
                     setSecretConflict(null);
-                    setSecretValue('');
                     setStep('signin');
                   }}
                 >

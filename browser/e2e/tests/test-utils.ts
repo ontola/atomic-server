@@ -603,8 +603,8 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  * button that the passkey-first onboarding rework removed, which timed out and
  * took down every spec that signs in — most of the suite.
  *
- * Note this is deliberately the FOSS path. The neighbouring "Restore account"
- * button is the managed/recovery route (passkey or recovery code); sending
+ * Note this is deliberately the FOSS path. The unlock form
+ * also takes a recovery code or passkey (the managed route); sending
  * self-hosted tests through it would exercise the wrong flow entirely.
  *
  * Idempotence is important because `before()` already signs in with a

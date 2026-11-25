@@ -58,7 +58,12 @@ export function UnlockBackupForm({ methods, busy, error, onUnlock }: Props) {
           <InputWrapper>
             <InputStyled
               value={value}
-              onChange={e => setValue(e.target.value)}
+              onChange={e => {
+                setValue(e.target.value);
+                // A secret either parses or it doesn't: sign in the moment
+                // it is complete, whether typed or pasted.
+                if (isAgentSecret(e.target.value)) submit(e.target.value);
+              }}
               // A pasted code or secret is complete: go on without a second
               // press. A wrong one just shows the error.
               onPaste={e => {
@@ -81,7 +86,11 @@ export function UnlockBackupForm({ methods, busy, error, onUnlock }: Props) {
                     ? 'Recovery code or secret'
                     : 'Paste your secret'
               }
-              aria-label='Recovery code or secret'
+              aria-label={
+                methods.includes('password') || methods.includes('code')
+                  ? 'Recovery code or secret'
+                  : 'Agent secret'
+              }
             />
           </InputWrapper>
           {value.trim() ? (

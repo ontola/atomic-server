@@ -554,8 +554,8 @@ msgstr "Not responding"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
-msgstr "Read more"
+msgid "Read more "
+msgstr "Read more "
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -1916,17 +1916,15 @@ msgstr "Sign in"
 msgid "Could not parse that secret."
 msgstr "Could not parse that secret."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Agent secret"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Signing in…"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3386,15 +3384,6 @@ msgstr "Skip, I'll save it myself"
 msgid "Could not restore your account."
 msgstr "Could not restore your account."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Restore account"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Enter the recovery password you set for {0}."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restoring…"
 msgstr "Restoring…"
@@ -3402,11 +3391,6 @@ msgstr "Restoring…"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Enter your agent secret to unlock this drive on this device."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Checking your {0} account…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4494,11 +4478,6 @@ msgstr "Reposition"
 msgid "Drag to reposition · release to save"
 msgstr "Drag to reposition · release to save"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Enter the recovery code you saved for {0}."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
@@ -4563,12 +4542,10 @@ msgstr "Checking what this device supports…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "Waiting for your passkey…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "Use a recovery code instead"
 
@@ -4581,10 +4558,6 @@ msgstr "Atomic account"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "Could not unlock with your passkey."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Unlock with your passkey"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4698,11 +4671,6 @@ msgid "Add a picture"
 msgstr "Add a picture"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Use your fingerprint, face, or screen lock."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "or sign in another way"
 
@@ -4726,10 +4694,6 @@ msgstr "Continue as"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "Could not reach your backup. Try again."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Paste your agent secret"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5642,11 +5606,6 @@ msgstr "Use your fingerprint, face, or screen lock — the same one that unlocks
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "Forgot it? Restore from {0}"
 
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
@@ -11330,11 +11289,6 @@ msgstr "Search again"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> The selected model does not support tool use."
@@ -13894,7 +13848,14 @@ msgstr "Recovery password or secret"
 msgid "Recovery code or secret"
 msgstr "Recovery code or secret"
 
-#. 0: restore.email
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your passkey or the recovery code you saved."
-msgstr "Unlock {0} with your passkey or the recovery code you saved."
+msgid "Use your passkey, recovery code or secret."
+msgstr "Use your passkey, recovery code or secret."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your account, or paste your secret."
+msgstr "Sign in with your account, or paste your secret."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
+msgstr "or paste your secret"

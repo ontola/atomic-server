@@ -554,7 +554,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -1916,17 +1916,15 @@ msgstr "Inloggen"
 msgid "Could not parse that secret."
 msgstr "Kan die geheime sleutel niet verwerken."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+#: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Agent secret"
 msgstr "Geheime agentsleutel"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Inloggen…"
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "<0/> Back"
@@ -3386,15 +3384,6 @@ msgstr "Overslaan, ik sla deze zelf op"
 msgid "Could not restore your account."
 msgstr "Kan je account niet herstellen."
 
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Restore account"
-msgstr "Account herstellen"
-
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery password you set for {0}."
-msgstr "Voer het herstelwachtwoord in dat je voor {0} hebt ingesteld."
-
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restoring…"
 msgstr "Herstellen…"
@@ -3402,11 +3391,6 @@ msgstr "Herstellen…"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Enter your agent secret to unlock this drive on this device."
 msgstr "Voer je geheime agentsleutel in om deze schijf op dit apparaat te ontgrendelen."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Checking your {0} account…"
-msgstr "Je {0}-account controleren…"
 
 #. 0: text
 #: ../table-page/src/TablePage/TableHeading.tsx
@@ -4494,11 +4478,6 @@ msgstr "Herpositioneren"
 msgid "Drag to reposition · release to save"
 msgstr "Sleep om te herpositioneren · laat los om op te slaan"
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Enter the recovery code you saved for {0}."
-msgstr "Voer de herstelcode in die je voor {0} hebt opgeslagen."
-
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
@@ -4563,12 +4542,10 @@ msgstr "Controleren wat dit apparaat ondersteunt…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Waiting for your passkey…"
 msgstr "Wachten op je passkey…"
 
 #: ../data-browser/src/components/NewIdentitySection.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use a recovery code instead"
 msgstr "In plaats daarvan een herstelcode gebruiken"
 
@@ -4581,10 +4558,6 @@ msgstr "Atomic-account"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Could not unlock with your passkey."
 msgstr "Kan niet ontgrendelen met je passkey."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock with your passkey"
-msgstr "Ontgrendelen met je passkey"
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not add a recovery code."
@@ -4698,11 +4671,6 @@ msgid "Add a picture"
 msgstr "Een foto toevoegen"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use your fingerprint, face, or screen lock."
-msgstr "Gebruik je vingerafdruk, gezicht of schermvergrendeling."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or sign in another way"
 msgstr "of log op een andere manier in"
 
@@ -4726,10 +4694,6 @@ msgstr "Doorgaan als"
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 msgid "Could not reach your backup. Try again."
 msgstr "Kan je back-up niet bereiken. Probeer het opnieuw."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Paste your agent secret"
-msgstr "Plak je geheime agentsleutel"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -5642,11 +5606,6 @@ msgstr "Gebruik je vingerafdruk, gezicht of schermvergrendeling — dezelfde waa
 #: ../data-browser/src/components/NewIdentitySection.tsx
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr "Bewaar deze veilig. Je hebt de code en je e-mail nodig om weer toegang te krijgen. We kunnen de code niet opnieuw tonen, maar je kunt altijd een nieuwe genereren via Instellingen."
-
-#. 0: PRODUCT_NAME
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Forgot it? Restore from {0}"
-msgstr "Vergeten? Herstel via {0}"
 
 #. 0: action.label(ctx)
 #: ../data-browser/src/actions/deriveTools.ts
@@ -11330,11 +11289,6 @@ msgstr "Opnieuw zoeken"
 msgid "You’re signed in as {0}, but this browser needs your account key to open this private drive. Paste your saved agent secret below. No account recovery backup is available."
 msgstr "Je bent ingelogd als {0}, maar deze browser heeft je accountsleutel nodig om deze privéschijf te openen. Plak hieronder je opgeslagen geheime agentsleutel. Er is geen back-up voor accountherstel beschikbaar."
 
-#. 0: restore.email
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "No recovery backup was found for {0}. Account recovery only works if you enabled it earlier."
-msgstr "Er is geen herstelback-up gevonden voor {0}. Accountherstel werkt alleen als je dit eerder hebt ingeschakeld."
-
 #: ../data-browser/src/chunks/AI/ModelSelect/OpenRouterModelSelector.tsx
 msgid "<0/> The selected model does not support tool use."
 msgstr "<0/> Het geselecteerde model ondersteunt geen toolgebruik."
@@ -13894,7 +13848,14 @@ msgstr "Herstelwachtwoord of geheime sleutel"
 msgid "Recovery code or secret"
 msgstr "Herstelcode of geheime sleutel"
 
-#. 0: restore.email
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Unlock {0} with your passkey or the recovery code you saved."
-msgstr "Ontgrendel {0} met je passkey of de herstelcode die je hebt opgeslagen."
+msgid "Use your passkey, recovery code or secret."
+msgstr "Gebruik je passkey, herstelcode of geheime sleutel."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your account, or paste your secret."
+msgstr "Log in met je account, of plak je geheime sleutel."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or paste your secret"
+msgstr "of plak je geheime sleutel"
