@@ -13846,21 +13846,13 @@ msgid "Your atomic.place account"
 msgstr "Akun atomic.place-mu"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr "Masuk dengan akun atomic.place-mu, atau gunakan passkey, kode pemulihan, atau kunci rahasiamu."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr "Masuk dengan akun atomic.place-mu, atau tempel kunci rahasiamu."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Tempel kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or use your passkey, code or secret"
-msgstr "atau gunakan passkey, kode, atau kunci rahasiamu"
+msgid "Passkey, recovery code or secret"
+msgstr "Passkey, kode pemulihan, atau kunci rahasia"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or paste your secret"
-msgstr "atau tempel kunci rahasiamu"
+msgid "Your secret"
+msgstr "Kunci rahasiamu"

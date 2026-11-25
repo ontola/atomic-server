@@ -1131,12 +1131,8 @@ export function GettingStartedFlow({
                         device.
                       </>
                     )
-                  ) : unlockOptions && !accountOffered ? (
+                  ) : accountOffered ? null : unlockOptions ? (
                     'Use your passkey, recovery code or secret.'
-                  ) : unlockOptions ? (
-                    'Sign in with your atomic.place account, or use your passkey, recovery code or secret.'
-                  ) : accountOffered ? (
-                    'Sign in with your atomic.place account, or paste your secret.'
                   ) : (
                     'Paste your secret.'
                   )}
@@ -1225,14 +1221,16 @@ export function GettingStartedFlow({
                 {/* The same passkey button and code-or-secret field as the
                     send-identity page. Without a backup this device can open,
                     it is just the field, for the agent secret. */}
+                {/* Two headed sections, the account and this device's own
+                    ways in, rather than a chain of "or"s. */}
                 {accountOffered ? (
-                  <OtherWaysLabel key='or-secret'>
+                  <AccountHeading key='or-secret'>
                     {unlockOptions ? (
-                      <>or use your passkey, code or secret</>
+                      <>Passkey, recovery code or secret</>
                     ) : (
-                      <>or paste your secret</>
+                      <>Your secret</>
                     )}
-                  </OtherWaysLabel>
+                  </AccountHeading>
                 ) : null}
                 <UnlockBackupForm
                   key='unlock'

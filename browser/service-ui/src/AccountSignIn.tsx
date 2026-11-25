@@ -275,7 +275,9 @@ export function AccountSignIn({
           emailInputId={emailInputId}
           busy={busy || sending}
           onSubmit={() => secretSignUp.submit(pending)}
-          onBack={() => (created !== null ? setCreated(null) : secretSignUp.dismiss?.())}
+          onBack={() =>
+            created !== null ? setCreated(null) : secretSignUp.dismiss?.()
+          }
         />
         {notice}
       </div>
@@ -304,9 +306,20 @@ export function AccountSignIn({
           {sending ? copy.sending : copy.send}
         </button>
       </form>
-      <p className='atomic-signin-or' aria-hidden='true'>
-        <span>{copy.or}</span>
-      </p>
+      {/* Only between the email and something else: a host that drops the
+          passkey and has no providers would leave it hanging. */}
+      {passkeySupported ||
+      googleHref ||
+      onGoogle ||
+      appleHref ||
+      onApple ||
+      githubHref ||
+      onGitHub ||
+      onSecret ? (
+        <p className='atomic-signin-or' aria-hidden='true'>
+          <span>{copy.or}</span>
+        </p>
+      ) : null}
       {passkeySupported ? (
         <button
           type='button'
@@ -514,9 +527,7 @@ function SecretCreated({
           </label>
         </>
       )}
-      {existing ? null : (
-        <p className='atomic-signin-hint'>{text.emailText}</p>
-      )}
+      {existing ? null : <p className='atomic-signin-hint'>{text.emailText}</p>}
       <label htmlFor={`${emailInputId}-new`}>{copy.emailLabel}</label>
       <input
         id={`${emailInputId}-new`}

@@ -13854,21 +13854,13 @@ msgid "Your atomic.place account"
 msgstr "Dein atomic.place-Konto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr "Melde dich mit deinem atomic.place-Konto an, oder verwende deinen Passkey, Wiederherstellungscode oder dein Geheimnis."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr "Melde dich mit deinem atomic.place-Konto an, oder füge dein Geheimnis ein."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Füge dein Geheimnis ein."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or use your passkey, code or secret"
-msgstr "oder verwende deinen Passkey, Code oder dein Geheimnis"
+msgid "Passkey, recovery code or secret"
+msgstr "Passkey, Wiederherstellungscode oder Geheimnis"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or paste your secret"
-msgstr "oder füge dein Geheimnis ein"
+msgid "Your secret"
+msgstr "Dein Geheimnis"
