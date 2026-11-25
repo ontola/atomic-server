@@ -497,6 +497,78 @@ class ResourceConfigTests(unittest.TestCase):
                         fanout.validate_config(dict(settings, **{field: value}))
 
 
+class AbsoluteDeadlineTests(unittest.TestCase):
+    def test_config_requires_a_timezone_aware_iso_deadline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = config(Path(temp), 2)
+            for value in ('', None, 123, 'tomorrow', '2026-11-25', '2026-11-25T21:14:48'):
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'absolute_deadline'):
+                    fanout.validate_config(dict(settings, absolute_deadline=value))
+            for value in ('2026-11-25T21:14:48Z', '2026-11-25T22:14:48+01:00'):
+                self.assertEqual(fanout.validate_config(dict(settings, absolute_deadline=value))['absolute_deadline'], value)
+
+    def test_expired_plan_rejects_before_local_or_provider_commands(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = dict(config(Path(temp), 2), absolute_deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat())
+            api = FakeAPI()
+            controller = fanout.Controller(settings, api)
+            with mock.patch.object(fanout, 'execute') as execute, mock.patch.object(api, 'identity') as identity:
+                with self.assertRaisesRegex(TimeoutError, 'deadline'):
+                    controller.plan()
+            execute.assert_not_called()
+            identity.assert_not_called()
+            self.assertEqual(api.mutations, [])
+
+    def test_expired_initialization_rejects_before_state_or_key_generation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = dict(config(Path(temp), 2), absolute_deadline=(fanout.utcnow() - dt.timedelta(seconds=1)).isoformat())
+            controller = fanout.Controller(settings, FakeAPI())
+            with mock.patch.object(fanout, 'execute') as execute:
+                with self.assertRaisesRegex(TimeoutError, 'deadline'):
+                    controller.initialize({'dagger_version': '0.0.1'})
+            execute.assert_not_called()
+            self.assertFalse(controller.path.exists())
+
+    def test_initialization_and_later_creates_never_extend_either_deadline(self):
+        began = fanout.utcnow()
+        for absolute_hours in (.5, 6):
+            with self.subTest(absolute_hours=absolute_hours), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                settings = dict(config(root, 2), max_hours=4,
+                                absolute_deadline=(began + dt.timedelta(hours=absolute_hours)).isoformat())
+                (root / 'credentials').write_text('fake credentials')
+                api = FakeAPI()
+                controller = fanout.Controller(settings, api)
+                controller.prepare = lambda key: None
+                with mock.patch.object(fanout, 'utcnow', return_value=began), mock.patch.object(fanout, 'execute', return_value=''):
+                    controller.initialize({'dagger_version': '0.0.1'})
+                    (controller.root / 'operator-key.pub').write_text('ssh-ed25519 FIXTURE')
+                    controller.register_keys()
+                expected = (began + dt.timedelta(hours=min(4, absolute_hours))).isoformat()
+                self.assertEqual(controller.read()['deadline'], expected)
+                self.assertEqual(controller.read()['first_creation_at'], began.isoformat())
+                with mock.patch.object(fanout, 'utcnow', return_value=began + dt.timedelta(minutes=5)):
+                    controller.create('node-001')
+                self.assertEqual(controller.read()['deadline'], expected)
+                before = list(api.mutations)
+                expired = dt.datetime.fromisoformat(expected) + dt.timedelta(seconds=1)
+                with mock.patch.object(fanout, 'utcnow', return_value=expired), self.assertRaises(TimeoutError):
+                    controller.create('node-002')
+                self.assertEqual(api.mutations, before)
+                self.assertEqual(controller.read()['deadline'], expected)
+
+    def test_default_cold_initialization_still_starts_budget_at_first_create(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = config(root, 2)
+            (root / 'credentials').write_text('fake credentials')
+            controller = fanout.Controller(settings, FakeAPI())
+            with mock.patch.object(fanout, 'execute', return_value=''):
+                controller.initialize({'dagger_version': '0.0.1'})
+            self.assertNotIn('deadline', controller.read())
+            self.assertNotIn('first_creation_at', controller.read())
+
+
 class CoverageTests(unittest.TestCase):
     def test_failed_shard_can_prove_coverage_without_becoming_a_pass(self):
         artifact = report([1], 1)

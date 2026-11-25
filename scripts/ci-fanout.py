@@ -154,6 +154,13 @@ def validate_config(config):
         raise ValueError('batch_key must be a unique safe identifier')
     if not re.fullmatch(r'[0-9a-f]{40}', config.get('source_commit', '')):
         raise ValueError('source_commit must be a full commit SHA')
+    if 'absolute_deadline' in config:
+        try:
+            deadline = dt.datetime.fromisoformat(config['absolute_deadline'].replace('Z', '+00:00'))
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError('absolute_deadline must be a timezone-aware ISO timestamp') from None
+        if deadline.utcoffset() is None:
+            raise ValueError('absolute_deadline must be a timezone-aware ISO timestamp')
     for field in ('worktree', 'runtime_dir'):
         if not Path(config.get(field, '')).is_absolute():
             raise ValueError(field + ' must be an absolute path')
@@ -472,6 +479,9 @@ class Controller:
         print(stamp() + ' ' + message, flush=True)
 
     def plan(self):
+        if self.config.get('absolute_deadline') and utcnow() >= dt.datetime.fromisoformat(
+                self.config['absolute_deadline'].replace('Z', '+00:00')):
+            raise TimeoutError('the authorized campaign deadline has passed')
         checkout = Path(self.config['worktree'])
         actual = execute(['git', 'rev-parse', 'HEAD'], cwd=checkout, text=True).strip()
         if actual != self.config['source_commit']:
@@ -506,6 +516,14 @@ class Controller:
                 'canary_before_remaining_nodes': True}
 
     def initialize(self, plan):
+        budget = {}
+        if self.config.get('absolute_deadline'):
+            began = utcnow()
+            absolute = dt.datetime.fromisoformat(self.config['absolute_deadline'].replace('Z', '+00:00'))
+            if began >= absolute:
+                raise TimeoutError('the authorized campaign deadline has passed')
+            budget = {'first_creation_at': began.isoformat(),
+                      'deadline': min(began + dt.timedelta(hours=self.config['max_hours']), absolute).isoformat()}
         if self.path.exists():
             raise ValueError('State already exists; use status/cleanup, never restart a finished batch')
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -528,7 +546,7 @@ class Controller:
         state = {'version': 1, 'config': self.config, 'source_commit': self.config['source_commit'],
                  'batch_key': self.config['batch_key'], 'plan': plan, 'nodes': nodes,
                  'keys': {}, 'status': 'initialized', 'created_at': stamp(), 'stop_requested': False,
-                 'controller_pid': os.getpid()}
+                 'controller_pid': os.getpid(), **budget}
         self.path.write_text(json.dumps(state, indent=2) + '\n')
         self.path.chmod(0o600)
         (self.root / 'cloud-init.yaml').write_text(self.cloud_init(plan['dagger_version']))

@@ -76,6 +76,10 @@ execution after reusable build/setup. Preserve a stable `cache_namespace` when
 deliberately restoring the same engine's compilation caches. A different
 namespace can make a warm snapshot appear cold.
 
+Optional `absolute_deadline` must be a timezone-aware ISO timestamp. Both cold
+and warm runners clip their window to that deadline; an expired value rejects
+planning before provider access. Retries do not extend it.
+
 ```sh
 python3 scripts/ci-fanout.py --config /absolute/private/batch.json plan
 python3 scripts/ci-fanout.py --config /absolute/private/batch.json run
