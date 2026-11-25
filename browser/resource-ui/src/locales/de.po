@@ -1011,7 +1011,6 @@ msgstr "Chat-Eingabe"
 
 #: ../data-browser/src/chunks/RTE/AIChatInput/AsyncAIChatInput.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/ChatRoom/ChatRoomView.tsx
 msgid "Send"
 msgstr "Senden"
@@ -1920,6 +1919,8 @@ msgstr "Dieses Geheimnis konnte nicht gelesen werden."
 msgid "Agent secret"
 msgstr "Agentengeheimnis"
 
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Signing in…"
 msgstr "Anmeldung läuft …"
@@ -4595,7 +4596,6 @@ msgstr "Atomic-Konto"
 msgid "Could not unlock with your passkey."
 msgstr "Mit deinem Passkey konnte nicht entsperrt werden."
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Unlock with your passkey"
@@ -4619,7 +4619,6 @@ msgstr "Dein Geheimnis konnte nicht angezeigt werden."
 
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
 #: ../data-browser/src/components/AccountRecoveryCard.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Unlocking…"
 msgstr "Wird entsperrt …"
 
@@ -5792,7 +5791,9 @@ msgstr "Deine Sicherung wird in deinem {0}-Konto aufbewahrt. Melde dich dort an,
 msgid "Signing in restores who you are. Your workspace still lives on the device you made it with."
 msgstr "Die Anmeldung stellt deine Identität wieder her. Dein Arbeitsbereich liegt weiterhin auf dem Gerät, auf dem du ihn erstellt hast."
 
+#. 0: phase.link.deviceName
 #. 0: PRODUCT_NAME
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Sign in to {0}"
 msgstr "Bei {0} anmelden"
@@ -8207,7 +8208,6 @@ msgstr "<0/> Link kopieren"
 
 #: ../data-browser/src/chunks/FormBuilder/ConditionsEditor.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 msgid "Done"
 msgstr "Fertig"
@@ -8477,7 +8477,6 @@ msgid "Add a note for the people you're inviting"
 msgstr "Füge eine Notiz für die eingeladenen Personen hinzu"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sending…"
 msgstr "Wird gesendet …"
 
@@ -12996,32 +12995,6 @@ msgstr "Hier ist kein Kontodienst bekannt."
 msgid "Sign in to continue"
 msgstr "Anmelden, um fortzufahren"
 
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Sign in to your account to send your identity to your device."
-msgstr "Melde dich bei deinem Konto an, um deine Identität an dein Gerät zu senden."
-
-#. 0: phase.link.deviceName
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send your identity to {0}?"
-msgstr "Deine Identität an {0} senden?"
-
-#. 0: code
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Only continue if you started this on your own device just now and it shows code {0}."
-msgstr "Fahre nur fort, wenn du dies gerade auf deinem eigenen Gerät gestartet hast und dort der Code {0} angezeigt wird."
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send with this code"
-msgstr "Mit diesem Code senden"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Unlock your backup"
-msgstr "Deine Sicherung entsperren"
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Could not send your identity"
-msgstr "Deine Identität konnte nicht gesendet werden"
-
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 msgid "Switch Drive"
@@ -13883,12 +13856,7 @@ msgid "It may exist on another device. Connect that device to send it, or discar
 msgstr "Es existiert vielleicht auf einem anderen Gerät. Verbinde dieses Gerät, um es zu senden, oder verwirf diese Änderungen."
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Your secret"
-msgstr ""
-
-#: ../data-browser/src/routes/SendIdentityRoute.tsx
-msgid "Send with my secret"
 msgstr ""
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
@@ -13902,4 +13870,52 @@ msgstr ""
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy your atomic: URL"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to your account to continue on your other device."
+msgstr ""
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Sign in to {0}?"
+msgstr ""
+
+#. 0: phase.link.deviceName; 1: code
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Use your passkey"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Continue with recovery code"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Paste your secret"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Continue with secret"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Confirm it’s you"
+msgstr ""
+
+#. 0: phase.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Signed in to {0}"
+msgstr ""
+
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Could not finish signing in"
+msgstr ""
+
+#. 0: phase.link.deviceName
+#: ../data-browser/src/routes/SendIdentityRoute.tsx
+msgid "Choose how to finish signing in to {0}."
 msgstr ""

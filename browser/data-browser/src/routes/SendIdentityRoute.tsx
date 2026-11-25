@@ -275,7 +275,7 @@ function SendIdentityPage() {
           <Column gap='1rem'>
             {phase.name === 'loading' || phase.name === 'sending' ? (
               <CardSubtitle>
-                {phase.name === 'sending' ? 'Sending…' : 'Loading…'}
+                {phase.name === 'sending' ? 'Signing in…' : 'Loading…'}
               </CardSubtitle>
             ) : null}
 
@@ -283,7 +283,7 @@ function SendIdentityPage() {
               <>
                 <CardTitle>Sign in to continue</CardTitle>
                 <CardSubtitle>
-                  Sign in to your account to send your identity to your device.
+                  Sign in to your account to continue on your other device.
                 </CardSubtitle>
                 {portalUrl && canHoldProviderCookie(portalUrl) ? (
                   <AccountSignInPanel
@@ -305,12 +305,11 @@ function SendIdentityPage() {
 
             {phase.name === 'confirm' ? (
               <>
-                <CardTitle>
-                  Send your identity to {phase.link.deviceName}?
-                </CardTitle>
+                <CardTitle>Sign in to {phase.link.deviceName}?</CardTitle>
                 <CardSubtitle>
-                  Only continue if you started this on your own device just now
-                  and it shows code {code}.
+                  {phase.link.deviceName} asks to use your account. Only
+                  continue if you started this on your own device just now and
+                  it shows code {code}.
                 </CardSubtitle>
                 <CardSubtitle>
                   Signed in as {accountAddress(phase.account)}.
@@ -320,23 +319,24 @@ function SendIdentityPage() {
                   disabled={busy}
                   onClick={() => void handleSend(phase.link, phase.account)}
                 >
-                  {busy ? 'Unlocking…' : 'Send'}
+                  {busy ? 'Signing in…' : `Sign in to ${phase.link.deviceName}`}
                 </CtaButton>
               </>
             ) : null}
 
             {phase.name === 'unlock' ? (
               <>
-                <CardTitle>Unlock your backup</CardTitle>
+                <CardTitle>Confirm it’s you</CardTitle>
+                <CardSubtitle>
+                  Choose how to finish signing in to {phase.link.deviceName}.
+                </CardSubtitle>
                 {phase.methods.includes('passkey') ? (
                   <Button
                     type='button'
                     disabled={busy}
                     onClick={() => void unlockStep(phase, 'passkey')}
                   >
-                    {busy
-                      ? 'Waiting for your passkey…'
-                      : 'Unlock with your passkey'}
+                    {busy ? 'Waiting for your passkey…' : 'Use your passkey'}
                   </Button>
                 ) : null}
                 {phase.methods.includes('code') ||
@@ -364,7 +364,7 @@ function SendIdentityPage() {
                         subtle
                         disabled={busy || !codeInput.trim()}
                       >
-                        Send with this code
+                        Continue with recovery code
                       </Button>
                     </Column>
                   </form>
@@ -379,7 +379,7 @@ function SendIdentityPage() {
                         autoComplete='off'
                         spellCheck={false}
                         disabled={busy}
-                        placeholder='Your secret'
+                        placeholder='Paste your secret'
                         aria-label='Your secret'
                       />
                     </InputWrapper>
@@ -388,7 +388,7 @@ function SendIdentityPage() {
                       subtle
                       disabled={busy || !secretInput.trim()}
                     >
-                      Send with my secret
+                      Continue with secret
                     </Button>
                   </Column>
                 </form>
@@ -398,14 +398,14 @@ function SendIdentityPage() {
 
             {phase.name === 'done' ? (
               <>
-                <CardTitle>Done</CardTitle>
+                <CardTitle>Signed in to {phase.deviceName}</CardTitle>
                 <CardSubtitle>Go back to {phase.deviceName}.</CardSubtitle>
               </>
             ) : null}
 
             {phase.name === 'failed' ? (
               <>
-                <CardTitle>Could not send your identity</CardTitle>
+                <CardTitle>Could not finish signing in</CardTitle>
                 <CardError role='alert'>{phase.message}</CardError>
               </>
             ) : null}
