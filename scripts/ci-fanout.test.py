@@ -55,6 +55,59 @@ def report(indices, index=None, total=20):
     return value
 
 
+class CommandErrorTests(unittest.TestCase):
+    def failure(self, stdout, stderr='', args=None):
+        command = args or ['doctl', '--access-token', 'ARGUMENT_SECRET', 'compute', 'droplet', 'get', '0']
+        result = subprocess.CompletedProcess(command, 1, stdout=stdout, stderr=stderr)
+        with mock.patch.object(fanout.subprocess, 'run', return_value=result):
+            with self.assertRaises(RuntimeError) as raised:
+                fanout.execute(command, text=isinstance(stdout, str))
+        return str(raised.exception)
+
+    def test_doctl_json_error_uses_only_structured_details_and_exit_code(self):
+        error = self.failure(json.dumps({'errors': [{
+            'code': 'invalid_argument',
+            'detail': 'dropletID is invalid because cannot be less than 1',
+            'next_step': 'run doctl compute droplet get --help',
+            'access_token': 'OUTPUT_SECRET',
+        }], 'credentials': 'DOCUMENT_SECRET'}))
+        self.assertIn('exit 1', error)
+        self.assertIn('invalid_argument', error)
+        self.assertIn('dropletID is invalid because cannot be less than 1', error)
+        for excluded in ('next_step', '--help', 'ARGUMENT_SECRET', 'OUTPUT_SECRET', 'DOCUMENT_SECRET'):
+            self.assertNotIn(excluded, error)
+
+    def test_normal_stderr_stays_authoritative_for_text_and_bytes(self):
+        for binary in (False, True):
+            with self.subTest(binary=binary):
+                stderr = b'normal stderr failure' if binary else 'normal stderr failure'
+                stdout = b'{"errors":[{"detail":"stdout diagnostic"}]}' if binary else '{"errors":[{"detail":"stdout diagnostic"}]}'
+                error = self.failure(stdout, stderr)
+                self.assertIn('normal stderr failure', error)
+                self.assertIn('exit 1', error)
+                self.assertNotIn('stdout diagnostic', error)
+
+    def test_nonerror_or_malformed_stdout_is_never_dumped(self):
+        for stdout in ('SECRET malformed JSON', '{"token":"SECRET"}',
+                       '{"errors":"SECRET"}', '{"errors":[null, {"token":"SECRET"}]}',
+                       '{"errors":[{"detail":{"token":"SECRET"}}]}'):
+            with self.subTest(stdout=stdout):
+                error = self.failure(stdout)
+                self.assertIn('exit 1', error)
+                self.assertNotIn('SECRET', error)
+                self.assertNotIn('ARGUMENT_SECRET', error)
+
+    def test_doctl_structured_error_supports_bytes_but_other_programs_do_not_parse_stdout(self):
+        output = b'{"errors":[{"detail":"safe provider diagnostic"}]}'
+        self.assertIn('safe provider diagnostic', self.failure(output, b'', ['/usr/local/bin/doctl']))
+        self.assertNotIn('safe provider diagnostic', self.failure(output, b'', ['other-program']))
+
+    def test_success_still_returns_original_stdout_without_parsing(self):
+        result = subprocess.CompletedProcess(['doctl'], 0, stdout=b'original output', stderr=b'')
+        with mock.patch.object(fanout.subprocess, 'run', return_value=result):
+            self.assertEqual(fanout.execute(['doctl']), b'original output')
+
+
 class FakeAPI(fanout.DigitalOcean):
     def __init__(self):
         super().__init__('unused')

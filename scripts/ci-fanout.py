@@ -95,8 +95,28 @@ def digest(data):
 def execute(args, timeout=120, **kwargs):
     result = subprocess.run(args, capture_output=True, timeout=timeout, **kwargs)
     if result.returncode:
+        program = Path(str(args[0])).name
         error = result.stderr.decode(errors='replace') if isinstance(result.stderr, bytes) else result.stderr
-        raise RuntimeError('Command failed: ' + str(args[0]) + ': ' + error[-1500:])
+        if not (error or '').strip() and program == 'doctl':
+            # JSON-mode doctl reports failures on stdout. Only provider error
+            # codes/details belong in logs, never a whole response or argv.
+            try:
+                output = result.stdout
+                document = json.loads(output) if isinstance(output, (str, bytes)) and len(output) <= 65536 else None
+            except (ValueError, UnicodeError):
+                document = None
+            entries = document.get('errors') if isinstance(document, dict) else None
+            diagnostics = []
+            for entry in entries[:4] if isinstance(entries, list) else []:
+                if not isinstance(entry, dict):
+                    continue
+                fields = [str(entry[field]) for field in ('code', 'detail')
+                          if type(entry.get(field)) in (str, int)]
+                if fields:
+                    diagnostics.append(': '.join(' '.join(field.split())[:750] for field in fields))
+            error = '; '.join(diagnostics)
+        raise RuntimeError('Command failed: ' + program + ' (exit ' + str(result.returncode) + '): '
+                           + ((error or '').strip()[-1500:] or 'no diagnostic output'))
     return result.stdout
 
 
