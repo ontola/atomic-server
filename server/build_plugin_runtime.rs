@@ -127,13 +127,48 @@ pub fn build() {
 }
 
 /// rquickjs-sys downloads the WASI SDK into its `OUT_DIR` and skips the
-/// download whenever the archive file exists. A download cut off halfway
-/// (a cancelled job, a runner going away) therefore leaves a truncated
-/// archive that every later build in that target dir fails to unpack
-/// ("gzip: stdin: unexpected end of file"). An archive next to an SDK that
-/// was never unpacked is from such an interrupted run; deleting it makes the
-/// next build download it again.
+/// download whenever the archive file exists, and the unpacking whenever
+/// `bin/wasm-ld` exists. A download cut off halfway (a cancelled job, a runner
+/// going away) therefore leaves a truncated archive in the cached target dir.
+/// Unpacking it fails ("gzip: stdin: unexpected end of file") after writing
+/// part of the SDK, so the next build finds `wasm-ld`, skips the unpacking
+/// and runs a half-written clang (SIGBUS). Every later build fails the same
+/// way. When the archive is not a complete gzip file, remove the whole SDK
+/// directory so the next build downloads and unpacks it again.
 fn remove_interrupted_wasi_sdk_downloads(dir: &Path) {
+    fn archive_is_complete(archive: &Path) -> bool {
+        // Without gzip there is nothing to check with; keep the archive.
+        let tested = std::process::Command::new("gzip")
+            .arg("-t")
+            .arg(archive)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        !matches!(tested, Ok(status) if !status.success())
+    }
+
+    fn check_sdk_dir(sdk: &Path) {
+        let Ok(files) = std::fs::read_dir(sdk) else {
+            return;
+        };
+        for file in files.flatten() {
+            let name = file.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("wasi-sdk-")
+                && name.ends_with(".tar.gz")
+                && !archive_is_complete(&file.path())
+            {
+                runtime_warning!(
+                    "removing {}: {} is truncated, an earlier download was interrupted",
+                    sdk.display(),
+                    name
+                );
+                let _ = std::fs::remove_dir_all(sdk);
+                return;
+            }
+        }
+    }
+
     fn visit(dir: &Path, depth: usize) {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
@@ -144,23 +179,7 @@ fn remove_interrupted_wasi_sdk_downloads(dir: &Path) {
                 continue;
             }
             if path.file_name().is_some_and(|n| n == "wasi-sdk") {
-                if path.join("bin/wasm-ld").exists() {
-                    continue;
-                }
-                let Ok(files) = std::fs::read_dir(&path) else {
-                    continue;
-                };
-                for file in files.flatten() {
-                    let name = file.file_name();
-                    let name = name.to_string_lossy();
-                    if name.starts_with("wasi-sdk-") && name.ends_with(".tar.gz") {
-                        runtime_warning!(
-                            "removing {}: the WASI SDK next to it was never unpacked, so the download was interrupted",
-                            file.path().display()
-                        );
-                        let _ = std::fs::remove_file(file.path());
-                    }
-                }
+                check_sdk_dir(&path);
             } else if depth > 0 {
                 visit(&path, depth - 1);
             }
