@@ -554,8 +554,8 @@ msgstr "Not responding"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
-msgstr "Read more "
+msgid "Read more"
+msgstr "Read more"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -13853,8 +13853,24 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Use your passkey, recovery code or secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your account, or paste your secret."
-msgstr "Sign in with your account, or paste your secret."
+msgid "Your atomic.place account"
+msgstr "Your atomic.place account"
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
+msgstr "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or paste your secret."
+msgstr "Sign in with your atomic.place account, or paste your secret."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste your secret."
+msgstr "Paste your secret."
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or use your passkey, code or secret"
+msgstr "or use your passkey, code or secret"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"

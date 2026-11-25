@@ -554,7 +554,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13842,7 +13842,23 @@ msgid "Use your passkey, recovery code or secret."
 msgstr ""
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your account, or paste your secret."
+msgid "Your atomic.place account"
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Sign in with your atomic.place account, or paste your secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "Paste your secret."
+msgstr ""
+
+#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
+msgid "or use your passkey, code or secret"
 msgstr ""
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx

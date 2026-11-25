@@ -112,7 +112,14 @@ type RestoreState =
   | { phase: 'checking' }
   | { phase: 'no-session' }
   | { phase: 'no-backup'; email: string }
-  | { phase: 'ready'; secret: RecoverySecret; email: string };
+  | {
+      phase: 'ready';
+      secret: RecoverySecret;
+      email: string;
+      /** A portal session is present. Without one the backup came from this
+       * device's cache, and signing in to the account opens it as well. */
+      signedIn: boolean;
+    };
 
 type Props = {
   subject: string;
@@ -471,6 +478,13 @@ export function GettingStartedFlow({
    * session, or it is too old to unlock with, offer the same sign-in options
    * as the portal (the shared `AccountSignIn`), which end back here signed in.
    */
+  const accountOffered =
+    !!knownPortalUrl &&
+    (restore.phase === 'no-session' ||
+      (restore.phase === 'ready' &&
+        assistedUnlock !== 'trying' &&
+        (!restore.signedIn || assistedUnlock === 'needs-sign-in')));
+
   function accountSignIn() {
     if (restore.phase === 'ready' && assistedUnlock === 'trying') {
       return (
@@ -478,14 +492,15 @@ export function GettingStartedFlow({
       );
     }
 
-    const offerSignIn =
-      !!knownPortalUrl &&
-      (restore.phase === 'no-session' ||
-        (restore.phase === 'ready' && assistedUnlock === 'needs-sign-in'));
+    if (!accountOffered || !knownPortalUrl) return null;
 
-    if (!offerSignIn || !knownPortalUrl) return null;
-
-    const onSignedIn = () => setRestoreAttempt(n => n + 1);
+    const panelProps = {
+      portalUrl: knownPortalUrl,
+      disabled: loading,
+      onSignedIn: () => setRestoreAttempt(n => n + 1),
+      initialEmail: restore.phase === 'ready' ? restore.email : undefined,
+      hidePasskey: restoreUnlock.hasPasskey,
+    };
 
     return (
       <Column key='account' gap='0.75rem'>
@@ -493,21 +508,17 @@ export function GettingStartedFlow({
           <CardSubtitle>
             Sign in again to open your account on this device.
           </CardSubtitle>
-        ) : null}
+        ) : (
+          // The panel both signs in and signs up; here it is for an account
+          // that already exists.
+          <AccountHeading>Your atomic.place account</AccountHeading>
+        )}
         {/* The same options either way; an app that cannot hold the
             account cookie finishes each one in the system browser. */}
         {canHoldProviderCookie(knownPortalUrl) ? (
-          <AccountSignInPanel
-            portalUrl={knownPortalUrl}
-            disabled={loading}
-            onSignedIn={onSignedIn}
-          />
+          <AccountSignInPanel {...panelProps} />
         ) : (
-          <AccountSignInViaBrowser
-            portalUrl={knownPortalUrl}
-            disabled={loading}
-            onSignedIn={onSignedIn}
-          />
+          <AccountSignInViaBrowser {...panelProps} />
         )}
       </Column>
     );
@@ -808,6 +819,7 @@ export function GettingStartedFlow({
           setRestore({
             phase: 'ready',
             secret,
+            signedIn: !!account,
             email: account
               ? accountAddress(account)
               : (secret.owner_address ?? secret.owner_email),
@@ -1119,10 +1131,14 @@ export function GettingStartedFlow({
                         device.
                       </>
                     )
-                  ) : unlockOptions ? (
+                  ) : unlockOptions && !accountOffered ? (
                     'Use your passkey, recovery code or secret.'
+                  ) : unlockOptions ? (
+                    'Sign in with your atomic.place account, or use your passkey, recovery code or secret.'
+                  ) : accountOffered ? (
+                    'Sign in with your atomic.place account, or paste your secret.'
                   ) : (
-                    'Sign in with your account, or paste your secret.'
+                    'Paste your secret.'
                   )}
                 </CardSubtitle>
 
@@ -1209,11 +1225,15 @@ export function GettingStartedFlow({
                 {/* The same passkey button and code-or-secret field as the
                     send-identity page. Without a backup this device can open,
                     it is just the field, for the agent secret. */}
-                {unlockOptions ? null : (
+                {accountOffered ? (
                   <OtherWaysLabel key='or-secret'>
-                    or paste your secret
+                    {unlockOptions ? (
+                      <>or use your passkey, code or secret</>
+                    ) : (
+                      <>or paste your secret</>
+                    )}
                   </OtherWaysLabel>
-                )}
+                ) : null}
                 <UnlockBackupForm
                   key='unlock'
                   methods={unlockOptions ?? ['secret']}
@@ -1652,6 +1672,10 @@ const AccountLabel = styled.span`
 const AccountDetail = styled.small`
   display: block;
   color: ${p => p.theme.colors.textLight};
+`;
+
+const AccountHeading = styled.span`
+  font-weight: 600;
 `;
 
 const OtherWaysLabel = styled.span`
