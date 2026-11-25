@@ -29,26 +29,26 @@ void main() {
     }
   });
 
-  test('class names map to icons, anything else to a document', () {
+  test('class names map to the web app\'s icons, an unknown one to the atom',
+      () {
     const expected = {
-      'Folder': Icons.folder_outlined,
+      'Folder': ClassIcons.folder,
       'Drive': driveIcon,
-      'Table': Icons.table_chart_outlined,
-      'Canvas': Icons.draw_outlined,
-      'AI chat': Icons.chat_bubble_outline,
-      'ai-chat': Icons.chat_bubble_outline,
-      'Conversation': Icons.chat_bubble_outline,
-      'ChatRoom': Icons.chat_bubble_outline,
-      'meeting': Icons.videocam_outlined,
-      'Class': Icons.data_object,
-      'property': Icons.data_object,
-      'form-field': Icons.input,
-      'Document': Icons.description_outlined,
-      'document-v2': Icons.description_outlined,
-      'row': Icons.description_outlined,
-      '': Icons.description_outlined,
+      'Table': ClassIcons.table,
+      'Canvas': ClassIcons.canvas,
+      'AI chat': Icons.auto_awesome,
+      'ai-chat': Icons.auto_awesome,
+      'Conversation': ClassIcons.comment,
+      'ChatRoom': ClassIcons.comment,
+      'meeting': ClassIcons.video,
+      'Class': ClassIcons.cls,
+      'property': ClassIcons.property,
+      'Document': ClassIcons.document,
+      'document-v2': ClassIcons.document,
+      '': ClassIcons.document,
+      'row': ClassIcons.atom,
       'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/ai-chat':
-          Icons.chat_bubble_outline,
+          Icons.auto_awesome,
     };
     for (final e in expected.entries) {
       expect(iconForClass(e.key), e.value, reason: e.key);

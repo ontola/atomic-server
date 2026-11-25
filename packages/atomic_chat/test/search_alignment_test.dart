@@ -65,7 +65,7 @@ void main() {
           expect(mat.color, isNotNull);
           expect(mat.shape, isNull); // no outline of any kind
           expect(mat.borderRadius, BorderRadius.circular(12));
-          final icons = find.byIcon(Icons.description_outlined);
+          final icons = find.byIcon(ClassIcons.document);
           expect(icons, findsAtLeastNWidgets(2));
           final lefts = [
             for (var i = 0; i < 2; i++) tester.getRect(icons.at(i)).left
