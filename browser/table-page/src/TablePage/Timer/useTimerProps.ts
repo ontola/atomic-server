@@ -1,6 +1,7 @@
 import { Datatype, Property, Resource, useStore } from '@tomic/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPropertyOnClass } from '../Kanban/createSelectProperty.js';
+import { resolveTimerProperties } from './timerProperties.js';
 
 export type TimerPropsStatus = 'resolving' | 'creating' | 'ready';
 
@@ -10,24 +11,6 @@ export interface UseTimerPropsResult {
   /** Timestamp Property holding each entry's end (once resolved). */
   endProp: Property | undefined;
   status: TimerPropsStatus;
-}
-
-/**
- * A property that can hold a start/stop instant. Strictly TIMESTAMP: a DATE
- * property has no time-of-day component, so it cannot record when a timer was
- * started. This is also what makes the `view-group-by` slot self-healing —
- * see below.
- */
-export function isInstantProperty(property: Property): boolean {
-  return property.datatype === Datatype.TIMESTAMP;
-}
-
-/** Adopts a class property whose shortname looks like the given role. */
-function findByShortname(
-  columns: Property[],
-  pattern: RegExp,
-): Property | undefined {
-  return columns.find(c => isInstantProperty(c) && pattern.test(c.shortname));
 }
 
 /**
@@ -66,36 +49,10 @@ export function useTimerProps(
   // Guards the create-once side effect against React re-runs / double-invoke.
   const creationStartedRef = useRef(false);
 
-  const storedStart = useMemo(
-    () =>
-      allColumns.find(c => c.subject === viewGroupBy && isInstantProperty(c)),
-    [allColumns, viewGroupBy],
+  const { start, end, storedStart, storedEnd } = useMemo(
+    () => resolveTimerProperties(allColumns, viewGroupBy, viewEndProp),
+    [allColumns, viewGroupBy, viewEndProp],
   );
-
-  const storedEnd = useMemo(
-    () =>
-      allColumns.find(c => c.subject === viewEndProp && isInstantProperty(c)),
-    [allColumns, viewEndProp],
-  );
-
-  // The start and end must never resolve to the SAME property — one entry would
-  // then stop the instant it started.
-  const guessedStart = useMemo(
-    () => findByShortname(allColumns, /^start/),
-    [allColumns],
-  );
-
-  const guessedEnd = useMemo(
-    () => findByShortname(allColumns, /^(end|stop|finish)/),
-    [allColumns],
-  );
-
-  const start = storedStart ?? guessedStart;
-  const end =
-    storedEnd?.subject === start?.subject
-      ? undefined
-      : (storedEnd ??
-        (guessedEnd?.subject === start?.subject ? undefined : guessedEnd));
 
   useEffect(() => {
     if (!enabled) {

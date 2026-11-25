@@ -283,6 +283,10 @@ loading and ownership checks and one default view for concurrent first writes.
 Configuration-dialog and external-column tests cover pending saves, retained
 drafts after failure and retry. Number forms cover fractional range bounds and
 invalid precision input.
+View query tests cover unresolved computed filters, the implicit timer Duration
+column, and shared filter and aggregate clock values in tables and dashboards.
+Date format tests cover independent radio groups and the saved legacy value
+remaining selected until explicitly replaced.
 
 `TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
 strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests

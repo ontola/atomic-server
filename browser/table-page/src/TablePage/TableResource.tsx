@@ -36,7 +36,7 @@ import {
 } from './tablePageContext.js';
 import { TableNewRow, TableRow } from './TableRow.js';
 import { hasUserContent, isSavedDraft, isUnsavedDraft } from './draftRow.js';
-import { useTableColumns, type TableColumn } from './useTableColumns.js';
+import type { TableColumn } from './useTableColumns.js';
 import { useTableData } from './useTableData.js';
 import {
   useId,
@@ -77,7 +77,6 @@ import { QuickAddBar } from './QuickAddBar.js';
 import { useTableAggregates } from './useTableAggregates.js';
 import { getTableDrive } from './tableDrive.js';
 import { TableTotalsFooter } from './TableTotalsFooter.js';
-import { toAggregation } from './tableAggregates.js';
 import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder.js';
 import { TableSummaryBar } from './TableSummaryBar.js';
@@ -149,7 +148,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setFilterValue,
     setFilterOperator,
     removeFilter,
-    viewColumns,
     setViewColumns,
     viewName,
     renameView,
@@ -175,8 +173,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewTimerExclusive,
     viewSplitLanguages,
     setViewSplitLanguages,
-    viewDerivedColumns,
-    viewDerivedColumnsSet,
+    derivedSpecs,
     setViewDerivedColumns,
     viewColumnOrder,
     setViewColumnOrder,
@@ -192,14 +189,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    queryValue,
+    queryAggregation,
+    unresolvedFilters,
+    unresolvedAggregates,
+    columns,
+    allColumns,
+    hideColumn,
+    showColumn,
   } = useTableData(resource, viewSubject, embedded);
 
-  const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
-    tableClass,
-    viewColumns,
-    setViewColumns,
-    viewSplitLanguages,
-  );
   const calendarRow = useTableCalendarRow(tableClass, allColumns);
 
   // The toolbar's quick filter. Session state, not View configuration: it is
@@ -237,7 +236,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const quickFilter = useQuickFilter(
     collection,
     quickFilterSources,
-    showsRows ? quickFilterText : '',
+    showsRows && !unresolvedFilters ? quickFilterText : '',
   );
   const rowCollection = quickFilter.collection;
   const quickFilterQuery = quickFilterText.trim();
@@ -298,26 +297,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
     !canWrite,
     isTimer,
     notifyEntryCreated,
-  );
-
-  // Computed columns are configuration on the View, not a feature of one view
-  // kind — a table can show a days-since just as a timer shows a duration. A
-  // timer view that has never had a derived-column list falls back to timing
-  // its start/end pair, so a view added from the view menu still has a
-  // Duration; once the user edits or removes it the stored list takes over
-  // (which is why "has a list" and "the list is empty" must stay distinct).
-  const effectiveDerivedSpecs =
-    isTimer && !viewDerivedColumnsSet
-      ? [...viewDerivedColumns, ...timer.derivedColumns]
-      : viewDerivedColumns;
-
-  // Keyed on their shape, not their identity: the timer's contribution is
-  // rebuilt whenever its props resolve, and these specs feed both the grid and
-  // the page context — an unstable array there re-renders every cell.
-  const derivedSpecsKey = JSON.stringify(effectiveDerivedSpecs);
-  const derivedSpecs = useMemo(
-    () => JSON.parse(derivedSpecsKey) as DerivedColumnSpec[],
-    [derivedSpecsKey],
   );
 
   const derivedColumns = useDerivedColumns(derivedSpecs);
@@ -532,14 +511,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   // Rebuilt every render (it carries a quantized `now`), so keyed on content.
-  const aggregationKey = JSON.stringify(
-    toAggregation(
-      viewAggregates,
-      viewGroupByColumn,
-      viewGroupGranularity,
-      derivedSpecs,
-    ) ?? null,
-  );
+  const aggregationKey = JSON.stringify(queryAggregation ?? null);
   const aggregation = useMemo(
     () => (JSON.parse(aggregationKey) as Aggregation | null) ?? undefined,
     [aggregationKey],
@@ -549,7 +521,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // clearing the grid's pages. See `useTableAggregates`.
   const viewAggregateOutcomes = useTableAggregates({
     property: core.properties.parent,
-    value: resource.subject,
+    value: queryValue,
     filters: queryFilters,
     expressionFilters: queryExpressionFilters,
     aggregation,
@@ -1593,7 +1565,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowCreated={notifyEntryCreated}
             />
           )}
-          {appView !== undefined ? (
+          {showsRows && unresolvedAggregates && (
+            <NoMatches role='status'>
+              A total is unavailable. Check its column.
+            </NoMatches>
+          )}
+          {showsRows && unresolvedFilters ? (
+            <NoMatches role='status'>
+              A filter is unavailable. Edit or remove it to see rows.
+            </NoMatches>
+          ) : appView !== undefined ? (
             // An app rendering this table's rows. It sits beside the Table tab
             // rather than in place of it: adding a way to look at rows never
             // takes one away, and the table is always one tab over.

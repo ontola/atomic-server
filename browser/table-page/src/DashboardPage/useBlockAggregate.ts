@@ -14,9 +14,6 @@ import type { BlockQuery } from './useBlockQuery.js';
 /** The id every block aggregate is asked for under. One per block, so one id. */
 const BLOCK_AGGREGATE_ID = 'block';
 
-/** How coarsely `now` reaches the query — see `toAggregation` in the table. */
-const NOW_QUANTUM_MS = 60_000;
-
 /**
  * The `aggregation` clause for one block, or undefined when there is nothing to
  * ask for — an incomplete spec must not turn into a query that answers zero.
@@ -74,11 +71,7 @@ export function toBlockAggregation(
           tz_offset_minutes: -new Date().getTimezoneOffset(),
         }
       : undefined,
-    ...(measuresNow
-      ? {
-          now_ms: Math.floor(Date.now() / NOW_QUANTUM_MS) * NOW_QUANTUM_MS,
-        }
-      : {}),
+    ...(measuresNow ? { now_ms: query.now } : {}),
     ...(aggregate.expression
       ? { tz_offset_minutes: localOffsetMinutes() }
       : {}),
@@ -112,8 +105,11 @@ export function useBlockAggregate(
     filters: query.filters,
     expressionFilters: query.expressionFilters,
     aggregation,
+    drive: query.drive,
     server: serverUrl,
   });
 
-  return outcomes.find(o => o.id === BLOCK_AGGREGATE_ID) ?? outcomes[0];
+  return query.ready
+    ? (outcomes.find(o => o.id === BLOCK_AGGREGATE_ID) ?? outcomes[0])
+    : undefined;
 }

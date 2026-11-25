@@ -4821,7 +4821,7 @@ msgid "Stop the running entry when another starts"
 msgstr "Stop de actieve registratie wanneer een andere start"
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Timer/useTimerColumns.tsx
+#: ../table-page/src/TablePage/Timer/timerProperties.ts
 msgid "Duration"
 msgstr "Duur"
 
@@ -13877,6 +13877,23 @@ msgstr "Wacht tot het verwijderen van de kolom is gesynchroniseerd voordat je ve
 #: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "This property is no longer available for deletion."
 msgstr "Deze property kan niet meer worden verwijderd."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A total is unavailable. Check its column."
+msgstr "Een totaal is niet beschikbaar. Controleer de kolom."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A filter is unavailable. Edit or remove it to see rows."
+msgstr "Een filter is niet beschikbaar. Bewerk of verwijder het om rijen te zien."
+
+#: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
+#: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
+msgid "Measurement unavailable. Check the source view."
+msgstr "De meting is niet beschikbaar. Controleer de bronweergave."
+
+#: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Saved format"
+msgstr "Opgeslagen formaat"
 
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"

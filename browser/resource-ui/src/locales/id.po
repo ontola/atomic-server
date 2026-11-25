@@ -4819,7 +4819,7 @@ msgid "Stop the running entry when another starts"
 msgstr "Hentikan entri yang berjalan saat entri lain dimulai"
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Timer/useTimerColumns.tsx
+#: ../table-page/src/TablePage/Timer/timerProperties.ts
 msgid "Duration"
 msgstr "Durasi"
 
@@ -13866,6 +13866,23 @@ msgstr "Tunggu sampai penghapusan kolom tersinkronisasi sebelum melanjutkan."
 #: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "This property is no longer available for deletion."
 msgstr "Properti ini tidak lagi dapat dihapus."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A total is unavailable. Check its column."
+msgstr "Total tidak tersedia. Periksa kolomnya."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A filter is unavailable. Edit or remove it to see rows."
+msgstr "Filter tidak tersedia. Edit atau hapus filter untuk melihat baris."
+
+#: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
+#: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
+msgid "Measurement unavailable. Check the source view."
+msgstr "Pengukuran tidak tersedia. Periksa tampilan sumber."
+
+#: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Saved format"
+msgstr "Format tersimpan"
 
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
