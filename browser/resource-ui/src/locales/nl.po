@@ -13763,6 +13763,14 @@ msgstr "Filterwaarde"
 msgid "This column is unavailable."
 msgstr "Deze kolom is niet beschikbaar."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Wacht tot het verwijderen van de kolom is gesynchroniseerd voordat je verdergaat."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Deze property kan niet meer worden verwijderd."
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Kolomnaam"
@@ -13876,11 +13884,3 @@ msgstr "of gebruik je passkey, code of geheime sleutel"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
 msgstr "of plak je geheime sleutel"
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "Wait for the column removal to sync before continuing."
-msgstr "Wacht tot het verwijderen van de kolom is gesynchroniseerd voordat je verdergaat."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "This property is no longer available for deletion."
-msgstr "Deze property kan niet meer worden verwijderd."

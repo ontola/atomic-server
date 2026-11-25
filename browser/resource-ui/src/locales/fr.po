@@ -13757,6 +13757,14 @@ msgstr "Valeur du filtre"
 msgid "This column is unavailable."
 msgstr "Cette colonne est indisponible."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Attendez que le retrait de la colonne soit synchronisé avant de continuer."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Cette propriété ne peut plus être supprimée."
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Nom de la colonne"
@@ -13870,11 +13878,3 @@ msgstr "ou utilisez votre passkey, votre code ou votre secret"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
 msgstr "ou collez votre secret"
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "Wait for the column removal to sync before continuing."
-msgstr "Attendez que le retrait de la colonne soit synchronisé avant de continuer."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "This property is no longer available for deletion."
-msgstr "Cette propriété ne peut plus être supprimée."

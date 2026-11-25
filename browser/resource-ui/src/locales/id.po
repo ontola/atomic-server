@@ -13752,6 +13752,14 @@ msgstr "Nilai filter"
 msgid "This column is unavailable."
 msgstr "Kolom ini tidak tersedia."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Tunggu sampai penghapusan kolom tersinkronisasi sebelum melanjutkan."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Properti ini tidak lagi dapat dihapus."
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Nama kolom"
@@ -13865,11 +13873,3 @@ msgstr "atau gunakan passkey, kode, atau kunci rahasiamu"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
 msgstr "atau tempel kunci rahasiamu"
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "Wait for the column removal to sync before continuing."
-msgstr "Tunggu sampai penghapusan kolom tersinkronisasi sebelum melanjutkan."
-
-#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
-msgid "This property is no longer available for deletion."
-msgstr "Properti ini tidak lagi dapat dihapus."
