@@ -51,7 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function setup() {
+async function setup(empty = false) {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
   const getAgent = vi.spyOn(store, 'getAgent').mockReturnValue({
     subject: 'https://example.com/agent',
@@ -79,7 +79,7 @@ async function setup() {
 
   await table.set(
     dataBrowser.properties.tableViews,
-    [active.subject, inactive.subject],
+    empty ? [] : [active.subject, inactive.subject],
     false,
   );
   const activeSave = vi.spyOn(active, 'save').mockResolvedValue('persisted');
@@ -93,7 +93,11 @@ async function setup() {
       </StoreContext>
     ),
   });
-  await waitFor(() => expect(hook.result.current.viewName).toBe('Active'));
+  await waitFor(() =>
+    expect(hook.result.current.activeView).toBe(
+      empty ? undefined : active.subject,
+    ),
+  );
 
   return {
     ...hook,
@@ -124,6 +128,61 @@ it('retains the active-view rename call without an explicit target', async () =>
   await waitFor(() => expect(state.activeSave).toHaveBeenCalledOnce());
   expect(state.active.get(core.properties.name)).toBe('Renamed active');
   expect(state.inactiveSave).not.toHaveBeenCalled();
+});
+
+it('waits for the captured active view before persisting configuration', async () => {
+  const state = await setup();
+  const loaded = Promise.withResolvers<Resource>();
+  const load = vi
+    .spyOn(state.store, 'getResource')
+    .mockReturnValueOnce(loaded.promise);
+  await act(async () => state.result.current.setViewColumnOrder(['column']));
+
+  expect(load).toHaveBeenCalledWith(state.active.subject);
+  expect(state.activeSave).not.toHaveBeenCalled();
+
+  await act(async () => loaded.resolve(state.active));
+  await waitFor(() => expect(state.activeSave).toHaveBeenCalledOnce());
+});
+
+it('does not persist configuration to an active view owned by another table', async () => {
+  const state = await setup();
+  await state.active.set(core.properties.parent, '_new:foreign-table', false);
+  await act(async () => state.result.current.setViewColumnOrder(['column']));
+
+  expect(state.activeSave).not.toHaveBeenCalled();
+  expect(
+    state.active.get(dataBrowser.properties.viewColumnOrder),
+  ).toBeUndefined();
+});
+
+it('shares the implicit default view when two configuration writes start together', async () => {
+  const state = await setup(true);
+  const created = Promise.withResolvers<Resource>();
+  const newResource = vi
+    .spyOn(state.store, 'newResource')
+    .mockImplementation(() => created.promise);
+  const set = state.table.set.bind(state.table);
+  vi.spyOn(state.table, 'set').mockImplementation((property, value) =>
+    set(property, value, false),
+  );
+  vi.spyOn(state.table, 'save').mockResolvedValue('persisted');
+  act(() => {
+    state.result.current.setViewColumnOrder(['column']);
+    state.result.current.setViewGroupBy('column');
+  });
+
+  expect(newResource).toHaveBeenCalledOnce();
+  await act(async () => created.resolve(state.active));
+  await waitFor(() =>
+    expect(state.active.get(dataBrowser.properties.viewGroupBy)).toBe('column'),
+  );
+  expect(state.active.get(dataBrowser.properties.viewColumnOrder)).toEqual([
+    'column',
+  ]);
+  expect(state.table.getSubjects(dataBrowser.properties.tableViews)).toEqual([
+    state.active.subject,
+  ]);
 });
 
 it('captures the inactive tab identity from its context-menu rename action', async () => {

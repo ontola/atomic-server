@@ -4,6 +4,7 @@ import { afterEach, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import {
   TableQuickAddFields,
+  isQuickAddDraftComplete,
   quickAddDraftFromSpec,
   quickAddSpecFromDraft,
   type QuickAddDraft,
@@ -62,6 +63,19 @@ const valid = (): QuickAddDraft => ({
   presetProperty: 'count',
   presetValue: '0',
 });
+
+it('requires a real numeric step and a still-available preset column', () => {
+  expect(isQuickAddDraftComplete(valid(), kinds)).toBe(true);
+  expect(isQuickAddDraftComplete({ ...valid(), presetValue: '' }, kinds)).toBe(
+    false,
+  );
+  expect(
+    isQuickAddDraftComplete({ ...valid(), presetValue: '1e' }, kinds),
+  ).toBe(false);
+  expect(
+    isQuickAddDraftComplete({ ...valid(), presetProperty: 'removed' }, kinds),
+  ).toBe(false);
+});
 it('retains native numeric input and delegates preset changes through the existing flat draft', () => {
   function Editor() {
     const [draft, setDraft] = useState(() => ({
@@ -102,7 +116,7 @@ it('retains native numeric input and delegates preset changes through the existi
   });
 });
 
-it('keeps new versus existing no-field defaults and the original single-preset conversion', () => {
+it('keeps new versus existing no-field defaults and preserves the extra stored presets', () => {
   expect(quickAddDraftFromSpec(undefined, 'name')).toMatchObject({
     withField: true,
     field: 'name',
@@ -120,7 +134,10 @@ it('keeps new versus existing no-field defaults and the original single-preset c
   expect(draft).toMatchObject({ withField: false, presetValue: '2' });
   expect(quickAddSpecFromDraft(draft, kinds)).toEqual({
     label: 'Create',
-    presets: [{ kind: 'increment', property: 'count', value: 2 }],
+    presets: [
+      { kind: 'increment', property: 'count', value: 2 },
+      { kind: 'toggle', property: 'done' },
+    ],
   });
 });
 

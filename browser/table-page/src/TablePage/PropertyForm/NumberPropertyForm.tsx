@@ -86,6 +86,7 @@ export const NumberPropertyForm = ({
         resource={resource}
         minProp={dataBrowser.properties.min}
         maxProp={dataBrowser.properties.max}
+        allowFractions
       />
     </Suspense>
   );

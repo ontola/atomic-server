@@ -109,7 +109,11 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
             if (!visible)
               void navigate({
                 to: '.',
-                search: { ...search, editColumn: undefined },
+                search: previous =>
+                  previous.editColumn === search.editColumn &&
+                  previous.subject === search.subject
+                    ? { ...previous, editColumn: undefined }
+                    : previous,
                 replace: true,
               });
           }}

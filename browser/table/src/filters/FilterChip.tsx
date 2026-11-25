@@ -120,7 +120,10 @@ export function TableFilterChip({
           <RemoveButton
             disabled={disabled}
             onClick={() => {
-              if (!disabled) onRemove();
+              if (!disabled) {
+                setOpen(false);
+                onRemove();
+              }
             }}
             title={text.remove}
             type='button'

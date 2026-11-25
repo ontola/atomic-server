@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { isQuickAddComplete, parseQuickAdd } from './quickAdd.js';
+import { describe, expect, it, vi } from 'vitest';
+import type { Store } from '@tomic/react';
+import {
+  createQuickAddRow,
+  isQuickAddComplete,
+  parseQuickAdd,
+} from './quickAdd.js';
 
 /**
  * A quick-add is stored config a person or an LLM writes, so what matters is that
@@ -77,4 +82,24 @@ describe('isQuickAddComplete', () => {
     expect(isQuickAddComplete({ label: 'Log a feed' })).toBe(true);
     expect(isQuickAddComplete({ label: '' })).toBe(false);
   });
+});
+
+it('does not announce a quick-added row while its save is only queued in memory', async () => {
+  const row = { save: vi.fn().mockResolvedValue('queued') };
+  const notifyResourceManuallyCreated = vi.fn();
+  const store = {
+    getResource: vi.fn().mockResolvedValue({ get: () => undefined }),
+    newResource: vi.fn().mockResolvedValue(row),
+    notifyResourceManuallyCreated,
+  } as unknown as Store;
+
+  await expect(
+    createQuickAddRow(store, {
+      table: 'table',
+      rowClass: 'class',
+      spec: { label: 'Add' },
+      properties: [],
+    }),
+  ).rejects.toThrow(/queued/);
+  expect(notifyResourceManuallyCreated).not.toHaveBeenCalled();
 });

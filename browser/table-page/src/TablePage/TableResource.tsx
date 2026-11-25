@@ -49,9 +49,11 @@ import {
 import { FancyTable } from '@tomic/resource-ui/chunks/TableEditor/TableEditor';
 import { DEFAULT_SIZE_PX } from '@tomic/table';
 import { NewColumnButton } from './NewColumnButton.js';
+import { ColumnRemovalDialog } from './ColumnRemovalDialog.js';
 import { TableHeading } from './TableHeading.js';
 import { TableFilterBar } from './TableFilterBar.js';
 import { RowSelectCheckbox } from './RowSelectCheckbox.js';
+import { useTableRowSelection } from './useTableRowSelection.js';
 import { CellSelectionMenu } from './CellSelectionMenu.js';
 import { useResourceContextMenu } from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs.js';
@@ -133,7 +135,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   viewSubject,
   embedded,
 }) => {
-  const { AppFrame } = useResourceUIHost();
+  const { AppFrame, reportError } = useResourceUIHost();
   const store = useStore();
   const titleId = useId();
   const canWrite = useCanWrite(resource);
@@ -323,28 +325,24 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // Every edit writes the *effective* list, so acting on a timer's implicit
   // Duration materializes it instead of silently dropping it.
   const addDerivedColumn = useCallback(
-    (spec: DerivedColumnSpec) => {
-      // Ids are the column's identity in the grid; keep them unique.
-      const taken = new Set(derivedSpecs.map(s => s.id));
-      let id = spec.id || 'computed';
-
-      for (let n = 2; taken.has(id); n++) {
-        id = `${spec.id}-${n}`;
-      }
-
-      setViewDerivedColumns([...derivedSpecs, { ...spec, id }]);
-    },
+    (spec: DerivedColumnSpec) =>
+      setViewDerivedColumns(
+        derivedSpecs.some(existing => existing.id === spec.id)
+          ? derivedSpecs.map(existing =>
+              existing.id === spec.id ? spec : existing,
+            )
+          : [...derivedSpecs, spec],
+      ),
     [derivedSpecs, setViewDerivedColumns],
   );
 
   const updateDerivedColumn = useCallback(
-    (spec: DerivedColumnSpec) => {
+    (spec: DerivedColumnSpec) =>
       setViewDerivedColumns(
         derivedSpecs.map(existing =>
           existing.id === spec.id ? spec : existing,
         ),
-      );
-    },
+      ),
     [derivedSpecs, setViewDerivedColumns],
   );
 
@@ -432,9 +430,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const removeDerivedColumn = useCallback(
     (id: string) => {
-      setViewDerivedColumns(derivedSpecs.filter(spec => spec.id !== id));
+      void setViewDerivedColumns(
+        derivedSpecs.filter(spec => spec.id !== id),
+      ).catch(reportError);
     },
-    [derivedSpecs, setViewDerivedColumns],
+    [derivedSpecs, setViewDerivedColumns, reportError],
   );
 
   // Configured row-action buttons. Hidden entirely from a viewer who cannot
@@ -442,44 +442,37 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
 
   const addRowAction = useCallback(
-    (spec: RowActionSpec) => {
-      // Same id minting as a computed column: derived from the label, and
-      // suffixed until it is unique within the view.
-      const base = stringToSlug(spec.label) || 'action';
-      const taken = new Set(viewRowActions.map(existing => existing.id));
-      let id = base;
-      let n = 2;
-
-      while (taken.has(id)) {
-        id = `${base}-${n++}`;
-      }
-
-      setViewRowActions([...viewRowActions, { ...spec, id }]);
-    },
+    (spec: RowActionSpec) =>
+      setViewRowActions(
+        viewRowActions.some(existing => existing.id === spec.id)
+          ? viewRowActions.map(existing =>
+              existing.id === spec.id ? spec : existing,
+            )
+          : [...viewRowActions, spec],
+      ),
     [viewRowActions, setViewRowActions],
   );
 
   const updateRowAction = useCallback(
-    (spec: RowActionSpec) => {
+    (spec: RowActionSpec) =>
       setViewRowActions(
         viewRowActions.map(existing =>
           existing.id === spec.id ? spec : existing,
         ),
-      );
-    },
+      ),
     [viewRowActions, setViewRowActions],
   );
 
   const removeRowAction = useCallback(
     (id: string) => {
-      setViewRowActions(viewRowActions.filter(spec => spec.id !== id));
       // Its placement in the column order would otherwise linger as dead config
       // that a later drag writes back forever.
-      setViewColumnOrder(
+      void setViewRowActions(
+        viewRowActions.filter(spec => spec.id !== id),
         viewColumnOrder.filter(key => key !== rowActionKey(id)),
-      );
+      ).catch(reportError);
     },
-    [viewRowActions, setViewRowActions, viewColumnOrder, setViewColumnOrder],
+    [viewRowActions, setViewRowActions, viewColumnOrder, reportError],
   );
 
   // Computed columns, then configured buttons, then the timer's Start/Stop — so
@@ -637,6 +630,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const { undoLastItem, addItemsToHistoryStack } =
     useTableHistory(invalidateCollection);
+  const handleUndo = useCallback(() => {
+    if (canWrite) void undoLastItem().catch(reportError);
+  }, [canWrite, undoLastItem, reportError]);
 
   const handlePaste = useHandlePaste(
     resource,
@@ -1118,41 +1114,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [rowCollection],
   );
 
-  // Rows ticked in the row header, by subject. A change of view, filter or
-  // sorting changes which rows are visible, so the ticks would point at rows
-  // the person can no longer see: they only count for the query they were made
-  // under.
-  const [selection, setSelection] = useState<{
-    queryKey: string;
-    rows: ReadonlySet<string>;
-  }>({ queryKey, rows: new Set() });
-  const selectedRows = useMemo<ReadonlySet<string>>(
-    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
-    [selection, queryKey],
-  );
-
-  const toggleRowSelected = useCallback(
-    (subject: string) => {
-      setSelection(prev => {
-        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
-
-        if (!next.delete(subject)) {
-          next.add(subject);
-        }
-
-        return { queryKey, rows: next };
-      });
-    },
-    [queryKey],
-  );
-
-  const clearRowSelection = useCallback(
-    () => setSelection({ queryKey, rows: new Set() }),
-    [queryKey],
-  );
+  const { selectedRows, toggleRowSelected, clearRowSelection, canActOnRows } =
+    useTableRowSelection({
+      table: resource.subject,
+      rowClass: tableClass.subject,
+      queryKey: JSON.stringify([activeView, viewKind, requestedQuery]),
+      quickQuery: quickFilterQuery,
+      writable: canWrite,
+    });
 
   const deleteRowSubjects = useCallback(
     async (subjects: string[]) => {
+      if (!canActOnRows()) return;
+
       const resources = subjects
         .map(subject => store.getResourceLoading(subject))
         .filter(row => !isUnsavedDraft(row));
@@ -1185,7 +1159,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       for (const row of resources) {
         await row.destroy();
 
-        if (!sessionSubjects.has(row.subject)) {
+        if (canActOnRows() && !sessionSubjects.has(row.subject)) {
           decrementMemberCount();
         }
       }
@@ -1194,6 +1168,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       newRowSubjects,
       store,
       clearRowSelection,
+      canActOnRows,
       addItemsToHistoryStack,
       decrementMemberCount,
     ],
@@ -1208,10 +1183,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // added this session.
   const subjectAtRow = useCallback(
     async (index: number): Promise<string | undefined> =>
-      index < memberCount
-        ? await collection.getMemberWithIndex(index)
-        : newRowSubjects[index - memberCount],
-    [collection, memberCount, newRowSubjects],
+      index < gridMemberCount
+        ? await rowCollection.getMemberWithIndex(index)
+        : gridNewRowSubjects[index - gridMemberCount],
+    [rowCollection, gridMemberCount, gridNewRowSubjects],
   );
 
   const { openResourceMenu } = useResourceContextMenu();
@@ -1256,22 +1231,50 @@ export const TableResource: React.FC<TableResourceProps> = ({
         return null;
       }
 
-      if (index < memberCount) {
-        return <RowSelectCheckbox collection={collection} index={index} />;
+      if (index < gridMemberCount) {
+        return <RowSelectCheckbox collection={rowCollection} index={index} />;
       }
 
       // The trailing empty row is the entry placeholder, not a row yet.
-      const newRowIndex = index - memberCount;
-      const subject = newRowSubjects[newRowIndex];
+      const newRowIndex = index - gridMemberCount;
+      const subject = gridNewRowSubjects[newRowIndex];
 
-      if (!subject || newRowIndex === newRowSubjects.length - 1) {
+      if (!subject || newRowIndex === gridNewRowSubjects.length - 1) {
         return null;
       }
 
       return <RowSelectCheckbox subject={subject} index={index} />;
     },
-    [canWrite, collection, memberCount, newRowSubjects],
+    [canWrite, rowCollection, gridMemberCount, gridNewRowSubjects],
   );
+
+  const [columnRemoval, setColumnRemoval] = useState<{
+    table: string;
+    tableClass: Resource;
+    property: Resource;
+  }>();
+
+  if (
+    columnRemoval &&
+    (columnRemoval.table !== resource.subject ||
+      columnRemoval.tableClass.subject !== tableClass.subject)
+  ) {
+    setColumnRemoval(undefined);
+  }
+
+  const requestColumnRemoval = useCallback(
+    (property: Resource) => {
+      setColumnRemoval(
+        current => current ?? { table: resource.subject, tableClass, property },
+      );
+    },
+    [resource.subject, tableClass],
+  );
+  const closeColumnRemoval = useCallback(() => {
+    setColumnRemoval(current =>
+      current === columnRemoval ? undefined : current,
+    );
+  }, [columnRemoval]);
 
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
@@ -1289,6 +1292,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1330,10 +1334,15 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
       allColumns,
+      viewRowActions,
+      addRowAction,
+      updateRowAction,
+      removeRowAction,
       viewAggregates,
       aggregateOutcomes,
       rowCollection.totalMembers,
@@ -1365,7 +1374,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
         ? await rowCollection.getMemberWithIndex(index)
         : gridNewRowSubjects[index - gridMemberCount];
 
-      if (!subject) {
+      if (!subject || !canActOnRows()) {
         return;
       }
 
@@ -1390,7 +1399,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
       await rowResource.destroy();
 
-      if (isMember) {
+      if (isMember && canActOnRows()) {
         decrementMemberCount();
       }
 
@@ -1409,6 +1418,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       gridMemberCount,
       gridNewRowSubjects,
       decrementMemberCount,
+      canActOnRows,
     ],
   );
 
@@ -1513,6 +1523,13 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   return (
     <TablePageContext value={tablePageContext}>
+      {columnRemoval && (
+        <ColumnRemovalDialog
+          tableClass={columnRemoval.tableClass}
+          property={columnRemoval.property}
+          onClose={closeColumnRemoval}
+        />
+      )}
       <TablePresenceContext value={presenceValue}>
         <TableCalendarRowContext value={calendarRow}>
           {!embedded && (
@@ -1568,6 +1585,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
            *  will be rejected is worse than none. */}
           {viewQuickAdd && canWrite && (
             <QuickAddBar
+              viewSubject={activeView}
               spec={viewQuickAdd}
               tableSubject={resource.subject}
               tableClass={tableClass}
@@ -1666,7 +1684,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 onClearCells={handleClearCells}
                 onCopyCommand={handleCopyCommand}
                 onPasteCommand={handlePaste}
-                onUndoCommand={undoLastItem}
+                onUndoCommand={handleUndo}
                 onColumnReorder={handleColumnReorder}
                 onRowExpand={handleRowExpand}
                 RowHeaderExtra={RowHeaderExtra}

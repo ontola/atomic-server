@@ -29,25 +29,19 @@ export function validateRange(
   max: number | undefined,
   shouldBeRounded = false,
 ): string | undefined {
-  let error: string | undefined = undefined;
-
-  if (min !== undefined && shouldBeRounded) {
-    error = Number.isInteger(min)
-      ? undefined
-      : 'Value should be a round number.';
+  if (
+    shouldBeRounded &&
+    ((min !== undefined && !Number.isInteger(min)) ||
+      (max !== undefined && !Number.isInteger(max)))
+  ) {
+    return 'Value should be a round number.';
   }
 
-  if (max !== undefined && shouldBeRounded) {
-    error = Number.isInteger(min)
-      ? undefined
-      : 'Value should be a round number.';
+  if (min !== undefined && max !== undefined && min >= max) {
+    return 'Min must be a less than max';
   }
 
-  if (min !== undefined && max !== undefined) {
-    error = min < max ? undefined : 'Min must be a less than max';
-  }
-
-  return error;
+  return undefined;
 }
 
 export function MinMaxInput({
@@ -79,6 +73,7 @@ export function MinMaxInput({
       <InputWrapper $invalid={invalid}>
         <InputStyled
           type='number'
+          step={round ? 1 : 'any'}
           max={maxValue}
           placeholder='min'
           defaultValue={minValue}
@@ -90,6 +85,7 @@ export function MinMaxInput({
       <InputWrapper $invalid={invalid}>
         <InputStyled
           type='number'
+          step={round ? 1 : 'any'}
           placeholder='max'
           min={minValue}
           defaultValue={maxValue}

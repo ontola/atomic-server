@@ -5,7 +5,8 @@ import {
   useStore,
   type AtomicValue,
 } from '@tomic/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef } from 'react';
+import { saveTableChange } from '../tableSave.js';
 
 enum HistoryItemType {
   ValueChange,
@@ -86,7 +87,7 @@ async function undoValueChange(item: ValueChangeItem, store: Store) {
   const resource = store.getResourceLoading(item.subject);
 
   await resource.set(item.property, item.previousValue, false);
-  await resource.save();
+  await saveTableChange(resource);
 }
 
 async function undoResourceCreated(item: ResourceCreatedItem, store: Store) {
@@ -106,7 +107,7 @@ async function undoResourceDeleted(item: ResourceDeletedItem, store: Store) {
     await resource.set(prop, val, false);
   }
 
-  await resource.save();
+  await saveTableChange(resource);
 
   return true;
 }
@@ -148,62 +149,44 @@ function addSingleItem(item: HistoryItem, stack: HistoryStack) {
   return [...stack, item];
 }
 
-function addBatch(items: HistoryItemBatch, stack: HistoryStack) {
-  return [...stack, items];
-}
-
 export function useTableHistory(invalidateTable: () => void) {
   const store = useStore();
-  const [stack, setStack] = useState<HistoryStack>([]);
+  const stack = useRef<HistoryStack>([]);
+  const undoing = useRef<HistoryStack[number] | undefined>(undefined);
 
-  const addItemsToHistoryStack: AddItemToHistoryStack = useCallback(
-    (item: HistoryItem | HistoryItemBatch) => {
-      setStack(prev => {
-        if (Array.isArray(item)) {
-          return addBatch(item, prev);
-        }
-
-        return addSingleItem(item, prev);
-      });
-    },
-    [],
-  );
+  const addItemsToHistoryStack: AddItemToHistoryStack = useCallback(item => {
+    const current = stack.current;
+    stack.current =
+      Array.isArray(item) || current.at(-1) === undoing.current
+        ? [...current, item]
+        : addSingleItem(item, current);
+  }, []);
 
   const undoLastItem = useCallback(async () => {
-    const lastItem = stack[stack.length - 1];
+    const index = stack.current.length - 1;
+    const lastItem = stack.current[index];
+    if (!lastItem || undoing.current) return;
+
+    const items = Array.isArray(lastItem) ? lastItem : [lastItem];
+    undoing.current = lastItem;
+    let completed = 0;
     let shouldInvalidate = false;
 
-    if (!lastItem) {
-      return;
-    }
-
-    if (Array.isArray(lastItem)) {
-      // TODO: Check if the array only consists of value changes and if so use Promise.all
-
-      for (const item of lastItem) {
+    try {
+      for (const item of items) {
         const collectionUpdated = await undoItem(item, store);
-
-        if (collectionUpdated) {
-          shouldInvalidate = true;
-        }
+        completed++;
+        if (collectionUpdated) shouldInvalidate = true;
       }
-    } else {
-      const collectionUpdated = await undoItem(lastItem, store);
+    } finally {
+      const remaining = items.slice(completed);
+      // An edit added during undo stays above the entry this command started on.
+      stack.current.splice(index, 1, ...(remaining.length ? [remaining] : []));
+      undoing.current = undefined;
 
-      if (collectionUpdated) {
-        shouldInvalidate = true;
-      }
+      if (shouldInvalidate) invalidateTable();
     }
+  }, [store, invalidateTable]);
 
-    setStack(prev => prev.slice(0, prev.length - 1));
-
-    if (shouldInvalidate) {
-      invalidateTable();
-    }
-  }, [stack, store, invalidateTable]);
-
-  return {
-    addItemsToHistoryStack,
-    undoLastItem,
-  };
+  return { addItemsToHistoryStack, undoLastItem };
 }
