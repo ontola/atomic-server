@@ -1196,6 +1196,63 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(unchangedOrigin.hasOriginatingRead).toBe(false);
     expect(unchangedOrigin.memberships).toEqual([]);
     expect(unchangedOrigin.key).toBe(organization.key);
+
+    // Older installations still point their bare table URL at an unconfigured
+    // Collection. A real saved View includes genesis and the creator's write ACL.
+    const legacyView = await page.evaluate(async subject => {
+      const store = window.store;
+      const base = 'https://atomicdata.dev/properties/';
+      const table = await store.getResource(subject);
+      const views = table.getSubjects(base + 'table-views');
+      const ordinary = (
+        await Promise.all(views.map(view => store.getResource(view)))
+      ).find(view => view.get(base + 'view-kind') === 'table');
+      const owner = store.getAgent()?.subject;
+      if (!ordinary || !owner) throw new Error('Missing signed table fixture');
+      const old = await store.newResource({
+        parent: subject,
+        isA: ['https://atomicdata.dev/classes/View'],
+        propVals: {
+          [base + 'name']: 'Collection',
+          [base + 'view-kind']: 'syncable-collection',
+          [base + 'write']: [owner],
+        },
+      });
+      await old.save();
+      // The ordinary Table has a setting of its own so a selected tab label
+      // cannot stand in for using the correct View on a bare URL.
+      await ordinary.set(base + 'view-filters', [
+        { property: base + 'name', operator: 'eq', value: 'atomic-server' },
+      ]);
+      await ordinary.save();
+      await table.set(base + 'table-views', [old.subject, ...views]);
+      await table.set(base + 'table-default-view', old.subject);
+      await table.save();
+
+      return old.subject;
+    }, repositoriesSubject);
+    await waitForSynced(page);
+    const tableUrl = new URL('/app/show', page.url());
+    tableUrl.searchParams.set('subject', repositoriesSubject);
+    await page.goto(tableUrl.href);
+    await expect(
+      page.getByRole('tab', { name: 'Table', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(
+      page.getByRole('tab', { name: 'Collection', exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '2');
+    await testInfo.attach('repositories-table-without-duplicate-collection', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    tableUrl.searchParams.set('view', legacyView);
+    await page.goto(tableUrl.href);
+    await expect(
+      page.getByRole('tab', { name: 'Collection', exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '4');
+    await expect(page.locator('iframe[title="App"]')).toHaveCount(0);
   });
 
   test('retains a saved principal and safely reconnects an expired orphan connection from the App', async ({

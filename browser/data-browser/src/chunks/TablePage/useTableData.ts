@@ -40,9 +40,12 @@ export function useTableData(
   viewOverride?: string,
   embedded = false,
 ): UseTableDataResult {
-  const tableView = useTableView(resource, viewOverride, embedded);
-  const { filters, sorting } = tableView;
   const syncableFilters = useSyncableFilters(resource, embedded);
+  const tableView = useTableView(resource, viewOverride, embedded, {
+    entity: syncableFilters.flat,
+    rules: new Set(syncableFilters.rules.map(rule => rule.resource.subject)),
+  });
+  const { filters, sorting } = tableView;
   const store = useStore();
 
   const [classSubject] = useSubject(resource, core.properties.classtype);

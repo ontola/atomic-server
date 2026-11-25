@@ -84,9 +84,10 @@ without a GitHub account. GitHub's Issues endpoint includes pull requests.
 
 **Table** follows the schema derived from the API description and provides
 **Open** for catalog-declared collection navigation. Item tables use Table and
-Sync; the redundant unconfigured Collection tab is hidden. Existing Collection
-links open native Table with their saved settings and filter intact. Renamed or
-customized views are retained, and the principal App keeps its collection list.
+Sync. The old unconfigured Collection tab is hidden, and opening the item
+table uses the ordinary Table settings. Existing Collection links open native
+Table with their saved settings and filter intact. Renamed or customized views
+are retained, and the principal App keeps its collection list.
 Opening, filtering or returning to these views makes no provider request.
 They remain available during a sync or a provider outage. Overlapping saved
 filters share one canonical row. Complete reads replace membership only for their

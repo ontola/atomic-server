@@ -9,6 +9,7 @@ import {
   useBoolean,
   useCanWrite,
   useResource,
+  useResources,
   useStore,
   useString,
   useValue,
@@ -21,6 +22,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { syncableCollectionTabs } from '../PluginRuns/syncableCollectionCompatibility';
 import { ShowRoute } from '../../routes/ShowRoute';
 import {
   filterKey,
@@ -100,6 +102,7 @@ export interface UseTableViewResult {
   renameView: (name: string) => void;
   /** All saved View subjects of the table, in order (the tabs). */
   views: string[];
+  visibleTabs: ReturnType<typeof syncableCollectionTabs>;
   /** The active View subject (undefined until one exists). */
   activeView: string | undefined;
   /** Switch the active view, via the `?view=` search param. */
@@ -239,6 +242,7 @@ export function useTableView(
    * the dashboard itself, which would render itself inside itself.
    */
   embedded = false,
+  syncable?: { entity: boolean; rules: ReadonlySet<string> },
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
@@ -255,12 +259,27 @@ export function useTableView(
   // first one) once they load.
   const activeViewParam = ShowRoute.useSearch({ select: s => s.view });
   const navigate = ShowRoute.useNavigate();
+  const explicitView = viewOverride ?? (embedded ? undefined : activeViewParam);
+  const requestedView = explicitView ?? defaultViewSubject ?? views[0];
+  const viewResources = useResources(views);
+  const rules = syncable?.rules ?? new Set<string>();
+  const visibleTabs = syncableCollectionTabs({
+    entity: syncable?.entity === true,
+    views,
+    activeView: requestedView,
+    rules,
+    getView: subject =>
+      viewResources.get(subject) ?? store.getResourceLoading(subject),
+  });
+  // A bare table link should read and edit the ordinary Table's configuration.
+  // Explicit legacy links retain their own view resource and saved settings.
   const activeView =
-    viewOverride ??
-    (embedded ? undefined : activeViewParam) ??
-    defaultViewSubject ??
-    views[0] ??
-    undefined;
+    syncable?.entity &&
+    !explicitView &&
+    requestedView &&
+    !rules.has(requestedView)
+      ? visibleTabs.activeView
+      : requestedView;
   const view = useResource(activeView ?? unknownSubject);
 
   // The `?view=` the URL carries *now*, rather than as of the render that a
@@ -1052,6 +1071,7 @@ export function useTableView(
     viewName: viewName ?? 'Default View',
     renameView,
     views: views as string[],
+    visibleTabs,
     activeView,
     setActiveView,
     createView,

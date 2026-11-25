@@ -1,4 +1,12 @@
-import { commits, core, dataBrowser, server, type Resource } from '@tomic/lib';
+import {
+  commits,
+  core,
+  dataBrowser,
+  GENESIS,
+  server,
+  subjectsReferToSameResource,
+  type Resource,
+} from '@tomic/lib';
 import type { ViewKind } from '@chunks/TablePage/tableViewKinds';
 
 /** Existing collection links keep their View's settings and saved rule scope. */
@@ -17,9 +25,24 @@ const baseProperties = new Set<string>([
   commits.properties.createdAt,
   server.properties.createdBy,
   commits.properties.lastCommit,
+  GENESIS,
   'https://atomicdata.dev/properties/drive',
   dataBrowser.properties.viewKind,
 ]);
+
+/** The installer gives generated Views their creator as their only writer. */
+function isGeneratedOwnerWrite(view: Resource, value: unknown): boolean {
+  const creator = view.getCreatedBy();
+
+  return (
+    typeof creator === 'string' &&
+    creator.length > 0 &&
+    Array.isArray(value) &&
+    value.length === 1 &&
+    typeof value[0] === 'string' &&
+    subjectsReferToSameResource(value[0], creator)
+  );
+}
 
 /** Hide only the unconfigured duplicate, never a renamed or configured View. */
 function isRedundantCollection(view: Resource): boolean {
@@ -28,7 +51,14 @@ function isRedundantCollection(view: Resource): boolean {
     !view.error &&
     view.get(dataBrowser.properties.viewKind) === 'syncable-collection' &&
     defaultNames.has(String(view.get(core.properties.name))) &&
-    view.getEntries().every(([property]) => baseProperties.has(property))
+    view
+      .getEntries()
+      .every(
+        ([property, value]) =>
+          baseProperties.has(property) ||
+          (property === core.properties.write &&
+            isGeneratedOwnerWrite(view, value)),
+      )
   );
 }
 

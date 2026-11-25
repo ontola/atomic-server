@@ -665,7 +665,6 @@ export async function materializeSyncableReferences(
         const views: string[] = [];
 
         for (const [name, kind] of [
-          ['Collection', 'syncable-collection'],
           ['Table', 'table'],
           ['Sync', 'syncables'],
         ]) {

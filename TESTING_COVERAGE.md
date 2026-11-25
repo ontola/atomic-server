@@ -1367,8 +1367,11 @@ This does not yet prove restoration of the user's private staging workspace.
   rendering of old Collection links, preserving saved configuration and scope,
   hiding only unconfigured duplicate tabs, retaining custom views and hidden
   definitions during reorder, and keeping principal App directory navigation.
-  `builtinSyncApp.test.ts` checks new entity views are Table/Sync, App directories
-  retain Collection, and successful history stays on its exact saved rule.
+  The browser test covers a signed old default with genesis and owner metadata:
+  bare links use Table settings and explicit legacy links keep their scope.
+  `builtinSyncApp.test.ts` and `syncableReferenceRecords.test.ts` check new
+  entity views are Table/Sync. App directories retain Collection, and successful
+  history stays on its exact saved rule.
   `syncableApiSchema.test.ts` preserves a user-renamed column label and identity
   when the catalog schema is reopened.
   `BuiltinSyncablesApp.test.ts` holds unrelated adoption/legacy scans pending:

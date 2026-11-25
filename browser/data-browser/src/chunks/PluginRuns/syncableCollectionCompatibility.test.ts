@@ -1,6 +1,13 @@
 // @wc-ignore-file
 import { expect, it } from 'vitest';
-import { commits, core, dataBrowser, server, type Resource } from '@tomic/lib';
+import {
+  commits,
+  core,
+  dataBrowser,
+  GENESIS,
+  server,
+  type Resource,
+} from '@tomic/lib';
 import {
   syncableCollectionTabs,
   syncableEntityViewKind,
@@ -26,6 +33,7 @@ function view(
     loading: false,
     get: (property: string) => values[property],
     getEntries: () => Object.entries(values),
+    getCreatedBy: () => values[server.properties.createdBy],
   } as Resource;
 }
 
@@ -98,6 +106,70 @@ it('hides the unconfigured duplicate only for entities with a loaded ordinary Ta
   table.loading = true;
   expect(tabs(true, [collection, table], collection.subject).views).toContain(
     collection.subject,
+  );
+});
+
+it('hides generated owner-only permissions and genesis metadata without altering either View', () => {
+  const collection = view(
+    'atomic:generated',
+    'Collection',
+    'syncable-collection',
+    {
+      [GENESIS]: 'signed-genesis-certificate',
+      [server.properties.createdBy]: 'did:ad:creator',
+      [core.properties.write]: ['atomic:creator'],
+    },
+  );
+  const table = view('atomic:table', 'Table', 'table');
+  const before = collection.getEntries();
+  expect(tabs(true, [collection, table], collection.subject)).toEqual({
+    views: [table.subject],
+    activeView: table.subject,
+    hidden: new Set([collection.subject]),
+  });
+  expect(collection.getEntries()).toEqual(before);
+});
+
+it('preserves custom or unproven permissions and settings even with genesis metadata', () => {
+  const metadata = {
+    [GENESIS]: 'signed-genesis-certificate',
+    [server.properties.createdBy]: 'atomic:creator',
+    [core.properties.write]: ['atomic:creator'],
+  };
+  const settings = [
+    { [core.properties.write]: ['atomic:someone-else'] },
+    { [core.properties.write]: ['atomic:creator', 'atomic:collaborator'] },
+    { [core.properties.write]: [] },
+    { [core.properties.write]: 'atomic:creator' },
+    { [core.properties.write]: [17] },
+    { [server.properties.createdBy]: undefined },
+    { [core.properties.read]: ['atomic:creator'] },
+    { [dataBrowser.properties.viewFilters]: [] },
+    { [dataBrowser.properties.viewColumns]: [] },
+    { 'atomic:unknown-setting': true },
+  ];
+  const table = view('atomic:table', 'Table', 'table');
+
+  for (const custom of settings) {
+    const collection = view(
+      'atomic:custom',
+      'Collection',
+      'syncable-collection',
+      { ...metadata, ...custom },
+    );
+    expect(tabs(true, [collection, table], collection.subject).views).toContain(
+      collection.subject,
+    );
+  }
+
+  const renamed = view(
+    'atomic:renamed',
+    'My collection',
+    'syncable-collection',
+    metadata,
+  );
+  expect(tabs(true, [renamed, table], renamed.subject).views).toContain(
+    renamed.subject,
   );
 });
 

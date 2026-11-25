@@ -594,9 +594,22 @@ describe('native direct reference records', () => {
       '"read":',
     );
     expect(row[p['syncable-rule-memberships']]).toBeUndefined();
-    expect(table[dataBrowser.properties.tableViews]).toHaveLength(3);
+    const viewSubjects = table[dataBrowser.properties.tableViews] as string[];
+    expect(
+      viewSubjects.map(subject => {
+        const view = f.resources.get(subject)!;
+
+        return [
+          view[core.properties.name],
+          view[dataBrowser.properties.viewKind],
+        ];
+      }),
+    ).toEqual([
+      ['Table', 'table'],
+      ['Sync', 'syncables'],
+    ]);
     expect(table[dataBrowser.properties.tableDefaultView]).toBe(
-      (table[dataBrowser.properties.tableViews] as string[])[0],
+      viewSubjects[0],
     );
     expect(
       f.queries.every(
@@ -604,6 +617,48 @@ describe('native direct reference records', () => {
       ),
     ).toBe(true);
     expect(f.owner(await f.run({ owner: person() }))).toBe(id);
+  });
+
+  it('preserves retained table, view identities and settings while enriching a reference', async () => {
+    const f = await fixture();
+    const id = f.owner(await f.run({ owner: person() }));
+    const p = f.context.schema.properties;
+    const tableId = f.resources.get(id)![p['syncable-entity-table']] as string;
+    const table = f.resources.get(tableId)!;
+    const legacyView = 'atomic:retained-collection-view';
+    f.resources.set(legacyView, {
+      [core.properties.parent]: tableId,
+      [core.properties.isA]: [dataBrowser.classes.view],
+      [core.properties.name]: 'My saved collection',
+      [dataBrowser.properties.viewKind]: 'syncable-collection',
+      'atomic:saved-settings': { columns: ['name'], sort: 'descending' },
+    });
+    table[dataBrowser.properties.tableViews] = [
+      legacyView,
+      ...(table[dataBrowser.properties.tableViews] as string[]),
+    ];
+    table[dataBrowser.properties.tableDefaultView] = legacyView;
+    const viewSubjects = table[dataBrowser.properties.tableViews] as string[];
+    const before = structuredClone([
+      table,
+      ...viewSubjects.map(subject => f.resources.get(subject)!),
+    ]);
+    const count = f.resources.size;
+    f.writes.length = 0;
+
+    expect(
+      f.owner(await f.run({ owner: person({ email: 'added@example.test' }) })),
+    ).toBe(id);
+    expect([
+      table,
+      ...viewSubjects.map(subject => f.resources.get(subject)!),
+    ]).toEqual(before);
+    expect(f.resources.size).toBe(count);
+    expect(
+      f.writes.some(
+        subject => subject === tableId || viewSubjects.includes(subject),
+      ),
+    ).toBe(false);
   });
 
   it('prefers usable human text over earlier URI/date columns and preserves an existing custom name', async () => {

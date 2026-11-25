@@ -50,7 +50,10 @@ retain accepted data. Canonical identity survives same-drive moves.
 
 Canonical entity collections use ordinary Table and Sync. Existing Collection
 links render native Table with the same saved filters and view settings; only
-unconfigured duplicate Collection tabs are hidden. App directories retain their
+unconfigured duplicate Collection tabs are hidden. A bare item-table link uses
+ordinary Table settings when its stored default is such a duplicate. Genesis
+metadata and the creator's standard write permission are not view settings.
+New reference tables also start with Table and Sync. App directories retain their
 Collection view. Ordinary Table cells show stored resource links. Table Open and
 ordinary Resource actions share one guarded catalog relationship resolver.
 Imported organizations and embedded owner summaries with suitable evidence can

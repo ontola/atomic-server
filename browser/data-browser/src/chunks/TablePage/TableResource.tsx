@@ -1,9 +1,6 @@
 import { SyncableFilterBar } from '../PluginRuns/SyncableFilterBar';
 import { useSyncableTableNavigation } from '../PluginRuns/useSyncableTableNavigation';
-import {
-  retainHiddenSyncableViews,
-  syncableCollectionTabs,
-} from '../PluginRuns/syncableCollectionCompatibility';
+import { retainHiddenSyncableViews } from '../PluginRuns/syncableCollectionCompatibility';
 import {
   core,
   dataBrowser,
@@ -12,7 +9,6 @@ import {
   type Aggregation,
   useCanWrite,
   useStore,
-  useResources,
   type DataBrowser,
   type ExpressionFilter,
   type Property,
@@ -164,6 +160,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     viewName,
     renameView,
     views,
+    visibleTabs,
     activeView,
     setActiveView,
     createView,
@@ -204,18 +201,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
     queryExpressionFilters,
     syncableFilters,
   } = useTableData(resource, viewSubject, embedded);
-  const ruleSubjects = new Set(
-    syncableFilters.rules.map(rule => rule.resource.subject),
-  );
-  const viewResources = useResources(views);
-  const visibleTabs = syncableCollectionTabs({
-    entity: syncableFilters.flat,
-    views,
-    activeView,
-    rules: ruleSubjects,
-    getView: subject =>
-      viewResources.get(subject) ?? store.getResourceLoading(subject),
-  });
 
   const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
     tableClass,
