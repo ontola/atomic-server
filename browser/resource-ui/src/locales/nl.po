@@ -13853,25 +13853,13 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Gebruik je passkey, herstelcode of geheime sleutel."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your atomic.place account"
-msgstr "Je atomic.place-account"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr "Log in met je atomic.place-account, of gebruik je passkey, herstelcode of geheime sleutel."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr "Log in met je atomic.place-account, of plak je geheime sleutel."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Plak je geheime sleutel."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or use your passkey, code or secret"
-msgstr "of gebruik je passkey, code of geheime sleutel"
+msgid "Passkey, recovery code or secret"
+msgstr "Passkey, herstelcode of geheime sleutel"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or paste your secret"
-msgstr "of plak je geheime sleutel"
+msgid "Your secret"
+msgstr "Je geheime sleutel"

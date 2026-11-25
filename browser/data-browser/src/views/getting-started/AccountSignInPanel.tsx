@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { styled, useTheme } from 'styled-components';
 import { AccountSignIn } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
+import { ServiceTheme } from '../../components/ServiceTheme';
 import {
   getAccountProviders,
   providerSignInUrl,
@@ -80,6 +81,8 @@ type SignInPanelProps = {
   /** This screen already offers the backup's own passkey; a second passkey
    * button for the account would look like the same thing twice. */
   hidePasskey?: boolean;
+  /** Leave out "How safe is each option?", for a sign-in screen. */
+  hideInfo?: boolean;
 };
 
 export function AccountSignInPanel({
@@ -88,6 +91,7 @@ export function AccountSignInPanel({
   onSignedIn,
   initialEmail,
   hidePasskey,
+  hideInfo,
 }: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
@@ -211,7 +215,7 @@ export function AccountSignInPanel({
       : null;
 
   return (
-    <Themed>
+    <ServiceTheme>
       <AccountSignIn
         googleHref={href('google')}
         appleHref={href('apple')}
@@ -226,6 +230,7 @@ export function AccountSignInPanel({
         sending={sending}
         theme={theme.darkMode ? 'dark' : 'light'}
         assistedRecovery={providers.assisted_recovery}
+        showInfo={!hideInfo}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>
@@ -237,20 +242,9 @@ export function AccountSignInPanel({
           ) : null
         }
       />
-    </Themed>
+    </ServiceTheme>
   );
 }
-
-const Themed = styled.div`
-  --service-accent: ${p => p.theme.colors.main};
-  --service-surface: ${p => p.theme.colors.bg};
-  --service-on-accent: ${p => p.theme.colors.bg};
-  --service-muted: ${p => p.theme.colors.textLight};
-  --service-text: ${p => p.theme.colors.text};
-  --service-border: ${p => p.theme.colors.bg2};
-  --service-input-bg: ${p => p.theme.colors.bg};
-  --service-radius: ${p => p.theme.radius};
-`;
 
 const Sent = styled.p`
   margin: 0;
@@ -272,6 +266,7 @@ export function AccountSignInViaBrowser({
   onSignedIn,
   initialEmail,
   hidePasskey,
+  hideInfo,
 }: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
@@ -398,7 +393,7 @@ export function AccountSignInViaBrowser({
   }
 
   return (
-    <Themed>
+    <ServiceTheme>
       <AccountSignIn
         googleHref={null}
         onGoogle={providers.google ? () => void open('google') : undefined}
@@ -417,6 +412,7 @@ export function AccountSignInViaBrowser({
         busy={busy || disabled}
         theme={theme.darkMode ? 'dark' : 'light'}
         assistedRecovery={providers.assisted_recovery}
+        showInfo={!hideInfo}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>
@@ -429,6 +425,6 @@ export function AccountSignInViaBrowser({
           ) : null
         }
       />
-    </Themed>
+    </ServiceTheme>
   );
 }
