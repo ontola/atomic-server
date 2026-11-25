@@ -13898,16 +13898,11 @@ msgstr "Verstuur met mijn geheime sleutel"
 msgid "Identity URL copied"
 msgstr "Identiteits-URL gekopieerd"
 
-#. 0: effectiveAgent.subject
-#: ../data-browser/src/components/Settings/AccountSettings.tsx
-msgid "Copy your identity URL ({0})"
-msgstr "Kopieer je identiteits-URL ({0})"
-
-#: ../data-browser/src/components/Settings/AccountSettings.tsx
-msgid "Copy atomic: URL"
-msgstr "Kopieer atomic: URL"
-
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
 msgstr "Ga terug naar {0}."
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy your atomic: URL"
+msgstr "Kopieer je atomic: URL"

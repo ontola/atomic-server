@@ -13895,16 +13895,11 @@ msgstr ""
 msgid "Identity URL copied"
 msgstr ""
 
-#. 0: effectiveAgent.subject
-#: ../data-browser/src/components/Settings/AccountSettings.tsx
-msgid "Copy your identity URL ({0})"
-msgstr ""
-
-#: ../data-browser/src/components/Settings/AccountSettings.tsx
-msgid "Copy atomic: URL"
-msgstr ""
-
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
+msgstr ""
+
+#: ../data-browser/src/components/Settings/AccountSettings.tsx
+msgid "Copy your atomic: URL"
 msgstr ""

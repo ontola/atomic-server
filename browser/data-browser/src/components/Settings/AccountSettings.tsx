@@ -1,3 +1,4 @@
+import { styled } from 'styled-components';
 import { useEffect, useRef, useState } from 'react';
 import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../../helpers/AppSettings';
@@ -23,6 +24,26 @@ import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
 import { SyncSettings } from './SyncSettings';
 import { settingsKeywords } from './settingsKeywords';
+
+const shortenSubject = (subject: string) =>
+  subject.length > 24
+    ? `${subject.slice(0, 18)}…${subject.slice(-4)}`
+    : subject;
+
+const AgentIdButton = styled.button`
+  align-self: flex-start;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: ${p => p.theme.colors.main};
+  }
+`;
 
 /** Two top-level sections: Profile (name, avatar, sign out) and Account &
  *  security (recovery, connected apps, this device). One component because
@@ -157,20 +178,20 @@ export function AccountSettings() {
             </WarningBlock>
           )}
           <AgentProfileHeader subject={effectiveAgent.subject!} />
+          <AgentIdButton
+            type='button'
+            title='Copy your atomic: URL'
+            onClick={() => void copyAgentUrl(effectiveAgent.subject!)}
+            data-test='copy-agent-url'
+          >
+            {shortenSubject(effectiveAgent.subject!)}
+          </AgentIdButton>
           <Row>
             <Button
               subtle
               onClick={() => navigate(editURL(effectiveAgent.subject!))}
             >
               More profile fields
-            </Button>
-            <Button
-              subtle
-              title={`Copy your identity URL (${effectiveAgent.subject})`}
-              onClick={() => void copyAgentUrl(effectiveAgent.subject!)}
-              data-test='copy-agent-url'
-            >
-              Copy atomic: URL
             </Button>
             <Button
               subtle
