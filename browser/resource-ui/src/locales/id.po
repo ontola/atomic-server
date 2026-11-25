@@ -554,7 +554,7 @@ msgstr "Tidak merespons"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Baca selengkapnya "
 
 #: src/components/forms/Field.tsx
@@ -13777,90 +13777,90 @@ msgstr "Mungkin ada di perangkat lain. Hubungkan perangkat itu untuk mengirimnya
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
-msgstr ""
+msgstr "URL identitas disalin"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
-msgstr ""
+msgstr "Kembali ke {0}."
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy your atomic: URL"
-msgstr ""
+msgstr "Salin URL atomic: kamu"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to your account to continue on your other device."
-msgstr ""
+msgstr "Masuk ke akunmu untuk melanjutkan di perangkat lainmu."
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to {0}?"
-msgstr ""
+msgstr "Masuk ke {0}?"
 
 #. 0: phase.link.deviceName; 1: code
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
-msgstr ""
+msgstr "{0} meminta untuk menggunakan akunmu. Lanjutkan hanya jika kamu baru saja memulai ini di perangkatmu sendiri dan perangkat itu menampilkan kode {1}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Use your passkey"
-msgstr ""
+msgstr "Gunakan passkey-mu"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Paste your secret"
-msgstr ""
+msgstr "Tempel kunci rahasiamu"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Confirm it’s you"
-msgstr ""
+msgstr "Konfirmasi bahwa ini kamu"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signed in to {0}"
-msgstr ""
+msgstr "Masuk ke {0}"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not finish signing in"
-msgstr ""
+msgstr "Tidak dapat menyelesaikan proses masuk"
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
-msgstr ""
+msgstr "Pilih cara menyelesaikan proses masuk ke {0}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery password or secret"
-msgstr ""
+msgstr "Kata sandi pemulihan atau kunci rahasia"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery code or secret"
-msgstr ""
+msgstr "Kode pemulihan atau kunci rahasia"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Gunakan passkey, kode pemulihan, atau kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your atomic.place account"
-msgstr ""
+msgstr "Akun atomic.place-mu"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Masuk dengan akun atomic.place-mu, atau gunakan passkey, kode pemulihan, atau kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr ""
+msgstr "Masuk dengan akun atomic.place-mu, atau tempel kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
-msgstr ""
+msgstr "Tempel kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or use your passkey, code or secret"
-msgstr ""
+msgstr "atau gunakan passkey, kode, atau kunci rahasiamu"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
-msgstr ""
+msgstr "atau tempel kunci rahasiamu"

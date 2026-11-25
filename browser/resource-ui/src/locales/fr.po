@@ -554,7 +554,7 @@ msgstr "Ne répond pas"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "En savoir plus"
 
 #: src/components/forms/Field.tsx
@@ -13782,90 +13782,90 @@ msgstr "Il existe peut-être sur un autre appareil. Connectez cet appareil pour 
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
-msgstr ""
+msgstr "URL d'identité copiée"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
-msgstr ""
+msgstr "Retournez à {0}."
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy your atomic: URL"
-msgstr ""
+msgstr "Copier votre URL atomic:"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to your account to continue on your other device."
-msgstr ""
+msgstr "Connectez-vous à votre compte pour continuer sur votre autre appareil."
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to {0}?"
-msgstr ""
+msgstr "Se connecter à {0} ?"
 
 #. 0: phase.link.deviceName; 1: code
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
-msgstr ""
+msgstr "{0} demande à utiliser votre compte. Continuez seulement si vous venez de lancer cela sur votre propre appareil et qu'il affiche le code {1}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Use your passkey"
-msgstr ""
+msgstr "Utiliser votre passkey"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Paste your secret"
-msgstr ""
+msgstr "Collez votre secret"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Confirm it’s you"
-msgstr ""
+msgstr "Confirmez que c'est vous"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signed in to {0}"
-msgstr ""
+msgstr "Connecté à {0}"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not finish signing in"
-msgstr ""
+msgstr "Impossible de terminer la connexion"
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
-msgstr ""
+msgstr "Choisissez comment terminer la connexion à {0}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery password or secret"
-msgstr ""
+msgstr "Mot de passe de récupération ou secret"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery code or secret"
-msgstr ""
+msgstr "Code de récupération ou secret"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Utilisez votre passkey, votre code de récupération ou votre secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your atomic.place account"
-msgstr ""
+msgstr "Votre compte atomic.place"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Connectez-vous avec votre compte atomic.place, ou utilisez votre passkey, votre code de récupération ou votre secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr ""
+msgstr "Connectez-vous avec votre compte atomic.place, ou collez votre secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
-msgstr ""
+msgstr "Collez votre secret."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or use your passkey, code or secret"
-msgstr ""
+msgstr "ou utilisez votre passkey, votre code ou votre secret"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
-msgstr ""
+msgstr "ou collez votre secret"

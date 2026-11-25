@@ -554,7 +554,7 @@ msgstr "No responde"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Leer más"
 
 #: src/components/forms/Field.tsx
@@ -13782,90 +13782,90 @@ msgstr "Puede que exista en otro dispositivo. Conecta ese dispositivo para envia
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
-msgstr ""
+msgstr "URL de identidad copiada"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
-msgstr ""
+msgstr "Vuelve a {0}."
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy your atomic: URL"
-msgstr ""
+msgstr "Copia tu URL atomic:"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to your account to continue on your other device."
-msgstr ""
+msgstr "Inicia sesión en tu cuenta para continuar en tu otro dispositivo."
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to {0}?"
-msgstr ""
+msgstr "¿Iniciar sesión en {0}?"
 
 #. 0: phase.link.deviceName; 1: code
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
-msgstr ""
+msgstr "{0} quiere usar tu cuenta. Continúa solo si acabas de iniciar esto en tu propio dispositivo y muestra el código {1}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Use your passkey"
-msgstr ""
+msgstr "Usar tu passkey"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Paste your secret"
-msgstr ""
+msgstr "Pega tu secreto"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Confirm it’s you"
-msgstr ""
+msgstr "Confirma que eres tú"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signed in to {0}"
-msgstr ""
+msgstr "Sesión iniciada en {0}"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not finish signing in"
-msgstr ""
+msgstr "No se pudo completar el inicio de sesión"
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
-msgstr ""
+msgstr "Elige cómo terminar de iniciar sesión en {0}."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery password or secret"
-msgstr ""
+msgstr "Contraseña de recuperación o secreto"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery code or secret"
-msgstr ""
+msgstr "Código de recuperación o secreto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Usa tu passkey, código de recuperación o secreto."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your atomic.place account"
-msgstr ""
+msgstr "Tu cuenta de atomic.place"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Inicia sesión con tu cuenta de atomic.place, o usa tu passkey, código de recuperación o secreto."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr ""
+msgstr "Inicia sesión con tu cuenta de atomic.place, o pega tu secreto."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
-msgstr ""
+msgstr "Pega tu secreto."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or use your passkey, code or secret"
-msgstr ""
+msgstr "o usa tu passkey, código o secreto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
-msgstr ""
+msgstr "o pega tu secreto"

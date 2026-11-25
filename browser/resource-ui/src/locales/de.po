@@ -554,7 +554,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -13785,90 +13785,90 @@ msgstr "Es existiert vielleicht auf einem anderen Gerät. Verbinde dieses Gerät
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Identity URL copied"
-msgstr ""
+msgstr "Identitäts-URL kopiert"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Go back to {0}."
-msgstr ""
+msgstr "Zurück zu {0}."
 
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Copy your atomic: URL"
-msgstr ""
+msgstr "Deine atomic:-URL kopieren"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to your account to continue on your other device."
-msgstr ""
+msgstr "Melde dich bei deinem Konto an, um auf deinem anderen Gerät weiterzumachen."
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Sign in to {0}?"
-msgstr ""
+msgstr "Bei {0} anmelden?"
 
 #. 0: phase.link.deviceName; 1: code
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "{0} asks to use your account. Only continue if you started this on your own device just now and it shows code {1}."
-msgstr ""
+msgstr "{0} möchte dein Konto verwenden. Fahre nur fort, wenn du dies gerade selbst auf deinem eigenen Gerät gestartet hast und es den Code {1} zeigt."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Use your passkey"
-msgstr ""
+msgstr "Deinen Passkey verwenden"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Paste your secret"
-msgstr ""
+msgstr "Füge dein Geheimnis ein"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Confirm it’s you"
-msgstr ""
+msgstr "Bestätige, dass du es bist"
 
 #. 0: phase.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Signed in to {0}"
-msgstr ""
+msgstr "Bei {0} angemeldet"
 
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Could not finish signing in"
-msgstr ""
+msgstr "Anmeldung konnte nicht abgeschlossen werden"
 
 #. 0: phase.link.deviceName
 #: ../data-browser/src/routes/SendIdentityRoute.tsx
 msgid "Choose how to finish signing in to {0}."
-msgstr ""
+msgstr "Wähle, wie du die Anmeldung bei {0} abschließen möchtest."
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery password or secret"
-msgstr ""
+msgstr "Wiederherstellungspasswort oder Geheimnis"
 
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 #: ../data-browser/src/components/UnlockBackupForm.tsx
 msgid "Recovery code or secret"
-msgstr ""
+msgstr "Wiederherstellungscode oder Geheimnis"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Verwende deinen Passkey, Wiederherstellungscode oder dein Geheimnis."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your atomic.place account"
-msgstr ""
+msgstr "Dein atomic.place-Konto"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr ""
+msgstr "Melde dich mit deinem atomic.place-Konto an, oder verwende deinen Passkey, Wiederherstellungscode oder dein Geheimnis."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr ""
+msgstr "Melde dich mit deinem atomic.place-Konto an, oder füge dein Geheimnis ein."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
-msgstr ""
+msgstr "Füge dein Geheimnis ein."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or use your passkey, code or secret"
-msgstr ""
+msgstr "oder verwende deinen Passkey, Code oder dein Geheimnis"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "or paste your secret"
-msgstr ""
+msgstr "oder füge dein Geheimnis ein"
