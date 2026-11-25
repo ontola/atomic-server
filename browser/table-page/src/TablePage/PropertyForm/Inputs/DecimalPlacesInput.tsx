@@ -13,6 +13,7 @@ import {
   InputWrapper,
 } from '@tomic/ui/components/forms/InputStyles';
 import { FormGroupHeading } from '../FormGroupHeading.js';
+import { parseInteger } from '../../EditorCells/numberInput.js';
 
 interface DecimalPlacesInputProps {
   resource: Resource;
@@ -32,15 +33,23 @@ export function DecimalPlacesInput({
 
   const handleDecimalPointChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      const num = Number.parseInt(newValue, 10);
+      const num = parseInteger(e.target.value);
 
-      if (num < 0 || num > 20) {
+      if (
+        typeof num === 'symbol' ||
+        (num !== undefined && (num < 0 || num > 20))
+      ) {
         setError('Value must be between 0 and 20.', true);
 
         return;
       } else {
         setError(undefined);
+      }
+
+      if (num === undefined) {
+        await setDecimalPlaces(undefined);
+
+        return;
       }
 
       if (num === 0) {
@@ -49,13 +58,9 @@ export function DecimalPlacesInput({
         await setDataType(urls.datatypes.float);
       }
 
-      if (isNaN(num)) {
-        return await setDecimalPlaces(undefined);
-      }
-
       setDecimalPlaces(num);
     },
-    [setError],
+    [setError, setDecimalPlaces, setDataType],
   );
 
   return (

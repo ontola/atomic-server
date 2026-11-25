@@ -112,46 +112,47 @@ msgstr "Agentes de IA"
 
 #: ../data-browser/src/chunks/AI/ConfigEditorDialog.tsx
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
-#: ../table-page/src/TablePage/BreakdownDialog.tsx
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
-#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Issues/IssuesView.tsx
-#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: ../table-page/src/TablePage/QuickAddDialog.tsx
-#: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
-#: src/components/AvatarCropper.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
-#: src/components/ConfirmationDialog.tsx
 #: ../data-browser/src/components/ConnectAppForm.tsx
-#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/HostUI/hostUIDialogs.tsx
 #: ../data-browser/src/components/MoveResourceDialog.tsx
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: src/components/forms/EditFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Conversation/NewMessageDialog.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 #: ../data-browser/src/views/OntologyPage/NewClassButton.tsx
 #: ../data-browser/src/views/OntologyPage/NewPropertyButton.tsx
 #: ../data-browser/src/views/PluginView/useResourcePicker.tsx
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../table-page/src/TablePage/BreakdownDialog.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssuesView.tsx
+#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: ../table-page/src/TablePage/QuickAddDialog.tsx
+#: ../table-page/src/TablePage/RowActionDialog.tsx
+#: src/components/AvatarCropper.tsx
+#: src/components/ConfirmationDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -262,18 +263,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Compacta automáticamente la conversación cuando los tokens de entrada superan este porcentaje de la ventana de contexto del modelo seleccionado. La compactación manual /compact sigue funcionando cuando está desactivada."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Eliminar"
 
@@ -3093,21 +3094,21 @@ msgid "Hide in this view"
 msgstr "Ocultar en esta vista"
 
 #. 0: ' '
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Eliminar <0/> de{0} <1/>"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "<0/> Delete property and its children"
 msgstr "<0/> Eliminar la propiedad y sus hijos"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Eliminar propiedad"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Eliminar columna"
 
@@ -13886,3 +13887,11 @@ msgstr "Estos cambios pertenecen a algo que este servidor nunca recibió"
 #: ../data-browser/src/helpers/syncProblem.ts
 msgid "It may exist on another device. Connect that device to send it, or discard these changes."
 msgstr "Puede que exista en otro dispositivo. Conecta ese dispositivo para enviarlo, o descarta estos cambios."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Espera a que se sincronice la eliminación de la columna antes de continuar."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Esta propiedad ya no se puede eliminar."

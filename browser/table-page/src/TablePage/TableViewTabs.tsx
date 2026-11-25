@@ -9,7 +9,7 @@ import {
   useString,
   useTitle,
 } from '@tomic/react';
-import { useContext, useMemo, useState, type JSX } from 'react';
+import { useCallback, useContext, useMemo, useState, type JSX } from 'react';
 import { css, styled } from 'styled-components';
 import { ghostButtonStyles } from '@tomic/ui/components/Button';
 import {
@@ -116,7 +116,7 @@ interface TableViewTabsProps {
   /** The active view's create button, if it has one. */
   quickAdd: QuickAddSpec | undefined;
   /** Persist the active view's create button (undefined removes it). */
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  setQuickAdd: (spec: QuickAddSpec | undefined) => void | Promise<void>;
   /**
    * The quick filter over the rows the view shows. Absent for views that show
    * no rows (a dashboard, an app).
@@ -458,7 +458,7 @@ function ViewTab({
   deleteView: (subject: string) => void;
   classProperties: Property[];
   quickAdd: QuickAddSpec | undefined;
-  setQuickAdd: (spec: QuickAddSpec | undefined) => void;
+  setQuickAdd: (spec: QuickAddSpec | undefined) => void | Promise<void>;
 }): JSX.Element {
   const resource = useResource(subject ?? 'unknown-subject');
   const [title] = useTitle(resource);
@@ -479,7 +479,13 @@ function ViewTab({
   // already-active tab). `undefined` = closed.
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number }>();
   const [showDelete, setShowDelete] = useState(false);
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddEditor, setQuickAddEditor] = useState<{
+    editing: QuickAddSpec | undefined;
+    save: typeof setQuickAdd;
+  }>();
+  const bindQuickAddEditor = useCallback((visible: boolean) => {
+    if (!visible) setQuickAddEditor(undefined);
+  }, []);
 
   const startRename = () => {
     setDraft(name);
@@ -533,7 +539,8 @@ function ViewTab({
                 helper:
                   'A button above the rows that creates one — "Log a feed", "Add item".',
                 icon: <FaPlus />,
-                onClick: () => setShowQuickAdd(true),
+                onClick: () =>
+                  setQuickAddEditor({ editing: quickAdd, save: setQuickAdd }),
               },
             ]
           : []),
@@ -660,13 +667,13 @@ function ViewTab({
           bindActive={a => (a ? refreshApps() : setMenuPoint(undefined))}
         />
       )}
-      {showQuickAdd && (
+      {quickAddEditor && (
         <QuickAddDialog
           open
-          bindShow={setShowQuickAdd}
+          bindShow={bindQuickAddEditor}
           classProperties={classProperties}
-          editing={quickAdd}
-          onSave={setQuickAdd}
+          editing={quickAddEditor.editing}
+          onSave={quickAddEditor.save}
         />
       )}
       {subject && (

@@ -48,6 +48,7 @@ import { useClassProperties } from './useClassProperties.js';
 import {
   QuickAddFields,
   draftFromSpec,
+  isQuickAddDraftComplete,
   specFromDraft,
   type QuickAddDraft,
 } from '../TablePage/QuickAddFields.js';
@@ -212,7 +213,7 @@ export function BlockConfigDialog({
       // form — one capability, one representation.
       await block.set(
         dataBrowser.properties.blockQuickAdd,
-        specFromDraft(quickAdd) as unknown as never,
+        specFromDraft(quickAdd, classProperties) as unknown as never,
       );
     }
 
@@ -409,7 +410,11 @@ export function BlockConfigDialog({
         </Button>
         <Button
           data-testid='block-save'
-          disabled={measureIncomplete}
+          disabled={
+            measureIncomplete ||
+            (blockKind === 'create' &&
+              !isQuickAddDraftComplete(quickAdd, classProperties))
+          }
           title={
             measureIncomplete
               ? `Pick a column for the ${fn} to measure`

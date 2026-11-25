@@ -270,6 +270,19 @@ focus; the existing number-form regression retains explicit text-format saves.
 The application `table-page-derived-compiler.test.tsx` executes the actual hook
 through the production React 19 compiler and changes only engine readiness.
 The production readiness and seasonal-clock fixes already exist on develop.
+`TableHeadingMenu.test.tsx` opens the actual column menu and exercises schema
+detachment, explicit deletion, retained errors after the heading unmounts, and
+retry after a failed delete. It supplies SDK save results rather than exercising
+the network. `TablePage.test.tsx` exercises the close handler against newer
+search parameters, including another column editor.
+The TablePage row-selection and undo tests cover expired callbacks, read-only
+transitions and retrying only the unfinished steps of a partially applied undo.
+Quick-add tests cover binding queued commands to the callback that accepted them
+and suppressing success callbacks after navigation. Saved-view tests cover
+loading and ownership checks and one default view for concurrent first writes.
+Configuration-dialog and external-column tests cover pending saves, retained
+drafts after failure and retry. Number forms cover fractional range bounds and
+invalid precision input.
 
 `TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
 strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests
@@ -296,7 +309,9 @@ formula execution still needs the real WASM evaluator.
 
 Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
 covers host value/operator/removal callbacks and the existing numeric/date/now
-input policy. Actual-component Chromium checks cover edit/readback, operator
+input policy, including closing a filter's popover when removal is requested.
+`QuickAddFields.test.tsx` covers retaining additional stored presets on edit.
+Actual-component Chromium checks cover edit/readback, operator
 selection, Escape/reopen/removal and desktop/mobile layout; these are component
 fixtures, not a claim of full backend-integrated TablePage coverage.
 

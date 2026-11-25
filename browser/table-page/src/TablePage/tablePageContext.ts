@@ -4,6 +4,7 @@ import {
   type AggregateOutcome,
   type Collection,
   type Property,
+  type Resource,
 } from '@tomic/react';
 import { createContext } from 'react';
 import { TableSorting } from './tableSorting.js';
@@ -41,6 +42,7 @@ export interface TablePageContextType {
   setFilterOperator: (key: string, operator: FilterOperator) => void;
   removeFilter: (key: string) => void;
   hideColumn: (property: string) => void;
+  requestColumnRemoval: (property: Resource) => void;
   /**
    * Adds a property to the active view's visible columns. Needed after creating
    * one: `view-columns` treats anything it doesn't list as hidden, so a brand
@@ -84,17 +86,17 @@ export interface TablePageContextType {
     granularity: GroupGranularity;
   }) => void;
   /** Add a computed column to the active view. */
-  addDerivedColumn: (spec: DerivedColumnSpec) => void;
+  addDerivedColumn: (spec: DerivedColumnSpec) => void | Promise<void>;
   /** Replace a computed column (matched on its id) in the active view. */
-  updateDerivedColumn: (spec: DerivedColumnSpec) => void;
+  updateDerivedColumn: (spec: DerivedColumnSpec) => void | Promise<void>;
   /** Drop a computed column from the active view. */
   removeDerivedColumn: (id: string) => void;
   /** The buttons this view puts on each row. */
   rowActions: RowActionSpec[];
   /** Add a row action to the active view. */
-  addRowAction: (spec: RowActionSpec) => void;
+  addRowAction: (spec: RowActionSpec) => void | Promise<void>;
   /** Replace a row action (matched on its id) in the active view. */
-  updateRowAction: (spec: RowActionSpec) => void;
+  updateRowAction: (spec: RowActionSpec) => void | Promise<void>;
   /** Drop a row action from the active view. */
   removeRowAction: (id: string) => void;
   addItemsToHistoryStack: AddItemToHistoryStack;
@@ -138,6 +140,7 @@ export const TablePageContext = createContext<TablePageContextType>({
   setFilterOperator: () => undefined,
   removeFilter: () => undefined,
   hideColumn: () => undefined,
+  requestColumnRemoval: () => undefined,
   showColumn: () => undefined,
   splitLanguageSubjects: [],
   toggleSplitLanguages: () => undefined,
