@@ -8,6 +8,8 @@ import {
 } from '@tomic/react';
 import { useEffect, useState } from 'react';
 
+const NO_PROPERTIES: Property[] = [];
+
 /**
  * Every property of a class — what a block's configuration picks from.
  *
@@ -22,28 +24,41 @@ export function useClassProperties(
   const classResource = useResource(classSubject ?? unknownSubject);
   const [required] = useArray(classResource, core.properties.requires);
   const [recommended] = useArray(classResource, core.properties.recommends);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    properties: Property[];
+  }>();
 
   // Serialized deps: `useArray` hands back a fresh array every render, and
   // fetching on identity would re-fetch every property forever.
-  const key = JSON.stringify([required, recommended]);
+  const key = JSON.stringify([classSubject, required, recommended]);
 
   useEffect(() => {
-    const [req, rec] = JSON.parse(key) as [string[], string[]];
+    const [subject, req, rec] = JSON.parse(key) as [
+      string | null,
+      string[],
+      string[],
+    ];
+    if (!subject) return;
     let cancelled = false;
 
-    void Promise.all([...req, ...rec].map(p => store.getProperty(p)))
-      .then(resolved => {
-        if (!cancelled) {
-          setProperties(resolved);
-        }
-      })
-      .catch(() => undefined);
+    void Promise.allSettled(
+      [...req, ...rec].map(p => store.getProperty(p)),
+    ).then(results => {
+      if (!cancelled) {
+        setLoaded({
+          key,
+          properties: results.flatMap(result =>
+            result.status === 'fulfilled' ? [result.value] : [],
+          ),
+        });
+      }
+    });
 
     return () => {
       cancelled = true;
     };
   }, [key, store]);
 
-  return properties;
+  return loaded?.key === key ? loaded.properties : NO_PROPERTIES;
 }

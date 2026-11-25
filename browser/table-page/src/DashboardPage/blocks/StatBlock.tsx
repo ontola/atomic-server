@@ -44,7 +44,11 @@ export function StatBlock({ block, config }: BlockProps): JSX.Element {
 
   return (
     <BlockShell block={block} label={config.label} center>
-      {spec ? (
+      {query.unavailable || (query.ready && spec && !aggregation) ? (
+        <Unconfigured>
+          Measurement unavailable. Check the source view.
+        </Unconfigured>
+      ) : spec ? (
         <>
           <Value>
             {formatAggregateValue(

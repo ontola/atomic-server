@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 
 /** How long to wait after the last edit before re-reading the totals. */
 const REFRESH_DEBOUNCE_MS = 500;
+const NO_OUTCOMES: AggregateOutcome[] = [];
 
 /**
  * The longest a pending re-read may be pushed back by further triggers. A
@@ -47,7 +48,10 @@ export function useTableAggregates(opts: {
   aggregation: Aggregation | undefined;
 }): AggregateOutcome[] {
   const store = useStore();
-  const [outcomes, setOutcomes] = useState<AggregateOutcome[]>([]);
+  const [result, setResult] = useState<{
+    key: string;
+    outcomes: AggregateOutcome[];
+  }>();
 
   // Serialized deps: these are rebuilt every render, and the fetch must only
   // re-run when the question actually changed.
@@ -55,13 +59,20 @@ export function useTableAggregates(opts: {
   const filtersKey = JSON.stringify(opts.filters ?? []);
   const expressionFiltersKey = JSON.stringify(opts.expressionFilters ?? []);
   const { property, value, drive, server } = opts;
+  const key = JSON.stringify([
+    property,
+    value,
+    filtersKey,
+    expressionFiltersKey,
+    aggregationKey,
+    drive,
+    server,
+  ]);
 
   useEffect(() => {
     const aggregation = JSON.parse(aggregationKey) as Aggregation | null;
 
     if (!aggregation?.aggregates.length || !property || !value) {
-      setOutcomes([]);
-
       return;
     }
 
@@ -88,7 +99,7 @@ export function useTableAggregates(opts: {
       const collection = await builder.buildAndFetch();
 
       if (!cancelled) {
-        setOutcomes(collection.aggregates);
+        setResult({ key, outcomes: collection.aggregates });
       }
     };
 
@@ -197,7 +208,8 @@ export function useTableAggregates(opts: {
     aggregationKey,
     drive,
     server,
+    key,
   ]);
 
-  return outcomes;
+  return result?.key === key ? result.outcomes : NO_OUTCOMES;
 }

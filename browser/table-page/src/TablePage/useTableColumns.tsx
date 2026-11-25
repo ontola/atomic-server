@@ -72,6 +72,8 @@ type UseTableColumnsReturnType = {
   showColumn: (subject: string) => void;
 };
 
+const NO_COLUMNS: Property[] = [];
+
 const valueOpts = {
   commit: true,
 };
@@ -108,7 +110,12 @@ export function useTableColumns(
   const [classConstraints] = useValue(tableClass, core.properties.constraints);
   const constraintsKey = JSON.stringify(classConstraints ?? null);
 
-  const [allColumns, setAllColumns] = useState<Property[]>([]);
+  const [loaded, setLoaded] = useState<{
+    subject: string;
+    properties: Property[];
+  }>();
+  const allColumns =
+    loaded?.subject === tableClass.subject ? loaded.properties : NO_COLUMNS;
 
   useEffect(() => {
     const props = [...requiredProps, ...recommendedProps];
@@ -141,8 +148,9 @@ export function useTableColumns(
           );
         }
 
-        setAllColumns(
-          results
+        setLoaded({
+          subject: tableClass.subject,
+          properties: results
             .filter(result => result.status === 'fulfilled')
             .map(result =>
               withConstraint(
@@ -154,7 +162,7 @@ export function useTableColumns(
                 ),
               ),
             ),
-        );
+        });
       },
     );
 
