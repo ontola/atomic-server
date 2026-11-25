@@ -77,6 +77,8 @@ export interface OnboardingInput {
   childCount: number;
   templateChildCount: number;
   hasAIChat: boolean;
+  /** AI is offered at all; a guest in a hosted build has none until they register. */
+  aiEnabled?: boolean;
   aiAvailable: boolean;
   /** Agents with rights on the panel's drive, other than the signed-in one. */
   otherAgentsOnDrives: boolean;
@@ -100,11 +102,6 @@ export function deriveOnboardingSteps(
   return [
     { id: 'name', done: !isDefaultDriveName(input.driveName) },
     { id: 'create', done: input.childCount > input.templateChildCount },
-    {
-      id: 'ai',
-      done: input.hasAIChat,
-      needs: input.aiAvailable ? undefined : 'ai-source',
-    },
     { id: 'invite', done: input.otherAgentsOnDrives || !!input.inviteSent },
     { id: 'save', done: input.accountLinked },
   ];
@@ -112,12 +109,18 @@ export function deriveOnboardingSteps(
 
 /** The second round, shown once every basic step is done. */
 export function deriveAdvancedSteps(input: OnboardingInput): OnboardingStep[] {
-  return [
+  const aiEnabled = input.aiEnabled ?? true;
+  const steps: OnboardingStep[] = [
     {
       id: 'table',
       done: (input.tableCount ?? 0) > (input.templateTableCount ?? 0),
     },
     { id: 'form', done: !!input.hasForm },
+    {
+      id: 'ai',
+      done: input.hasAIChat,
+      needs: input.aiAvailable ? undefined : 'ai-source',
+    },
     {
       id: 'app',
       done: !!input.hasApp,
@@ -125,6 +128,10 @@ export function deriveAdvancedSteps(input: OnboardingInput): OnboardingStep[] {
     },
     { id: 'message', done: !!input.hasConversation },
   ];
+
+  return steps.filter(
+    step => aiEnabled || (step.id !== 'ai' && step.id !== 'app'),
+  );
 }
 
 /**
@@ -211,6 +218,7 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     childCount: children.length,
     templateChildCount,
     hasAIChat: chats.length > 0,
+    aiEnabled: enableAI,
     aiAvailable: enableAI && availableProviders.length > 0,
     otherAgentsOnDrives: others,
     inviteSent,
