@@ -1,19 +1,24 @@
 # Built-in Syncables: integration handoff
 
 Real-data import acceptance passed on `18c46ed3a`; the SDK counter fix is
-`d993656e6`. The current production revision is `fa9cb95f4`: native resource
+`d993656e6`. Production revision `fa9cb95f4` introduced native resource
 actions, paged entity Collection compatibility, faster Sync controls, accepted
 background preparation, source invalidation recovery and generic reference-origin
-navigation. All 18 native browser journeys passed, and localhost serves the
-matching build against the existing drive.
+navigation. All 18 native browser journeys passed. The follow-up production
+revision `847a1955b` hides generated duplicate Collection tabs and makes bare
+links use the ordinary Table settings. Localhost serves that tested build
+against the existing drive.
 
 - [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
   Main/server CI on the final integration candidate, reviews and merges.
   Integration and shared CI remain with trekmeester; workers must not rebase,
   dispatch or rerun shared CI. Remove this handoff after that acceptance.
-- [ ] Signed-in Chrome verification of the new reference-origin actions on
-  `fa9cb95f4` remains open because browser control was unavailable after the
-  restart. The existing account and drive remain available on localhost.
+- [x] Signed-in Chrome verification on `fa9cb95f4` completed 25 November.
+  The existing GitHub account synced the embedded Apptorrent organization's
+  saved Repositories filter. Its Table showed five rows, and the run completed
+  at 15:09:57 UTC. GitHub returned the rows early; local reconciliation took
+  most of the 9m50s total. The Ontola check was stopped after seven minutes
+  and its previous enabled state was restored.
 - [x] Attached the [current real-data walkthrough](https://github.com/ontola/atomic-server/pull/2522#issuecomment-7102109541)
   on 23 November 2026: 25 seconds from My drive through the principal App to
   the 2,608 stored Issues/PRs and linked authors. This edited capture uses the
@@ -92,6 +97,14 @@ cold rows hydrate before ownership validation. Canonical `github` replaces
 is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
+
+- Collection tab follow-up `847a1955bb73bb5947d9bc3fbd709043cbd03a6d` passed
+  46 focused tests, app and E2E typechecks, lint, and one native Chromium
+  journey using a signed legacy default. The bare link applies the ordinary
+  Table filter; the explicit legacy link retains its original rows. Report and
+  screenshot are under `.e2e-runs/2026-11-25T15-24-08.043Z-GNEFm2/`.
+  [Flutter 45644799764](https://github.com/ontola/atomic-server/actions/runs/45644799764)
+  passed on that revision.
 
 - Production source: `fa9cb95f420b739db18f3b34b0b9ad4b9927c081`, owned branch
   `codex/builtin-syncables-completion`, published through
