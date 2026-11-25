@@ -1,10 +1,6 @@
 import { useState } from 'react';
-import { Button } from '@tomic/ui/components/Button';
-import { Column } from '@tomic/ui/components/Row';
-import {
-  InputStyled,
-  InputWrapper,
-} from '@tomic/ui/components/forms/InputStyles';
+import { PasskeyMark } from '@tomic/service-ui';
+import { ServiceTheme } from './ServiceTheme';
 import type { UnlockMethod } from '../helpers/managed/recovery';
 import { isAgentSecret } from '../helpers/verifyAgentSecret';
 import { CardError } from '../views/getting-started/chrome';
@@ -37,70 +33,75 @@ export function UnlockBackupForm({ methods, busy, error, onUnlock }: Props) {
     );
   }
 
+  // The shared sign-in classes, so this sits under the account's email
+  // field and buttons at the same height, width and corners.
   return (
-    <Column gap='1rem'>
+    <ServiceTheme className='atomic-signin'>
       {methods.includes('passkey') ? (
-        <Button
+        <button
           type='button'
+          className='atomic-signin-option'
           disabled={busy}
           onClick={() => onUnlock('passkey')}
         >
-          Use your passkey
-        </Button>
+          <PasskeyMark />
+          <span>Use your passkey</span>
+        </button>
       ) : null}
       <form
+        className='atomic-signin-email'
         onSubmit={e => {
           e.preventDefault();
           submit(value);
         }}
       >
-        <Column gap='1rem'>
-          <InputWrapper>
-            <InputStyled
-              value={value}
-              onChange={e => {
-                setValue(e.target.value);
-                // A secret either parses or it doesn't: sign in the moment
-                // it is complete, whether typed or pasted.
-                if (isAgentSecret(e.target.value)) submit(e.target.value);
-              }}
-              // A pasted code or secret is complete: go on without a second
-              // press. A wrong one just shows the error.
-              onPaste={e => {
-                const pasted = e.clipboardData.getData('text');
+        <input
+          value={value}
+          onChange={e => {
+            setValue(e.target.value);
+            // A secret either parses or it doesn't: sign in the moment
+            // it is complete, whether typed or pasted.
+            if (isAgentSecret(e.target.value)) submit(e.target.value);
+          }}
+          // A pasted code or secret is complete: go on without a second
+          // press. A wrong one just shows the error.
+          onPaste={e => {
+            const pasted = e.clipboardData.getData('text');
 
-                if (pasted.trim()) {
-                  e.preventDefault();
-                  setValue(pasted);
-                  submit(pasted);
-                }
-              }}
-              type='password'
-              autoComplete='off'
-              spellCheck={false}
-              disabled={busy}
-              placeholder={
-                methods.includes('password')
-                  ? 'Recovery password or secret'
-                  : methods.includes('code')
-                    ? 'Recovery code or secret'
-                    : 'Paste your secret'
-              }
-              aria-label={
-                methods.includes('password') || methods.includes('code')
-                  ? 'Recovery code or secret'
-                  : 'Agent secret'
-              }
-            />
-          </InputWrapper>
-          {value.trim() ? (
-            <Button type='submit' subtle disabled={busy}>
-              Continue
-            </Button>
-          ) : null}
-        </Column>
+            if (pasted.trim()) {
+              e.preventDefault();
+              setValue(pasted);
+              submit(pasted);
+            }
+          }}
+          type='password'
+          autoComplete='off'
+          spellCheck={false}
+          disabled={busy}
+          placeholder={
+            methods.includes('password')
+              ? 'Recovery password or secret'
+              : methods.includes('code')
+                ? 'Recovery code or secret'
+                : 'Paste your secret'
+          }
+          aria-label={
+            methods.includes('password') || methods.includes('code')
+              ? 'Recovery code or secret'
+              : 'Agent secret'
+          }
+        />
+        {value.trim() ? (
+          <button
+            type='submit'
+            className='atomic-signin-submit'
+            disabled={busy}
+          >
+            Continue
+          </button>
+        ) : null}
       </form>
       {error ? <CardError role='alert'>{error}</CardError> : null}
-    </Column>
+    </ServiceTheme>
   );
 }

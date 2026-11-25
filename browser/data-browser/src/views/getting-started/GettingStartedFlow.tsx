@@ -500,6 +500,7 @@ export function GettingStartedFlow({
       onSignedIn: () => setRestoreAttempt(n => n + 1),
       initialEmail: restore.phase === 'ready' ? restore.email : undefined,
       hidePasskey: restoreUnlock.hasPasskey,
+      hideInfo: true,
     };
 
     return (

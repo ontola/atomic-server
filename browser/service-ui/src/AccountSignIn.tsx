@@ -207,6 +207,7 @@ export function AccountSignIn({
   notice,
   theme,
   assistedRecovery = false,
+  showInfo = true,
 }: {
   /** Where the Google option goes; `null` when the account service has
    * no Google client, which is the same answer on every screen. */
@@ -255,6 +256,9 @@ export function AccountSignIn({
   theme?: 'light' | 'dark';
   /** Signing in alone opens the identity; the info dialog says so. */
   assistedRecovery?: boolean;
+  /** "How safe is each option?" helps someone choosing how to sign up; a
+   * returning person signing in can do without it. */
+  showInfo?: boolean;
 }) {
   const info = useRef<HTMLDialogElement>(null);
   const [secretOpen, setSecretOpen] = useState(false);
@@ -414,14 +418,16 @@ export function AccountSignIn({
         </form>
       ) : null}
       {notice}
-      <button
-        type='button'
-        className='atomic-signin-info-open'
-        onClick={() => info.current?.showModal()}
-        data-test='sign-in-info'
-      >
-        {copy.info.open}
-      </button>
+      {showInfo ? (
+        <button
+          type='button'
+          className='atomic-signin-info-open'
+          onClick={() => info.current?.showModal()}
+          data-test='sign-in-info'
+        >
+          {copy.info.open}
+        </button>
+      ) : null}
       <dialog
         ref={info}
         className='atomic-signin-info'
@@ -633,7 +639,8 @@ function GoogleMark() {
 }
 
 // A key, in the text colour: the passkey sits beside Google as an equal.
-function PasskeyMark() {
+/** The passkey mark the sign-in uses, for a host's own passkey button. */
+export function PasskeyMark() {
   return (
     <svg
       width='18'
