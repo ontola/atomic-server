@@ -908,6 +908,11 @@ async fn content_addressed_image_with_storage(remote: bool) {
     let path = format!("/download/files/{}", hash.to_hex());
     let raw = test::call_service(&app, TestRequest::get().uri(&path).to_request()).await;
     assert_eq!(raw.status(), 200);
+    // Content-addressed: the browser may keep it for good.
+    assert_eq!(
+        raw.headers().get("cache-control").unwrap(),
+        "public, max-age=31536000, immutable"
+    );
     assert_eq!(test::read_body(raw).await.as_ref(), bytes.as_slice());
     for (format, expected_format) in [
         ("webp", image::ImageFormat::WebP),
