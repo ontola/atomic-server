@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import os
+import queue
 from pathlib import Path, PurePosixPath
 import re
 import shlex
@@ -40,7 +41,8 @@ CHECKS = (
     ('docs-publish', ['docs-publish', '--netlify-auth-token', 'env://NETLIFY_TOKEN']),
     ('typedoc-publish', ['typedoc-publish', '--netlify-auth-token', 'env://NETLIFY_TOKEN']),
 )
-BUNDLE_FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'test-inventory.json')
+BUNDLE_FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'checks.oci.tar', 'test-inventory.json')
+BUNDLE_CHECKS = frozenset(('js-test', 'js-typecheck', 'typedoc-publish', 'js-test-integration'))
 MUTATIONS = {'create', 'delete', 'import'}
 
 
@@ -117,7 +119,7 @@ def validate_archive(path, source):
             or receipt.get('source_commit') != source or receipt.get('build_exit_code') != 0):
         raise ValueError('archive does not prove a successful matching build')
     manifest = json.loads((path / 'bundle/manifest.json').read_text())
-    if (manifest.get('sourceCommit') != source or manifest.get('platform') != 'linux/amd64'
+    if (manifest.get('version') != 2 or manifest.get('sourceCommit') != source or manifest.get('platform') != 'linux/amd64'
             or receipt.get('manifest_sha256') != file_sha256(path / 'bundle/manifest.json')
             or set(manifest.get('files', {})) != set(BUNDLE_FILES) - {'manifest.json'}):
         raise ValueError('archive manifest provenance mismatch')
@@ -505,7 +507,8 @@ class Controller:
                               'shard_index': index, 'status': 'planned', 'phase_results': {}}
         state = {'version': 1, 'config': self.config, 'source_commit': self.config['source_commit'],
                  'batch_key': self.config['batch_key'], 'plan': plan, 'nodes': nodes,
-                 'keys': {}, 'status': 'initialized', 'created_at': stamp(), 'stop_requested': False}
+                 'keys': {}, 'status': 'initialized', 'created_at': stamp(), 'stop_requested': False,
+                 'controller_pid': os.getpid()}
         self.path.write_text(json.dumps(state, indent=2) + '\n')
         self.path.chmod(0o600)
         (self.root / 'cloud-init.yaml').write_text(self.cloud_init(plan['dagger_version']))
@@ -528,18 +531,49 @@ runcmd:
         if state.get('deadline') and utcnow() >= dt.datetime.fromisoformat(state['deadline']):
             raise TimeoutError('batch elapsed-time limit reached')
 
+    def artifact_transfer_timeout(self, maximum=900, allow_stopped=False):
+        """Large artifacts get more transfer time, never a later batch deadline."""
+        deadline = self.read().get('deadline')
+        remaining = (dt.datetime.fromisoformat(deadline) - utcnow()).total_seconds() if deadline else maximum
+        if remaining <= 0:
+            raise TimeoutError('deadline reached; skipping artifact transfer before cleanup')
+        # Cleanup intentionally preserves completed builds after stop_requested.
+        # Only this bounded backup bypasses the stop flag, not the time limit.
+        if not allow_stopped:
+            self.check_deadline()
+        return min(maximum, remaining)
+
+    def creation_reconciled(self, attempted_at):
+        """An empty provider list immediately after a lost response proves nothing."""
+        return bool(attempted_at and (utcnow() - dt.datetime.fromisoformat(
+            attempted_at.replace('Z', '+00:00'))).total_seconds() >= 120)
+
     def register_keys(self):
         public = (self.root / 'operator-key.pub').read_text().strip()
         for account in self.config['accounts']:
+            self.check_deadline()
+            if self.read()['keys'].get(account['context'], {}).get('creation_attempted'):
+                raise RuntimeError('operator SSH key creation already attempted; reconcile instead')
+            self.api.identity(account)
             name = self.config['batch_key'] + '-operator'
+            existing = self.api.call(account, ['compute', 'ssh-key', 'list'])
+            if any(item['name'] == name or item.get('public_key', '').strip() == public for item in existing):
+                raise RuntimeError('refusing to adopt a pre-existing operator SSH key')
+            self.check_deadline()
             self.update(lambda state: state['keys'].update({account['context']: {'name': name,
-                        'public_key': public, 'creation_attempted': True}}))
+                        'public_key': public, 'creation_attempted': True,
+                        'creation_attempted_at': stamp(), 'creation_absence_verified': True,
+                        'creation_account_uuid': account['expected_uuid']}}))
             try:
                 value = self.api.call(account, ['compute', 'ssh-key', 'import', name,
                                                '--public-key-file', str(self.root / 'operator-key.pub'),
                                                '--http-retry-max', '0'])
             except BaseException:
-                self.recover_keys(account)
+                try:
+                    self.recover_keys(account)
+                except Exception as error:
+                    self.update(lambda state: state['keys'][account['context']].update(
+                        creation_reconciliation_error=str(error)))
                 raise
             value = value[0] if isinstance(value, list) else value
             self.update(lambda state: state['keys'][account['context']].update(
@@ -549,6 +583,7 @@ runcmd:
         key = self.read()['keys'].get(account['context'])
         if not key:
             return
+        self.api.identity(account)
         matches = [item for item in self.api.call(account, ['compute', 'ssh-key', 'list'])
                    if item['name'] == key['name'] and
                    item.get('public_key', '').strip() == key['public_key']]
@@ -556,29 +591,51 @@ runcmd:
             raise RuntimeError('ambiguous duplicate owned SSH keys')
         if matches:
             item = matches[0]
+            if key.get('id') is not None and (key['id'] != item['id']
+                    or key.get('fingerprint') != item.get('fingerprint')):
+                raise RuntimeError('owned SSH key ID differs; refusing adoption')
+            if key.get('id') is None and (not key.get('creation_absence_verified')
+                    or key.get('creation_account_uuid') != account['expected_uuid']):
+                raise RuntimeError('unknown SSH key lacks verified creation ownership')
             self.update(lambda state: state['keys'][account['context']].update(
                 id=item['id'], fingerprint=item['fingerprint']))
+        elif key.get('id') is None and key.get('creation_attempted'):
+            if (not key.get('creation_absence_verified')
+                    or key.get('creation_account_uuid') != account['expected_uuid']
+                    or not self.creation_reconciled(key.get('creation_attempted_at'))):
+                raise RuntimeError('SSH key import outcome pending provider reconciliation')
+            self.update(lambda state: state['keys'][account['context']].update(
+                creation_absence_reconciled_at=stamp()))
 
     def create(self, node_id):
         with self.lock('resources'):
             self.check_deadline()
             state = self.read()
             node = state['nodes'][node_id]
-            if node.get('droplet_id'):
-                raise ValueError('node already has a paid resource')
+            if node.get('droplet_id') or node.get('creation_attempted_at'):
+                raise ValueError('node creation already attempted; reconcile instead of creating again')
             if not state.get('deadline'):
                 started = utcnow()
                 self.update(lambda value: value.update(first_creation_at=started.isoformat(),
                     deadline=(started + dt.timedelta(hours=self.config['max_hours'])).isoformat()))
             account = self.account(node['account'])
-            self.node_update(node_id, creation_attempted_at=stamp())
+            self.api.identity(account)
+            existing = self.api.call(account, ['compute', 'droplet', 'list'])
+            if any(item['name'] == node['name'] for item in existing):
+                raise RuntimeError('refusing to adopt a pre-existing Droplet name')
+            self.check_deadline()
+            self.node_update(node_id, creation_attempted_at=stamp(),
+                creation_absence_verified=True, creation_account_uuid=account['expected_uuid'])
             try:
                 value = self.api.call(account, ['compute', 'droplet', 'create', node['name'],
                     '--region', self.config['region'], '--size', self.config['size'],
                     '--image', 'ubuntu-24-04-x64', '--ssh-keys', str(state['keys'][node['account']]['id']),
                     '--user-data-file', str(self.root / 'cloud-init.yaml'), '--http-retry-max', '0'])
             except BaseException:
-                self.recover_resources()
+                try:
+                    self.recover_resources()
+                except Exception as error:
+                    self.node_update(node_id, creation_reconciliation_error=str(error))
                 raise
             value = value[0] if isinstance(value, list) else value
             self.record_resource(node_id, value)
@@ -594,26 +651,61 @@ runcmd:
                          actual_size=item['size'], status='bootstrapping')
 
     def recover_resources(self):
-        state = self.read()
+        errors = []
         for account in self.config['accounts']:
-            names = {node['name']: key for key, node in state['nodes'].items()
-                     if node['account'] == account['context'] and node.get('creation_attempted_at')}
-            existing = self.api.call(account, ['compute', 'droplet', 'list'])
-            for item in existing:
-                if item['name'] not in names:
+            try:
+                self.recover_account_resources(account)
+            except Exception as error:
+                errors.append(account['context'] + ': ' + str(error))
+        if errors:
+            raise RuntimeError('; '.join(errors))
+
+    def recover_account_resources(self, account):
+        nodes = {key: node for key, node in self.read()['nodes'].items()
+                 if node['account'] == account['context'] and node.get('creation_attempted_at')
+                 and not node.get('resource_only') and not node.get('deleted_at')}
+        if not nodes:
+            return
+        self.api.identity(account)
+        existing = self.api.call(account, ['compute', 'droplet', 'list'])
+        errors = []
+        for key, node in nodes.items():
+            matches = [item for item in existing if item['name'] == node['name']]
+            known = node.get('droplet_id')
+            for item in matches:
+                if known == item['id']:
                     continue
-                key = names[item['name']]
-                known = self.read()['nodes'][key].get('droplet_id')
-                if known is None or known == item['id']:
-                    if known is None:
-                        self.record_resource(key, item)
+                # An unknown ID is owned only by a verified, unique creation
+                # attempt in this account; old same-name machines stay untouched.
+                try:
+                    created = dt.datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+                    attempted = dt.datetime.fromisoformat(node['creation_attempted_at'].replace('Z', '+00:00'))
+                    owned = (node.get('creation_absence_verified')
+                             and node.get('creation_account_uuid') == account['expected_uuid']
+                             and created >= attempted - dt.timedelta(seconds=2))
+                except (KeyError, TypeError, ValueError):
+                    owned = False
+                if not owned:
+                    errors.append(key + ': unknown Droplet lacks verified creation ownership')
+                    continue
+                if known is None:
+                    self.record_resource(key, item)
+                    known = item['id']
                 else:
-                    # A duplicate API create still belongs to this unique name/account.
                     extra = key + '-duplicate-' + str(item['id'])
                     self.update(lambda value: value['nodes'].update({extra: {
                         **value['nodes'][key], 'id': extra, 'droplet_id': item['id'],
                         'created_at': item['created_at'], 'actual_size': item['size'],
                         'resource_only': True, 'status': 'ambiguous-create'}}))
+            if known is None and not matches:
+                if (node.get('creation_absence_verified')
+                        and node.get('creation_account_uuid') == account['expected_uuid']
+                        and self.creation_reconciled(node['creation_attempted_at'])):
+                    self.node_update(key, creation_absence_reconciled_at=stamp())
+                else:
+                    errors.append(key + ': Droplet create outcome pending provider reconciliation')
+        if errors:
+            raise RuntimeError('; '.join(errors))
 
     def ssh_options(self, node, first=False):
         return ['-i', str(self.root / 'operator-key'), '-o', 'BatchMode=yes',
@@ -753,12 +845,55 @@ dagger version
         self.event(str(error) + '; continuing independent checks and browser shards')
 
     def run_check_queue(self, node_id, jobs):
+        # Keep shared-queue generators lazy; sorting one would claim every job
+        # for a single worker. Finite per-node queues can safely prioritize setup.
+        if isinstance(jobs, (list, tuple)):
+            jobs = sorted(jobs, key=lambda item: item[0] in BUNDLE_CHECKS)
         for name, args in jobs:
+            self.check_deadline()
+            if self.read().get('validation_error'):
+                raise RuntimeError('CI setup failed before another check could start')
+            if name in BUNDLE_CHECKS:
+                args = self.bundle_check_args(node_id, name)
             self.phase(node_id, 'check-' + name, 'check', args)
             try:
                 self.wait([node_id])
             except PhaseFailure as error:
                 self.record_phase_failure(error)
+
+    def new_check_queue(self):
+        pending = queue.Queue()
+        for job in sorted(CHECKS, key=lambda item: item[0] in BUNDLE_CHECKS):
+            pending.put(job)
+        return pending
+
+    def run_check_worker(self, node_id, pending):
+        while True:
+            self.check_deadline()
+            try:
+                job = pending.get_nowait()
+            except queue.Empty:
+                return
+            self.run_check_queue(node_id, [job])
+
+    def bundle_check_args(self, node_id, name):
+        if name not in BUNDLE_CHECKS:
+            raise ValueError('unsupported prepared-workspace check')
+        while True:
+            self.check_deadline()
+            state = self.read()
+            if state.get('validation_error'):
+                raise RuntimeError('CI bundle preparation failed before dependent checks')
+            prepared = state['nodes'][node_id].get('prepared_bundle')
+            if prepared:
+                if (prepared.get('source_commit') != self.config['source_commit']
+                        or prepared.get('manifest_sha256') != state['bundle']['manifest_sha256']):
+                    raise ValueError('prepared check bundle differs from the pinned source or manifest')
+                return ['bundle-check', '--bundle', prepared['path'],
+                        '--expected-commit', self.config['source_commit'],
+                        '--manifest-sha256', prepared['manifest_sha256'], '--check-name', name,
+                        '--netlify-auth-token', 'env://NETLIFY_TOKEN']
+            time.sleep(1)
 
     def run_browser_shard(self, node_id, builder):
         self.browser(node_id, builder)
@@ -1026,12 +1161,9 @@ dagger version
                 partial = root / ('.' + entry.name + '.' + uuid.uuid4().hex + '.partial')
                 (partial / 'bundle').mkdir(parents=True)
                 try:
-                    deadline = state.get('deadline')
-                    remaining = (dt.datetime.fromisoformat(deadline) - utcnow()).total_seconds() if deadline else 300
-                    if remaining <= 0:
-                        raise TimeoutError('deadline reached; skipping unarchived bundle network copy before cleanup')
+                    timeout = self.artifact_transfer_timeout(allow_stopped=state.get('stop_requested', False))
                     self.scp(builder, ['/opt/atomic-ci/share/bundle/' + name for name in BUNDLE_FILES],
-                             partial / 'bundle', download=True, timeout=min(300, remaining))
+                             partial / 'bundle', download=True, timeout=timeout)
                     execution = result.get('browser_build', {})
                     receipt = execution.get('original_build')
                     if receipt is None:
@@ -1067,14 +1199,17 @@ dagger version
                 validate_archive(path, self.config['source_commit'])
             except (ValueError, OSError, json.JSONDecodeError):
                 continue
-            entry = self.config['artifact_cache_dir'] + '/' + self.config['source_commit'] + '-linux-amd64-v1'
+            entry = self.config['artifact_cache_dir'] + '/' + self.config['source_commit'] + '-linux-amd64-v2'
             partial = entry + '.' + uuid.uuid4().hex + '.partial'
             command = 'if test -e ' + shlex.quote(entry) + '; then echo existing; else mkdir -p ' + shlex.quote(partial + '/bundle') + '; fi'
-            if self.ssh(builder, command).strip() == 'existing':
+            if self.ssh(builder, command, timeout=self.artifact_transfer_timeout(45)).strip() == 'existing':
                 return
-            self.scp(builder, [path / 'bundle' / name for name in BUNDLE_FILES], partial + '/bundle/', timeout=300)
-            self.scp(builder, [path / 'build-receipt.json', path / 'COMPLETED'], partial + '/')
-            self.ssh(builder, 'test ! -e ' + shlex.quote(entry) + ' && mv ' + shlex.quote(partial) + ' ' + shlex.quote(entry))
+            self.scp(builder, [path / 'bundle' / name for name in BUNDLE_FILES], partial + '/bundle/',
+                     timeout=self.artifact_transfer_timeout())
+            self.scp(builder, [path / 'build-receipt.json', path / 'COMPLETED'], partial + '/',
+                     timeout=self.artifact_transfer_timeout(180))
+            self.ssh(builder, 'test ! -e ' + shlex.quote(entry) + ' && mv ' + shlex.quote(partial) + ' ' + shlex.quote(entry),
+                     timeout=self.artifact_transfer_timeout(45))
             self.node_update(builder, restored_bundle_archive=str(path), bundle_restored_at=stamp())
             return
 
@@ -1100,6 +1235,8 @@ dagger version
         script = '''python3 - <<'PYREMOTE'
 import hashlib,json,pathlib
 p=pathlib.Path('/opt/atomic-ci/share/bundle')
+if any(f.is_symlink() or not f.is_file() for f in p.iterdir()):
+    raise ValueError('bundle artifacts must be regular files')
 m=p/'manifest.json'
 print(json.dumps({'manifest_sha256':hashlib.sha256(m.read_bytes()).hexdigest(),
                   'manifest':json.loads(m.read_text()),
@@ -1114,9 +1251,12 @@ PYREMOTE'''
             raise ValueError('builder exported an incompatible source/platform')
         if manifest.get('files') != bundle['actual_hashes']:
             raise ValueError('builder artifact hashes differ from its manifest')
-        if manifest.get('version') != 1 or not report_identities(bundle['inventory']):
+        if (manifest.get('version') != 2 or set(manifest.get('files', {})) != set(BUNDLE_FILES) - {'manifest.json'}
+                or set(bundle['file_bytes']) != set(BUNDLE_FILES) or not report_identities(bundle['inventory'])):
             raise ValueError('builder exported an unsupported or empty bundle')
         self.update(lambda state: state.update(bundle=bundle, builder=builder))
+        self.node_update(builder, prepared_bundle={'path': '/opt/atomic-ci/share/bundle',
+                         'source_commit': self.config['source_commit'], 'manifest_sha256': bundle['manifest_sha256']})
         return bundle
 
     def share(self, builder, workers, files=BUNDLE_FILES, hashes=None):
@@ -1160,7 +1300,8 @@ systemctl reload ssh
         self.ssh(builder, 'cat > /etc/ssh/authorized_keys/atomic-artifacts',
                  input='\n'.join(public) + '\n')
         self.ssh(builder, 'chmod 644 /etc/ssh/authorized_keys/atomic-artifacts')
-        expected = hashes or {'manifest.json':self.read()['bundle']['manifest_sha256']}
+        state = self.read()
+        expected = hashes or {'manifest.json': state['bundle']['manifest_sha256'], **state['bundle']['actual_hashes']}
 
         def transfer(worker):
             self.check_deadline()
@@ -1178,6 +1319,10 @@ systemctl reload ssh
             self.ssh(worker, 'bash -s', input=script, timeout=900)
             self.node_update(worker, bundle_checksums=expected, bundle_received_at=stamp(),
                              artifact_transfer_network='public-ssh', artifact_payload_bytes=transfer_bytes)
+            if files == BUNDLE_FILES and hashes is None:
+                self.node_update(worker, prepared_bundle={'path': '/opt/atomic-ci/bundle',
+                    'source_commit': self.config['source_commit'],
+                    'manifest_sha256': state['bundle']['manifest_sha256']})
         with cf.ThreadPoolExecutor(max_workers=min(8, len(workers)) or 1) as pool:
             for future in [pool.submit(transfer, key) for key in workers]:
                 future.result()
@@ -1243,8 +1388,11 @@ systemctl reload ssh
             self.api.identity(account)
             actual = self.api.call(account, ['compute', 'droplet', 'list'])
             owned = next((item for item in actual if item['id'] == node['droplet_id']), None)
-            if owned and owned['name'] != node['name']:
+            if owned and (owned['name'] != node['name']
+                    or owned.get('created_at') != node['created_at']):
                 raise RuntimeError('owned Droplet ID/name mismatch; refusing deletion')
+            if not owned and not self.creation_reconciled(node.get('creation_attempted_at') or node.get('created_at')):
+                raise RuntimeError('owned Droplet absence pending provider reconciliation')
             if owned:
                 self.api.call(account, ['compute', 'droplet', 'delete', str(node['droplet_id']),
                                         '--force', '--http-retry-max', '0'])
@@ -1268,9 +1416,12 @@ systemctl reload ssh
 
     def _cleanup(self, reason='manual cleanup', successful=False):
         self.update(lambda state: state.update(stop_requested=True, stop_reason=reason))
-        with self.lock('resources'):
-            self.recover_resources()
         errors = []
+        with self.lock('resources'):
+            try:
+                self.recover_resources()
+            except Exception as error:
+                errors.append('resource reconciliation: ' + str(error))
         for key, node in self.read()['nodes'].items():
             if node.get('phase_kind') == 'builder' and not node.get('phase_results', {}).get('build'):
                 try:
@@ -1319,6 +1470,8 @@ systemctl reload ssh
                     owned = next((item for item in items if item['id'] == key['id']), None)
                     if owned and (owned['name'] != key['name'] or owned['fingerprint'] != key['fingerprint']):
                         raise RuntimeError('owned SSH key identity mismatch')
+                    if not owned and not key.get('deletion_verified') and not self.creation_reconciled(key.get('creation_attempted_at')):
+                        raise RuntimeError('owned SSH key absence pending provider reconciliation')
                     if owned:
                         self.api.call(account, ['compute', 'ssh-key', 'delete', str(key['id']), '--force'])
                     for attempt in range(12):
@@ -1397,15 +1550,15 @@ systemctl reload ssh
         self.initialize(plan)
         watcher = None
         checks = {}
-        check_pool = cf.ThreadPoolExecutor(max_workers=10)
+        check_pool = cf.ThreadPoolExecutor(max_workers=len(CHECKS) + 1)
         browser_pool = cf.ThreadPoolExecutor(max_workers=plan['nodes'])
         try:
-            self.register_keys()
             with (self.root / 'watchdog.log').open('ab') as watcher_log:
                 watcher = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--config',
                     str(self.root / 'config.json'), 'watchdog'], start_new_session=True,
                     stdout=watcher_log, stderr=subprocess.STDOUT)
             self.update(lambda state: state.update(watchdog_pid=watcher.pid, status='running'))
+            self.register_keys()
             node_ids = list(self.read()['nodes'])
             builder, canary = node_ids[:2]
             initial = node_ids[:min(len(node_ids), len(CHECKS) + 1)]
@@ -1418,31 +1571,22 @@ systemctl reload ssh
                 self.config['source_commit'], 'export', '--path', '/opt/atomic-ci/share/bundle'])
             self._parallel_create(initial[2:])
             check_nodes = initial[1:]
-            queues = {key: [] for key in check_nodes}
-            for index, job in enumerate(CHECKS):
-                queues[check_nodes[index % len(check_nodes)]].append(job)
-
-            checks = {key:check_pool.submit(self.run_check_queue, key, queues[key]) for key in check_nodes}
+            pending = self.new_check_queue()
+            checks = {key:check_pool.submit(self.run_check_worker, key, pending) for key in check_nodes}
             build = check_pool.submit(self.wait, [builder])
-            # Rust may continue while the first imported browser shard validates the transport.
-            while not (build.done() and checks[canary].done()):
+            # Independent checks overlap the one build. Bundle-dependent workers
+            # may wait, so never wait for their queues before publishing it.
+            while not build.done():
                 self.check_deadline()
                 for future in [build, *checks.values()]:
                     if future.done():
                         future.result()
                 time.sleep(5)
             build.result()
-            checks[canary].result()
             self.read_bundle(builder)
             self.archive_bundle(builder)
-            self.share(builder, [canary])
-            self.run_browser_shard(canary, builder)
-            if not self.config['retries'] or self.read()['nodes'][canary]['phase_results']['browser']['status'] == 'passed':
-                self.remove(canary)
-            remaining = [key for key in node_ids if key not in initial]
-            self._parallel_create(remaining)
-            workers = [key for key in node_ids if key not in (builder, canary)]
-            self.share(builder, workers)
+            self.share(builder, check_nodes)
+            checks[builder] = check_pool.submit(self.run_check_worker, builder, pending)
 
             def run_browser(key):
                 if key in checks:
@@ -1451,7 +1595,15 @@ systemctl reload ssh
                 if (key != builder and (not self.config['retries']
                         or self.read()['nodes'][key]['phase_results']['browser']['status'] == 'passed')):
                     self.remove(key)
-            jobs = [browser_pool.submit(run_browser, key) for key in node_ids if key != canary]
+            jobs = [browser_pool.submit(run_browser, key) for key in initial if key != canary]
+            checks[canary].result()
+            self.run_browser_shard(canary, builder)
+            if not self.config['retries'] or self.read()['nodes'][canary]['phase_results']['browser']['status'] == 'passed':
+                self.remove(canary)
+            remaining = [key for key in node_ids if key not in initial]
+            self._parallel_create(remaining)
+            self.share(builder, remaining)
+            jobs.extend(browser_pool.submit(run_browser, key) for key in remaining)
             for future in cf.as_completed(jobs):
                 future.result()
             self.finish_validation(node_ids)
@@ -1468,21 +1620,42 @@ systemctl reload ssh
         finally:
             check_pool.shutdown(wait=False, cancel_futures=True)
             browser_pool.shutdown(wait=False, cancel_futures=True)
-            if watcher is not None and watcher.poll() is None:
+            # A failed cleanup still owns paid resources or an unresolved API
+            # outcome. Its independent watchdog must outlive this controller.
+            complete = (self.path.exists() and self.read().get('finished_at')
+                        and not self.read().get('cleanup_errors'))
+            if complete and watcher is not None and watcher.poll() is None:
                 watcher.terminate()
                 try:
                     watcher.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     watcher.kill()
 
+    def watchdog_step(self):
+        state = self.read()
+        if state.get('finished_at') and not state.get('cleanup_errors'):
+            return True
+        owner_dead = False
+        if state.get('controller_pid'):
+            try:
+                os.kill(state['controller_pid'], 0)
+            except ProcessLookupError:
+                owner_dead = True
+            except PermissionError:
+                pass
+        expired = state.get('deadline') and utcnow() >= dt.datetime.fromisoformat(state['deadline'])
+        if state.get('cleanup_errors') or state.get('stop_requested') or owner_dead or expired:
+            self.cleanup('independent cleanup watchdog')
+        state = self.read()
+        return bool(state.get('finished_at')) and not state.get('cleanup_errors')
+
     def watchdog(self):
         while True:
-            state = self.read()
-            if state.get('finished_at'):
-                return
-            if state.get('deadline') and utcnow() >= dt.datetime.fromisoformat(state['deadline']):
-                self.cleanup('independent elapsed-time watchdog')
-                return
+            try:
+                if self.watchdog_step():
+                    return
+            except Exception as error:
+                self.event('Independent cleanup watchdog will retry: ' + str(error))
             time.sleep(10)
 
 

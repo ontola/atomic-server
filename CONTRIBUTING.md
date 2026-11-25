@@ -206,7 +206,11 @@ branch-specific workflow under `.github/workflows/`.
 For independent Docker/Dagger engines, build the E2E artifacts once and copy
 them to the browser workers. The bundle contains the optimized E2E server
 (with its production frontend and WASM), the installed Playwright client image,
-and the complete test inventory. Obtain the manifest hash from the trusted
+a complete Node 22 checks image (`checks.oci.tar`), and the complete test
+inventory. Manifest version 2 hashes every artifact. Both images are prepared
+in the same builder invocation so their WASM compilation is shared; the checks
+image keeps the normal production build flags and full workspace/fixtures,
+while the browser image retains its E2E routes. Obtain the manifest hash from the trusted
 builder, rather than from an untrusted copy of the bundle:
 
 ```sh
@@ -220,7 +224,7 @@ manifest_hash=$(shasum -a 256 /absolute/path/browser-bundle/manifest.json | cut 
 dagger call browser-shard --bundle /absolute/path/browser-bundle \
   --expected-commit "$commit" --manifest-sha256 "$manifest_hash" \
   --shard-index 1 --shard-count 20 --playwright-workers 1 \
-  --playwright-retries 1 export --path /absolute/path/browser-results
+  --playwright-retries 0 export --path /absolute/path/browser-results
 ```
 
 Workers verify the manifest, file hashes, platform, pinned tool versions and
@@ -231,6 +235,15 @@ reports even when a browser assertion fails: the caller must require
 `test-exit-code` to be zero and reconcile every test against the inventory.
 Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
 checks still run independently; the shared E2E build does not replace them.
+The DO runner executes `js-test`, `js-typecheck` and `typedoc-publish` through
+`bundle-check`, importing the verified checks image instead of building the
+workspace again. Typechecking still runs every existing TypeScript check.
+`js-test-integration` reuses the verified WASM package but retains its own
+minimal Node setup and glibc debug server, profile and feature flags. All test
+bodies execute with the run's fresh key. Missing, old-version or corrupt checks
+artifacts are rejected rather than silently rebuilt on each worker.
+Checks without this bundle dependency can run while the builder prepares it;
+dependent checks start only after their worker has the validated bundle.
 
 `dagger call browser-source-inputs` reports the exact source files and their
 hashes before compilation. The fingerprint excludes generated package stores,

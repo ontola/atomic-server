@@ -5,6 +5,7 @@ import errno
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -42,7 +43,7 @@ class Fixture:
             path.mkdir()
             for name in helper.FILES[1:]:
                 (path / name).write_text('small fixture payload ' + name)
-            manifest = {'sourceCommit': value('--source-commit'), 'platform': 'linux/amd64',
+            manifest = {'version': 2, 'sourceCommit': value('--source-commit'), 'platform': 'linux/amd64',
                         'tool': self.pin, 'files': {name:helper.sha256(path / name) for name in helper.FILES[1:]}}
             (path / 'manifest.json').write_text(json.dumps(manifest))
             return
@@ -107,6 +108,42 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(second['original_build_receipt_sha256'], first['original_build_receipt_sha256'])
         self.assertEqual(receipt.read_bytes(), original)
         self.assertEqual(second['original_build'], first['original_build'])
+
+    def test_old_or_incomplete_manifest_cannot_be_a_prepared_workspace_cache_hit(self):
+        first = self.run_helper()
+        self.assertTrue(first['cache_entry'].endswith('-linux-amd64-v2'))
+        entry = Path(first['cache_entry'])
+        self.assertTrue((entry / 'bundle/checks.oci.tar').is_file())
+        manifest_path = entry / 'bundle/manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['version'] = 1
+        manifest['files'].pop('checks.oci.tar')
+        manifest_path.write_text(json.dumps(manifest))
+        (entry / 'bundle/checks.oci.tar').unlink()
+        rebuilt = self.run_helper()
+        self.assertEqual(rebuilt['status'], 'built')
+        self.assertEqual(self.fixture.builds, 2)
+        self.assertTrue((self.output / 'checks.oci.tar').is_file())
+        self.assertEqual(json.loads((self.output / 'manifest.json').read_text())['version'], 2)
+
+    def test_validation_of_missing_or_corrupt_checks_archive_never_invokes_a_builder(self):
+        self.run_helper()
+        for mutation in ('missing', 'corrupt', 'wrong-source'):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temp:
+                copied = Path(temp) / 'bundle'
+                shutil.copytree(self.output, copied)
+                if mutation == 'missing':
+                    (copied / 'checks.oci.tar').unlink()
+                elif mutation == 'corrupt':
+                    (copied / 'checks.oci.tar').write_text('corrupt')
+                else:
+                    manifest = json.loads((copied / 'manifest.json').read_text())
+                    manifest['sourceCommit'] = 'b' * 40
+                    (copied / 'manifest.json').write_text(json.dumps(manifest))
+                invoke = mock.Mock()
+                with self.assertRaises(ValueError):
+                    helper.validate(copied, SHA, ['fixture'], invoke)
+                invoke.assert_not_called()
         self.assertTrue(all((self.output / name).is_file() and not (self.output / name).is_symlink()
                             for name in helper.FILES))
 

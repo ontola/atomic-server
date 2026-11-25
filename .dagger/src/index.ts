@@ -388,6 +388,8 @@ export class AtomicServer {
   private maxBuildJobs = 0;
   private buildJobs = 0;
   private testRunKey = '';
+  /** Only populated while preparing a portable bundle: one shared WASM graph. */
+  private bundleWasm: Directory | undefined;
 
   constructor(
     @argument({
@@ -793,7 +795,7 @@ export class AtomicServer {
       //    leaves the OS libraries alone.
       .withDirectory('/lib/defaults', this.source.directory('lib/defaults'));
 
-    return (
+    return this.jsTypecheckPrepared(
       depsContainer
         .withWorkdir('/app')
         // 2. Packages reached through node_modules need a `dist`. Building
@@ -803,7 +805,14 @@ export class AtomicServer {
         //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build'])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build']),
+    );
+  }
+
+  /** The dependency dist files are already present in a prepared workspace. */
+  private jsTypecheckPrepared(prepared: Container): Promise<string> {
+    return (
+      prepared
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
@@ -833,9 +842,11 @@ export class AtomicServer {
 
   @func()
   async jsTest(): Promise<string> {
-    const depsContainer = this.jsBuild();
+    return this.jsTestPrepared(this.jsBuild());
+  }
 
-    const unitTests = this.testExec(depsContainer.withWorkdir('/app'), [
+  private jsTestPrepared(prepared: Container): Promise<string> {
+    const unitTests = this.testExec(prepared.withWorkdir('/app'), [
       'pnpm',
       'run',
       'test',
@@ -971,6 +982,7 @@ export class AtomicServer {
    *  emitted `pkg/` artifacts. */
   @func()
   wasmBuild(): Directory {
+    if (this.bundleWasm) return this.bundleWasm;
     return (
       this.withCargoHomeCache(
         dag.container().from(RUST_IMAGE),
@@ -1147,8 +1159,15 @@ export class AtomicServer {
    *  need `@tomic/lib`'s source + node_modules. */
   @func()
   async jsTestIntegration(): Promise<string> {
+    return this.jsTestIntegrationWithWasm();
+  }
+
+  private async jsTestIntegrationWithWasm(
+    preparedWasm?: Directory,
+    freshPreparedCheck = false,
+  ): Promise<string> {
     const binary = this.rustBuildSlim();
-    const wasmPkg = this.wasmBuild();
+    const wasmPkg = preparedWasm ?? this.wasmBuild();
 
     const browser = this.source.directory('browser');
     const pnpmContainer = dag
@@ -1272,15 +1291,21 @@ export class AtomicServer {
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
+    const prepared = withSource
+      .withFile('/repo/target/debug/atomic-server', binary, {
+        permissions: 0o755,
+      })
+      .withDirectory('/repo/wasm/pkg', wasmPkg)
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
+      .withWorkdir('/repo/browser/lib');
     return this.testExec(
-      withSource
-        .withFile('/repo/target/debug/atomic-server', binary, {
-          permissions: 0o755,
-        })
-        .withDirectory('/repo/wasm/pkg', wasmPkg)
-        .withWorkdir('/repo/browser/utils')
-        .withExec(['pnpm', 'run', 'build'])
-        .withWorkdir('/repo/browser/lib'),
+      freshPreparedCheck
+        ? prepared.withEnvVariable(
+            'ATOMIC_BUNDLE_CHECK_NONCE',
+            this.e2eRunNonce,
+          )
+        : prepared,
       ['pnpm', 'run', 'test:integration'],
     ).stdout();
   }
@@ -1435,10 +1460,16 @@ export class AtomicServer {
     /** Publish to the live typedoc site rather than a preview URL. */
     @argument() prod = false,
   ): Promise<string> {
-    const browserDir = this.jsBuild();
+    return this.typedocPrepared(this.jsBuild(), netlifyAuthToken, prod);
+  }
 
+  private typedocPrepared(
+    prepared: Container,
+    netlifyAuthToken: Secret,
+    prod: boolean,
+  ): Promise<string> {
     return (
-      browserDir
+      prepared
         .withWorkdir('/app')
         .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
         // The `--prod` flag lives in the pnpm script, so it is steered by env
@@ -2607,6 +2638,16 @@ export class AtomicServer {
     validateBundleCommit(sourceCommit);
     await this.requireBrowserBundlePlatform();
 
+    // These two frontend variants share their real WASM build in this one
+    // invocation. The check workspace keeps the normal production flags.
+    const wasm = this.wasmBuild();
+    this.bundleWasm = wasm;
+    const checks = this.jsBuild(false)
+      .withDirectory('/lib/defaults', this.source.directory('lib/defaults'))
+      .withDirectory('/atomic-ci/wasm/pkg', wasm)
+      .withoutMount('/app/.pnpm-store');
+    const checksArchive = checks.asTarball();
+
     // No service or browser execution is captured in the portable client.
     const base = this.e2eBaseContainer();
     const client = base
@@ -2629,15 +2670,23 @@ export class AtomicServer {
       'x86_64-unknown-linux-musl',
       true,
     ).file('/atomic-server-binary');
-    const [sourceFingerprint, binaryHash, archiveHash, inventoryHash] =
-      await Promise.all([
-        this.browserSourceFingerprint(),
-        this.browserArtifactHash(binary),
-        this.browserArtifactHash(archive),
-        this.browserArtifactHash(inventory),
-      ]);
+    const [
+      sourceFingerprint,
+      binaryHash,
+      archiveHash,
+      inventoryHash,
+      checksHash,
+    ] = await Promise.all([
+      this.browserSourceFingerprint(),
+      this.browserArtifactHash(binary),
+      this.browserArtifactHash(archive),
+      this.browserArtifactHash(inventory),
+      this.browserArtifactHash(checksArchive),
+    ]).finally(() => {
+      this.bundleWasm = undefined;
+    });
     const manifest: BrowserBundleManifest = {
-      version: 1,
+      version: 2,
       sourceCommit,
       sourceFingerprint,
       sourceFingerprintVersion: BROWSER_SOURCE_FINGERPRINT_VERSION,
@@ -2648,6 +2697,7 @@ export class AtomicServer {
       files: {
         'atomic-server-binary': binaryHash,
         'client.oci.tar': archiveHash,
+        'checks.oci.tar': checksHash,
         'test-inventory.json': inventoryHash,
       },
     };
@@ -2655,6 +2705,7 @@ export class AtomicServer {
       .directory()
       .withFile('atomic-server-binary', binary)
       .withFile('client.oci.tar', archive)
+      .withFile('checks.oci.tar', checksArchive)
       .withFile('test-inventory.json', inventory)
       .withNewFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
   }
@@ -2687,6 +2738,7 @@ export class AtomicServer {
     for (const name of [
       'atomic-server-binary',
       'client.oci.tar',
+      'checks.oci.tar',
       'test-inventory.json',
     ] as const) {
       if (
@@ -2720,6 +2772,58 @@ export class AtomicServer {
       manifestSha256,
       validatedAt: new Date().toISOString(),
     });
+  }
+
+  /** Run the existing checks against one verified, completely built workspace. */
+  @func()
+  async bundleCheck(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    @argument() manifestSha256: string,
+    @argument() checkName: string,
+    @argument() netlifyAuthToken: Secret,
+  ): Promise<string> {
+    if (
+      ![
+        'js-test',
+        'js-typecheck',
+        'typedoc-publish',
+        'js-test-integration',
+      ].includes(checkName)
+    ) {
+      throw new Error('Unsupported prepared-workspace check');
+    }
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    const imported = dag.container().import_(bundle.file('checks.oci.tar'));
+    if (String(await imported.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser check workspace platform does not match its manifest',
+      );
+    }
+    // The image contains build outputs, never completed test executions.
+    // Even a standalone call with no explicit test-run key executes checks.
+    const prepared = imported
+      .withWorkdir('/app')
+      .withEnvVariable('ATOMIC_BUNDLE_CHECK_NONCE', this.e2eRunNonce);
+    switch (checkName) {
+      case 'js-test':
+        return this.jsTestPrepared(prepared);
+      case 'js-typecheck':
+        return this.jsTypecheckPrepared(prepared);
+      case 'typedoc-publish':
+        return this.typedocPrepared(prepared, netlifyAuthToken, false);
+      default:
+        // Keep the integration suite's native debug/glibc server and its
+        // original minimal /repo/browser layout; only its WASM is shared.
+        return this.jsTestIntegrationWithWasm(
+          imported.directory('/atomic-ci/wasm/pkg'),
+          true,
+        );
+    }
   }
 
   /**

@@ -1,6 +1,6 @@
 /** Portable artifacts use content hashes rather than engine-local Dagger IDs. */
 export type BrowserBundleManifest = {
-  version: 1;
+  version: 2;
   sourceCommit: string;
   sourceFingerprint: string;
   sourceFingerprintVersion: 2;
@@ -11,6 +11,7 @@ export type BrowserBundleManifest = {
   files: {
     'atomic-server-binary': string;
     'client.oci.tar': string;
+    'checks.oci.tar': string;
     'test-inventory.json': string;
   };
 };
@@ -68,7 +69,7 @@ export function validateBrowserManifest(
   }
   const manifest = value as BrowserBundleManifest;
   if (
-    manifest.version !== 1 ||
+    manifest.version !== 2 ||
     manifest.platform !== BROWSER_BUNDLE_PLATFORM ||
     manifest.sourceFingerprintVersion !== BROWSER_SOURCE_FINGERPRINT_VERSION
   ) {
@@ -92,6 +93,7 @@ export function validateBrowserManifest(
   }
   validateBundleHash(manifest.files['atomic-server-binary']);
   validateBundleHash(manifest.files['client.oci.tar']);
+  validateBundleHash(manifest.files['checks.oci.tar']);
   validateBundleHash(manifest.files['test-inventory.json']);
   return manifest;
 }

@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import uuid
 
-FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'test-inventory.json')
+FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'checks.oci.tar', 'test-inventory.json')
 
 
 def now():
@@ -53,9 +53,15 @@ def validate(bundle, source, prefix, run):
                                   for name in FILES):
         raise ValueError('bundle must contain regular, materialized artifact files')
     manifest_hash = sha256(bundle / 'manifest.json')
+    manifest = json.loads((bundle / 'manifest.json').read_text())
+    if (manifest.get('version') != 2 or manifest.get('sourceCommit') != source
+            or manifest.get('platform') != 'linux/amd64'
+            or set(manifest.get('files', {})) != set(FILES) - {'manifest.json'}
+            or any(sha256(bundle / name) != expected for name, expected in manifest['files'].items())):
+        raise ValueError('bundle manifest version, source or required artifact hashes differ')
     result = json.loads(run(prefix + ['validate-browser-bundle', '--bundle', str(bundle),
         '--expected-commit', source, '--manifest-sha256', manifest_hash], capture=True))
-    if (result.get('sourceCommit') != source or result.get('manifestSha256') != manifest_hash
+    if (result.get('version') != 2 or result.get('sourceCommit') != source or result.get('manifestSha256') != manifest_hash
             or result.get('kind') != 'browser-bundle-validation'):
         raise ValueError('validator receipt differs from the requested source or manifest')
     return result
@@ -127,7 +133,7 @@ def ensure_bundle(source, cache_root, output, prefix, run=invoke):
             or cache_root.is_relative_to(resolved_output)):
         raise ValueError('published output and cache directories must not overlap')
     cache_root.mkdir(parents=True, exist_ok=True)
-    entry = cache_root / (source + '-linux-amd64-v1')
+    entry = cache_root / (source + '-linux-amd64-v2')
     with locked(cache_root / (entry.name + '.lock')):
         status = 'cached'
         try:
