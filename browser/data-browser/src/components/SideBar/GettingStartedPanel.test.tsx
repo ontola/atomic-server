@@ -95,13 +95,13 @@ const render = (placement?: 'sidebar' | 'page') =>
     </ThemeProvider>,
   );
 const fresh = (): Step[] =>
-  ['name', 'create', 'ai', 'invite', 'save'].map(id => ({
+  ['name', 'create', 'invite', 'save'].map(id => ({
     id,
     done: false,
   }));
 
 const freshAdvanced = (): Step[] =>
-  ['table', 'form', 'app', 'message'].map(id => ({ id, done: false }));
+  ['table', 'form', 'ai', 'app', 'message'].map(id => ({ id, done: false }));
 
 beforeEach(() => {
   steps = fresh();
@@ -121,24 +121,21 @@ describe('GettingStartedPanel', () => {
     for (const title of [
       'Name your drive',
       'Make something',
-      'Talk to the AI',
       'Invite someone',
-      'Save your work',
+      'Register with email',
     ])
       expect(html).toContain(title);
   });
 
   it('keeps hints in the tooltip and done rows inert', () => {
     steps[0].done = true;
-    steps[2].needs = 'ai-source';
     const html = render();
 
-    expect(html).toContain('Needs an AI source');
     expect(html).not.toMatch(/<strong/);
     const row = (title: string) =>
       html.split('<button').find(b => b.includes(`>${title}<`));
     expect(row('Name your drive')).toContain('disabled=""');
-    expect(row('Talk to the AI')).not.toContain('disabled=""');
+    expect(row('Invite someone')).not.toContain('disabled=""');
   });
 
   it('renders the same steps as a drive page section, without the panel', () => {
@@ -149,7 +146,7 @@ describe('GettingStartedPanel', () => {
     expect(html).toContain('Getting started');
     expect(html).toMatch(/0\s*(<!-- -->)?\s*of/);
     expect(html).toContain('Name your drive');
-    expect(html).toContain('Save your work');
+    expect(html).toContain('Register with email');
     steps = steps.map(s => ({ ...s, done: true }));
     advancedSteps = advancedSteps.map(s => ({ ...s, done: true }));
     expect(render('page')).toBe('');
@@ -161,9 +158,10 @@ describe('GettingStartedPanel', () => {
 
     expect(html).toContain('Next steps');
     expect(html).not.toContain('Getting started');
-    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*4/);
+    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*5/);
     expect(html).toContain('Make a table');
     expect(html).toContain('Make a form');
+    expect(html).toContain('Talk to the AI');
     expect(html).toContain('Build an app with AI');
     expect(html).toContain('Send someone a message');
     expect(html).not.toContain('Name your drive');

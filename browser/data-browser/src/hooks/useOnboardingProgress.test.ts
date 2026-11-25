@@ -41,13 +41,7 @@ describe('deriveOnboardingSteps', () => {
   it('lists the steps in order, none done for a new person', () => {
     const steps = deriveOnboardingSteps(base);
 
-    expect(steps.map(s => s.id)).toEqual([
-      'name',
-      'create',
-      'ai',
-      'invite',
-      'save',
-    ]);
+    expect(steps.map(s => s.id)).toEqual(['name', 'create', 'invite', 'save']);
     expect(steps.some(s => s.done)).toBe(false);
   });
 
@@ -70,11 +64,21 @@ describe('deriveOnboardingSteps', () => {
   });
 
   it('is done for the AI once a chat exists, and names the missing source', () => {
-    expect(done({ ...base, hasAIChat: true }).ai).toBe(true);
-    expect(
-      deriveOnboardingSteps({ ...base, aiAvailable: false })[2].needs,
-    ).toBe('ai-source');
-    expect(deriveOnboardingSteps(base)[2].needs).toBeUndefined();
+    const ai = (input: typeof base) =>
+      deriveAdvancedSteps(input).find(s => s.id === 'ai');
+
+    expect(ai({ ...base, hasAIChat: true })?.done).toBe(true);
+    expect(ai({ ...base, aiAvailable: false })?.needs).toBe('ai-source');
+    expect(ai(base)?.needs).toBeUndefined();
+  });
+
+  it('leaves the AI steps out when AI is not offered', () => {
+    const ids = deriveAdvancedSteps({ ...base, aiEnabled: false }).map(
+      s => s.id,
+    );
+
+    expect(ids).not.toContain('ai');
+    expect(ids).not.toContain('app');
   });
 
   it('is done for Invite once another agent has rights on a drive', () => {
@@ -112,16 +116,18 @@ describe('deriveAdvancedSteps', () => {
       deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
     );
 
-  it('lists table, form, app, message, none done for a new drive', () => {
+  it('lists table, form, ai, app, message, none done for a new drive', () => {
     expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual([
       'table',
       'form',
+      'ai',
       'app',
       'message',
     ]);
     expect(adv()).toEqual({
       table: false,
       form: false,
+      ai: false,
       app: false,
       message: false,
     });
@@ -139,10 +145,11 @@ describe('deriveAdvancedSteps', () => {
 
   it('counts the app once the drive has one, and names a missing AI source', () => {
     expect(adv({ hasApp: true }).app).toBe(true);
-    expect(deriveAdvancedSteps(base)[2].needs).toBeUndefined();
-    expect(deriveAdvancedSteps({ ...base, aiAvailable: false })[2].needs).toBe(
-      'ai-source',
-    );
+    const app = (input: OnboardingInput) =>
+      deriveAdvancedSteps(input).find(s => s.id === 'app');
+
+    expect(app(base)?.needs).toBeUndefined();
+    expect(app({ ...base, aiAvailable: false })?.needs).toBe('ai-source');
   });
 
   it('counts a conversation for the message step', () => {
