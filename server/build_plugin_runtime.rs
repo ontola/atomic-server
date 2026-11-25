@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 macro_rules! runtime_warning {
     ($($tokens: tt)*) => {
@@ -71,6 +71,7 @@ pub fn build() {
     // dependencies. The outer release build holds that Cargo lock while this
     // script runs, so the nested build needs a separate target directory too.
     let runtime_target = PathBuf::from(&out_dir).join("plugin-runtime-target");
+    remove_interrupted_wasi_sdk_downloads(&runtime_target);
     let built =
         std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
             .args(["build", "-p", CRATE, "--release", "--target", TARGET])
@@ -123,4 +124,48 @@ pub fn build() {
             let _ = std::fs::write(&embedded, []);
         }
     }
+}
+
+/// rquickjs-sys downloads the WASI SDK into its `OUT_DIR` and skips the
+/// download whenever the archive file exists. A download cut off halfway
+/// (a cancelled job, a runner going away) therefore leaves a truncated
+/// archive that every later build in that target dir fails to unpack
+/// ("gzip: stdin: unexpected end of file"). An archive next to an SDK that
+/// was never unpacked is from such an interrupted run; deleting it makes the
+/// next build download it again.
+fn remove_interrupted_wasi_sdk_downloads(dir: &Path) {
+    fn visit(dir: &Path, depth: usize) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+                continue;
+            }
+            if path.file_name().is_some_and(|n| n == "wasi-sdk") {
+                if path.join("bin/wasm-ld").exists() {
+                    continue;
+                }
+                let Ok(files) = std::fs::read_dir(&path) else {
+                    continue;
+                };
+                for file in files.flatten() {
+                    let name = file.file_name();
+                    let name = name.to_string_lossy();
+                    if name.starts_with("wasi-sdk-") && name.ends_with(".tar.gz") {
+                        runtime_warning!(
+                            "removing {}: the WASI SDK next to it was never unpacked, so the download was interrupted",
+                            file.path().display()
+                        );
+                        let _ = std::fs::remove_file(file.path());
+                    }
+                }
+            } else if depth > 0 {
+                visit(&path, depth - 1);
+            }
+        }
+    }
+    // <dir>/build-cache/wasm32-wasip2/release/build/rquickjs-sys-<hash>/out/wasi-sdk
+    visit(dir, 7);
 }
