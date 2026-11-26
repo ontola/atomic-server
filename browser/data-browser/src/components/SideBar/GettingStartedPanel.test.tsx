@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
 import { GettingStartedPanel } from './GettingStartedPanel';
 
+const markDesktopDownloadOpened = vi.hoisted(() => vi.fn());
+
 type Step = { id: string; done: boolean; needs?: string };
 let steps: Step[] = [];
 let advancedSteps: Step[] = [];
@@ -30,6 +32,7 @@ vi.mock('@hooks/useOnboardingProgress', () => ({
     doneCount: steps.filter(s => s.done).length,
     advancedSteps,
     advancedDoneCount: advancedSteps.filter(s => s.done).length,
+    markDesktopDownloadOpened,
   }),
 }));
 vi.mock('@hooks/useUserSetting', () => ({
@@ -101,7 +104,10 @@ const fresh = (): Step[] =>
   }));
 
 const freshAdvanced = (): Step[] =>
-  ['table', 'form', 'ai', 'app', 'message'].map(id => ({ id, done: false }));
+  ['table', 'form', 'ai', 'app', 'message', 'desktop'].map(id => ({
+    id,
+    done: false,
+  }));
 
 beforeEach(() => {
   steps = fresh();
@@ -158,12 +164,13 @@ describe('GettingStartedPanel', () => {
 
     expect(html).toContain('Next steps');
     expect(html).not.toContain('Getting started');
-    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*5/);
+    expect(html).toMatch(/0\s*(<!-- -->)?\s*of\s*(<!-- -->)?\s*6/);
     expect(html).toContain('Make a table');
     expect(html).toContain('Make a form');
     expect(html).toContain('Talk to the AI');
     expect(html).toContain('Build an app with AI');
     expect(html).toContain('Send someone a message');
+    expect(html).toContain('Get the desktop app');
     expect(html).not.toContain('Name your drive');
     advancedSteps[2].needs = 'ai-source';
     expect(render()).toContain('Needs an AI source');

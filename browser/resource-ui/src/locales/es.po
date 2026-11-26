@@ -554,7 +554,7 @@ msgstr "No responde"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Leer más"
 
 #: src/components/forms/Field.tsx
@@ -4221,7 +4221,9 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Tus datos están en el dispositivo al que tienes conexión."
 
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
 msgstr "Conectar un dispositivo"
@@ -13136,7 +13138,9 @@ msgstr "Solo guardado en este dispositivo"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "Has iniciado sesión, pero no se terminó de guardar tu trabajo en tu cuenta. Comprueba tu conexión e inténtalo de nuevo."
 
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Registrarse con correo"
 
@@ -13397,18 +13401,9 @@ msgstr "Para más personas, usa un Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Solo este navegador puede abrir tu trabajo. Inicia sesión o regístrate con tu correo, o conecta otro dispositivo, para poder abrirlo en otro lugar y no perder el acceso."
 
-#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Guarda tu trabajo"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registra tu correo o conecta un dispositivo para abrirlo en otro lugar"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work here"
-msgstr "Guarda tu trabajo aquí"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13878,3 +13873,29 @@ msgstr "Passkey, código de recuperación o secreto"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your secret"
 msgstr "Tu secreto"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register here"
+msgstr "Regístrate aquí"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Descarga la aplicación de escritorio"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Abre tus unidades desde el Dock o la barra de tareas, también sin conexión"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Instalando la actualización…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Actualización disponible"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Reinicia para usar la versión {0}"

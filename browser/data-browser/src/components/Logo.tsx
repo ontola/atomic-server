@@ -5,6 +5,9 @@ import { useSettings } from '../helpers/AppSettings';
 import { openExternal } from '../helpers/openExternal';
 
 export const ATOMIC_PLACE_WEBSITE = 'https://atomic.place';
+/** Where the desktop app is downloaded; may later become atomic.place/app. */
+export const DESKTOP_DOWNLOAD_URL =
+  'https://github.com/ontola/atomic-server/releases/latest';
 
 interface LogoProps {
   style?: CSSProperties;

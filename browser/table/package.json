@@ -1,6 +1,6 @@
 {
   "name": "@tomic/table",
-  "version": "0.41.0-beta.8",
+  "version": "0.41.0",
   "description": "Atomic table grid and storage-independent typed editors",
   "type": "module",
   "license": "MIT",

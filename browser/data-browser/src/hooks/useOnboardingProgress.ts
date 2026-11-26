@@ -28,6 +28,7 @@ import { usePrivateDriveSync } from './usePrivateDriveSync';
 import { useDriveApps } from '@chunks/AppPage/useDriveApps';
 import { useConversations } from '@helpers/conversations/useConversations';
 import { userSettingProps, useUserSetting } from './useUserSetting';
+import { isRunningInTauri } from '../helpers/tauri';
 
 export type OnboardingStepId =
   | 'name'
@@ -38,7 +39,8 @@ export type OnboardingStepId =
   | 'table'
   | 'form'
   | 'app'
-  | 'message';
+  | 'message'
+  | 'desktop';
 
 /** What a step is waiting for before its button can do anything. */
 export type OnboardingNeed = 'ai-source';
@@ -57,6 +59,9 @@ export interface OnboardingStep {
 export const onboardingKeys = {
   /** The drive `startWelcomeDrive` made; it stays the Welcome drive when renamed. */
   welcomeDrive: (agent?: string) => `atomic.gettingStarted.welcome:${agent}`,
+  /** The desktop download step was clicked; nothing else records that. */
+  desktopDownload: (agent?: string) =>
+    `atomic.gettingStarted.desktopDownload:${agent}`,
 };
 
 const same = (a: string, b?: string) =>
@@ -93,6 +98,10 @@ export interface OnboardingInput {
   hasApp?: boolean;
   /** The agent is in at least one conversation. */
   hasConversation?: boolean;
+  /** Running inside the desktop app, where the download step is left out. */
+  inDesktopApp?: boolean;
+  /** The download step was clicked. */
+  desktopDownloadOpened?: boolean;
 }
 
 /** The steps in order, each with a derived `done` and, if blocked, why. */
@@ -127,10 +136,13 @@ export function deriveAdvancedSteps(input: OnboardingInput): OnboardingStep[] {
       needs: input.aiAvailable ? undefined : 'ai-source',
     },
     { id: 'message', done: !!input.hasConversation },
+    { id: 'desktop', done: !!input.desktopDownloadOpened },
   ];
 
-  return steps.filter(
-    step => aiEnabled || (step.id !== 'ai' && step.id !== 'app'),
+  return steps.filter(step =>
+    step.id === 'desktop'
+      ? !input.inDesktopApp
+      : aiEnabled || (step.id !== 'ai' && step.id !== 'app'),
   );
 }
 
@@ -158,6 +170,12 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     onboardingKeys.welcomeDrive(agent?.subject),
     undefined,
   );
+  const [desktopDownloadOpened, setDesktopDownloadOpened] =
+    useUserSetting<boolean>(
+      userSettingProps.desktopDownloadOpened,
+      onboardingKeys.desktopDownload(agent?.subject),
+      false,
+    );
   const accountLinked = useIsLinkedToAccount();
   const { subjects: children } = useVisibleDriveChildren(drive);
   // The Welcome template fills its drive; anything past that is the person's.
@@ -237,6 +255,8 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     hasForm: childClasses.some(c => c.includes(forms.classes.form)),
     hasApp: apps.length > 0,
     hasConversation: conversations.length > 0,
+    inDesktopApp: isRunningInTauri(),
+    desktopDownloadOpened,
   };
   const steps = deriveOnboardingSteps(input);
   const advancedSteps = deriveAdvancedSteps(input);
@@ -247,5 +267,6 @@ export function useOnboardingProgress(drive: string, driveName?: string) {
     doneCount: count(steps),
     advancedSteps,
     advancedDoneCount: count(advancedSteps),
+    markDesktopDownloadOpened: () => setDesktopDownloadOpened(true),
   };
 }

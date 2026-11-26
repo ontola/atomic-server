@@ -554,7 +554,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -4227,7 +4227,9 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Je gegevens staan op het apparaat waarmee je verbonden bent."
 
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
 msgstr "Een apparaat verbinden"
@@ -13142,7 +13144,9 @@ msgstr "Alleen op dit apparaat opgeslagen"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "Je bent ingelogd, maar het opslaan van je werk in je account is niet gelukt. Controleer je verbinding en probeer het opnieuw."
 
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Registreren met e-mail"
 
@@ -13403,18 +13407,9 @@ msgstr "Gebruik voor meer mensen een Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mailadres, of koppel een ander apparaat, zodat je het elders kunt openen en de toegang niet kwijtraakt."
 
-#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Bewaar je werk"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registreer je e-mailadres of koppel een apparaat om het elders te openen"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work here"
-msgstr "Bewaar je werk hier"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13884,3 +13879,29 @@ msgstr "Passkey, herstelcode of geheime sleutel"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your secret"
 msgstr "Je geheime sleutel"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register here"
+msgstr "Registreer hier"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Download de desktop-app"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Open je drives vanuit het Dock of de taakbalk, ook offline"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Update wordt geïnstalleerd…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Update beschikbaar"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Herstart om versie {0} te gebruiken"

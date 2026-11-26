@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFMTM5RUMyRUYxMTFBNjEKUldSaEdoSHZ3cDRUbmhPL0ZjeVFaZ2dwNkM4a3lMZW5SRTU3SjFzc2Y1TnNhUEM0NHlOTUx6THMK",
+      "endpoints": [
+        "https://github.com/ontola/atomic-server/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

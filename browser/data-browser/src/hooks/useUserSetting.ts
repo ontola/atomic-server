@@ -15,6 +15,7 @@ import { usePrivateDrive } from './usePrivateDrive';
 export const userSettingProps = {
   onboardingPanelOpen: preferencesSchema.properties.onboardingPanelOpen,
   welcomeDrive: preferencesSchema.properties.welcomeDrive,
+  desktopDownloadOpened: preferencesSchema.properties.desktopDownloadOpened,
 } as const;
 
 type SettingValue = boolean | string | undefined;

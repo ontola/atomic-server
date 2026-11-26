@@ -554,7 +554,7 @@ msgstr "Antwortet nicht"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
+msgid "Read more "
 msgstr "Mehr erfahren "
 
 #: src/components/forms/Field.tsx
@@ -4224,7 +4224,9 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Deine Daten liegen auf dem Gerät, mit dem du verbunden bist."
 
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
 msgstr "Gerät verbinden"
@@ -13139,7 +13141,9 @@ msgstr "Nur auf diesem Gerät gespeichert"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "Du bist angemeldet, aber das Speichern deiner Arbeit in deinem Konto wurde nicht abgeschlossen. Prüfe deine Verbindung und versuche es erneut."
 
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Mit E-Mail registrieren"
 
@@ -13400,18 +13404,9 @@ msgstr "Für mehr Personen nutze einen Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Nur dieser Browser kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
 
-#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Speichere deine Arbeit"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registriere deine E-Mail oder verbinde ein Gerät, um sie anderswo zu öffnen"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work here"
-msgstr "Speichere deine Arbeit hier"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13881,3 +13876,29 @@ msgstr "Passkey, Wiederherstellungscode oder Geheimnis"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your secret"
 msgstr "Dein Geheimnis"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register here"
+msgstr "Hier registrieren"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Desktop-App herunterladen"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Öffne deine Drives über das Dock oder die Taskleiste, auch offline"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Update wird installiert …"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Update verfügbar"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Neu starten, um Version {0} zu verwenden"
