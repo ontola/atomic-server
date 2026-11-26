@@ -13892,3 +13892,16 @@ msgstr "Download de desktop-app"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Open your drives from the Dock or taskbar, also offline"
 msgstr "Open je drives vanuit het Dock of de taakbalk, ook offline"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Update wordt geïnstalleerd…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Update beschikbaar"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Herstart om versie {0} te gebruiken"

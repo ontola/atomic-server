@@ -24,6 +24,37 @@ cargo tauri dev
 cargo tauri build
 ```
 
+## Self-update
+
+Release builds update themselves. A few seconds after launch, and then every few
+hours, the app (`src/updates.rs`) reads `latest.json` from the latest GitHub
+release. When it names a newer version the page shows an "Update available"
+toast; clicking it downloads, verifies and installs the update and restarts.
+Nothing installs without that click.
+
+This is the Tauri updater, so it is the same on macOS, Windows and Linux. It is
+off in development and in plain `cargo tauri build` runs: the `updater` cargo
+feature and `tauri.updater.conf.json` (which holds the public key and the
+`latest.json` URL) are only added by `tauri-release.yml`.
+
+One-time setup, by whoever owns releases:
+
+```sh
+cargo tauri signer generate -w ~/.tauri/atomic-updater.key
+```
+
+1. Put the printed **public** key in `tauri.updater.conf.json`, replacing the placeholder.
+2. Add the private key as the repository secret `TAURI_SIGNING_PRIVATE_KEY`
+   (and its password as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+
+Keep a copy of the private key somewhere safe: installed apps only accept
+updates signed with it, so losing it means every user has to reinstall by hand.
+Until the secret exists the workflow builds as before and ships no updater.
+
+`latest.json` is written by `scripts/make-latest-json.mjs` in the attach job.
+GitHub's `releases/latest` skips pre-releases, so betas do not update existing
+installs; a stable `vX.Y.Z` release does.
+
 ## Running in development
 
 `cargo tauri dev` starts the front-end for you — `beforeDevCommand` in `tauri.conf.json` runs `pnpm -C browser/data-browser dev:tauri`, and the app points at `localhost:6747` (`devUrl`).
