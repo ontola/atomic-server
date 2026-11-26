@@ -974,16 +974,27 @@ describe('native direct reference records', () => {
     });
   });
 
-  it.each(['at acknowledgement', 'after the next publication'] as const)(
-    'authors the exact native genesis writer before server publication %s',
-    async timing => {
+  it.each([
+    ['at acknowledgement', 'atomic:agent:me'],
+    ['after the next publication', 'atomic:agent:me'],
+    ['at acknowledgement', 'did:ad:agent:me'],
+    ['after the next publication', 'did:ad:agent:me'],
+  ] as const)(
+    'preserves the native genesis writer %s for %s',
+    async (timing, actorSubject) => {
       const f = await fixture();
+      f.actor.subject = actorSubject;
+      const storedWriter = 'atomic:agent:me';
       const published = new Set<string>();
       let delayed: string | undefined;
 
       const publish = (subject: string) => {
         if (published.has(subject)) return;
-        f.resources.get(subject)![core.properties.write] = [f.actor.subject];
+        const row = f.resources.get(subject)!;
+        expect(row[core.properties.write]).toEqual([actorSubject]);
+        // The database projection canonicalizes legacy references when
+        // persisting ACLs and serving them back to the browser.
+        row[core.properties.write] = [storedWriter];
         published.add(subject);
       };
 
@@ -1009,7 +1020,7 @@ describe('native direct reference records', () => {
         ...(table[dataBrowser.properties.tableViews] as string[]),
       ]) {
         expect(f.resources.get(subject)![core.properties.write]).toEqual([
-          f.actor.subject,
+          storedWriter,
         ]);
         expect(published.has(subject)).toBe(true);
       }

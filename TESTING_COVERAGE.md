@@ -1377,6 +1377,13 @@ This does not yet prove restoration of the user's private staging workspace.
   `BuiltinSyncablesApp.test.ts` holds unrelated adoption/legacy scans pending:
   canonical collection controls still prepare, with and without a saved filter,
   while worker preparation continues to wait for the complete migration proof.
+- The native GitHub journey covers the OAuth return opening the new drive
+  sidebar App, the first empty Organizations Table triggering its eligible
+  saved filter, and the Sync tab selecting that filter. Frame tests cover the
+  scoped connection handoff and the chooser fallback. They also verify the
+  page status updates in place, including a valid Last link and an unknown
+  total. Reference projector tests cover legacy writer IDs before and after
+  server acknowledgement while still rejecting actual permission changes.
 - `embed/flutterHost.test.ts` covers native-host precedence, locked Flutter
   channel tokens and lazy standalone fixtures. The production embed size check
   keeps its existing first-use and total budgets; the main Data Browser build

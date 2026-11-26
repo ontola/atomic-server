@@ -1,6 +1,7 @@
 // @wc-ignore-file
 /** Native projection of direct references observed by the host reader. No frame entry point. */
 import {
+  canonicalizeScheme,
   core,
   dataBrowser,
   Datatype,
@@ -90,6 +91,16 @@ const equal = (a: unknown, b: unknown) =>
   sourceConfigFingerprint(a) === sourceConfigFingerprint(b);
 const localId = (key: string) => 'syncables:node:' + encodeURIComponent(key);
 const copy = <T>(value: T): T => structuredClone(value);
+
+function guardedPropertyValue(property: string, value: unknown): unknown {
+  // Persisted write grants use canonical subjects, even if the active agent
+  // still signs with the older scheme. Keep every writer and the list shape.
+  return property === core.properties.write && Array.isArray(value)
+    ? value.map(writer =>
+        typeof writer === 'string' ? canonicalizeScheme(writer) : writer,
+      )
+    : value;
+}
 
 export { validateSyncableReferenceEvidence } from './builtinSyncReferenceIdentity.js';
 
@@ -284,7 +295,10 @@ export async function materializeSyncableReferences(
     const stamp = (
       row: Resource,
       fields = watched.get(row)?.fields ?? identityFields,
-    ) => sourceConfigFingerprint(fields.map(field => row.get(field)));
+    ) =>
+      sourceConfigFingerprint(
+        fields.map(field => guardedPropertyValue(field, row.get(field))),
+      );
 
     const watch = (row: Resource, fields: string[] = []) => {
       const selected = [
@@ -299,7 +313,9 @@ export async function materializeSyncableReferences(
         fieldStamps: new Map(
           selected.map(field => [
             field,
-            sourceConfigFingerprint(row.get(field)),
+            sourceConfigFingerprint(
+              guardedPropertyValue(field, row.get(field)),
+            ),
           ]),
         ),
       });
@@ -324,8 +340,9 @@ export async function materializeSyncableReferences(
         if (row !== except && stamp(row, expected.fields) !== expected.stamp) {
           const field = expected.fields.find(
             property =>
-              sourceConfigFingerprint(row.get(property)) !==
-              expected.fieldStamps.get(property),
+              sourceConfigFingerprint(
+                guardedPropertyValue(property, row.get(property)),
+              ) !== expected.fieldStamps.get(property),
           );
           throw new Error(
             `A reference identity, value, permission or ancestor changed (${row.subject}; ${field ?? 'unknown property'})`,
@@ -383,7 +400,12 @@ export async function materializeSyncableReferences(
       const expected = sourceConfigFingerprint(
         watched
           .get(row)!
-          .fields.map(field => (field === property ? value : row.get(field))),
+          .fields.map(field =>
+            guardedPropertyValue(
+              field,
+              field === property ? value : row.get(field),
+            ),
+          ),
       );
       await row.set(property, value as JSONValue, true, undefined, () =>
         guard(),
@@ -397,7 +419,10 @@ export async function materializeSyncableReferences(
         stamp: expected,
         fieldStamps: new Map([
           ...previousWatch.fieldStamps,
-          [property, sourceConfigFingerprint(value)],
+          [
+            property,
+            sourceConfigFingerprint(guardedPropertyValue(property, value)),
+          ],
         ]),
       });
       guard();

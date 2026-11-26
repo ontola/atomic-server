@@ -26,8 +26,8 @@ It is then one more way to look at rows you already have.
 
 From My Drive, open the account menu and choose **Apps**. Turn on **Show
 experimental plugins** to see services from your configured integration proxy.
-Choose **Add to Drive** on GitHub to open its account chooser. Connect an account,
-then open its entry to install a principal App such as **GitHub · michiel**.
+Choose **Add to Drive** on GitHub to open its account chooser. After you connect
+an account, its App opens and appears in the drive sidebar.
 **Public** installs a separate **GitHub · Public** App without signing in. The
 chooser stays in Apps; it does not add a provider folder to your drive.
 
@@ -66,12 +66,17 @@ A new filter has no completed sync history or observed membership yet; use its
 Sync controls to import that scope, or choose **All cached rows** for data from
 other filters and earlier imports. Its empty result does not delete those rows.
 
-Use **Sync settings** for the selected filter, then **Sync now**. Each filter has
-its own sync state and **Pause**/**Resume** controls. Pausing one filter retains
-its rows and does not pause another. Runs continue while you browse other views
-or resources in the app; closing the app stops them. Paused status survives a
-reload. The Sync view also offers source setup for new saved filters; catalog
-inputs and relationships determine the available sources.
+Opening an empty table for the first time starts its sync if it has one
+eligible direct filter, as with Organizations. Use **Sync settings** and then
+**Sync now** to start a run manually. When you open **Sync**, it selects the
+table's direct filter or its only saved filter when one is available. During
+a run, Sync counts pages across the reads needed for the filter and shows a
+total when the provider supplies one for a single collection read.
+Each filter has its own sync state and **Pause**/**Resume** controls. Pausing one
+filter retains its rows and does not pause another. Runs continue while you
+browse other views or resources in the app. Closing the app stops them. Paused
+status survives a reload. The Sync view also offers source setup for new saved
+filters. Catalog inputs and relationships determine the available sources.
 Sync history describes the selected filter, rather than every row in its table.
 The entry count shown in Sync belongs to its last read attempt. Existing rows
 alone do not imply that this particular filter has completed a successful read.
@@ -88,11 +93,11 @@ Sync. The old unconfigured Collection tab is hidden, and opening the item
 table uses the ordinary Table settings. Existing Collection links open native
 Table with their saved settings and filter intact. Renamed or customized views
 are retained, and the principal App keeps its collection list.
-Opening, filtering or returning to these views makes no provider request.
-They remain available during a sync or a provider outage. Overlapping saved
-filters share one canonical row. Complete reads replace membership only for their
-own filter; partial or interrupted reads retain prior membership and accepted
-rows. Missing fields do not erase richer stored values. User fields are retained.
+Browsing stored rows remains available during a sync or a provider outage.
+Overlapping saved filters share one canonical row. Complete reads replace
+membership only for their own filter. Partial or interrupted reads retain prior
+membership and accepted rows. Missing fields do not erase richer stored values.
+User fields are retained.
 Moving a row within the same drive retains its identity; rows moved outside the
 worker's collection are protected from refresh rather than duplicated.
 Renaming a column changes its display label, while sync continues to address its

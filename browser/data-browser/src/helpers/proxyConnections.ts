@@ -236,6 +236,7 @@ export interface ProxyHost {
       method?: string;
       body?: string;
       ifMatch?: string;
+      readProgress?: 'page';
     },
     signal?: AbortSignal,
   ) => Promise<{

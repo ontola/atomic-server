@@ -181,6 +181,15 @@ export function useSyncableFilters(table: Resource, embedded = false) {
   const selected = current?.rules.find(
     rule => rule.resource.subject === requested,
   );
+  const direct = current?.rules.filter(({ config }) => {
+    const source = config.definition.source;
+
+    return (
+      source.kind === 'bound' &&
+      Object.keys(source.bound.pathParams).length === 0
+    );
+  });
+  const directRule = direct?.length === 1 ? direct[0] : undefined;
   const invalid =
     !!current?.source &&
     ((!!requested && !selected) ||
@@ -190,6 +199,7 @@ export function useSyncableFilters(table: Resource, embedded = false) {
     ...current,
     rules: current?.rules ?? [],
     selected,
+    directRule,
     requested,
     ready: !!current && !pendingView && !invalid && !current.error,
     error:

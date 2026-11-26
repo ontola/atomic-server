@@ -40,11 +40,25 @@ export function useTableData(
   viewOverride?: string,
   embedded = false,
 ): UseTableDataResult {
-  const syncableFilters = useSyncableFilters(resource, embedded);
+  const savedFilters = useSyncableFilters(resource, embedded);
   const tableView = useTableView(resource, viewOverride, embedded, {
-    entity: syncableFilters.flat,
-    rules: new Set(syncableFilters.rules.map(rule => rule.resource.subject)),
+    entity: savedFilters.flat,
+    rules: new Set(savedFilters.rules.map(rule => rule.resource.subject)),
   });
+  const syncableFilters =
+    !embedded &&
+    tableView.viewKind === 'syncables' &&
+    savedFilters.ready &&
+    !savedFilters.requested
+      ? {
+          ...savedFilters,
+          selected:
+            savedFilters.directRule ??
+            (savedFilters.rules.length === 1
+              ? savedFilters.rules[0]
+              : undefined),
+        }
+      : savedFilters;
   const { filters, sorting } = tableView;
   const store = useStore();
 

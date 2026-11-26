@@ -279,6 +279,8 @@ export interface HostRequest {
   path?: string;
   query?: unknown;
   ifMatch?: string;
+  /** Presentation hint from a built-in worker. It grants no read authority. */
+  readProgress?: 'page';
   action?: unknown;
 }
 

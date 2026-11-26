@@ -574,6 +574,15 @@ async function openConsent(
   ).toBeVisible();
 }
 
+async function finishConsent(page: Page, appName = 'GitHub · michiel') {
+  await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: appName, exact: true }),
+  ).toBeVisible({ timeout: 45_000 });
+
+  return getCurrentSubject(page);
+}
+
 async function sourceState(
   page: Page,
   subject: string,
@@ -910,6 +919,15 @@ async function browse(page: Page) {
     .or(page.getByRole('main').getByRole('grid'));
 }
 
+async function waitForInitialSync(page: Page, rowName: string) {
+  const directory = await browse(page);
+  await expect(directory.getByText(rowName, { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+
+  return directory;
+}
+
 async function openRow(page: Page, text: string) {
   const directory = await browse(page);
   const previous = await getCurrentSubject(page);
@@ -957,9 +975,6 @@ async function selectFilter(page: Page, value?: string) {
 
 async function sync(page: Page, rule?: string) {
   await selectFilter(page, rule);
-  await page
-    .getByRole('button', { name: 'Sync settings', exact: true })
-    .click();
   await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
   await expect(
@@ -1138,19 +1153,20 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('heading', { name: 'Connected principals' }),
     ).toBeVisible({ timeout: 45_000 });
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
+    await finishConsent(page);
+    const principal = await browse(page);
     await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
-    await browse(page);
-    const principalUrl = page.url();
-    await openRow(page, 'Organizations');
-    const organizationsSubject = await getCurrentSubject(page);
-    await page.goto(principalUrl);
+      principal.getByText('Organizations', { exact: true }),
+    ).toBeVisible();
+    // Look up the empty table without opening its first-sync eligible Table.
+    const organizationsSubject = await sourceSubject(
+      page,
+      'collection',
+      'githubOrganization',
+    );
     await openRow(page, 'Repositories');
     const repositoriesSubject = await getCurrentSubject(page);
-    await sync(page);
+    await waitForInitialSync(page, 'notes');
     const organization = (
       await sourceState(page, organizationsSubject)
     ).rows.find(row => row.raw?.id === 123)!;
@@ -1278,24 +1294,21 @@ test.describe('catalog-driven built-in Syncables', () => {
     const appUrl = page.url();
     const appSubject = await getCurrentSubject(page);
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
-    await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
-    const principalSubject = await sourceSubject(page, 'principal');
+    const principalSubject = await finishConsent(page);
     const saved = await sourceState(page, principalSubject);
     const oldSlot = requests.redeemed[0];
+    const principalButton = iframe.getByRole('button', {
+      name: 'GitHub · michiel',
+      exact: true,
+    });
 
     // A newer slot verifies the same typed principal. The older owned slot is
     // retained by the proxy and can expire independently of the saved account.
+    await page.goto(appUrl);
+    await expect(principalButton).toBeVisible({ timeout: 45_000 });
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
+    expect(await finishConsent(page)).toBe(principalSubject);
     await expect.poll(() => requests.redeemed.length).toBe(2);
-    await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
     await expect
       .poll(async () => (await sourceState(page, principalSubject)).config)
       .toMatchObject({ connectionId: requests.redeemed[1] });
@@ -1310,7 +1323,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       { optional: true },
     );
     requests.expiredPrincipalConnection = oldSlot;
-    await page.reload();
+    await page.goto(appUrl);
     const notice = iframe
       .getByRole('alert')
       .filter({ hasText: 'This connection has expired.' });
@@ -1321,9 +1334,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(notice).toContainText(
       'Saved accounts and collections are retained.',
     );
-    await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toHaveCount(1);
+    await expect(principalButton).toHaveCount(1);
     await expect(iframe.locator('body')).not.toContainText(
       'No accounts connected',
     );
@@ -1353,9 +1364,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await openConsent(page, iframe, 'Reconnect connection');
     await page.getByRole('link', { name: 'Authorize', exact: true }).click();
     await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
-    await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
+    await expect(principalButton).toBeVisible({ timeout: 45_000 });
     await expect(iframe.getByRole('alert')).toHaveCount(0);
     expect(requests.redeemed).toHaveLength(3);
     // Recovery replaces the credential behind the original logical slot.
@@ -1381,8 +1390,10 @@ test.describe('catalog-driven built-in Syncables', () => {
     const restored = await sourceState(page, principalSubject);
     expect(restored.key).toBe(saved.key);
     expect(restored.localId).toBe(saved.localId);
-    expect(restored.config).toMatchObject({ connectionId: oldSlot });
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
+    expect(restored.config).toMatchObject({
+      connectionId: requests.redeemed[1],
+    });
+    await principalButton.click();
     await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
     expect(await getCurrentSubject(page)).toBe(principalSubject);
     const directory = await browse(page);
@@ -1459,23 +1470,26 @@ test.describe('catalog-driven built-in Syncables', () => {
     await page.getByRole('link', { name: 'Decline', exact: true }).click();
     await expect(page).toHaveURL(appUrl);
     expect(requests.redeemed).toEqual([]);
-    await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(appUrl, { timeout: 45_000 });
     await expect(
-      iframe.getByRole('button', { name: 'michiel', exact: true }),
-    ).toBeVisible({ timeout: 45_000 });
+      sidebar.getByRole('button', { name: 'GitHub · michiel', exact: true }),
+    ).toHaveCount(0);
+    await openConsent(page, iframe, 'Connect account');
+    const principalSubject = await finishConsent(page);
+    await expect(
+      sidebar.getByRole('button', { name: 'GitHub · michiel', exact: true }),
+    ).toHaveCount(1);
+    await testInfo.attach('github-principal-after-authorization', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
     expect(requests.organizationRequests).toBe(0);
     expect(requests.repositoryRequests).toBe(0);
     expect(requests.providerRequests.every(path => path === '/user')).toBe(
       true,
     );
-    const savedPrincipalSubject = await sourceSubject(page, 'principal');
-    const savedPrincipal = await sourceState(page, savedPrincipalSubject);
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
-    await expect.poll(() => getCurrentSubject(page)).not.toBe(appSubject);
-    const principalSubject = await getCurrentSubject(page);
-    expect(principalSubject).toBe(savedPrincipalSubject);
+    const setupReads = requests.providerRequests.length;
+    const setupDocuments = requests.documentRequests.length;
+    expect(await sourceSubject(page, 'principal')).toBe(principalSubject);
     await browse(page);
     const apps = await principalApps(page);
     expect(apps).toHaveLength(1);
@@ -1486,15 +1500,13 @@ test.describe('catalog-driven built-in Syncables', () => {
       isApp: true,
       appData: principalSubject,
       builtin: 'syncables',
-      key: savedPrincipal.key,
-      localId: savedPrincipal.localId,
-      views: savedPrincipal.views,
+      config: {
+        principal: { kind: 'authenticated', subject: 321 },
+        connectionId: requests.redeemed[0],
+      },
       icon: manager.icon,
     });
     expect(typeof apps[0].icon).toBe('string');
-    expect(apps[0].classes).toEqual(
-      expect.arrayContaining(savedPrincipal.classes),
-    );
     await expect(
       sidebar.getByRole('button', { name: 'GitHub · michiel', exact: true }),
     ).toHaveCount(1);
@@ -1535,26 +1547,37 @@ test.describe('catalog-driven built-in Syncables', () => {
       principalTable.getByText('Repositories', { exact: true }),
     ).toBeVisible();
     await expect(sidebar.getByText('Accounts', { exact: true })).toHaveCount(0);
-    const setupReads = requests.providerRequests.length;
-    const setupDocuments = requests.documentRequests.length;
     await expect(
       principalTable.getByText('Issues and pull requests', { exact: true }),
     ).toBeVisible();
+    expect(requests.providerRequests).toHaveLength(setupReads);
+    expect(requests.documentRequests).toHaveLength(setupDocuments);
     await openRow(page, 'Organizations');
     const organizationsSubject = await getCurrentSubject(page),
       organizationsUrl = page.url();
-    await browse(page);
+    const directory = await waitForInitialSync(page, 'ontola');
     await expect(
       page.getByRole('tab', { name: 'Collection', exact: true }),
     ).toHaveCount(0);
-    expect(requests.providerRequests).toHaveLength(setupReads);
-    expect(requests.documentRequests).toHaveLength(setupDocuments);
-    await sync(page);
-    const organizationsRule = await page
-      .getByRole('combobox', { name: 'Saved filter', exact: true })
-      .inputValue();
-    const directory = await browse(page);
-    await expect(directory.getByText('ontola', { exact: true })).toBeVisible();
+    expect(requests.organizationRequests).toBe(1);
+    await selectView(page, 'Sync');
+    const organizationsFilter = page.getByRole('combobox', {
+      name: 'Saved filter',
+      exact: true,
+    });
+    await expect(
+      iframe.getByRole('button', { name: 'Sync now', exact: true }),
+    ).toBeEnabled({ timeout: 60_000 });
+    await expect(
+      organizationsFilter.getByRole('option', { name: 'All cached rows' }),
+    ).toHaveCount(0);
+    const organizationsRule = await organizationsFilter.inputValue();
+    expect(organizationsRule).toBeTruthy();
+    await testInfo.attach('github-organizations-sync-default-rule', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await browse(page);
     await expect(
       directory.getByText('reporting', { exact: true }),
     ).toBeVisible();
@@ -1571,12 +1594,9 @@ test.describe('catalog-driven built-in Syncables', () => {
     await page.goto(principalUrl);
     await openRow(page, 'Repositories');
     const repositoriesSubject = await getCurrentSubject(page);
-    await sync(page);
-    const rootRepositoriesRule = await page
-      .getByRole('combobox', { name: 'Saved filter', exact: true })
-      .inputValue();
+    await waitForInitialSync(page, 'notes');
+    const rootRepositoriesRule = await selectFilter(page);
     const rootRepositoriesUrl = page.url();
-    await browse(page);
     const rootState = await sourceState(page, repositoriesSubject);
     expect(rootState.rows).toHaveLength(3);
     const firstRepo = rootState.rows.find(row => row.name === 'atomic-server')!;
@@ -1807,6 +1827,15 @@ test.describe('catalog-driven built-in Syncables', () => {
     });
     await syncNow.click();
     await expect.poll(() => requests.issueConnections.length).toBe(1);
+    // The two paged source reads also count toward this related sync.
+    const pageProgress = iframe.getByRole('status').filter({
+      hasText: /^Syncing page 3$/,
+    });
+    await expect(pageProgress).toBeVisible();
+    await testInfo.attach('github-sync-page-progress', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
     await sidebar
       .getByRole('button', { name: 'Organizations', exact: true })
       .click();
@@ -1837,6 +1866,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       iframe.getByRole('button', { name: 'Syncing', exact: true }),
     ).toBeDisabled();
+    await expect(pageProgress).toBeVisible();
     expect(requests.providerRequests).toHaveLength(backgroundReads);
     // The native view did no provider/catalog reads. Reopening the Sync iframe
     // derives a fresh scoped host profile from the current document + selection,
@@ -2054,13 +2084,8 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('heading', { name: 'Connected principals' }),
     ).toBeVisible({ timeout: 45_000 });
     const managerUrl = page.url();
-    const managerSubject = await getCurrentSubject(page);
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
-    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
-    const principalSubject = await getCurrentSubject(page);
+    const principalSubject = await finishConsent(page);
     await browse(page);
     const installed = await principalApps(page);
     expect(installed).toHaveLength(1);
@@ -2078,8 +2103,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     });
     await openRow(page, 'Repositories');
     const repositoriesSubject = await getCurrentSubject(page);
-    await sync(page);
-    await browse(page);
+    await waitForInitialSync(page, 'notes');
     const first = await sourceState(page, repositoriesSubject);
     expect(first.rows).toHaveLength(3);
     expect(first.config?.connectionId).toBe(requests.redeemed[0]);
@@ -2108,15 +2132,10 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('button', { name: 'My linked GitHub', exact: true }),
     ).toBeVisible({ timeout: 45_000 });
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    expect(await finishConsent(page, 'My linked GitHub')).toBe(
+      principalSubject,
+    );
     await expect.poll(() => requests.redeemed.length).toBe(2);
-    await expect(
-      iframe.getByRole('button', { name: 'My linked GitHub', exact: true }),
-    ).toHaveCount(1, { timeout: 45_000 });
-    await iframe
-      .getByRole('button', { name: 'My linked GitHub', exact: true })
-      .click();
     await expect(page.getByRole('main')).toHaveAttribute(
       'about',
       principalSubject,
@@ -2190,14 +2209,8 @@ test.describe('catalog-driven built-in Syncables', () => {
     };
     await page.goto(managerUrl);
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
+    const otherSubject = await finishConsent(page, 'GitHub · Other user');
     await expect.poll(() => requests.redeemed.length).toBe(3);
-    await iframe
-      .getByRole('button', { name: 'Other user', exact: true })
-      .click();
-    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
-    const otherSubject = await getCurrentSubject(page);
     expect(otherSubject).not.toBe(principalSubject);
     await browse(page);
     const separate = await principalApps(page);
@@ -2225,8 +2238,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     await openRow(page, 'Repositories');
     const otherRepositories = await getCurrentSubject(page);
     expect(otherRepositories).not.toBe(repositoriesSubject);
-    await sync(page);
-    await browse(page);
+    await waitForInitialSync(page, 'notes');
     const other = await sourceState(page, otherRepositories);
     expect(other.rows).toHaveLength(3);
     expect(other.rows.every(row => !rowSubjects.includes(row.subject))).toBe(
@@ -2317,12 +2329,8 @@ test.describe('catalog-driven built-in Syncables', () => {
       iframe.getByRole('heading', { name: 'Connected principals' }),
     ).toBeVisible({ timeout: 45_000 });
     const managerA = await getCurrentSubject(page);
-    const managerUrl = page.url();
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
-    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerA);
+    await finishConsent(page);
     await browse(page);
     const appsA = await principalApps(page);
     expect(appsA).toHaveLength(1);
@@ -2330,8 +2338,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(appA.parent).toBe(driveA);
     await openRow(page, 'Repositories');
     const tableA = await getCurrentSubject(page);
-    await sync(page);
-    await browse(page);
+    await waitForInitialSync(page, 'notes');
     const firstA = await sourceState(page, tableA, driveA);
     expect(firstA.parent).toBe(appA.subject);
     expect(firstA.rows).toHaveLength(3);
@@ -2367,12 +2374,11 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(appB.key).toBe(appA.key);
     expect(appB.localId).toBe(appA.localId);
     expect(requests.redeemed).toHaveLength(1);
+    requests.repositoryIssueCount = 17;
     await openRow(page, 'Repositories');
     const tableB = await getCurrentSubject(page);
     expect(tableB).not.toBe(tableA);
-    requests.repositoryIssueCount = 17;
-    await sync(page);
-    await browse(page);
+    await waitForInitialSync(page, 'notes');
     const firstB = await sourceState(page, tableB, driveB);
     expect(firstB.parent).toBe(appB.subject);
     expect(firstB.key).toBe(firstA.key);
@@ -2573,17 +2579,16 @@ test.describe('catalog-driven built-in Syncables', () => {
     const managerSubject = await getCurrentSubject(page);
     const manager = await sourceState(page, managerSubject);
     await openConsent(page, iframe, 'Connect account');
-    await page.getByRole('link', { name: 'Authorize', exact: true }).click();
-    await expect(page).toHaveURL(managerUrl, { timeout: 45_000 });
-    await iframe.getByRole('button', { name: 'michiel', exact: true }).click();
-    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    await finishConsent(page);
     await browse(page);
     const apps = await principalApps(page);
     expect(apps).toHaveLength(1);
     const app = apps[0];
     await openRow(page, 'Repositories');
     const tableSubject = await getCurrentSubject(page);
-    await sync(page);
+    await waitForInitialSync(page, 'notes');
+    await selectFilter(page);
+    await selectView(page, 'Sync');
     const syncUrl = page.url();
     await browse(page);
     const storedUrl = page.url();

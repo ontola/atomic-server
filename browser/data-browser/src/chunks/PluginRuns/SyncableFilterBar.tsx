@@ -1,12 +1,10 @@
 import { saveFlatSyncableSelection } from './syncableFlatNavigation';
 import { parseSyncableCollectionView } from './syncableCollection';
 import { getTableDrive } from '../TablePage/tableDrive';
-import { useId, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { useAppExecutions } from '../AppPage/AppExecutionRuntime';
-import { syncableExecutionKey } from './BuiltinSyncablesApp';
-const noSubscribe = () => () => {};
-const emptyRuns: never[] = [];
-const emptySnapshot = () => emptyRuns;
+import { appProfile, syncableExecutionKey } from './BuiltinSyncablesApp';
+import { readSyncableRuleStatus } from './syncableRules';
 import {
   core,
   dataBrowser,
@@ -19,13 +17,38 @@ import { ShowRoute } from '../../routes/ShowRoute';
 import { Button } from '@components/Button';
 import { useSyncableFilters } from './useSyncableFilters';
 
+const noSubscribe = () => () => {};
+const idleExecution = () => 'idle' as const;
+
+function canHydrateRule(rule: Resource, statusProperty: string): boolean {
+  try {
+    const status = readSyncableRuleStatus(rule.get(statusProperty));
+
+    return (
+      !status.paused &&
+      status.enabled !== false &&
+      !status.lastSuccess &&
+      !status.run &&
+      !status.error
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** One saved provider scope across the native data views and Sync controls. */
 export function SyncableFilterBar({
   table,
   state,
+  tableView,
+  syncView,
+  empty,
 }: {
   table: Resource;
   state: ReturnType<typeof useSyncableFilters>;
+  tableView: boolean;
+  syncView: boolean;
+  empty: boolean;
 }) {
   const store = useStore();
   const filterId = useId();
@@ -33,16 +56,114 @@ export function SyncableFilterBar({
   const search = ShowRoute.useSearch();
   const canWrite = useCanWrite(table);
   const registry = useAppExecutions();
-  useSyncExternalStore(
-    registry?.subscribe ?? noSubscribe,
-    registry?.getSnapshot ?? emptySnapshot,
-    registry?.getSnapshot ?? emptySnapshot,
-  );
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
-  if (!state.flat) return null;
+  const [hydrationError, setHydrationError] = useState<{
+    key: string;
+    message: string;
+  }>();
   const selected = state.selected;
+  const drive = state.flat
+    ? (getTableDrive(store, table) ?? store.getDrive())
+    : undefined;
+  const tableSubject = table.subject;
+  const direct = state.directRule?.resource;
+  const directRule =
+    tableView &&
+    direct &&
+    (!selected || selected.resource.subject === direct.subject)
+      ? direct
+      : undefined;
+  const statusProperty = state.properties?.['syncable-mirror-status'];
+  const hydrationKey =
+    drive && directRule
+      ? syncableExecutionKey(drive, tableSubject, directRule.subject)
+      : undefined;
+  const automaticError =
+    hydrationError?.key === hydrationKey ? hydrationError?.message : undefined;
+  const hydrate = state.flat && state.ready && empty && canWrite;
+  const statusRule = selected?.resource ?? directRule;
+  const executionKey = syncableExecutionKey(
+    drive ?? '',
+    tableSubject,
+    statusRule?.subject,
+  );
+  const execution = useSyncExternalStore(
+    registry?.subscribe ?? noSubscribe,
+    () =>
+      registry?.isQueued(executionKey)
+        ? 'queued'
+        : registry?.isRunning(executionKey)
+          ? 'running'
+          : 'idle',
+    idleExecution,
+  );
+  const queued = execution === 'queued';
+  const running = execution === 'running';
+
+  useEffect(() => {
+    if (
+      !hydrate ||
+      !registry ||
+      !drive ||
+      !directRule ||
+      !statusProperty ||
+      !hydrationKey ||
+      automaticError !== undefined
+    )
+      return;
+    const actor = store.getAgent();
+    if (!actor?.subject) return;
+
+    const controller = new AbortController();
+    const canStart = () =>
+      !controller.signal.aborted &&
+      store.getAgent() === actor &&
+      !registry.isRunning(hydrationKey) &&
+      canHydrateRule(directRule, statusProperty);
+
+    if (!canStart()) return;
+
+    void directRule
+      .canWrite(actor.subject)
+      .then(async ([canWriteRule]) => {
+        if (!canWriteRule || !canStart()) return;
+        const spec = await appProfile(
+          store,
+          drive,
+          tableSubject,
+          registry,
+          controller.signal,
+          false,
+          undefined,
+          directRule.subject,
+        );
+        if (canStart()) return spec.profile.execution?.('start');
+      })
+      .catch(reason => {
+        if (!controller.signal.aborted)
+          setHydrationError({
+            key: hydrationKey,
+            message: String(reason?.message ?? reason),
+          });
+      });
+
+    // The registry owns an accepted worker after this Table view closes.
+    return () => controller.abort();
+  }, [
+    automaticError,
+    directRule,
+    drive,
+    hydrate,
+    hydrationKey,
+    registry,
+    statusProperty,
+    store,
+    tableSubject,
+  ]);
+
+  if (!state.flat) return null;
   const descriptor = parseSyncableCollectionView(
     table.get(state.properties!['syncable-collection-view']),
     table.get(core.properties.classtype),
@@ -54,7 +175,6 @@ export function SyncableFilterBar({
     >[number],
   ) => {
     if (!selected) return;
-    const drive = getTableDrive(store, table) ?? store.getDrive();
     if (!drive) return;
     const target = await saveFlatSyncableSelection(
       store,
@@ -85,8 +205,8 @@ export function SyncableFilterBar({
           .get(dataBrowser.properties.viewKind) === kind,
     ),
   )[0];
-  const status = selected?.resource.get(
-    state.properties!['syncable-mirror-status'],
+  const status = (
+    statusProperty ? statusRule?.get(statusProperty) : undefined
   ) as
     | {
         paused?: boolean;
@@ -95,11 +215,11 @@ export function SyncableFilterBar({
         lastSuccess?: string;
       }
     | undefined;
-  const executionKey = syncableExecutionKey(
-    getTableDrive(store, table) ?? store.getDrive() ?? '',
-    table.subject,
-    selected?.resource.subject,
-  );
+  const alert =
+    error ??
+    state.error ??
+    automaticError ??
+    (!selected && typeof status?.error === 'string' ? status.error : undefined);
 
   const choose = (subject: string) => {
     setRenaming(false);
@@ -121,19 +241,19 @@ export function SyncableFilterBar({
   };
 
   const openSync = () => {
-    const syncView = views.find(
+    const syncViewSubject = views.find(
       subject =>
         !ruleSubjects.has(subject) &&
         store
           .getResourceLoading(subject)
           .get(dataBrowser.properties.viewKind) === 'syncables',
     );
-    if (syncView)
+    if (syncViewSubject)
       void navigate({
         to: '.',
         search: {
           ...search,
-          view: syncView,
+          view: syncViewSubject,
           syncFilter: selected?.resource.subject,
         },
       });
@@ -148,7 +268,12 @@ export function SyncableFilterBar({
         value={selected?.resource.subject ?? ''}
         onChange={event => choose(event.target.value)}
       >
-        <option value=''>All cached rows</option>
+        {!syncView && <option value=''>All cached rows</option>}
+        {syncView && !selected && (
+          <option disabled value=''>
+            Select a saved filter
+          </option>
+        )}
         {state.rules.map(rule => (
           <option key={rule.resource.subject} value={rule.resource.subject}>
             {String(
@@ -157,13 +282,17 @@ export function SyncableFilterBar({
           </option>
         ))}
       </select>
-      {selected && (
+      {(selected ||
+        queued ||
+        running ||
+        status?.error ||
+        status?.incomplete) && (
         <span role='status'>
           {status?.paused
             ? 'Paused'
-            : registry?.isQueued(executionKey)
+            : queued
               ? 'Queued'
-              : registry?.isRunning(executionKey)
+              : running
                 ? 'Syncing'
                 : status?.error
                   ? 'Needs attention'
@@ -174,7 +303,7 @@ export function SyncableFilterBar({
                       : 'Ready to sync'}
         </span>
       )}
-      {selected && !status?.lastSuccess && (
+      {!syncView && selected && !status?.lastSuccess && (
         <span>
           This filter has no completed sync yet. Choose All cached rows to
           browse data stored by other filters or earlier imports.
@@ -220,12 +349,12 @@ export function SyncableFilterBar({
             }}
           >{`Open ${relationship.title}`}</Button>
         ))}
-      <Button subtle onClick={openSync}>
-        {selected ? 'Sync settings' : 'Manage sync filters'}
-      </Button>
-      {(error ?? state.error) && (
-        <span role='alert'>{error ?? state.error}</span>
+      {!syncView && (
+        <Button subtle onClick={openSync}>
+          {selected ? 'Sync settings' : 'Manage sync filters'}
+        </Button>
       )}
+      {alert && <span role='alert'>{alert}</span>}
     </Bar>
   );
 }

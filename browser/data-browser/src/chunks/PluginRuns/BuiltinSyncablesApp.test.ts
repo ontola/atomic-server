@@ -222,6 +222,7 @@ const store = {
 const registry = {
   isRunning: vi.fn(() => false),
   isQueued: vi.fn(() => false),
+  pageProgress: vi.fn(() => undefined),
   start: vi.fn(async () => undefined),
   cancel: vi.fn(),
   ready: vi.fn(),
@@ -255,6 +256,7 @@ beforeEach(() => {
   );
   vi.mocked(migrateSyncableApiViews).mockResolvedValue(undefined);
   vi.stubGlobal('location', { href: 'https://node.example/current' });
+  vi.stubGlobal('localStorage', {});
   state.actor = { subject: 'atomic:agent:person' };
   state.principalApps = [];
   state.queryScope.mockResolvedValue(true);
@@ -308,6 +310,32 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+it('passes the scoped OAuth return to the platform chooser', async () => {
+  const connectionId = 'n'.repeat(43);
+  state.proxy.preferredKeyedConnection.mockResolvedValue(connectionId);
+
+  const spec = await open();
+
+  expect(state.proxy.preferredKeyedConnection).toHaveBeenCalledWith(
+    { drive: 'drive', app: 'atomic:source' },
+    'calendar-service',
+  );
+  expect(spec.profile.context).toMatchObject({
+    preferredConnectionId: connectionId,
+  });
+  expect(state.proxy.consumePreferredKeyedConnection).not.toHaveBeenCalled();
+});
+
+it('keeps the OAuth return out of a collection profile', async () => {
+  state.kind = 'collection';
+  state.proxy.preferredKeyedConnection.mockResolvedValue('n'.repeat(43));
+
+  const spec = await open();
+
+  expect(state.proxy.preferredKeyedConnection).not.toHaveBeenCalled();
+  expect(spec.profile.context).not.toHaveProperty('preferredConnectionId');
 });
 
 it('reconnects only the explicitly requested owned verified connection from the platform root', async () => {
@@ -415,6 +443,7 @@ it('passes validated installation aliases and blocking warnings into the existin
     expect.any(Function),
     expect.any(Function),
     expect.any(Function),
+    undefined,
   );
 });
 

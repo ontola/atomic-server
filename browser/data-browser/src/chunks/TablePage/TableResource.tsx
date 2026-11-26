@@ -162,6 +162,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     views,
     visibleTabs,
     activeView,
+    view,
     setActiveView,
     createView,
     setViewKind,
@@ -1581,7 +1582,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
             />
           )}
           {!embedded && (
-            <SyncableFilterBar table={resource} state={syncableFilters} />
+            <SyncableFilterBar
+              table={resource}
+              state={syncableFilters}
+              tableView={
+                viewKind === 'table' &&
+                !appView &&
+                !!activeView &&
+                !view.loading &&
+                !view.error
+              }
+              syncView={viewKind === 'syncables'}
+              empty={ready && collection.totalMembers === 0}
+            />
           )}
           {/* Above the view switch, not inside the table branch: the filter
            * dropdown in the tab bar is offered for every view kind, so a kanban /

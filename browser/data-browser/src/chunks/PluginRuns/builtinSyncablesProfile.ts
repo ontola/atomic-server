@@ -742,6 +742,7 @@ export function syncProxyTransport(
     proof: VerifiedSyncablePrincipal,
   ) => void | Promise<void>,
   onObserved?: (observations: readonly EntityObservation[]) => Promise<void>,
+  onPage?: (request: TransportRequest, response?: TransportResponse) => void,
 ): ProxyHost {
   const assertCurrent = () => {
     assertSessionCurrent();
@@ -1137,9 +1138,12 @@ export function syncProxyTransport(
           : undefined;
         assertReadCurrent();
         signal?.throwIfAborted();
+        const reportPage = input.readProgress === 'page' ? onPage : undefined;
+        reportPage?.(request);
         const response = await relay(request, slot, signal, verifiedActive);
         assertReadCurrent();
         signal?.throwIfAborted();
+        reportPage?.(request, response);
         const observations = await plan.observe(request, response);
         assertReadCurrent();
         signal?.throwIfAborted();

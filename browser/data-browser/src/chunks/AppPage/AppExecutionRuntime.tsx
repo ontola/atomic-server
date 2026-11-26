@@ -36,6 +36,7 @@ export interface AppExecutionRun {
   queued?: boolean;
   prepare?: (signal: AbortSignal) => Promise<AppExecutionSpec>;
   failed?: AppExecutionSpec['failed'];
+  pageProgress?: { page: number; total?: number };
 }
 
 export interface AppExecutionStartOptions {
@@ -69,6 +70,18 @@ export class AppExecutionRegistry {
   }
   isRunning = (key: string) => this.runs.has(key);
   isQueued = (key: string) => this.runs.get(key)?.queued === true;
+  pageProgress(key: string) {
+    return this.runs.get(key)?.pageProgress;
+  }
+  reportPage(
+    key: string,
+    signal: AbortSignal,
+    progress: NonNullable<AppExecutionRun['pageProgress']>,
+  ) {
+    const run = this.runs.get(key);
+    if (run?.controller.signal === signal && !signal.aborted)
+      run.pageProgress = progress;
+  }
   start = async (
     key: string,
     prepare: (signal: AbortSignal) => Promise<AppExecutionSpec>,

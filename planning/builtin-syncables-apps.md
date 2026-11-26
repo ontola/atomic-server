@@ -6,8 +6,7 @@ actions, paged entity Collection compatibility, faster Sync controls, accepted
 background preparation, source invalidation recovery and generic reference-origin
 navigation. All 18 native browser journeys passed. The follow-up production
 revision `847a1955b` hides generated duplicate Collection tabs and makes bare
-links use the ordinary Table settings. Localhost serves that tested build
-against the existing drive.
+links use the ordinary Table settings.
 
 - [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
   Main/server CI on the final integration candidate, reviews and merges.
@@ -33,9 +32,11 @@ Each typed principal has one App for the selected drive/proxy/provider. The
 provider chooser stays in Apps; Public is its own App. Promotion preserves the
 existing principal subject/local ID, child tables/rows/rules, user fields and
 views. Native registrations outside iframe write roots prevent duplicate Apps,
-including after reload, a new OAuth slot, renaming and same-drive moves. App
-binding changes revoke old workers; child sync inherits the verified current
-slot. Opening the chooser cannot silently select an older orphan slot.
+including after reload, a new OAuth slot, renaming and same-drive moves. The
+OAuth return opens and installs the exact newly connected account in the
+selected drive. App binding changes revoke old workers; child sync inherits
+the verified current slot. Opening the chooser independently leaves account
+selection to the user.
 Existing conflicting data is preserved and reported rather than merged.
 
 Apps and Sync reads, query results, subscriptions and writes stay in the selected
@@ -70,12 +71,18 @@ catalog reads. The navigation column adds no API schema field. Sync
 runs in an opaque iframe through the existing bridge; the proxy retains
 credentials. Request authority comes from the selected filter, current catalog
 and actual response provenance, without Drive-root iframe write grants.
-Reopening Sync revalidates selected source, principal, catalog and permissions
-without restarting its worker. Canonical controls skip whole-integration legacy
-and adoption scans; actual workers and setup retain their full evidence checks.
-Sync status belongs to the selected saved filter. Cached rows do not imply that
-a new filter has completed a sync or contains those rows. Column label changes
-retain stable Property IDs; API-owned cell values can change on the next sync.
+Opening an empty Table starts its first sync when a single direct saved filter
+is eligible. Sync defaults to the direct or sole saved filter, and leaves a
+choice when the selection is ambiguous. Reopening Sync revalidates selected
+source, principal, catalog and permissions without restarting its worker.
+Canonical controls skip whole-integration legacy and adoption scans; actual
+workers and setup retain their full evidence checks. Running status shows the
+page being read and includes a total when declared for a single walk. Progress
+is held in the active host execution and status updates retain the same controls.
+Completed status belongs to the selected saved filter. Cached rows do not imply
+that a new filter has completed a sync or contains those rows. Column label
+changes retain stable Property IDs; API-owned cell values can change on the next
+sync.
 
 The catalog's `x-embeddedResources` declarations supply object, object-array,
 discriminator-selected and explicit scalar reference links. Host-held response
@@ -86,7 +93,9 @@ same-drive moves; moved rows are reused without reparenting or updating them.
 Partial-reference resources retain actual identity evidence until required API
 and class fields are proved. Raw values and richer/user-authored data remain
 stored; reference-only targets claim no invented collection read or membership.
-Trash, ambiguity, unproven ancestry and changed permissions fail closed. Link
+Trash, ambiguity, unproven ancestry and changed permissions fail closed. The
+reference guard compares write grants by canonical writer ID, including when
+the server acknowledges a legacy writer with the current scheme. Link
 schema/view migration preserves existing row/class IDs and user column choices.
 
 Proven legacy sources preserve subjects, local IDs, user fields and read plans.
@@ -97,6 +106,12 @@ cold rows hydrate before ownership validation. Canonical `github` replaces
 is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
+
+- The OAuth return, first table sync, page progress and writer-ID fix passed
+  3,221 Data Browser tests, both MCP tests, the app and E2E typechecks, and
+  all eight native Syncables Chromium journeys. Chromium verified page progress
+  while an Issues request was held and after reopening Sync. The report is
+  under `.e2e-runs/2026-11-26T14-08-53.154Z-kYmYFT/`.
 
 - Collection tab follow-up `847a1955bb73bb5947d9bc3fbd709043cbd03a6d` passed
   46 focused tests, app and E2E typechecks, lint, and one native Chromium

@@ -57,6 +57,7 @@ import { fetchSyncableDocument } from './syncableDocument';
 import { syncableApiSchema } from './syncableApiSchema';
 import { materializeSyncableReferences } from './syncableReferenceRecords';
 import { migrateSyncableApiViews } from './syncableApiSchemaViews';
+import { syncablePageTotal } from './syncablePageProgress';
 import {
   ruleSourceKey,
   sourceConfigFingerprint,
@@ -742,6 +743,17 @@ export async function appProfile(
     await statusResource.save();
   };
 
+  const preferredConnectionId =
+    !worker && context.kind === 'platform'
+      ? await proxy.preferredKeyedConnection(
+          { drive, app: table },
+          context.platform,
+        )
+      : undefined;
+  assertCurrent();
+  let page = 0;
+  let total: number | undefined;
+
   const profile: AppFrameProfile = {
     authoritativeQueries: true,
     retainedIdentityProperties: [
@@ -772,6 +784,7 @@ export async function appProfile(
     context: {
       ...context,
       ...(context.kind === 'platform' ? { principalApps } : {}),
+      ...(preferredConnectionId ? { preferredConnectionId } : {}),
       document,
       querySelection: trusted.querySelection,
       apiSchema,
@@ -821,6 +834,24 @@ export async function appProfile(
         );
         assertQueuedAuthority();
       },
+      worker && context.rule
+        ? (request, response) => {
+            if (!response) page++;
+            else if (total === undefined && context.rule) {
+              total = syncablePageTotal(
+                document,
+                context.rule.definition,
+                request,
+                response,
+              );
+            }
+
+            registry.reportPage(key, signal, {
+              page,
+              ...(total !== undefined && total >= page ? { total } : {}),
+            });
+          }
+        : undefined,
     ),
     ...(!worker && context.kind === 'platform'
       ? {
@@ -883,9 +914,12 @@ export async function appProfile(
         );
       }
 
+      const progress = registry.pageProgress(key);
+
       return {
         running: registry.isRunning(key),
         queued: registry.isQueued(key),
+        ...(progress ? { progress } : {}),
       };
     },
     ...(!worker && context.mode !== 'public'

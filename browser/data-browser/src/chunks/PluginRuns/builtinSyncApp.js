@@ -525,6 +525,9 @@ export function createSyncApp(store, context) {
       method,
       query,
       ...(body !== undefined ? { body } : {}),
+      ...(context.worker && request.purpose === 'list'
+        ? { readProgress: 'page' }
+        : {}),
     });
 
     if (request.purpose === 'principal' && response.status === 401)
@@ -1620,7 +1623,7 @@ function el(tag, text, className) {
   return node;
 }
 
-/** Opening Sync reads saved state; provider requests require an explicit action. */
+/** The visible controls read saved state. Accepted executions run separately. */
 export async function view({ root, store }) {
   const context = await store.getContext();
   const app = createSyncApp(store, context);
@@ -1677,6 +1680,16 @@ export async function view({ root, store }) {
   if (context.kind === 'platform') {
     let discovery;
     const errors = [];
+
+    if (context.preferredConnectionId) {
+      try {
+        await app.openPrincipal(context.preferredConnectionId);
+
+        return;
+      } catch (error) {
+        errors.push(error);
+      }
+    }
 
     try {
       discovery = await app.discoverPrincipals();
@@ -1882,73 +1895,113 @@ export async function view({ root, store }) {
     return;
   }
 
+  const selected = await store.getResource(context.rule.subject);
+  const start = button('Sync now', async () => {
+    await store.execution('start');
+    void render().catch(showError);
+  });
+  const pause = button('Pause', async () => {
+    const { paused } = await app.status();
+    if (!paused) await store.execution('cancel');
+    await app.saveStatus({ paused: !paused });
+    void render().catch(showError);
+  });
+  const pageProgress = el('p', undefined, 'muted');
+  pageProgress.setAttribute('role', 'status');
+  pageProgress.hidden = true;
+  const details = el('div');
+  controls.append(start, pause);
+  if (context.connectionId)
+    controls.append(
+      button('Reconnect', () =>
+        store.proxy.connect({
+          platform: context.platform,
+          connectionId: context.connectionId,
+        }),
+      ),
+    );
+  root.append(
+    el('h3', 'Saved filter sync'),
+    el('p', selected.get(core.name)),
+    controls,
+    pageProgress,
+    details,
+    ...warnings(),
+  );
+
   let timer;
+  let rendering = 0;
+  let previousDetails;
 
   const render = async () => {
     clearTimeout(timer);
+    const revision = ++rendering;
     const execution = await store.execution('state');
     const status = await app.status();
-    root.replaceChildren(el('h3', 'Saved filter sync'));
-    controls.replaceChildren();
-    const start = button(
-      execution.queued ? 'Queued' : execution.running ? 'Syncing' : 'Sync now',
-      async () => {
-        await store.execution('start');
-        await render();
-      },
+    if (revision !== rendering) return;
+    const startText = execution.queued
+      ? 'Queued'
+      : execution.running
+        ? 'Syncing'
+        : 'Sync now';
+    if (start.textContent !== startText) start.textContent = startText;
+    start.disabled = !!(
+      execution.running ||
+      execution.queued ||
+      status.paused ||
+      status.enabled === false
     );
-    start.disabled = execution.running || execution.queued || status.paused;
-    controls.append(
-      start,
-      button(status.paused ? 'Resume' : 'Pause', async () => {
-        if (!status.paused) await store.execution('cancel');
-        await app.saveStatus({ paused: !status.paused });
-        await render();
-      }),
-    );
-    if (context.connectionId)
-      controls.append(
-        button('Reconnect', () =>
-          store.proxy.connect({
-            platform: context.platform,
-            connectionId: context.connectionId,
-          }),
-        ),
-      );
-    const selected = await store.getResource(context.rule.subject);
-    root.append(
-      el('p', selected.get(core.name)),
-      controls,
-      ...(typeof status.rows === 'number'
-        ? [
-            el(
-              'p',
-              status.rows + ' entries read in the last attempt for this filter',
-            ),
-          ]
-        : []),
-      status.lastSuccess
-        ? el(
+    const pauseText = status.paused ? 'Resume' : 'Pause';
+    if (pause.textContent !== pauseText) pause.textContent = pauseText;
+    const progress = execution.running && execution.progress;
+    const pageText = progress
+      ? `Syncing page ${progress.page}${progress.total ? ` of ${progress.total}` : ''}`
+      : '';
+    pageProgress.hidden = !pageText;
+    if (pageProgress.textContent !== pageText)
+      pageProgress.textContent = pageText;
+
+    const detailsStamp = JSON.stringify([
+      status.rows,
+      status.lastSuccess,
+      status.incomplete,
+      status.added,
+      status.changed,
+      status.unchanged,
+      status.error,
+    ]);
+
+    if (detailsStamp !== previousDetails) {
+      previousDetails = detailsStamp;
+      details.replaceChildren();
+      if (typeof status.rows === 'number')
+        details.append(
+          el(
             'p',
-            'Last completed sync for this filter: ' + status.lastSuccess,
-            'muted',
-          )
-        : el(
-            'p',
-            'This filter has not completed a sync yet. Existing rows may come from another filter or an earlier import.',
-            'muted',
+            status.rows + ' entries read in the last attempt for this filter',
           ),
-    );
-    if (status.lastSuccess || status.incomplete)
-      root.append(
+        );
+      details.append(
         el(
           'p',
-          `${status.added ?? 0} added · ${status.changed ?? 0} changed · ${status.unchanged ?? 0} unchanged`,
+          status.lastSuccess
+            ? 'Last completed sync for this filter: ' + status.lastSuccess
+            : 'This filter has not completed a sync yet. Existing rows may come from another filter or an earlier import.',
           'muted',
         ),
       );
-    if (status.error) showError(status.error);
-    root.append(...warnings());
+      if (status.lastSuccess || status.incomplete)
+        details.append(
+          el(
+            'p',
+            `${status.added ?? 0} added · ${status.changed ?? 0} changed · ${status.unchanged ?? 0} unchanged`,
+            'muted',
+          ),
+        );
+      if (status.error) showError(status.error);
+      else root.querySelector('[data-sync-error]')?.remove();
+    }
+
     if (execution.running || execution.queued)
       timer = setTimeout(() => void render().catch(showError), 500);
   };

@@ -508,6 +508,7 @@ export const store = {
       query,
       body,
       ifMatch,
+      readProgress,
     }) {
       return proxyRequest({
         platform,
@@ -517,6 +518,7 @@ export const store = {
         query,
         body,
         ifMatch,
+        readProgress,
       });
     },
 
@@ -711,6 +713,7 @@ async function proxyRequest({
   query,
   body,
   ifMatch,
+  readProgress,
 }) {
   const verb = String(method).toUpperCase();
   if (!PROXY_METHODS.includes(verb)) throw new Error('Invalid proxy method');
@@ -730,6 +733,7 @@ async function proxyRequest({
       query,
       body,
       ifMatch,
+      ...(readProgress === 'page' ? { readProgress } : {}),
     });
 
     return {

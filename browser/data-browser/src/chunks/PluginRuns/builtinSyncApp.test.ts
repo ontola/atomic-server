@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { URL as NodeURL } from 'node:url';
+import { syncablePageTotal } from './syncablePageProgress';
 import {
   bindCollection,
   deriveOntology,
@@ -424,7 +425,11 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
     },
     ui: { openResource: vi.fn() },
     execution: vi.fn(
-      async (): Promise<{ running: boolean; queued?: boolean }> => ({
+      async (): Promise<{
+        running: boolean;
+        queued?: boolean;
+        progress?: { page: number; total?: number };
+      }> => ({
         running: false,
       }),
     ),
@@ -758,7 +763,63 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       ),
     ).toHaveLength(1);
     expect(nodes(set.data, 'record')).toHaveLength(0);
+    expect(set.store.ui.openResource).not.toHaveBeenCalled();
     expect(set.store.execution).not.toHaveBeenCalledWith('start');
+  });
+
+  it('opens only the account connected in the OAuth handoff', async () => {
+    const set = setup('platform', { preferredConnectionId: 'new-oauth-slot' });
+    set.store.proxy.connections.mockResolvedValue([
+      { connectionId: 'old-slot', platform: 'example-service' },
+      { connectionId: 'new-oauth-slot', platform: 'example-service' },
+    ]);
+
+    await view({ root: document.createElement('div'), store: set.store });
+
+    expect(set.request.mock.calls.map(([request]) => request)).toEqual([
+      expect.objectContaining({
+        path: 'v2/session',
+        connectionId: 'new-oauth-slot',
+      }),
+    ]);
+    const saved = nodes(set.data, 'principal');
+    expect(saved).toHaveLength(1);
+    const [subject, row] = saved[0];
+    expect(config(row)).toMatchObject({
+      principal,
+      connectionId: 'new-oauth-slot',
+    });
+    expect(set.store.ui.openResource.mock.calls).toEqual([[subject]]);
+  });
+
+  it('offers the chooser when opening the OAuth account fails', async () => {
+    const set = setup('platform', { preferredConnectionId: 'slot' });
+    set.store.ui.openResource.mockRejectedValueOnce(
+      new Error('Could not install the connected account'),
+    );
+    const element = document.createElement('div');
+
+    await view({ root: element, store: set.store });
+
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain(
+      'Could not install the connected account',
+    );
+    expect(element.textContent).toContain('Connect account');
+    expect(element.textContent).toContain('Public');
+    const account = [...element.querySelectorAll('button')].find(
+      button => button.textContent === 'Ada',
+    );
+    expect(account).toBeDefined();
+    account!.click();
+    const subject = nodes(set.data, 'principal').find(
+      ([, row]) => config(row).connectionId === 'slot',
+    )![0];
+    await vi.waitFor(() =>
+      expect(set.store.ui.openResource.mock.calls).toEqual([
+        [subject],
+        [subject],
+      ]),
+    );
   });
 
   it('keeps Public and connection controls available when a principal cannot be resolved', async () => {
@@ -1834,6 +1895,68 @@ describe('shared entity tables and independent saved filters', () => {
     expect(element.textContent).not.toContain('Never');
     expect(set.request).not.toHaveBeenCalled();
     expect(set.store.ui.openResource).not.toHaveBeenCalled();
+  });
+
+  it('advances visible page progress without replacing the active Sync controls', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const set = setup();
+      set.store.execution.mockResolvedValue({
+        running: true,
+        progress: { page: 1 },
+      });
+      const element = document.createElement('div');
+      await view({ root: element, store: set.store });
+      const progress = element.querySelector('[role=status]')!;
+      const start = element.querySelector('button');
+      expect(progress.textContent).toBe('Syncing page 1');
+      set.store.execution.mockResolvedValue({
+        running: true,
+        progress: { page: 3, total: 8 },
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(element.querySelector('[role=status]')).toBe(progress);
+      expect(progress.textContent).toBe('Syncing page 3 of 8');
+      expect(element.querySelector('button')).toBe(start);
+      set.store.execution.mockResolvedValue({ running: false });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(progress.textContent).toBe('');
+      expect(start?.textContent).toBe('Sync now');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes a page total from a matching last Link and leaves unreported totals unknown', () => {
+    const document = apiDocument();
+    const bound = bindCollection(document, { collection: 'myTeams' });
+    const selection = {
+      version: 1 as const,
+      resource: bound.resource,
+      source: { kind: 'bound' as const, bound },
+    };
+    const request = {
+      url: new URL('/v2/me/teams', origin),
+      method: 'GET' as const,
+      headers: {},
+    };
+    const total = (link: string) =>
+      syncablePageTotal(document, selection, request, {
+        status: 200,
+        body: '[]',
+        headers: { link },
+      });
+    expect(
+      total(
+        '</v2/me/teams?page=2>; rel="next", </v2/me/teams?page=8>; rel="last"',
+      ),
+    ).toBe(8);
+    expect(total('</v2/me/teams?page=2>; rel="next"')).toBeUndefined();
+    expect(
+      total('<https://other.example/v2/me/teams?page=8>; rel="last"'),
+    ).toBeUndefined();
   });
 
   it('keeps successful history scoped to the selected filter rather than inferring it from stored rows', async () => {
