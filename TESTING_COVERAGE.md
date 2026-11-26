@@ -732,6 +732,13 @@ once with independent work overlapping preparation. These graph/fixture tests
 do not establish a real prepared application image's full-suite acceptance or
 the wall-time improvement; that needs a new frozen-candidate CI run.
 
+The DO-hosted wrapper has separate fake-provider regressions in
+`scripts/ci-fanout-cloud.test.py`: deadline/account/volume ownership, sanitized
+evidence preservation, verified bundle completion and independent reaper
+cleanup. The launcher plan includes its extra control machine and retained
+volume in the cost bound. A real disconnected-monitoring run remains necessary
+to establish end-to-end cloud-init/volume behavior; fake tests do not prove it.
+
 `scripts/ci-fanout-warm.test.py` checks the reusable warm wrapper with fake
 provider responses: read-only snapshot/budget planning, ledger-before-create,
 lost creation/deletion responses, account drift, foreign/attached volume

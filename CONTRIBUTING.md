@@ -349,13 +349,14 @@ unexpectedly skipped/interrupted retry keeps the result red. Other CI checks
 are not automatically repeated as whole suites.
 Source, build, transport, malformed-report and deadline errors still stop the
 run because the remaining results could not be validated safely.
-Before that first browser shard, the runner also copies the completed bundle
-and its original build receipt to `artifact_archive_dir` on the controller's
-machine. This archive survives Droplet deletion and can restore a verified
-same-commit cache on a fresh runner. A browser-preparation failure preserves an
-already-running Rust check within the existing deadline; explicit interruption
-and the deadline still stop the run. Failed backups are reported, and cleanup
-continues within its time bound.
+The bundle is shared directly between DO machines. Controller backup defaults
+to disabled (`host_bundle_backup: false`); explicitly enabling it copies the
+completed bundle and original build receipt to `artifact_archive_dir` in the
+background, bounded to 120 seconds and the original deadline. Only a fully
+verified archive can restore a same-commit build on a fresh runner. A
+browser-preparation failure preserves an already-running Rust check within the
+existing deadline; explicit interruption and the deadline still stop the run.
+Failed backups are reported, and cleanup cancels unfinished transfers.
 Full-suite acceptance requires successful independent checks and an exact,
 disjoint union of all browser shard reports. Quota and a listed machine size
 do not guarantee regional capacity. These commands do not dispatch GitHub CI.
@@ -363,6 +364,22 @@ Public-IP artifact transfers count against the sender account's bandwidth
 allowance. The runner records payload bytes separately from compute costs;
 the eventual bandwidth bill depends on that account's monthly usage and
 allowance. See [DigitalOcean bandwidth billing](https://docs.digitalocean.com/platform/billing/bandwidth/).
+
+For laptop-independent orchestration, use `scripts/ci-fanout-cloud-launch.py`.
+Its read-only `plan` checks the three test machines plus a small separate
+controller, a regional 10-GiB volume and the complete time/cost bound. Only
+`launch` provisions resources. Cloud-init starts separate supervisor and
+reaper services before tool installation, so closing the monitoring connection
+does not stop CI. The absolute deadline includes controller bootstrap time.
+Credentials and the live runtime stay on the temporary controller boot disk;
+only allowlisted evidence and verified build archives are copied to the
+explicitly retained volume. `collect` retrieves reports, never the large build
+cache. After collecting, `finalize` requests controller removal; the independent
+reaper also removes it at the original deadline when the laptop is offline.
+The build volume remains paid storage until deliberately removed. See the
+[DO operator guide](docs/skills/atomic-do-ci/references/operations.md) for the
+configuration, ownership/recovery rules and result interpretation. This wrapper
+runs the existing ten-check/full-browser scheduler; it is not another test lane.
 
 ```sh
 # Make sure nextest is installed

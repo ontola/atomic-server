@@ -210,6 +210,68 @@ explicitly preserved in authorized DO storage. Persistent Spaces or snapshot
 storage has its own retention/cost scope; never silently keep a paid VM to retain
 a build. The current runner does not provide a Spaces archive backend.
 
+## DO-hosted control and retained build volume
+
+`scripts/ci-fanout-cloud-launch.py` runs the existing cold controller on a
+small temporary DO machine. This is additional control compute, included in the
+run budget; the requested node count still describes the test fleet. The same
+explicit account UUID, clean source SHA, test key and all ten checks/full browser
+inventory apply. Prepare and publish the scripts before pinning the candidate.
+
+Extend the ordinary configuration with explicit `cloud_controller_size`,
+`expected_controller_hourly_rate`, `cloud_volume_name`, `cloud_volume_gib: 10`,
+`expected_volume_hourly_rate` and `max_total_usd`. For reuse, also supply the exact
+`cloud_volume_id`; never adopt an arbitrary same-name volume. Use live provider
+prices and a region supporting the controller, workers and volume. The planning
+bound includes control compute, test compute, volume time and cleanup reserve.
+The retained volume's continuing storage charge is intentional and separate
+from a completed run's compute cost. The November 2026 standard rate was
+[$0.10/GiB/month](https://docs.digitalocean.com/products/volumes/details/pricing/),
+so 10 GiB is about $1/month; verify before a later authorization.
+
+```sh
+python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json plan
+python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json launch
+python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json status
+python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json collect
+python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json finalize
+```
+
+The one-hour clock starts with the first controller creation request, before
+its installation and source checkout. Cloud-init installs separate supervisor
+and reaper units before bootstrap work; monitoring SSH is optional after launch.
+The reaper does not depend on installing doctl, Git or Dagger. It enforces the
+same absolute deadline, verifies resource identity before deletion and retries
+provider cleanup failures. A systemd cgroup kill cannot take out the independent
+reaper together with the test controller.
+
+The regional disk must match its recorded ID, name, size and attachment. Mount
+its existing ext4 filesystem; never format an existing cache volume. The build
+archive uses original successful build receipts, manifest ABI 2 and payload
+hashes. A partial, mismatched or corrupt copy cannot bypass building. Cache
+validation is distinct from fresh test execution. A failed archive operation
+must be reported even if application tests pass: successful CI alone does not
+prove that the requested build was preserved.
+
+Keep selected-account credentials, operator private keys, source and the live
+runtime on the temporary controller's boot disk. The retained disk receives
+only allowlisted reports/state/logs plus validated build archives, with original
+and persistent paths recorded. Do not persist `doctl.yaml`, private keys,
+cloud-init user data or symlinks. Launcher user data is sensitive even though it
+is outside Git; never print it. The launcher needs PyYAML to select only the
+requested context from a local YAML doctl config; the remote supervisor uses
+stdlib Python and JSON credentials.
+
+After successful test-fleet cleanup, the small controller remains available
+until `finalize` or the original deadline so reports can be collected. If the
+laptop is unavailable, evidence and the build remain on the retained disk after
+the controller deletes itself. Recover by explicitly attaching that recorded
+volume to another authorized controller in the same region; do not create an
+untracked second test fleet. Independently verify worker/controller/key absence
+and retain only the authorized build volume plus any pre-existing intended
+snapshot. Record ongoing volume storage, controller lifetime and test-machine
+lifetimes separately. Fetching reports must not download the multi-GB cache.
+
 ## Monitor, interpret and clean up
 
 Keep the controller alive and the laptop awake if it owns orchestration; an
