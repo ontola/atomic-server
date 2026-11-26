@@ -13907,4 +13907,26 @@ msgstr "Tu secreto"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register here"
-msgstr "Registrarse aquí"
+msgstr "Regístrate aquí"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Descarga la aplicación de escritorio"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Abre tus unidades desde el Dock o la barra de tareas, también sin conexión"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Instalando la actualización…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Actualización disponible"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Reinicia para usar la versión {0}"

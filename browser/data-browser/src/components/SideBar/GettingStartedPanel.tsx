@@ -36,6 +36,8 @@ import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { UiHint } from '../UiHint';
 import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
 import { SectionTitle } from '@views/Drive/SectionTitle';
+import { DESKTOP_DOWNLOAD_URL } from '@components/Logo';
+import { openExternal } from '@helpers/openExternal';
 
 /** Where the list is shown: the sidebar panel, or a section of the drive page. */
 export type GettingStartedPlacement = 'sidebar' | 'page';
@@ -214,6 +216,15 @@ function Steps({
       hint: 'Write to someone you invited, like a colleague or friend',
       pointer: 'Send a message here',
       run: showMessageDialog,
+    },
+    desktop: {
+      title: 'Get the desktop app',
+      hint: 'Open your drives from the Dock or taskbar, also offline',
+      pointer: 'Get the desktop app',
+      run: () => {
+        progress.markDesktopDownloadOpened();
+        void openExternal(DESKTOP_DOWNLOAD_URL);
+      },
     },
   };
 

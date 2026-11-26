@@ -1,6 +1,6 @@
 {
   "name": "@tomic/utils",
-  "version": "0.41.0-beta.8",
+  "version": "0.41.0",
   "private": true,
   "type": "module",
   "license": "MIT",

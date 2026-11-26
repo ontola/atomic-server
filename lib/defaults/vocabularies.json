@@ -268,6 +268,20 @@
     ]
   },
   {
+    "@id": "https://atomicdata.dev/preferences/v1/desktop-download-opened",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/name": "Desktop download opened",
+    "https://atomicdata.dev/properties/shortname": "desktop-download-opened",
+    "https://atomicdata.dev/properties/description": "The person opened the desktop app download from the Get the desktop app step.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/preferences/v1",
+    "https://atomicdata.dev/properties/read": [
+      "https://atomicdata.dev/agents/publicAgent"
+    ]
+  },
+  {
     "@id": "https://atomicdata.dev/preferences/v1",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/class/ontology"
@@ -279,7 +293,8 @@
       "https://atomicdata.dev/preferences/v1/show-api-plugins",
       "https://atomicdata.dev/preferences/v1/show-experimental-plugins",
       "https://atomicdata.dev/preferences/v1/onboarding-panel-open",
-      "https://atomicdata.dev/preferences/v1/welcome-drive"
+      "https://atomicdata.dev/preferences/v1/welcome-drive",
+      "https://atomicdata.dev/preferences/v1/desktop-download-opened"
     ],
     "https://atomicdata.dev/properties/read": [
       "https://atomicdata.dev/agents/publicAgent"

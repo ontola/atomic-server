@@ -13903,3 +13903,25 @@ msgstr "Kunci rahasiamu"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register here"
 msgstr "Daftar di sini"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Unduh aplikasi desktop"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Buka drive Anda dari Dock atau bilah tugas, bahkan saat offline"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Installing the update…"
+msgstr "Memasang pembaruan…"
+
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Update available"
+msgstr "Pembaruan tersedia"
+
+#. 0: version
+#: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
+msgid "Restart to use version {0}"
+msgstr "Mulai ulang untuk memakai versi {0}"
