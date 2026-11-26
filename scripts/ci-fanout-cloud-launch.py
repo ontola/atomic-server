@@ -303,9 +303,14 @@ class CloudLauncher:
 
     def check_volume(self, volume, reused=False):
         region = volume.get('region', {}).get('slug') if volume else None
+        filesystem = volume.get('filesystem_type') if volume else None
+        # DO may omit filesystem metadata for an existing guest-formatted disk.
+        # Only explicit ID reuse permits unknown API metadata; remote blkid and
+        # the exact ext4 mount are still mandatory, and never format the disk.
+        filesystem_ok = filesystem == 'ext4' or (reused and self.config.get('cloud_volume_id') and filesystem in ('', None))
         if (not volume or volume['name'] != self.config['cloud_volume_name']
                 or volume['size_gigabytes'] != 10 or region != self.config['cloud_controller_region']
-                or volume.get('filesystem_type') != 'ext4' or volume.get('droplet_ids')):
+                or not filesystem_ok or volume.get('droplet_ids')):
             raise ValueError('persistent volume identity, size, region, filesystem or attachment differs')
         if reused and volume['id'] != self.config['cloud_volume_id']:
             raise ValueError('persistent volume ID differs from explicit authorization')

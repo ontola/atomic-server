@@ -987,6 +987,32 @@ class LauncherTests(unittest.TestCase):
             controller.plan()
         self.assertEqual(self.api.creates, [])
 
+    def test_explicit_reuse_allows_unknown_api_filesystem_without_creating_resources(self):
+        for filesystem in ('', None):
+            with self.subTest(filesystem=filesystem):
+                self.api.volumes = [{'id': VOLUME, 'name': 'fixture-cache', 'size_gigabytes': 10,
+                                     'region': {'slug': 'mem1'}, 'filesystem_type': filesystem, 'droplet_ids': []}]
+                controller = launch.CloudLauncher(dict(self.config, cloud_volume_id=VOLUME), api=self.api,
+                                                  run=self.run_command, now=lambda: NOW)
+                with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan):
+                    controller.plan()
+                self.assertEqual(self.api.creates, [])
+                self.assertFalse(Path(self.config['runtime_dir']).exists())
+
+    def test_reuse_rejects_known_wrong_filesystem_and_new_volume_requires_ext4(self):
+        record = {'id': VOLUME, 'name': 'fixture-cache', 'size_gigabytes': 10,
+                  'region': {'slug': 'mem1'}, 'droplet_ids': []}
+        reused = launch.CloudLauncher(dict(self.config, cloud_volume_id=VOLUME), api=self.api,
+                                      run=self.run_command, now=lambda: NOW)
+        for filesystem in ('xfs', 'btrfs', 'unknown'):
+            with self.subTest(reused_filesystem=filesystem), self.assertRaises(ValueError):
+                reused.check_volume(dict(record, filesystem_type=filesystem), reused=True)
+        for filesystem in ('', None, 'xfs'):
+            with self.subTest(new_filesystem=filesystem), self.assertRaises(ValueError):
+                self.controller.check_volume(dict(record, filesystem_type=filesystem), reused=False)
+        self.controller.check_volume(dict(record, filesystem_type='ext4'), reused=False)
+        self.assertEqual(self.api.creates, [])
+
     def test_oversized_userdata_is_rejected_before_any_paid_create(self):
         payload = b''.join(hashlib.sha512(str(index).encode()).digest() for index in range(2048))
         scripts = dict(self.scripts, **{'ci-fanout-cloud.py': self.scripts['ci-fanout-cloud.py'] + b'\n# ' + base64.b64encode(payload)})
