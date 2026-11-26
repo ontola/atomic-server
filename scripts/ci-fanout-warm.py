@@ -17,6 +17,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -77,7 +78,10 @@ def validate_config(config, module):
         timestamp(config['absolute_deadline'])
     snapshots = config.get('source_snapshots')
     if snapshots is None and len(config['accounts']) == 1:
-        snapshots = {config['accounts'][0]['context']: {
+        companion = config.get('source_snapshot_profile', {})
+        if not isinstance(companion, dict):
+            raise ValueError('source_snapshot_profile must be an explicit companion object')
+        snapshots = {config['accounts'][0]['context']: {**companion,
             'id': config.get('source_snapshot_id'), 'name': config.get('source_snapshot_name')}}
     contexts = {account['context'] for account in config['accounts']}
     if not isinstance(snapshots, dict) or set(snapshots) != contexts:
@@ -90,7 +94,48 @@ def validate_config(config, module):
                 or any(ord(char) < 32 for char in snapshot['name'])):
             raise ValueError('invalid source snapshot for ' + context)
     config['source_snapshots'] = snapshots
+    validate_cache_profile(config)
     return config
+
+
+def validate_cache_profile(config, dagger_version=None):
+    namespace = config.get('cache_namespace')
+    if not isinstance(namespace, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', namespace):
+        raise ValueError('warm mode requires the stable snapshot cache namespace')
+    for profile in config['source_snapshots'].values():
+        version = profile.get('dagger_engine_version', '')
+        if (profile.get('cache_namespace') != namespace or not isinstance(version, str) or not re.fullmatch(r'\d+\.\d+\.\d+', version)
+                or (dagger_version is not None and version != dagger_version)
+                or profile.get('architecture') != 'linux/amd64' or profile.get('docker_data_root') != '/mnt/atomic-ci/docker'):
+            raise ValueError('snapshot cache namespace, pinned engine, architecture or Docker root differs')
+
+
+def validate_startup_cache(config, node, entry, observation):
+    """Prove restored nonempty engine state, never a job cache hit."""
+    validate_cache_profile(config)
+    profile = config['source_snapshots'][node['account']]
+    source = entry.get('source_snapshot', {})
+    device = '/dev/disk/by-id/scsi-0DO_Volume_' + entry['name']
+    version = profile['dagger_engine_version']
+    image_version = re.compile(r'^registry\.dagger\.io/engine:v?' + re.escape(version) + r'(?:@sha256:[a-f0-9]+)?$')
+    account = next(account for account in config['accounts'] if account['context'] == node['account'])
+    if (entry.get('node_id') != node['id'] or entry.get('account') != node['account'] or not entry.get('id')
+            or entry.get('expected_uuid') != account['expected_uuid'] or entry.get('absence_verified') is not True
+            or entry.get('name') != node['name'] + '-cache'
+            or source.get('id') != profile['id'] or source.get('name') != profile['name']
+            or observation.get('volume_name') != entry['name'] or observation.get('device') != device
+            or observation.get('mount_target') != '/mnt/atomic-ci' or observation.get('filesystem_type') != 'ext4'
+            or not observation.get('filesystem_uuid')
+            or observation.get('device_realpath', device) != observation.get('mount_source_realpath', observation.get('mount_source'))
+            or observation.get('docker_root_dir') != profile['docker_data_root']
+            or type(observation.get('restored_docker_entries')) is not int or observation['restored_docker_entries'] <= 0
+            or observation.get('restored_dagger_cache_nonempty') is not True
+            or observation.get('engine_version') != version or observation.get('cache_namespace') != config['cache_namespace']
+            or not any(image_version.search(image) for image in observation.get('engine_images', []) if isinstance(image, str))):
+        raise ValueError('worker cache startup does not prove the intended nonempty restored engine')
+    return dict(observation, restoration_verified=True, cache_hits_proven=False, node_id=node['id'], account=node['account'],
+                volume_id=entry['id'], snapshot_id=profile['id'], dagger_engine_version=version,
+                cache_namespace_source='snapshot companion and current job configuration')
 
 
 def verify_snapshot(api, account, config):
@@ -306,6 +351,7 @@ def controller_class(module, api_factory=None):
             if self.config.get('absolute_deadline') and module.utcnow() >= timestamp(self.config['absolute_deadline']):
                 raise TimeoutError('the authorized campaign deadline has passed')
             plan = super().plan()
+            validate_cache_profile(self.config, plan['dagger_version'])
             snapshots = {account['context']: verify_snapshot(self.api, account, self.config)
                          for account in self.config['accounts']}
             storage = plan['nodes'] * self.config['expected_volume_hourly_rate']
@@ -324,11 +370,45 @@ def controller_class(module, api_factory=None):
                 deadline = min(deadline, timestamp(self.config['absolute_deadline']))
             self.update(lambda state: state.update(first_creation_at=began.isoformat(), deadline=deadline.isoformat()))
 
+        def prepare(self, node_id):
+            super().prepare(node_id)
+            node = self.read()['nodes'][node_id]
+            account = self.account(node['account'])
+            entry = json.loads((self.root / 'warm-volumes.json').read_text())[node['name'] + '-cache']
+            self.api.identity(account)
+            volumes = self.api.call(account, ['compute', 'volume', 'list'])
+            actual = next((item for item in volumes if item['id'] == entry['id']), None)
+            if not actual or not owned_volume(actual, entry, account, self.config) or actual.get('droplet_ids') != [node['droplet_id']]:
+                raise ValueError('startup cache volume is not the exact clone attached to this worker')
+            profile = self.config['source_snapshots'][node['account']]
+            device = '/dev/disk/by-id/scsi-0DO_Volume_' + entry['name']
+            collector = (
+                'import json,os,pathlib,re,subprocess; '
+                'read=lambda args:subprocess.check_output(args,text=True).strip(); '
+                'data=json.loads(pathlib.Path("/var/lib/atomic-ci-cache-before-start.json").read_text()); '
+                'mount=json.loads(read(["findmnt","--json","--mountpoint","/mnt/atomic-ci","--output","TARGET,SOURCE,FSTYPE"]))["filesystems"][0]; '
+                'info=json.loads(read(["docker","info","--format","{{json .}}"])); '
+                'images=read(["docker","ps","-a","--format","{{.Image}}"]).splitlines(); '
+                'data.update(volume_name=' + repr(entry['name']) + ',device=' + repr(device) + ',device_realpath=os.path.realpath(' + repr(device) + '),'
+                'mount_target=mount["target"],mount_source=mount["source"],mount_source_realpath=os.path.realpath(mount["source"]),'
+                'filesystem_type=mount["fstype"],filesystem_uuid=read(["blkid","-s","UUID","-o","value",' + repr(device) + ']),'
+                'docker_root_dir=info["DockerRootDir"],engine_images=images,engine_version=' + repr(profile['dagger_engine_version']) + ','
+                'cache_namespace=' + repr(self.config['cache_namespace']) + '); print(json.dumps(data))')
+            observation = json.loads(self.ssh(node_id, 'python3 -c ' + shlex.quote(collector), timeout=60))
+            proof = validate_startup_cache(self.config, node, entry, observation)
+            write_json(self.root / node_id / 'cache-startup.json', proof)
+            self.node_update(node_id, cache_startup_proof=proof)
+
         def cloud_init(self, version):
             text = super().cloud_init(version)
             marker = '  - [systemctl, enable, --now, docker]'
             if text.count(marker) != 1:
                 raise ValueError('review the changed base Docker bootstrap before using warm volumes')
+            before_start = ('import json,pathlib; root=pathlib.Path("/mnt/atomic-ci/docker"); '
+                'entries=list(root.iterdir()) if root.exists() else []; '
+                'dagger=[p for p in (root/"volumes").glob("*dagger*/_data") if p.is_dir() and any(p.iterdir())]; '
+                'pathlib.Path("/var/lib/atomic-ci-cache-before-start.json").write_text(json.dumps({'
+                '"restored_docker_entries":len(entries),"restored_dagger_cache_nonempty":bool(dagger)}))')
             script = ('set -euo pipefail; systemctl stop docker.service docker.socket; '
                 'set -- /dev/disk/by-id/scsi-0DO_Volume_' + self.config['batch_key'] + '-node-*-cache; '
                 'test "$#" = 1; test -b "$1"; '
@@ -339,6 +419,7 @@ def controller_class(module, api_factory=None):
                 'printf "UUID=%s /mnt/atomic-ci ext4 defaults 0 2\\n" "$volume_uuid" >> /etc/fstab; '
                 'printf "[Unit]\\nRequiresMountsFor=/mnt/atomic-ci\\n[Service]\\nExecStartPre=/usr/bin/mountpoint -q /mnt/atomic-ci\\n" '
                 '> /etc/systemd/system/docker.service.d/atomic-ci-volume.conf; '
+                'python3 -c ' + shlex.quote(before_start) + '; '
                 'mkdir -p /mnt/atomic-ci/docker /mnt/atomic-ci/browser-bundles /var/cache/atomic-ci; '
                 'printf \'%s\\n\' \'{"data-root":"/mnt/atomic-ci/docker"}\' >/etc/docker/daemon.json; '
                 'if test -e /var/cache/atomic-ci/browser-bundles; then '

@@ -81,8 +81,34 @@ def validate_config(config):
     expected = dict(account, nodes=3)
     if fanout.get('accounts') != [expected] or fanout.get('batch_key') != config['batch_key'] or fanout.get('source_commit') != config['source_commit']:
         raise ValueError('fanout account, fleet or source differs from the authorized campaign')
-    if fanout.get('region') != volume['region']:
-        raise ValueError('controller volume and worker region must match')
+    config.setdefault('cloud_worker_mode', 'cold')
+    config.setdefault('region', fanout.get('region'))
+    config.setdefault('cloud_controller_region', config['region'])
+    config.setdefault('expected_cache_volume_hourly_rate', 0)
+    mode = config['cloud_worker_mode']
+    if any(fanout.get(field) for field in ('source_snapshot_id', 'source_snapshot_name', 'source_snapshot_profile')):
+        raise ValueError('remote snapshot configuration must use the explicit canonical map')
+    if mode not in ('cold', 'warm') or not slug(config['region']) or fanout.get('region') != config['region'] or config['cloud_controller_region'] != volume['region']:
+        raise ValueError('invalid worker mode or controller/worker region contract')
+    clone_rate = config['expected_cache_volume_hourly_rate']
+    if isinstance(clone_rate, bool) or not isinstance(clone_rate, (int, float)) or not math.isfinite(clone_rate):
+        raise ValueError('invalid temporary cache volume price')
+    if mode == 'cold':
+        if fanout.get('region') != volume['region'] or clone_rate != 0 or fanout.get('source_snapshots'):
+            raise ValueError('cold mode cannot request warm volumes or another worker region')
+    else:
+        profiles = fanout.get('source_snapshots')
+        if not isinstance(profiles, dict) or set(profiles) != {account['context']}:
+            raise ValueError('warm mode requires exactly the selected account snapshot')
+        profile = profiles[account['context']]
+        if (not isinstance(profile, dict) or not slug(profile.get('id')) or not isinstance(profile.get('name'), str) or not profile['name']
+                or not slug(fanout.get('cache_namespace')) or profile.get('cache_namespace') != fanout['cache_namespace']
+                or not isinstance(profile.get('dagger_engine_version'), str) or not re.fullmatch(r'\d+\.\d+\.\d+', profile['dagger_engine_version'])
+                or profile.get('architecture') != 'linux/amd64' or profile.get('docker_data_root') != '/mnt/atomic-ci/docker'
+                or fanout.get('test_run_key') != config['batch_key'] or clone_rate <= 0
+                or fanout.get('expected_volume_hourly_rate') != clone_rate
+                or fanout.get('artifact_cache_dir') != '/var/cache/atomic-ci/browser-bundles'):
+            raise ValueError('warm snapshot companion, namespace, fresh run or clone price differs')
     if timestamp(fanout.get('absolute_deadline')) != deadline or not 0 < fanout.get('max_hours', 0) <= 1:
         raise ValueError('fanout cannot extend the original deadline')
     if (fanout.get('worktree') != config['repo'] or fanout.get('runtime_dir') != str(Path(config['root']) / 'runtime')
@@ -98,7 +124,7 @@ def validate_config(config):
     rates = (controller.get('expected_hourly_rate'), fanout.get('expected_hourly_rate'), config['expected_volume_hourly_rate'], config['max_total_usd'])
     if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0 for value in rates):
         raise ValueError('explicit positive prices and budget are required')
-    hourly = rates[0] + 3 * rates[1] + rates[2]
+    hourly = rates[0] + 3 * rates[1] + rates[2] + 3 * clone_rate
     # Reserve two minutes of cleanup at the full rate, without extending work.
     if hourly * ((deadline - began).total_seconds() + config['cleanup_reserve_seconds']) / 3600 + config['cloud_egress_reserve_usd'] > config['max_total_usd'] or config['max_total_usd'] > 7.50:
         raise ValueError('controller, fleet, volume and cleanup reserve exceed the authorized budget')
@@ -169,6 +195,17 @@ class CloudAPI:
         value = self.request('GET', 'volumes/' + str(resource_id))
         return value['volume'] if value else None
 
+    def volumes(self):
+        return self.listing('volumes', 'volumes')
+
+    def snapshot(self, resource_id):
+        value = self.request('GET', 'snapshots/' + str(resource_id))
+        return value['snapshot'] if value else None
+
+    def delete_volume(self, resource_id):
+        self.identity()
+        return self.request('DELETE', 'volumes/' + str(resource_id))
+
     def delete_droplet(self, resource_id):
         self.identity()
         return self.request('DELETE', 'droplets/' + str(resource_id))
@@ -215,6 +252,23 @@ def verify_volume(config, api, own_id):
     if not own or own.get('volume_ids') != [expected['id']]:
         raise ValueError('controller does not exclusively attach the retained volume')
     return volume
+
+
+def verify_cache_snapshot(config, api):
+    if config['cloud_worker_mode'] != 'warm':
+        return None
+    api.identity()
+    expected = config['fanout_config']['source_snapshots'][config['account']['context']]
+    actual = api.snapshot(expected['id'])
+    if (not actual or str(actual.get('id')) != expected['id'] or actual.get('name') != expected['name']
+            or actual.get('resource_type') != 'volume' or config['region'] not in actual.get('regions', [])
+            or type(actual.get('min_disk_size')) is not int or not 0 < actual['min_disk_size'] <= 200):
+        raise ValueError('worker cache snapshot identity, type, region or size differs')
+    return actual
+
+
+def fanout_driver(config):
+    return 'ci-fanout-warm.py' if config.get('cloud_worker_mode', 'cold') == 'warm' else 'ci-fanout.py'
 
 
 def command(args, timeout=60, check=True):
@@ -330,9 +384,9 @@ def evidence_allowed(relative):
     if any(part in forbidden for part in parts):
         return False
     if len(parts) == 1:
-        return parts[0] in {'state.json', 'config.json', 'browser-merged.json', 'source-input-reference.json'} or parts[0].endswith('.log')
+        return parts[0] in {'state.json', 'config.json', 'browser-merged.json', 'source-input-reference.json', 'warm-volumes.json', 'warm-cleanup.json'} or parts[0].endswith('.log')
     return bool(re.fullmatch(r'node-\d{3}', parts[0])) and (parts[1] == 'results' or
-        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] == 'source-inputs.json')))
+        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json'))))
 
 
 def persist_evidence(config, final=False):
@@ -415,7 +469,8 @@ def persist_evidence(config, final=False):
                'deadline': config['deadline'], 'estimated_worker_compute_usd': sum(node.get('compute_usd', 0) for node in state.get('nodes', {}).values()),
                'controller_hourly_usd': config['controller']['expected_hourly_rate'],
                'retained_volume_hourly_usd_estimate': config['expected_volume_hourly_rate'],
-               'retained_volume_monthly_usd_estimate': 1.0, 'updated_at': utcnow().isoformat()}
+               'retained_volume_monthly_usd_estimate': 1.0, 'worker_mode': config.get('cloud_worker_mode', 'cold'),
+               'temporary_cache_volume_hourly_usd_estimate': config.get('expected_cache_volume_hourly_rate', 0), 'updated_at': utcnow().isoformat()}
     write_json(destination / 'cloud-summary.json', summary)
     return receipt
 
@@ -444,6 +499,92 @@ def update_runtime(config, update):
         update(state)
         write_json(path, state)
         return state
+
+
+def reap_cache_volumes(config, api, state, now):
+    """Independent stdlib fallback: never detach/delete by name alone."""
+    root = Path(config['fanout_config']['runtime_dir'])
+    path = root / 'warm-volumes.json'
+    result = {'errors': [], 'cache_volume_ids_deleted': [], 'all_deleted': False, 'estimated_storage_usd': 0}
+    expected = {config['batch_key'] + '-node-' + str(index).zfill(3) + '-cache' for index in range(1, 4)}
+    account = config['account']
+    selected = config['fanout_config']['source_snapshots'][account['context']]
+    with (root / 'warm-volumes.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            result['errors'].append('cache-volume creation/cleanup ledger is still locked')
+            return result
+        ledger = read_json(path, {})
+        listed = api.volumes()
+        for volume in listed:
+            if volume.get('name') in expected and volume['name'] not in ledger:
+                result['errors'].append('unrecorded expected-name cache volume is not owned')
+        for name, entry in ledger.items():
+            try:
+                node = state['nodes'][entry['node_id']]
+                source = entry.get('source_snapshot', {})
+                if (name not in expected or name != node['name'] + '-cache' or entry.get('name') != name
+                        or node.get('account') != account['context'] or entry.get('account') != account['context']
+                        or entry.get('expected_uuid') != account['expected_uuid'] or entry.get('absence_verified') is not True
+                        or source.get('id') != selected['id'] or source.get('name') != selected['name']
+                        or source.get('resource_type') != 'volume' or config['region'] not in source.get('regions', [])
+                        or not isinstance(entry.get('description'), str)
+                        or not re.fullmatch(r'Atomic CI cache ' + re.escape(config['batch_key']) + r' [a-f0-9]{32}', entry['description'])
+                        or entry.get('creation_identity_error') or (entry.get('id') is not None and entry['id'] in (config['volume']['id'], source.get('resource_id')))):
+                    raise ValueError('cache-volume ledger ownership/snapshot differs')
+                attempted = timestamp(entry['attempted_at'])
+                resource_id = entry.get('id')
+                matches = [volume for volume in listed if volume.get('name') == name]
+                if resource_id and any(volume['id'] != resource_id for volume in matches):
+                    result['errors'].append(name + ': unexpected same-name cache-volume ID is not owned')
+                if not resource_id and len(matches) > 1:
+                    raise ValueError('cache-volume creation identity is ambiguous')
+                volume = api.volume(resource_id) if resource_id else (matches[0] if matches else None)
+                if volume:
+                    if (volume.get('id') == config['volume']['id'] or volume.get('name') != name
+                            or volume.get('region', {}).get('slug') != config['region'] or volume.get('size_gigabytes') != 200
+                            or volume.get('description') != entry['description'] or (resource_id and volume['id'] != resource_id)
+                            or timestamp(volume['created_at']) < attempted.replace(microsecond=0)
+                            or timestamp(volume['created_at']) > now + dt.timedelta(seconds=2)
+                            or volume.get('snapshot_id') not in (None, '', selected['id'])
+                            or (entry.get('created_at') and entry['created_at'] != volume['created_at'])):
+                        raise ValueError('live cache volume differs from exact owned create intent')
+                    entry.update(id=volume['id'], created_at=volume['created_at'])
+                    write_json(path, ledger)
+                    resource_id = volume['id']
+                    if volume.get('droplet_ids'):
+                        raise ValueError('cache volume remains attached; delete its owned worker first')
+                    if node.get('droplet_id') and api.droplet(node['droplet_id']):
+                        raise ValueError('cache-volume worker absence is not verified')
+                    requested = entry.get('delete_attempted_at')
+                    if not requested or (now - timestamp(requested)).total_seconds() >= 30:
+                        entry['delete_attempted_at'] = now.isoformat()
+                        write_json(path, ledger)
+                        try:
+                            api.identity()
+                            api.delete_volume(resource_id)
+                            result['cache_volume_ids_deleted'].append(resource_id)
+                        except (RuntimeError, OSError) as error:
+                            entry['delete_response_error'] = str(error)
+                    if api.volume(resource_id) is not None or any(volume['id'] == resource_id for volume in api.volumes()):
+                        raise ValueError('cache-volume deletion absence is not verified')
+                elif not entry.get('delete_attempted_at') and (now - attempted).total_seconds() < 120:
+                    raise ValueError('cache-volume creation/absence still awaiting provider reconciliation')
+                entry.update(deletion_verified=True, deleted_at=entry.get('deleted_at') or now.isoformat())
+                if entry.get('created_at'):
+                    seconds = max(60, (timestamp(entry['deleted_at']) - timestamp(entry['created_at'])).total_seconds())
+                    entry.setdefault('estimated_storage_usd', seconds / 3600 * config['expected_cache_volume_hourly_rate'])
+            except (ValueError, KeyError, TypeError, RuntimeError, OSError) as error:
+                result['errors'].append(name + ': ' + str(error))
+        known_ids = {entry.get('id') for entry in ledger.values() if entry.get('id')}
+        if any(volume.get('name') in expected or volume.get('id') in known_ids for volume in api.volumes()):
+            result['errors'].append('temporary cache-volume fleet absence is not verified')
+        write_json(path, ledger)
+        result['all_deleted'] = not result['errors']
+        result['estimated_storage_usd'] = sum(entry.get('estimated_storage_usd', 0) for entry in ledger.values())
+        write_json(root / 'warm-cleanup.json', dict(result, at=now.isoformat()))
+    return result
 
 
 def reap_once(config, api=None, now=None, metadata=None):
@@ -519,6 +660,11 @@ def reap_once(config, api=None, now=None, metadata=None):
                 lifetime_seconds=node.get('lifetime_seconds', elapsed), compute_usd=node.get('compute_usd', max(.01, max(60, elapsed) / 3600 * rate))))
         except (ValueError, KeyError, TypeError, RuntimeError) as error:
             report['errors'].append(key + ': ' + str(error))
+    if config['cloud_worker_mode'] == 'warm':
+        clones = reap_cache_volumes(config, api, read_json(Path(config['fanout_config']['runtime_dir']) / 'state.json'), now)
+        report.update(cache_volume_ids_deleted=clones['cache_volume_ids_deleted'], cache_volumes_all_deleted=clones['all_deleted'],
+                      estimated_cache_storage_usd=clones['estimated_storage_usd'])
+        report['errors'].extend(clones['errors'])
     keys = dict(state.get('keys', {}))
     if finalizing:
         keys['controller'] = {'id': config['controller']['ssh_key_id'], 'name': config['controller']['ssh_key_name'],
@@ -560,6 +706,13 @@ def reap_once(config, api=None, now=None, metadata=None):
     expected_key_names = {key.get('name') for key in keys.values()}
     if any(item.get('name') in expected_key_names for item in api.keys()):
         report['errors'].append('owned SSH key absence is not verified')
+    if config['cloud_worker_mode'] == 'warm':
+        ledger = read_json(Path(config['fanout_config']['runtime_dir']) / 'warm-volumes.json', {})
+        clone_ids = {entry.get('id') for entry in ledger.values() if entry.get('id')}
+        clone_names = {name + '-cache' for name in expected_names}
+        if any(volume.get('name') in clone_names or volume.get('id') in clone_ids for volume in api.volumes()):
+            report['cache_volumes_all_deleted'] = False
+            report['errors'].append('final temporary cache-volume absence is not verified')
     report['cleanup_complete'] = not report['errors']
     report['self_delete_requested'] = finalizing and report['cleanup_complete']
     report['estimated_controller_compute_usd'] = max(.01, max(60, (now - timestamp(own['created_at'])).total_seconds()) / 3600 * config['controller']['expected_hourly_rate'])
@@ -586,6 +739,7 @@ def bootstrap_run(config, api=None, metadata=None):
     try:
         own = verify_controller(config, api, metadata if metadata is not None else globals()['metadata']())
         verify_volume(config, api, own['id'])
+        verify_cache_snapshot(config, api)
         ensure_volume_mounted(config)
         guard_deadline(config)
         if not shutil.which('git') or not shutil.which('ssh'):
@@ -625,6 +779,10 @@ def bootstrap_run(config, api=None, metadata=None):
         command(['git', '-C', str(repo), 'checkout', '--detach', config['source_commit']])
         if command(['git', '-C', str(repo), 'rev-parse', 'HEAD']) != config['source_commit'] or command(['git', '-C', str(repo), 'status', '--porcelain']):
             raise ValueError('source checkout is not the exact clean pin')
+        if config['cloud_worker_mode'] == 'warm':
+            profile = config['fanout_config']['source_snapshots'][config['account']['context']]
+            if read_json(repo / 'dagger.json')['engineVersion'].lstrip('v') != profile['dagger_engine_version']:
+                raise ValueError('snapshot engine version differs from the pinned source')
         guard_deadline(config)
         path = root / 'fanout-config.json'
         write_json(path, config['fanout_config'])
@@ -633,7 +791,7 @@ def bootstrap_run(config, api=None, metadata=None):
                  '--property=StandardOutput=append:' + str(root / 'controller.log'),
                  '--property=StandardError=append:' + str(root / 'controller.log'),
                  '--setenv=PATH=/usr/local/bin:/usr/bin:/bin', sys.executable,
-                 str(repo / 'scripts/ci-fanout.py'), '--config', str(path), 'run'])
+                 str(repo / 'scripts' / fanout_driver(config)), '--config', str(path), 'run'])
         write_json(status_path, {'phase': 'running', 'source_commit': config['source_commit'], 'started_at': utcnow().isoformat()})
         while True:
             guard_deadline(config)

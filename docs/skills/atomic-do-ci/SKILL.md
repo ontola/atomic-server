@@ -27,7 +27,7 @@ PR head as the tested commit. This skill does not authorize merging or deploymen
 Use `scripts/ci-fanout.py` for a cold fleet, or the snapshot-aware
 `scripts/ci-fanout-warm.py` for writable clones of an existing volume snapshot.
 For laptop-independent runs, use `scripts/ci-fanout-cloud-launch.py`: a small
-DO controller runs the same scheduler, while a deliberately retained regional
+DO controller runs the same cold or snapshot-backed scheduler, while a deliberately retained regional
 volume stores verified build archives and allowlisted reports. Include control
 compute and volume time in the campaign budget. Launch autonomous supervisor
 and reaper services before bootstrap, keep credentials on the temporary boot

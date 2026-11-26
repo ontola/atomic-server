@@ -3178,3 +3178,13 @@ Rust and browser tests cover issuer-signed invitation origins (including `atomic
 Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
 
 Notification tests in `lib/src/notify/tests.rs` cover direct and inherited grants, changes after queueing, independently shared unread items, and the delivery channels. The native client helper tests cover the exact private push origin, including port matching. Server-side push requests use the filtered DNS resolver and disable redirects and proxies.
+
+
+Autonomous warm-worker regressions (`ci-fanout-cloud.test.py` and
+`ci-fanout-warm.test.py`) cover separate controller/worker regions, all three
+clone prices, explicit snapshot companions/pinned Dagger, actual producer-ledger
+to independent-reaper compatibility, lost API responses, foreign attachments,
+retained/source storage protection, bootstrap failure and expired deadlines.
+Generated SSH collectors/shell setup are checked and verify pre-Docker nonempty
+cache state plus mounted Docker/engine provenance without claiming cache hits.
+These fixtures are not real-cloud warm-run acceptance.
