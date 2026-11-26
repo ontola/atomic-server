@@ -1,3 +1,4 @@
+import { styled } from 'styled-components';
 import { useEffect, useRef, useState } from 'react';
 import { core, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../../helpers/AppSettings';
@@ -15,13 +16,34 @@ import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { paths } from '../../routes/paths';
-import { signOutEverywhere } from '../../helpers/managed/signOut';
+import { useSignOut } from '../../hooks/useSignOut';
 import { clearHeartbeat } from '../../helpers/deviceLock';
+import toast from 'react-hot-toast';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { SettingsSection } from './SettingsSection';
 import { useSettingsSearch } from './SettingsSearch';
 import { SyncSettings } from './SyncSettings';
 import { settingsKeywords } from './settingsKeywords';
+
+const shortenSubject = (subject: string) =>
+  subject.length > 24
+    ? `${subject.slice(0, 18)}…${subject.slice(-4)}`
+    : subject;
+
+const AgentIdButton = styled.button`
+  align-self: flex-start;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.textLight};
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: ${p => p.theme.colors.main};
+  }
+`;
 
 /** Two top-level sections: Profile (name, avatar, sign out) and Account &
  *  security (recovery, connected apps, this device). One component because
@@ -36,6 +58,7 @@ export function AccountSettings() {
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const navigate = useNavigateWithTransition();
   const leavingAccount = useRef(false);
+  const signOut = useSignOut();
   const { section } = useSettingsSearch();
 
   const { privateDrive, loading: privateDriveLoading } = usePrivateDrive();
@@ -86,19 +109,14 @@ export function AccountSettings() {
     const currentDrive = drive;
     // Finish clearing the cookie before a subsequent sign-in can set a new one.
     // A late logout response otherwise invalidates the newly-created session.
-    await signOutEverywhere({ agentSubject: effectiveAgent?.subject, forget });
+    leavingAccount.current = true;
+    await signOut({ agentSubject: effectiveAgent?.subject, forget });
 
     // Everything that makes the UI say "signed out" happens now, synchronously.
     // `store.setAgent` drives a `useSyncExternalStore`, so the app re-renders
     // this tick; the private workspace is no longer readable, so clear the
     // active drive rather than leave it on screen; and go to the one sign-in
     // surface. The signed-out redirect above must not replace our destination.
-    leavingAccount.current = true;
-    setAgent(undefined);
-    // Empty, not the server origin: a drive is a workspace, and the origin is
-    // the pre-DID default standing in for one. Signed out, there is no
-    // workspace — say that, don't fall back to the server's own.
-    setDrive('');
     navigate({ to: paths.welcome, replace: true });
 
     // Best-effort: if the drive we just left was private, forget it from
@@ -115,6 +133,15 @@ export function AccountSettings() {
         }
       })
       .catch(() => undefined);
+  }
+
+  async function copyAgentUrl(subject: string) {
+    try {
+      await navigator.clipboard.writeText(subject);
+      toast.success('Identity URL copied');
+    } catch (e) {
+      store.notifyError(e as Error);
+    }
   }
 
   if (!effectiveAgent) {
@@ -147,6 +174,14 @@ export function AccountSettings() {
             </WarningBlock>
           )}
           <AgentProfileHeader subject={effectiveAgent.subject!} />
+          <AgentIdButton
+            type='button'
+            title='Copy your atomic: URL'
+            onClick={() => void copyAgentUrl(effectiveAgent.subject!)}
+            data-test='copy-agent-url'
+          >
+            {shortenSubject(effectiveAgent.subject!)}
+          </AgentIdButton>
           <Row>
             <Button
               subtle

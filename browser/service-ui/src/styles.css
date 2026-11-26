@@ -159,7 +159,9 @@
   font-weight: 700;
 }
 .atomic-signin-email input {
-  border: 1px solid var(--service-border, var(--color-bg-2, #ccc));
+  /* The same outline as the buttons next to it (Google's #747775), so a field
+     and an option read as one set. */
+  border: 1px solid #747775;
   background: var(--service-input-bg, var(--color-bg-1, #fff));
   color: var(--service-text, var(--color-text, #111));
 }
@@ -188,6 +190,9 @@
   .atomic-signin:not([data-signin-theme='light']) .atomic-signin-option:hover {
     background: #1f1f20;
   }
+  .atomic-signin:not([data-signin-theme='light']) .atomic-signin-email input {
+    border-color: #8e918f;
+  }
 }
 .atomic-signin[data-signin-theme='dark'] .atomic-signin-option {
   background: #131314;
@@ -196,6 +201,9 @@
 }
 .atomic-signin[data-signin-theme='dark'] .atomic-signin-option:hover {
   background: #1f1f20;
+}
+.atomic-signin[data-signin-theme='dark'] .atomic-signin-email input {
+  border-color: #8e918f;
 }
 
 .atomic-signin-info-open,
