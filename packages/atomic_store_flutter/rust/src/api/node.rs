@@ -474,7 +474,7 @@ mod tests {
 
     async fn open_with_agent(name: &str) -> (AtomicStore, std::path::PathBuf) {
         let dir = temp_dir(name);
-        let store = AtomicStore::open(dir.to_string_lossy().into_owned(), None, None)
+        let store = AtomicStore::open(dir.to_string_lossy().into_owned(), None, None, None)
             .await
             .unwrap();
         store.setup(name.into()).await.unwrap();
