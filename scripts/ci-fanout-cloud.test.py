@@ -382,6 +382,27 @@ class CloudTests(unittest.TestCase):
             cloud.ensure_volume_mounted(self.config)
         self.assertFalse(any('mkfs' in part for args in calls for part in args))
 
+    def test_failed_startup_observation_is_retained_only_at_exact_node_evidence_path(self):
+        runtime=Path(self.config['fanout_config']['runtime_dir'])
+        observation={'engine_images':[],'restored_dagger_cache_nonempty':False}
+        allowed='node-001/cache-startup-observation.json'
+        rejected=('cache-startup-observation.json','node-1/cache-startup-observation.json',
+                  'node-001-foreign/cache-startup-observation.json','node-001/cache-startup-observation.json.bak',
+                  'node-001/nested/cache-startup-observation.json')
+        for name in (allowed,*rejected):
+            path=runtime/name; path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text(json.dumps(observation))
+        outside=self.root/'outside-observation.json'; outside.write_text('private outside file')
+        linked=runtime/'node-002/cache-startup-observation.json'; linked.parent.mkdir(parents=True)
+        linked.symlink_to(outside)
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+        saved=Path(self.config['volume']['mount_path'])/'runs/fixture-cloud/runtime'
+        self.assertEqual(json.loads((saved/allowed).read_text()),observation)
+        for name in (*rejected,'node-002/cache-startup-observation.json'):
+            self.assertFalse((saved/name).exists(),name)
+        self.assertFalse((saved/'node-001/cache-startup.json').exists())
+
     def test_persist_allowlist_keeps_results_but_excludes_credentials_private_keys_and_symlinks(self):
         runtime = Path(self.config['fanout_config']['runtime_dir'])
         files = {

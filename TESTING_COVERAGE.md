@@ -3237,3 +3237,12 @@ Playwright teardown error; production fixtures drain page, context and extra
 owned-context callbacks before closing, while an upstream reset still fails.
 This explicit browser regression needs the pinned Playwright Chromium install;
 it is separate from the Node-only script unit suite.
+Global browser-export failures are covered separately from ordinary test failures:
+runner/controller regressions use the observed 129-pass, one intentional-skip,
+one blocked-case report. Verified global exports let unrelated checks and shards
+finish while preserving aggregate failure and explicit unrun identities; such
+shards never retry. Receipt/source/transport/malformed-export/deadline failures
+still abort. Coverage is recomputed from raw reports at the full-union barrier,
+and merged errors retain every shard's provenance.
+Warm startup observations are preserved before validation, with per-field
+diagnostics and strict evidence-path filtering when restoration is rejected.
