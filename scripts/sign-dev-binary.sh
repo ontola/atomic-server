@@ -21,7 +21,7 @@ BIN="$1"
 IDENTITY="${ATOMIC_DEV_SIGNING_IDENTITY:-Developer ID Application: Argu B.V. (Q9WPWRTU7G)}"
 
 case "${BIN##*/}" in
-  atomic.place)
+  atomic-place)
     if security find-identity -v -p codesigning 2>/dev/null | grep -qF "$IDENTITY"; then
       # No hardened runtime, and get-task-allow kept, so lldb can still attach —
       # a dev build has no reason to carry release restrictions.

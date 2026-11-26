@@ -79,7 +79,7 @@ name = "atomic_server_tauri"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "atomic.place"
+name = "atomic-place"
 path = "src/main.rs"
 
 [features]
