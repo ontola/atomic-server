@@ -157,6 +157,24 @@ describe('store read policy', () => {
     expect(socket.fetch).not.toHaveBeenCalled();
   });
 
+  it('drops queued writes of a drive that became local-only', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    const subject = 'atomic:late-note';
+    store.outbox.markDirty(subject);
+    vi.spyOn(store, 'isLocalOnlySubject').mockReturnValue(true);
+    const post = vi.spyOn(globalThis, 'fetch');
+
+    await (
+      store as unknown as { drainOutboxSubject: (s: string) => Promise<void> }
+    ).drainOutboxSubject(subject);
+
+    expect(store.outbox.getEntry(subject)).toBeUndefined();
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('never requests a mangled legacy subject', async ({ expect }) => {
     await enableLoro();
     const { store } = await testStore();

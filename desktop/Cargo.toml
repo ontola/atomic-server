@@ -79,7 +79,7 @@ name = "atomic_server_tauri"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "atomic-server-tauri"
+name = "atomic-place"
 path = "src/main.rs"
 
 # Release builds only (see tauri.updater.conf.json): the updater refuses to

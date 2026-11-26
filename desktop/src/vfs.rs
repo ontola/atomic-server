@@ -1744,8 +1744,14 @@ mod tests {
     // Its content is the deep link that opens the resource in Atomic desktop.
     let (bytes, _eof) = fs.read(link.fileid, 0, 4096).await.unwrap();
     let content = String::from_utf8(bytes).unwrap();
-    assert!(content.contains("atomic://open?subject="));
-    assert!(content.contains(&percent_encode(&table_subject)));
+    // A subject that is already an atomic identifier is its own deep link; any
+    // other subject is wrapped in `atomic://open?subject=`.
+    if atomic_lib::identifiers::is_atomic_identifier(&table_subject) {
+      assert!(content.contains(&table_subject));
+    } else {
+      assert!(content.contains("atomic://open?subject="));
+      assert!(content.contains(&percent_encode(&table_subject)));
+    }
 
     // Lookup resolves the link by its `.inetloc` name.
     assert_eq!(

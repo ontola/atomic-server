@@ -21,6 +21,10 @@ export async function handOverAppKey(
     return;
   }
 
+  // No node holds a device-only drive; its apps write as the person (see
+  // `writeAsApp`), so there is no key to hand over.
+  if (store.isLocalOnlyDrive(options.drive)) return;
+
   await handOverServerAppKey(store, options);
 }
 

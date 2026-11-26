@@ -643,6 +643,9 @@ pub fn run() {
 
       let menu = crate::menu::build(app.handle())?;
       app.handle().set_menu(menu)?;
+      app
+        .handle()
+        .on_menu_event(|app, event| crate::menu::on_event(app, event.id().as_ref()));
       system_tray::setup(app, &config)?;
 
       Ok(())

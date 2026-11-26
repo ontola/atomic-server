@@ -46,15 +46,16 @@ permissions:
   contents: write
 
 # Baked into the frontend by `build:tauri` on every target (Vite reads VITE_*
-# at build time; see desktop/README.md). The apps embed their own node, which
-# is not managed and names no portal, so without this a fresh install has no
-# provider: the Sync page shows no "Sync with AtomicServer.eu", and restoring
-# an account has nowhere to restore from. This names the provider only — the
-# app stays a FOSS build (no VITE_ATOMIC_HOSTED_DISTRIBUTION): it creates its
-# identity locally and *links* to the account by device code, because a
-# webview on `tauri://localhost` cannot hold the portal's session cookie.
+# at build time; see desktop/README.md). The packaged desktop and mobile apps
+# are the atomic.place product: a hosted distribution that names atomic.place
+# as its account service. The embedded node is not managed and names no
+# portal, so without this a fresh install has no provider. Sign-in still links
+# by device code (`atomic://account-return`), because a webview on
+# `tauri://localhost` cannot hold the portal's session cookie. A plain FOSS
+# build (no VITE_ATOMIC_HOSTED_DISTRIBUTION) keeps the same optional login.
 env:
-  VITE_MANAGED_PORTAL_URL: https://atomicserver.eu
+  VITE_MANAGED_PORTAL_URL: https://atomic.place
+  VITE_ATOMIC_HOSTED_DISTRIBUTION: 'true'
   # Official packaged apps have no server-injected browser config.
   VITE_SENTRY_DSN: https://b08842f7f4ac1d5bea3415049eb226c0@o1378995.ingest.us.sentry.io/4512015907291136
   VITE_SENTRY_ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}

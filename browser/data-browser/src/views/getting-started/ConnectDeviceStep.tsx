@@ -5,7 +5,7 @@ import { FaMobileScreenButton, FaLock } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
 import { listVaultDrives } from '../../helpers/managed/vault';
-import { getManagedAccount } from '../../helpers/managed/session';
+import { getManagedAccountOrNull } from '../../helpers/managed/session';
 import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import { safePortalUrl } from '../../helpers/managed/api';
 import { openExternal } from '../../helpers/openExternal';
@@ -159,7 +159,7 @@ export function ConnectDeviceStep({
 
       if (local) setVaultDrive(local);
 
-      const account = await getManagedAccount().catch(() => null);
+      const account = await getManagedAccountOrNull();
 
       if (cancelled) return;
 

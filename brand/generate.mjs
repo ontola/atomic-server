@@ -123,6 +123,30 @@ function renderIco(markPath, outPath) {
   execFileSync('magick', [...parts, ...STRIP, outPath]);
 }
 
+/**
+ * macOS draws icons exactly as supplied, so a tile that fills the whole canvas
+ * looks about a quarter too big next to every other app. Apple's icon grid
+ * puts the 824 x 824 tile on a 1024 x 1024 canvas (80.5%), leaving a
+ * transparent margin that holds the soft shadow. Only macOS wants this: Windows
+ * and Linux take the tile full size.
+ */
+const MAC_TILE_RATIO = 824 / 1024;
+
+function renderMacIconPng(markPath, size, outPath) {
+  const tile = Math.round(size * MAC_TILE_RATIO);
+  const raw = path.join(TMP, `mac-${path.basename(outPath)}-${size}.png`);
+
+  execFileSync('rsvg-convert', ['-w', String(tile), '-h', String(tile), markPath, '-o', raw]);
+  // Shadow as in Apple's template: a faint, blurred drop below the tile.
+  execFileSync('magick', [
+    '-background', 'none', raw,
+    '(', '+clone', '-background', 'black', '-shadow', '35x' + Math.max(1, Math.round(size / 80)) + '+0+' + Math.max(1, Math.round(size / 100)), ')',
+    '+swap', '-background', 'none', '-layers', 'merge', '+repage',
+    '-gravity', 'center', '-extent', `${size}x${size}`,
+    ...STRIP, outPath,
+  ]);
+}
+
 function renderIcns(markPath, outPath) {
   // Unique per call — iconutil takes the whole directory, so a leftover
   // file from an earlier call would silently end up in the bundle.
@@ -137,7 +161,7 @@ function renderIcns(markPath, outPath) {
     [512, 'icon_512x512.png'], [1024, 'icon_512x512@2x.png'],
   ];
   for (const [size, name] of spec) {
-    execFileSync('rsvg-convert', ['-w', String(size), '-h', String(size), markPath, '-o', path.join(iconset, name)]);
+    renderMacIconPng(markPath, size, path.join(iconset, name));
   }
   execFileSync('iconutil', ['-c', 'icns', iconset, '-o', outPath]);
 }
@@ -183,7 +207,7 @@ const TARGETS = [
     ],
   },
   {
-    mark: 'atomic',
+    mark: 'place',
     root: SERVER_ROOT,
     label: 'atomic-server: Tauri desktop',
     dir: 'desktop/icons',

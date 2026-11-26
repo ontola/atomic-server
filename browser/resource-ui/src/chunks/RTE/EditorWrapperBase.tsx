@@ -21,6 +21,7 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
     }
     display: ${p => (p.hideEditor ? 'none' : 'block')};
     outline: none;
+    caret-color: ${p => resourceTheme(p.theme).colors.text};
     width: min(100%, 75ch);
 
     .tiptap-image {

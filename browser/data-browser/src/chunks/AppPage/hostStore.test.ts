@@ -59,6 +59,8 @@ function fakeStore(parents: Record<string, string | undefined> = {}) {
   return {
     getAgent: () => ({ subject: 'did:ad:agent:me' }),
     getServerUrl: () => 'https://node.test',
+    isLocalOnlyDrive: () => false,
+    isLocalOnlySubject: () => false,
     getResource: async (subject: string) => ({
       subject,
       error: undefined,
@@ -95,6 +97,36 @@ describe('writing as the app', () => {
         propVals: { p: 'v' },
       },
     ]);
+  });
+
+  it('saves on this device, with no request, when the drive is device-only', async () => {
+    const set = vi.fn();
+    const save = vi.fn();
+    const store = {
+      ...fakeStore({ 'did:ad:mine': APP }),
+      isLocalOnlyDrive: () => true,
+      isLocalOnlySubject: () => true,
+      getResource: async (subject: string) => ({
+        subject,
+        error: undefined,
+        get: (property: string) =>
+          property === core.properties.parent ? APP : undefined,
+        getPropVals: () => ({}),
+        set,
+        save,
+      }),
+    } as unknown as Store;
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+    );
+
+    expect(sent).toEqual([]);
+    expect(set).toHaveBeenCalledWith('p', 'v');
+    expect(save).toHaveBeenCalled();
   });
 
   it('sends removed properties as their own write, since save only sets', async () => {
