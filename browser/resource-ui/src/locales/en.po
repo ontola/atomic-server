@@ -554,8 +554,8 @@ msgstr "Not responding"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more"
-msgstr "Read more"
+msgid "Read more "
+msgstr "Read more "
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -4227,7 +4227,9 @@ msgid "Your data lives on the device you’re connected to."
 msgstr "Your data lives on the device you’re connected to."
 
 #: ../data-browser/src/components/ConnectServerDialog.tsx
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SyncProblemBanner.tsx
 msgid "Connect a device"
 msgstr "Connect a device"
@@ -13142,7 +13144,9 @@ msgstr "Only saved on this device"
 msgid "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 msgstr "You are signed in, but saving your work to your account did not finish. Check your connection and try again."
 
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register with email"
 msgstr "Register with email"
 
@@ -13403,18 +13407,9 @@ msgstr "For more people, use a Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 
-#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work"
-msgstr "Save your work"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Register your email or connect a device to open it elsewhere"
-
-#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
-msgid "Save your work here"
-msgstr "Save your work here"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13884,3 +13879,16 @@ msgstr "Passkey, recovery code or secret"
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your secret"
 msgstr "Your secret"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Register here"
+msgstr "Register here"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Get the desktop app"
+msgstr "Get the desktop app"
+
+#: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
+msgid "Open your drives from the Dock or taskbar, also offline"
+msgstr "Open your drives from the Dock or taskbar, also offline"

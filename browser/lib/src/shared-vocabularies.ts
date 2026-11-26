@@ -58,6 +58,8 @@ export const preferencesSchema = {
     onboardingPanelOpen: `${preferences}onboarding-panel-open`,
     /** The drive the app made at first start. */
     welcomeDrive: `${preferences}welcome-drive`,
+    /** The Get the desktop app step was clicked. */
+    desktopDownloadOpened: `${preferences}desktop-download-opened`,
   },
 } as const;
 

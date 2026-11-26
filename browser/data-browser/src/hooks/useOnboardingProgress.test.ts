@@ -116,13 +116,14 @@ describe('deriveAdvancedSteps', () => {
       deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
     );
 
-  it('lists table, form, ai, app, message, none done for a new drive', () => {
+  it('lists table, form, ai, app, message, desktop, none done for a new drive', () => {
     expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual([
       'table',
       'form',
       'ai',
       'app',
       'message',
+      'desktop',
     ]);
     expect(adv()).toEqual({
       table: false,
@@ -130,6 +131,7 @@ describe('deriveAdvancedSteps', () => {
       ai: false,
       app: false,
       message: false,
+      desktop: false,
     });
   });
 
@@ -154,5 +156,13 @@ describe('deriveAdvancedSteps', () => {
 
   it('counts a conversation for the message step', () => {
     expect(adv({ hasConversation: true }).message).toBe(true);
+  });
+
+  it('counts the desktop step once clicked, and leaves it out in the desktop app', () => {
+    expect(adv({ desktopDownloadOpened: true }).desktop).toBe(true);
+    expect(adv({ inDesktopApp: true })).not.toHaveProperty('desktop');
+    expect(
+      deriveAdvancedSteps({ ...base, inDesktopApp: true }).map(s => s.id),
+    ).toEqual(['table', 'form', 'ai', 'app', 'message']);
   });
 });
