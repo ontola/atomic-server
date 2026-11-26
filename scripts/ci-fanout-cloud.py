@@ -418,7 +418,13 @@ def persist_evidence(config, final=False):
             sources.append((path, Path(name)))
     def signature(path):
         stat = path.stat()
-        return [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
+        value = [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
+        # Same-size writes can share ctime on Linux even when mtime is restored.
+        # Mutable reports/receipts and small exit markers need content identity;
+        # leave large immutable traces on the inexpensive metadata shortcut.
+        if path.suffix.lower() == '.json' or stat.st_size <= 64 * 1024:
+            value.append(sha256(path))
+        return value
     for source, relative in sources:
         target = destination / relative
         if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
