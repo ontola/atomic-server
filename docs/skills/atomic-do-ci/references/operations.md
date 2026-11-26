@@ -212,7 +212,7 @@ a build. The current runner does not provide a Spaces archive backend.
 
 ## DO-hosted control and retained build volume
 
-`scripts/ci-fanout-cloud-launch.py` runs the existing cold controller on a
+`scripts/ci-fanout-cloud-launch.py` runs the pinned cold or warm controller on a
 small temporary DO machine. This is additional control compute, included in the
 run budget; the requested node count still describes the test fleet. The same
 explicit account UUID, clean source SHA, test key and all ten checks/full browser
@@ -307,3 +307,42 @@ These runners execute the ten public Atomic Server checks and complete browser
 inventory. Empty `NETLIFY_TOKEN` skips preview uploads while still building docs.
 Private downstream SaaS checks and deployment are separate gates. Report this
 scope explicitly; a public DO pass is not evidence that those other gates ran.
+
+
+## Autonomous snapshot-backed workers
+
+Set `cloud_worker_mode: "warm"` to run the public warm wrapper from the DO
+controller. `region` is the worker/snapshot region; `cloud_controller_region`
+is the retained disk/controller region. Each worker gets its own disposable
+200-GiB writable clone. The retained 10-GiB artifact disk stays separate and
+requires its explicit `cloud_volume_id`; no new recurring storage is created.
+Cold remains the default and rejects warm settings rather than ignoring them.
+
+Provide `source_snapshots` keyed by the selected account context. Each value
+must contain the snapshot `id`, `name`, `cache_namespace`,
+`dagger_engine_version`, `architecture: "linux/amd64"` and
+`docker_data_root: "/mnt/atomic-ci/docker"`. The read-only plan checks the
+snapshot type, account, available region/minimum size and the candidate's pinned
+Dagger version. Never infer the cache namespace from provider metadata.
+
+`expected_volume_hourly_rate` prices the retained controller disk;
+`expected_cache_volume_hourly_rate` prices **each** temporary clone. The cloud
+budget includes all three clones, three test VMs, controller compute, retained
+disk time, cleanup and egress reserve. At the historical November rates, a
+55-minute work window (`max_hours: 0.9166666666666666`) plus two minutes of
+cleanup and $0.15 egress reserve bounds that estimate below $6.90. Verify actual
+prices and regional availability before launching; this example grants no
+spending authorization. Neither retries nor restart reset the original deadline.
+
+`cache-startup.json` records nonempty engine cache state before Docker starts,
+then verifies the restored filesystem/mount, Docker data root, pinned engine
+image and configured namespace before the first Dagger call. It explicitly does
+not claim a particular build was a cache hit. A builder-only snapshot may leave
+Rust-test and Clippy jobs largely cold. Cargo's source freshness guard remains.
+
+The independent stdlib reaper consumes the public warm driver's ownership
+ledger under its shared lock. It deletes only proven temporary clone IDs after
+worker deletion/detachment, reconciles lost provider responses, preserves the
+source snapshot and retained disk, and verifies clone absence before deleting
+the controller. Warm ownership/startup tests are fake-provider tests; a real
+restored-engine/full-CI run is a separate acceptance gate.

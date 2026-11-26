@@ -104,3 +104,30 @@ HTML-only PRs still use the full gate by default. The measured full baseline is
 future input-verified HTML-only route might take 10–15 minutes including VM
 startup, but that is an unmeasured estimate, not an implemented path filter or
 permission to skip Rust/Flutter checks solely from a filename suffix.
+
+
+## November 26 autonomous cold run
+
+Source `72e47860e2158e4e18da222a0096619fb9823c3c`, with autonomous tooling
+matching `81a334cb75c01bbbaeb9c636e186e99f388aae4e`: three cold 64-vCPU workers
+plus a small DO controller, in mem1. Complete validation took **38m17.444s**,
+including controller startup; bundle preparation took **13m21.25s**. Ten public
+checks passed. Of 392 browser identities, 370 passed first attempt, two recovered
+in the final failed-only retry round, nine remained failed and eleven were
+intentionally skipped. Nothing was unrun. Rust reported 1,890 passes and 42
+existing skips. This was a complete **failed** run, not merge evidence.
+
+Estimated compute and campaign storage was conservatively $3.93; a $0.15
+network reserve is not an observed charge. All owned compute/keys were removed;
+the authorized 10-GiB artifact disk and earlier snapshot remain. Full reports
+and the verified completed bundle stayed on DO; only selected small reports
+were downloaded. The subsequent test-only repairs at `bd71e126` were not tested
+by this run. CPU utilization was not collected: the older 29.6% figure must not
+be attributed to this run.
+
+The older 26m36s run used warm builder-cache clones and different code/scheduling.
+In the newer run, JS integration waited for the complete shared bundle, then
+ran for 9m28s; it had overlapped the main build previously. Reordering shared
+WASM preparation before main-build/JS-integration fan-out remains a separate
+optimization. Cold setup, build duration and scheduling all changed, so these
+runs do not isolate a hardware-speed comparison.

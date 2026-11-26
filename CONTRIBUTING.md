@@ -746,3 +746,11 @@ rewrite the tested dependency graph. Commit any needed lockfile updates in the
 paired PR, run the affected Rust suites, and merge the pair together after CI.
 The SaaS alignment gate requires the Server checker, so land the Server PR
 before the SaaS PR when first introducing this policy.
+
+
+The autonomous DO launcher also supports `cloud_worker_mode: "warm"`, separate
+worker/controller regions and explicit snapshot companions. Temporary writable
+cache clones are included in the bounded budget and independent cleanup; the
+retained artifact disk is separate. See the
+[operator guide](docs/skills/atomic-do-ci/references/operations.md#autonomous-snapshot-backed-workers)
+for configuration, cache evidence and acceptance limitations.

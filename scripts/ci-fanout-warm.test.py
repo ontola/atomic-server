@@ -6,6 +6,7 @@ import copy
 import datetime as dt
 import importlib.util
 import json
+import shlex
 from pathlib import Path
 import tempfile
 import unittest
@@ -26,7 +27,7 @@ UUIDS = {'alpha': '11111111-1111-1111-1111-111111111111',
 
 def configuration(root):
     return warm.validate_config({
-        'batch_key': 'fixture-warm', 'test_run_key': 'fixture-warm',
+        'batch_key': 'fixture-warm', 'test_run_key': 'fixture-warm', 'cache_namespace': 'fixturewarm',
         'source_commit': SHA, 'worktree': str(root / 'repo'),
         'runtime_dir': str(root / 'runtime'), 'doctl_config': str(root / 'credentials'),
         'region': 'fixture-region', 'size': 'fixture-size', 'max_hours': 1,
@@ -34,7 +35,9 @@ def configuration(root):
         'max_total_usd': 1.04, 'authorization': 'Run the reviewed two-node fixture for at most one hour.',
         'accounts': [{'context': context, 'expected_uuid': identity, 'nodes': 1}
                      for context, identity in UUIDS.items()],
-        'source_snapshots': {context: {'id': 'snapshot-' + context, 'name': 'reviewed-' + context}
+        'source_snapshots': {context: {'id': 'snapshot-' + context, 'name': 'reviewed-' + context,
+                                     'cache_namespace': 'fixturewarm', 'dagger_engine_version': '0.0.1',
+                                     'architecture': 'linux/amd64', 'docker_data_root': '/mnt/atomic-ci/docker'}
                              for context in UUIDS},
     }, base)
 
@@ -453,13 +456,23 @@ class WarmTests(unittest.TestCase):
                 self.controller.plan()
         self.assertEqual(self.api.mutations, [])
 
-    def test_single_account_snapshot_shorthand_is_explicit(self):
+    def test_snapshot_id_name_shorthand_cannot_bypass_required_cache_companion(self):
         settings = dict(self.config)
         settings['accounts'] = [dict(self.config['accounts'][0], nodes=2)]
         del settings['source_snapshots']
         settings.update(source_snapshot_id='snapshot-alpha', source_snapshot_name='reviewed-alpha')
-        result = warm.validate_config(settings, base)
-        self.assertEqual(result['source_snapshots'], {'alpha': {'id': 'snapshot-alpha', 'name': 'reviewed-alpha'}})
+        with self.assertRaisesRegex(ValueError, 'snapshot cache'):
+            warm.validate_config(settings, base)
+
+    def test_single_account_shorthand_requires_an_explicit_cache_companion(self):
+        settings=copy.deepcopy(self.config)
+        settings['accounts']=[dict(settings['accounts'][0],nodes=2)]
+        profile=settings.pop('source_snapshots')['alpha']
+        settings.update(source_snapshot_id=profile['id'],source_snapshot_name=profile['name'],
+                        source_snapshot_profile={key:profile[key] for key in
+                            ('cache_namespace','dagger_engine_version','architecture','docker_data_root')})
+        result=warm.validate_config(settings,base)
+        self.assertEqual(result['source_snapshots']['alpha'],profile)
 
     def test_no_state_watchdog_exits_only_when_its_owner_is_gone(self):
         self.controller.path.unlink()
@@ -549,6 +562,76 @@ class WarmTests(unittest.TestCase):
             del candidate[field]
             with self.subTest(field=field), self.assertRaises(ValueError):
                 warm.validate_config(candidate, base)
+
+
+    def startup_fixture(self):
+        node=self.create()
+        entry=next(iter(json.loads((self.controller.root/'warm-volumes.json').read_text()).values()))
+        device='/dev/disk/by-id/scsi-0DO_Volume_'+entry['name']
+        observation={'volume_name':entry['name'],'device':device,'mount_target':'/mnt/atomic-ci',
+                     'mount_source':device,'filesystem_type':'ext4','filesystem_uuid':'fixture-fs-uuid',
+                     'docker_root_dir':'/mnt/atomic-ci/docker','restored_docker_entries':3,
+                     'restored_dagger_cache_nonempty':True,'engine_images':['registry.dagger.io/engine:v0.0.1'],
+                     'engine_version':'0.0.1','cache_namespace':'fixturewarm'}
+        return node,entry,observation
+
+    def test_startup_proof_proves_restoration_but_never_claims_job_cache_hits(self):
+        node,entry,observation=self.startup_fixture()
+        proof=warm.validate_startup_cache(self.config,node,entry,observation)
+        self.assertTrue(proof['restoration_verified'])
+        self.assertFalse(proof['cache_hits_proven'])
+        self.assertEqual(proof['volume_id'],entry['id'])
+        self.assertEqual(proof['snapshot_id'],'snapshot-alpha')
+        self.assertEqual(proof['node_id'],'node-001')
+        self.assertEqual(proof['account'],'alpha')
+        self.assertEqual(proof['dagger_engine_version'],'0.0.1')
+        self.assertEqual(proof['docker_root_dir'],'/mnt/atomic-ci/docker')
+        self.assertEqual(proof['cache_namespace'],'fixturewarm')
+
+    def test_real_prepare_validates_attached_clone_and_persists_compilable_startup_collector_proof(self):
+        node,entry,observation=self.startup_fixture()
+        with mock.patch.object(base.Controller,'prepare',side_effect=lambda key:(self.controller.root/key).mkdir(exist_ok=True)), \
+             mock.patch.object(self.controller,'ssh',return_value=json.dumps(observation)) as ssh:
+            type(self.controller).prepare(self.controller,node['id'])
+        argv=shlex.split(ssh.call_args.args[1])
+        self.assertEqual(argv[:2],['python3','-c'])
+        compile(argv[2],'<actual-worker-startup-collector>','exec')
+        proof=json.loads((self.controller.root/node['id']/'cache-startup.json').read_text())
+        self.assertEqual(proof['volume_id'],entry['id'])
+        self.assertTrue(proof['restoration_verified'])
+        self.assertFalse(proof['cache_hits_proven'])
+        self.assertEqual(self.controller.read()['nodes'][node['id']]['cache_startup_proof'],proof)
+
+    def test_startup_proof_rejects_empty_or_different_restored_cache_and_runtime(self):
+        node,entry,observation=self.startup_fixture()
+        changes=[('volume_name','foreign'),('device','/dev/foreign'),('mount_target','/other'),
+                 ('mount_source','/dev/foreign'),('filesystem_type','xfs'),('filesystem_uuid',''),
+                 ('docker_root_dir','/var/lib/docker'),('restored_docker_entries',0),
+                 ('restored_docker_entries',True),('restored_dagger_cache_nonempty',False),
+                 ('engine_images',[]),('engine_images',['unrelated-service:0.0.1']),
+                 ('engine_version','0.0.2'),('cache_namespace','wrong-namespace')]
+        for field,value in changes:
+            with self.subTest(field=field,value=value),self.assertRaises(ValueError):
+                warm.validate_startup_cache(self.config,node,entry,dict(observation,**{field:value}))
+
+    def test_readonly_plan_rejects_wrong_candidate_engine_and_snapshot_namespace_before_clones(self):
+        for field,value in [('dagger_engine_version','0.0.2'),('cache_namespace','other'),
+                            ('architecture','linux/arm64'),('docker_data_root','/var/lib/docker')]:
+            config=copy.deepcopy(self.config)
+            config['source_snapshots']['alpha'][field]=value
+            with self.subTest(field=field),mock.patch.object(base,'execute',side_effect=self.git_output),self.assertRaises(ValueError):
+                warm.controller_class(base,lambda _:self.api)(config).plan()
+            self.assertEqual(self.api.mutations,[])
+
+    def test_raw_cache_observation_is_captured_before_first_docker_start(self):
+        text=self.controller.cloud_init('0.0.1')
+        commands=[json.loads(line[4:]) for line in text.splitlines() if line.startswith('  - ["bash"')]
+        script=commands[0][-1]
+        marker='/var/lib/atomic-ci-cache-before-start.json'
+        self.assertIn(marker,script)
+        self.assertLess(script.index(marker),script.index('systemctl enable --now docker'))
+        self.assertNotIn('docker pull',script)
+        subprocess.run(['bash','-n'],input=script,text=True,check=True)
 
 
 if __name__ == '__main__':

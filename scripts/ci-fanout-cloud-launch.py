@@ -11,6 +11,7 @@ import base64
 import contextlib
 import datetime as dt
 import fcntl
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -28,6 +29,9 @@ sys.dont_write_bytecode = True
 SPEC = importlib.util.spec_from_file_location('cloud_launch_base', Path(__file__).with_name('ci-fanout.py'))
 BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
+WARM_SPEC = importlib.util.spec_from_file_location('cloud_launch_warm', Path(__file__).with_name('ci-fanout-warm.py'))
+WARM = importlib.util.module_from_spec(WARM_SPEC)
+WARM_SPEC.loader.exec_module(WARM)
 ROOT = '/root/atomic-ci-control'
 MOUNT = '/mnt/atomic-ci'
 CLEANUP_SECONDS = 120
@@ -56,9 +60,42 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
     if not config['expected_controller_hourly_rate'] or not config['expected_volume_hourly_rate'] or not 0 < config['max_total_usd'] <= 7.5:
         raise ValueError('positive prices and a total ceiling at most $7.50 are required')
+    mode = config.setdefault('cloud_worker_mode', 'cold')
+    if mode not in ('cold', 'warm'):
+        raise ValueError('cloud_worker_mode must be cold or warm')
+    control_region = config.setdefault('cloud_controller_region', config['region'])
+    if not isinstance(control_region, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}', control_region):
+        raise ValueError('invalid cloud_controller_region')
+    warm_fields = ('source_snapshots', 'source_snapshot_id', 'source_snapshot_name', 'source_snapshot_profile', 'expected_cache_volume_hourly_rate')
+    if mode == 'cold' and any(key in config for key in warm_fields):
+        raise ValueError('cold mode cannot silently ignore warm snapshot or cache-volume settings')
+    if mode == 'warm':
+        if not config.get('cloud_volume_id'):
+            raise ValueError('warm mode requires explicit reuse of the retained cloud_volume_id')
+        if not isinstance(config.get('source_snapshots'), dict) or any(key in config for key in ('source_snapshot_id', 'source_snapshot_name', 'source_snapshot_profile')):
+            raise ValueError('warm cloud mode requires explicit per-account source_snapshots')
+        rate = config.get('expected_cache_volume_hourly_rate')
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)) or not math.isfinite(rate) or rate <= 0:
+            raise ValueError('warm mode requires a positive expected_cache_volume_hourly_rate')
+        WARM.validate_config(worker_config(config), BASE)
+        for companion in config['source_snapshots'].values():
+            if (not config['cache_namespace'] or companion.get('cache_namespace') != config['cache_namespace']
+                    or not isinstance(companion.get('dagger_engine_version'), str)
+                    or not re.fullmatch(r'\d+\.\d+\.\d+', companion['dagger_engine_version'])
+                    or companion.get('architecture') != 'linux/amd64'
+                    or companion.get('docker_data_root') != '/mnt/atomic-ci/docker'):
+                raise ValueError('warm snapshot companion namespace, engine, architecture or Docker layout differs')
     if config.get('cloud_volume_id') and not re.fullmatch(r'[0-9a-f-]{36}', config['cloud_volume_id']):
         raise ValueError('cloud_volume_id must be an explicit UUID')
     return config
+
+
+def worker_config(config):
+    """Keep retained controller storage separate from disposable worker clones."""
+    worker = dict(config)
+    if config.get('cloud_worker_mode') == 'warm':
+        worker['expected_volume_hourly_rate'] = config['expected_cache_volume_hourly_rate']
+    return worker
 
 
 def checked_source(config):
@@ -68,7 +105,10 @@ def checked_source(config):
     if git('rev-parse', 'HEAD').decode().strip() != config['source_commit'] or git('status', '--porcelain=v1', '--untracked-files=no').strip():
         raise ValueError('cloud launch requires the exact clean configured source')
     result = {}
-    for name in ('ci-fanout-cloud-launch.py', 'ci-fanout-cloud.py'):
+    names = ['ci-fanout-cloud-launch.py', 'ci-fanout-cloud.py']
+    if config.get('cloud_worker_mode') == 'warm':
+        names.append('ci-fanout-warm.py')
+    for name in names:
         path = 'scripts/' + name
         try:
             committed = git('show', config['source_commit'] + ':' + path)
@@ -115,14 +155,15 @@ def cloud_init(supervisor_bytes, config, credentials):
                 'StandardError=append:' + ROOT + ('/reaper.log' if command=='reap' else '/supervisor.log') + '\n' +
                 'ExecStart=/usr/bin/python3 ' + script + ' --config ' + config_path + ' ' + command +
                 '\n[Install]\nWantedBy=multi-user.target\n')
-    files = [(script, supervisor_bytes, '0600'), (config_path, json.dumps(config).encode(), '0600'),
+    files = [(script, gzip.compress(supervisor_bytes, mtime=0), '0600'), (config_path, json.dumps(config).encode(), '0600'),
              (ROOT + '/doctl.json', json.dumps(credentials).encode(), '0600'),
              ('/etc/systemd/system/atomic-ci-reaper-' + batch + '.service', unit('reap', 'always').encode(), '0644'),
              ('/etc/systemd/system/atomic-ci-supervisor-' + batch + '.service', unit('bootstrap-run', 'no').encode(), '0644')]
     lines = ['#cloud-config', 'write_files:']
     for path, data, permissions in files:
+        encoding = 'gz+b64' if path == script else 'b64'
         lines.extend(['  - path: ' + path, '    owner: root:root', "    permissions: '" + permissions + "'",
-                      '    encoding: b64', '    content: ' + base64.b64encode(data).decode()])
+                      '    encoding: ' + encoding, '    content: ' + base64.b64encode(data).decode()])
     # There is deliberately no packages/apt directive before these services.
     lines.extend(['runcmd:', '  - [systemctl, daemon-reload]',
         '  - [systemctl, enable, --now, atomic-ci-reaper-' + batch + '.service]',
@@ -203,7 +244,10 @@ class CloudLauncher:
             raise ValueError('use a fresh local runtime directory; inspect an existing launch with status')
         scripts = checked_source(self.config)
         credentials = selected_credentials(self.config['doctl_config'], self.account['context'])
-        worker = BASE.Controller(self.config, api=self.api).plan()
+        if self.config['cloud_worker_mode'] == 'warm':
+            worker = WARM.controller_class(BASE, api_factory=lambda _: self.api)(worker_config(self.config)).plan()
+        else:
+            worker = BASE.Controller(self.config, api=self.api).plan()
         info = self.api.identity(self.account)
         droplets = self.api.call(self.account, ['compute', 'droplet', 'list'])
         if len(droplets) + 4 > info['droplet_limit']:
@@ -211,10 +255,10 @@ class CloudLauncher:
         if any(item['name'] == self.config['batch_key'] + '-controller' for item in droplets):
             raise ValueError('controller name already exists; refusing a second fleet')
         sizes = self.api.call(self.account, ['compute', 'size', 'list'])
-        for slug, expected, cores in ((self.config['size'], self.config['expected_hourly_rate'], 64),
-                                      (self.config['cloud_controller_size'], self.config['expected_controller_hourly_rate'], None)):
+        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'], 64, self.config['region']),
+                                      (self.config['cloud_controller_size'], self.config['expected_controller_hourly_rate'], None, self.config['cloud_controller_region'])):
             item = next((value for value in sizes if value['slug'] == slug), None)
-            if (not item or not item.get('available') or self.config['region'] not in item.get('regions', [])
+            if (not item or not item.get('available') or region not in item.get('regions', [])
                     or abs(item['price_hourly'] - expected) > .000001 or cores and item['vcpus'] != cores):
                 raise ValueError('requested machine size, region, architecture profile or price is unavailable')
         volumes = self.api.call(self.account, ['compute', 'volume', 'list'])
@@ -227,6 +271,8 @@ class CloudLauncher:
         if any(item['name'] == self.config['batch_key'] + '-controller-key' for item in keys):
             raise ValueError('controller SSH key name already exists')
         hourly = 3 * self.config['expected_hourly_rate'] + self.config['expected_controller_hourly_rate'] + self.config['expected_volume_hourly_rate']
+        cache_hourly = 3 * self.config['expected_cache_volume_hourly_rate'] if self.config['cloud_worker_mode'] == 'warm' else 0
+        hourly += cache_hourly
         ceiling = hourly * (self.config['max_hours'] + CLEANUP_SECONDS / 3600) + self.config['cloud_egress_reserve_usd']
         if ceiling > self.config['max_total_usd']:
             raise ValueError('controller, test machines, storage, cleanup and egress exceed the authorized budget')
@@ -245,6 +291,10 @@ class CloudLauncher:
             raise ValueError('cloud-init leaves insufficient room under the 64 KiB user-data limit')
         return {'source_commit': self.config['source_commit'], 'test_nodes': 3,
                 'controller_size': self.config['cloud_controller_size'], 'region': self.config['region'],
+                'controller_region': self.config['cloud_controller_region'], 'cloud_worker_mode': self.config['cloud_worker_mode'],
+                'cache_volume_gib': WARM.VOLUME_GIB if cache_hourly else 0,
+                'cache_storage_hourly_usd_estimate': cache_hourly,
+                'source_snapshots': worker.get('source_snapshots', {}),
                 'persistent_volume_gib': 10, 'maximum_hours': self.config['max_hours'],
                 'cleanup_reserve_seconds': CLEANUP_SECONDS, 'hourly_usd': hourly, 'cloud_init_bytes':userdata_bytes,
                 'egress_reserve_usd': self.config['cloud_egress_reserve_usd'], 'maximum_estimated_usd': ceiling,
@@ -254,7 +304,7 @@ class CloudLauncher:
     def check_volume(self, volume, reused=False):
         region = volume.get('region', {}).get('slug') if volume else None
         if (not volume or volume['name'] != self.config['cloud_volume_name']
-                or volume['size_gigabytes'] != 10 or region != self.config['region']
+                or volume['size_gigabytes'] != 10 or region != self.config['cloud_controller_region']
                 or volume.get('filesystem_type') != 'ext4' or volume.get('droplet_ids')):
             raise ValueError('persistent volume identity, size, region, filesystem or attachment differs')
         if reused and volume['id'] != self.config['cloud_volume_id']:
@@ -295,7 +345,7 @@ class CloudLauncher:
 
     def record_controller(self, item):
         state = self.read(); expected = state['controller']
-        if (item['name'] != expected['name'] or item.get('region', {}).get('slug') != self.config['region']
+        if (item['name'] != expected['name'] or item.get('region', {}).get('slug') != self.config['cloud_controller_region']
                 or item.get('size_slug') != self.config['cloud_controller_size']
                 or expected['ownership_tag'] not in item.get('tags', [])
                 or not self.created_after(item, expected['intent_at'])
@@ -340,7 +390,7 @@ class CloudLauncher:
                 self.update(lambda value: value['volume'].update(intent_at=self.now().isoformat()))
                 try:
                     values = self.api.call(self.account, ['compute', 'volume', 'create', self.config['cloud_volume_name'],
-                        '--size', '10GiB', '--region', self.config['region'], '--fs-type', 'ext4',
+                        '--size', '10GiB', '--region', self.config['cloud_controller_region'], '--fs-type', 'ext4',
                         '--desc', self.read()['volume']['description'], '--http-retry-max', '0'])
                     self.record_volume(values[0] if isinstance(values, list) else values)
                 except BaseException:
@@ -376,7 +426,7 @@ class CloudLauncher:
             userdata.write_text(cloud_init(scripts['ci-fanout-cloud.py'], remote, credentials)); userdata.chmod(0o600)
             try:
                 values = self.api.call(self.account, ['compute', 'droplet', 'create', self.read()['controller']['name'],
-                    '--region', self.config['region'], '--size', self.config['cloud_controller_size'],
+                    '--region', self.config['cloud_controller_region'], '--size', self.config['cloud_controller_size'],
                     '--image', 'ubuntu-24-04-x64', '--ssh-keys', str(self.read()['ssh_key']['id']),
                     '--volumes', self.read()['volume']['id'], '--tag-name', self.read()['controller']['ownership_tag'],
                     '--user-data-file', str(userdata), '--http-retry-max', '0'])
@@ -419,7 +469,7 @@ class CloudLauncher:
 
     def remote_config(self, state=None):
         state = state or self.read()
-        fanout = dict(self.config, worktree='/opt/atomic-ci-control/repo', runtime_dir=ROOT + '/runtime',
+        fanout = dict(worker_config(self.config), worktree='/opt/atomic-ci-control/repo', runtime_dir=ROOT + '/runtime',
                       doctl_config=ROOT + '/doctl.json', absolute_deadline=state['deadline'], host_bundle_backup=True,
                       oci_probe_dir='/opt/atomic-ci-control/repo/scripts/ci-fanout/oci-smoke',
                       artifact_archive_dir=MOUNT + '/browser-bundles')
@@ -430,8 +480,11 @@ class CloudLauncher:
                     expected_hourly_rate=self.config['expected_controller_hourly_rate'],
                     ssh_key_id=state['ssh_key']['id'], ssh_key_name=state['ssh_key']['name'],
                     ssh_key_fingerprint=state['ssh_key']['fingerprint']),
-                'volume': dict(state['volume'], size_gigabytes=10, region=self.config['region'], mount_path=MOUNT),
-                'fanout_config': fanout, 'max_total_usd': self.config['max_total_usd'],
+                'volume': dict(state['volume'], size_gigabytes=10, region=self.config['cloud_controller_region'], mount_path=MOUNT),
+                'fanout_config': fanout, 'cloud_worker_mode': self.config['cloud_worker_mode'],
+                'cloud_controller_region': self.config['cloud_controller_region'],
+                'expected_cache_volume_hourly_rate': self.config.get('expected_cache_volume_hourly_rate', 0),
+                'max_total_usd': self.config['max_total_usd'],
                 'expected_volume_hourly_rate': self.config['expected_volume_hourly_rate'],
                 'cloud_egress_reserve_usd': self.config['cloud_egress_reserve_usd'], 'cleanup_reserve_seconds': CLEANUP_SECONDS}
 

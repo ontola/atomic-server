@@ -8,6 +8,7 @@ import io
 import tarfile
 import datetime as dt
 import hashlib
+import gzip
 import importlib.util
 import json
 import os
@@ -61,7 +62,6 @@ def configuration(root):
             'authorization': 'Run only the reviewed three-node fixture within the fixed hour and budget.',
             'artifact_archive_dir': str(mount / 'browser-bundles'),
             'host_bundle_backup': True,
-            'source_snapshots': {'personal': {'id': 'fixture-snapshot', 'name': 'fixture-reviewed'}},
         },
     }
 
@@ -508,6 +508,14 @@ class CloudTests(unittest.TestCase):
                 self.assertFalse(result['self_delete_requested'])
                 self.assertEqual(self.api.deleted, [])
 
+    def test_cold_remote_contract_rejects_ignored_snapshot_hints(self):
+        for field,value in [('source_snapshot_id',SNAPSHOT),('source_snapshot_name','reviewed-seed'),
+                            ('source_snapshot_profile',{'cache_namespace':'fixturewarm'})]:
+            with self.subTest(field=field),self.assertRaises(ValueError):
+                config=copy.deepcopy(self.config)
+                config['fanout_config'][field]=value
+                cloud.validate_config(config)
+
     def test_total_budget_counts_the_remote_controller(self):
         # Workers alone fit exactly; adding the control node must reject it.
         config = copy.deepcopy(self.config)
@@ -515,6 +523,328 @@ class CloudTests(unittest.TestCase):
         config['fanout_config']['max_total_usd'] = 4.5
         with self.assertRaisesRegex(ValueError, 'budget|cost|maximum|max_total'):
             cloud.validate_config(config)
+
+
+CACHE_VOLUME = '33333333-3333-3333-3333-333333333333'
+SNAPSHOT = '44444444-4444-4444-4444-444444444444'
+
+
+def warm_configuration(root):
+    config = configuration(root)
+    config.update(cloud_worker_mode='warm', cloud_controller_region='mem1',
+                  expected_volume_hourly_rate=.0015, expected_cache_volume_hourly_rate=.03)
+    config['fanout_config'].update(region='atl1', cache_namespace='fixturewarm', expected_volume_hourly_rate=.03,
+        artifact_cache_dir='/var/cache/atomic-ci/browser-bundles',
+        source_snapshots={'personal': {'id': SNAPSHOT, 'name': 'reviewed-seed',
+            'cache_namespace': 'fixturewarm', 'dagger_engine_version': '0.0.1',
+            'architecture': 'linux/amd64', 'docker_data_root': '/mnt/atomic-ci/docker'}})
+    return config
+
+
+class WarmAPI(FakeAPI):
+    def __init__(self, config):
+        super().__init__(config)
+        self.cache_volumes = {}
+        self.snapshots = {SNAPSHOT: {'id': SNAPSHOT, 'name': 'reviewed-seed', 'resource_type': 'volume',
+                                    'resource_id': 'seed-volume', 'regions': ['atl1'], 'min_disk_size': 200}}
+        self.stale_volume_404 = False
+        self.lose_volume_delete = False
+        self.keep_volume_after_delete = False
+        self.keep_attachment = False
+
+    def volumes(self):
+        self.calls.append(('volumes',))
+        return copy.deepcopy([self.volume_record, *self.cache_volumes.values()])
+
+    def volume(self, ident):
+        if ident == VOLUME:
+            return super().volume(ident)
+        self.calls.append(('volume', ident))
+        return None if self.stale_volume_404 else copy.deepcopy(self.cache_volumes.get(ident))
+
+    def snapshot(self, ident):
+        self.calls.append(('snapshot', ident))
+        return copy.deepcopy(self.snapshots.get(ident))
+
+    def delete_volume(self, ident):
+        if ident == VOLUME or ident in self.snapshots:
+            raise AssertionError('retained volume and source snapshot must never be deleted')
+        self.deleted.append(('volume', ident))
+        if not self.keep_volume_after_delete:
+            self.cache_volumes.pop(ident, None)
+        if self.lose_volume_delete:
+            raise RuntimeError('lost delete response')
+
+    def delete_droplet(self, ident):
+        super().delete_droplet(ident)
+        if not self.keep_attachment:
+            for volume in self.cache_volumes.values():
+                volume['droplet_ids'] = [n for n in volume['droplet_ids'] if n != int(ident)]
+
+
+class WarmCloudTests(unittest.TestCase):
+    write_state = CloudTests.write_state
+    reap = CloudTests.reap
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.config = cloud.validate_config(warm_configuration(self.root))
+        for path in (self.config['root'], self.config['repo'], self.config['volume']['mount_path']):
+            Path(path).mkdir()
+        Path(self.config['credentials']).write_text(json.dumps({'context':'personal','auth-contexts':{'personal':'dop_v1_FIXTURE_SECRET'}}))
+        self.metadata = {'droplet_id': 99, 'hostname': 'fixture-cloud-control', 'region': 'mem1'}
+        self.api = WarmAPI(self.config)
+
+    def clone(self, attached=False, known=True):
+        created = (START + dt.timedelta(seconds=2)).isoformat()
+        volume = {'id': CACHE_VOLUME, 'name': 'fixture-cloud-node-001-cache', 'size_gigabytes': 200,
+                  'region': {'slug': 'atl1'}, 'description': 'Atomic CI cache fixture-cloud ' + 'a' * 32,
+                  'created_at': created, 'droplet_ids': [201] if attached else []}
+        self.api.cache_volumes[CACHE_VOLUME] = volume
+        entry = {'name': volume['name'], 'node_id':'node-001', 'account':'personal', 'expected_uuid':ACCOUNT,
+                 'absence_verified':True, 'attempted_at':(START+dt.timedelta(seconds=1)).isoformat(),
+                 'source_snapshot':copy.deepcopy(self.api.snapshots[SNAPSHOT]), 'description':volume['description']}
+        if known:
+            entry.update(id=CACHE_VOLUME, created_at=created)
+        ledger = {volume['name']:entry}
+        runtime = Path(self.config['fanout_config']['runtime_dir'])
+        runtime.mkdir(parents=True, exist_ok=True)
+        (runtime / 'warm-volumes.json').write_text(json.dumps(ledger))
+        return entry
+
+    def state(self, with_worker=False):
+        nodes = {}
+        if with_worker:
+            node = CloudTests.worker(self)
+            self.api.records[201]['region'] = {'slug':'atl1'}
+            self.api.records[201]['volume_ids'] = [CACHE_VOLUME]
+            nodes['node-001'] = node
+        else:
+            nodes['node-001'] = {'id':'node-001','account':'personal','name':'fixture-cloud-node-001'}
+        self.write_state(nodes)
+        return json.loads((Path(self.config['fanout_config']['runtime_dir'])/'state.json').read_text())
+
+    def cleanup_clones(self, now=DEADLINE):
+        state = json.loads((Path(self.config['fanout_config']['runtime_dir'])/'state.json').read_text())
+        return cloud.reap_cache_volumes(self.config, self.api, state, now)
+
+    def test_explicit_warm_mode_selects_the_public_snapshot_driver(self):
+        self.assertEqual(cloud.fanout_driver(self.config),'ci-fanout-warm.py')
+        self.assertEqual(cloud.fanout_driver({'cloud_worker_mode':'cold'}),'ci-fanout.py')
+        self.assertEqual(cloud.fanout_driver({}),'ci-fanout.py')
+
+    def test_expired_warm_bootstrap_does_not_contact_provider_or_install_anything(self):
+        config=copy.deepcopy(self.config)
+        config['campaign_started_at']=(START-dt.timedelta(hours=2)).isoformat()
+        config['deadline']=(DEADLINE-dt.timedelta(hours=2)).isoformat()
+        config['controller']['creation_intent_at']=config['campaign_started_at']
+        config['fanout_config']['absolute_deadline']=config['deadline']
+        with mock.patch.object(cloud.subprocess,'run',side_effect=AssertionError('expired campaign cannot install/start')):
+            with self.assertRaises(TimeoutError):
+                cloud.bootstrap_run(config,api=self.api,metadata=self.metadata)
+        self.assertEqual(self.api.calls,[])
+        self.assertEqual(self.api.deleted,[])
+
+    def test_warm_regions_and_retained_vs_clone_prices_remain_separate(self):
+        self.assertEqual(self.config['fanout_config']['region'], 'atl1')
+        self.assertEqual(self.config['volume']['region'], 'mem1')
+        self.assertEqual(self.config['expected_volume_hourly_rate'], .0015)
+        self.assertEqual(self.config['expected_cache_volume_hourly_rate'], .03)
+        self.assertEqual(self.config['fanout_config']['expected_volume_hourly_rate'], .03)
+        self.assertEqual(cloud.verify_controller(self.config,self.api,self.metadata)['id'],99)
+        self.assertEqual(cloud.verify_volume(self.config,self.api,99)['id'],VOLUME)
+
+    def test_lost_create_response_is_reconciled_only_from_owned_clone_proof(self):
+        self.state()
+        self.clone(known=False)
+        result = self.cleanup_clones()
+        self.assertTrue(result['all_deleted'])
+        self.assertEqual(result['cache_volume_ids_deleted'], [CACHE_VOLUME])
+        self.assertGreater(result['estimated_storage_usd'],0)
+        self.assertEqual(self.api.deleted, [('volume',CACHE_VOLUME)])
+        self.assertEqual(self.api.volume_record['id'],VOLUME)
+        self.assertIn(SNAPSHOT,self.api.snapshots)
+
+    def test_known_volume_404_with_stale_listing_cannot_prove_absence(self):
+        self.state()
+        self.clone()
+        self.api.stale_volume_404 = True
+        result = self.cleanup_clones()
+        self.assertFalse(result['all_deleted'])
+        self.assertEqual(self.api.deleted,[])
+
+    def test_recent_unknown_create_and_empty_provider_listing_keeps_cleanup_pending(self):
+        self.state()
+        entry=self.clone(known=False)
+        self.api.cache_volumes.clear()
+        entry['attempted_at']=(DEADLINE-dt.timedelta(seconds=30)).isoformat()
+        path=Path(self.config['fanout_config']['runtime_dir'])/'warm-volumes.json'
+        path.write_text(json.dumps({entry['name']:entry}))
+        result=self.cleanup_clones()
+        self.assertFalse(result['all_deleted'])
+        self.assertEqual(self.api.deleted,[])
+
+    def test_clone_identity_mutations_never_authorize_volume_deletion(self):
+        mutations = [
+            ('id', lambda e,v:e.update(id='55555555-5555-5555-5555-555555555555')),
+            ('name', lambda e,v:v.update(name='foreign-cache')),
+            ('account', lambda e,v:e.update(account='other')),
+            ('uuid', lambda e,v:e.update(expected_uuid='55555555-5555-5555-5555-555555555555')),
+            ('region', lambda e,v:v.update(region={'slug':'mem1'})),
+            ('size', lambda e,v:v.update(size_gigabytes=10)),
+            ('description', lambda e,v:v.update(description='foreign description')),
+            ('snapshot', lambda e,v:e['source_snapshot'].update(id='foreign-snapshot')),
+            ('actual-snapshot', lambda e,v:v.update(snapshot_id='foreign-snapshot')),
+            ('actual-id', lambda e,v:v.update(id='55555555-5555-5555-5555-555555555555')),
+            ('changed-created', lambda e,v:v.update(created_at=(START+dt.timedelta(seconds=3)).isoformat())),
+            ('created', lambda e,v:v.update(created_at=(START-dt.timedelta(minutes=1)).isoformat())),
+        ]
+        for label, change in mutations:
+            with self.subTest(label=label):
+                self.api=WarmAPI(self.config)
+                self.state()
+                entry=self.clone()
+                change(entry,self.api.cache_volumes[CACHE_VOLUME])
+                path=Path(self.config['fanout_config']['runtime_dir'])/'warm-volumes.json'
+                path.write_text(json.dumps({entry['name']:entry}))
+                result=self.cleanup_clones()
+                self.assertFalse(result['all_deleted'])
+                self.assertEqual(self.api.deleted,[])
+
+    def test_foreign_attachment_blocks_cache_and_controller_deletion(self):
+        self.state(with_worker=True)
+        self.clone(attached=True)
+        self.api.cache_volumes[CACHE_VOLUME]['droplet_ids'].append(888)
+        result=self.reap()
+        self.assertFalse(result['cleanup_complete'])
+        self.assertFalse(result['self_delete_requested'])
+        self.assertNotIn(('volume',CACHE_VOLUME),self.api.deleted)
+        self.assertNotIn(('droplet',99),self.api.deleted)
+
+    def test_workers_are_removed_and_detached_before_clone_then_controller(self):
+        self.state(with_worker=True)
+        self.clone(attached=True)
+        with mock.patch.object(cloud.subprocess,'run',side_effect=AssertionError('reaper cannot require doctl/git')):
+            result=self.reap()
+        self.assertTrue(result['cleanup_complete'])
+        self.assertEqual(self.api.deleted[0],('droplet',201))
+        self.assertLess(self.api.deleted.index(('volume',CACHE_VOLUME)), self.api.deleted.index(('droplet',99)))
+        self.assertEqual(self.api.volume_record['id'],VOLUME)
+        self.assertIn(SNAPSHOT,self.api.snapshots)
+
+    def test_unconfirmed_volume_delete_blocks_controller_cleanup(self):
+        self.state()
+        self.clone()
+        self.api.keep_volume_after_delete=True
+        result=self.reap()
+        self.assertFalse(result['cleanup_complete'])
+        self.assertFalse(result['self_delete_requested'])
+        self.assertNotIn(('droplet',99),self.api.deleted)
+
+    def test_owned_volume_delete_response_loss_can_be_resolved_by_fresh_absence(self):
+        self.state()
+        self.clone()
+        self.api.lose_volume_delete=True
+        result=self.cleanup_clones()
+        self.assertTrue(result['all_deleted'])
+        self.assertEqual(self.api.deleted,[('volume',CACHE_VOLUME)])
+
+    def test_bootstrap_failure_releases_workers_and_clone_before_deadline_without_bootstrap_tools(self):
+        self.state(with_worker=True)
+        self.clone(attached=True)
+        (Path(self.config['root'])/'cloud-status.json').write_text('{"phase":"failed"}')
+        with mock.patch.object(cloud.subprocess,'run',side_effect=AssertionError('cleanup cannot depend on bootstrap tools')):
+            result=self.reap(now=NOW)
+        self.assertTrue(result['cleanup_complete'])
+        self.assertFalse(result['self_delete_requested'])
+        self.assertIn(('droplet',201),self.api.deleted)
+        self.assertIn(('volume',CACHE_VOLUME),self.api.deleted)
+        self.assertNotIn(('droplet',99),self.api.deleted)
+
+    def test_unrecorded_second_clone_keeps_controller_alive_after_first_clone_is_cleaned(self):
+        self.state()
+        self.clone()
+        extra='55555555-5555-5555-5555-555555555555'
+        self.api.cache_volumes[extra]=dict(self.api.cache_volumes[CACHE_VOLUME],id=extra,name='fixture-cloud-node-002-cache')
+        result=self.reap()
+        self.assertFalse(result['cleanup_complete'])
+        self.assertIn(('volume',CACHE_VOLUME),self.api.deleted)
+        self.assertNotIn(('volume',extra),self.api.deleted)
+        self.assertNotIn(('droplet',99),self.api.deleted)
+
+    def test_public_warm_controller_ledger_is_cleaned_by_independent_cloud_reaper(self):
+        # Exercise the actual producer and consumer together. Only provider calls,
+        # SSH preparation and the local key setup are fake; the ledger is not.
+        case=self
+        class PublicProvider(launch.BASE.DigitalOcean):
+            def __init__(self):
+                super().__init__('unused-selected-credentials')
+            def raw(self, account, args):
+                if args==['account','get']:
+                    return {'uuid':ACCOUNT,'droplet_limit':10}
+                if args==['compute','droplet','list']:
+                    return case.api.droplets()
+                if args==['compute','volume','list']:
+                    return case.api.volumes()
+                if args[:3]==['compute','snapshot','get']:
+                    return case.api.snapshot(args[3])
+                if args[:3]==['compute','volume','create']:
+                    ledger=json.loads((Path(case.config['fanout_config']['runtime_dir'])/'warm-volumes.json').read_text())
+                    intent=ledger[args[3]]
+                    case.assertTrue(intent['absence_verified'])
+                    case.assertEqual(intent['expected_uuid'],ACCOUNT)
+                    case.assertNotIn('id',intent)
+                    case.assertEqual(args[args.index('--snapshot')+1],SNAPSHOT)
+                    volume={'id':CACHE_VOLUME,'name':args[3],'size_gigabytes':200,'region':{'slug':'atl1'},
+                            'description':args[args.index('--desc')+1], 'created_at':launch.BASE.stamp(),'droplet_ids':[]}
+                    case.api.cache_volumes[CACHE_VOLUME]=volume
+                    return [copy.deepcopy(volume)]
+                if args[:3]==['compute','droplet','create']:
+                    volume=case.api.cache_volumes[args[args.index('--volumes')+1]]
+                    volume['droplet_ids']=[201]
+                    record={'id':201,'name':args[3],'created_at':launch.BASE.stamp(),
+                            'size_slug':case.config['fanout_config']['size'],'size':{'price_hourly':1.5},
+                            'region':{'slug':'atl1'},'volume_ids':[volume['id']]}
+                    case.api.records[201]=record
+                    return [copy.deepcopy(record)]
+                raise AssertionError('unexpected public provider call: '+repr(args))
+        provider=PublicProvider()
+        public=launch.WARM.controller_class(launch.BASE,lambda _:provider)(self.config['fanout_config'])
+        public.prepare=lambda key:public.node_update(key,status='ready')
+        public.event=lambda value:None
+        with mock.patch.object(launch.BASE,'execute',return_value=''):
+            public.initialize({'dagger_version':'0.0.1','nodes':3})
+        public.update(lambda state:state.update(keys={'personal':{'id':124}}))
+        public.create('node-001')
+        ledger=json.loads((public.root/'warm-volumes.json').read_text())
+        self.assertEqual(ledger['fixture-cloud-node-001-cache']['id'],CACHE_VOLUME)
+        # The fixture did not import a worker key; do not invent ownership of one.
+        public.update(lambda state:state.update(keys={}))
+        result=self.reap()
+        self.assertTrue(result['cleanup_complete'])
+        self.assertEqual(self.api.deleted[0],('droplet',201))
+        self.assertIn(('volume',CACHE_VOLUME),self.api.deleted)
+        self.assertEqual(self.api.deleted[-1],('droplet',99))
+        self.assertIn(SNAPSHOT,self.api.snapshots)
+        self.assertEqual(self.api.volume_record['id'],VOLUME)
+
+    def test_warm_ledger_and_startup_proof_are_persisted_without_credentials(self):
+        self.state()
+        self.clone()
+        runtime=Path(self.config['fanout_config']['runtime_dir'])
+        (runtime/'warm-cleanup.json').write_text('{"all_deleted":true}')
+        proof=runtime/'node-001/cache-startup.json'
+        proof.parent.mkdir(parents=True, exist_ok=True)
+        proof.write_text('{"restoration_verified":true}')
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            receipt=cloud.persist_evidence(self.config,final=True)
+        saved=Path(self.config['volume']['mount_path'])/'runs/fixture-cloud/runtime'
+        self.assertTrue((saved/'warm-volumes.json').is_file())
+        self.assertTrue((saved/'warm-cleanup.json').is_file())
+        self.assertEqual((saved/'node-001/cache-startup.json').read_text(),proof.read_text())
+        self.assertNotIn('dop_v1_FIXTURE_SECRET',json.dumps(receipt))
 
 
 class LauncherAPI:
@@ -541,9 +871,11 @@ class LauncherAPI:
             return copy.deepcopy(self.keys)
         if args == ['compute', 'size', 'list']:
             return [{'slug': self.config['size'], 'vcpus': 64, 'available': True,
-                     'regions': ['mem1'], 'price_hourly': 1.5},
+                     'regions': [self.config['region']], 'price_hourly': 1.5},
                     {'slug': self.config['cloud_controller_size'], 'vcpus': 2, 'available': True,
-                     'regions': ['mem1'], 'price_hourly': .04}]
+                     'regions': [self.config.get('cloud_controller_region', self.config['region'])], 'price_hourly': .04}]
+        if args[:3] == ['compute', 'snapshot', 'get']:
+            return [{'id':SNAPSHOT,'name':'reviewed-seed','resource_type':'volume','resource_id':'seed-volume','regions':['atl1'],'min_disk_size':200}]
         if args[:3] == ['compute', 'volume', 'get']:
             return [copy.deepcopy(next(v for v in self.volumes if v['id'] == args[3]))]
         if args[:3] == ['compute', 'volume', 'create']:
@@ -656,7 +988,8 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(self.api.creates, [])
 
     def test_oversized_userdata_is_rejected_before_any_paid_create(self):
-        scripts = dict(self.scripts, **{'ci-fanout-cloud.py': self.scripts['ci-fanout-cloud.py'] + b'\n# ' + b'x' * (65 * 1024)})
+        payload = b''.join(hashlib.sha512(str(index).encode()).digest() for index in range(2048))
+        scripts = dict(self.scripts, **{'ci-fanout-cloud.py': self.scripts['ci-fanout-cloud.py'] + b'\n# ' + base64.b64encode(payload)})
         with mock.patch.object(launch, 'checked_source', return_value=scripts), \
              mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
              self.assertRaisesRegex(ValueError, '64|user.?data|large|limit'):
@@ -680,7 +1013,14 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(commands[1], ['systemctl','enable','--now','atomic-ci-reaper-fixture-cloud.service'])
         self.assertEqual(commands[2], ['systemctl','enable','--now','atomic-ci-supervisor-fixture-cloud.service'])
         self.assertNotIn('packages', data)
-        files = {f['path']: base64.b64decode(f['content']).decode() for f in data['write_files']}
+        files = {}
+        for entry in data['write_files']:
+            payload = base64.b64decode(entry['content'])
+            if entry['encoding'] == 'gz+b64':
+                payload = gzip.decompress(payload)
+            else:
+                self.assertEqual(entry['encoding'], 'b64')
+            files[entry['path']] = payload.decode()
         reaper = files['/etc/systemd/system/atomic-ci-reaper-fixture-cloud.service']
         supervisor = files['/etc/systemd/system/atomic-ci-supervisor-fixture-cloud.service']
         self.assertIn('KillMode=control-group', reaper)
@@ -738,6 +1078,113 @@ class LauncherTests(unittest.TestCase):
                            ('reports/id_ed25519','file'), ('reports/symlink','link'), ('../escape','file')]:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 launch.extract_reports(self.report_archive([(name,kind)]), destination)
+
+
+class WarmLauncherTests(unittest.TestCase):
+    run_command = LauncherTests.run_command
+    source_plan = LauncherTests.source_plan
+
+    def setUp(self):
+        LauncherTests.setUp(self)
+        warm=warm_configuration(self.root)
+        self.config.update(cloud_worker_mode='warm', cloud_controller_region='mem1', region='atl1',
+                           cloud_volume_id=VOLUME, expected_cache_volume_hourly_rate=.03,
+                           cache_namespace='fixturewarm', source_snapshots=warm['fanout_config']['source_snapshots'])
+        self.scripts['ci-fanout-warm.py']=Path(launch.WARM.__file__).read_bytes()
+        self.worker_plan.update(nodes=3, hourly_usd=4.5, dagger_version='0.0.1')
+        self.api=LauncherAPI(self.config)
+        self.api.volumes=[{'id':VOLUME,'name':'fixture-cache','size_gigabytes':10,
+                           'region':{'slug':'mem1'},'filesystem_type':'ext4','droplet_ids':[],'created_at':START.isoformat()}]
+        self.controller=launch.CloudLauncher(self.config,api=self.api,run=self.run_command,now=lambda:NOW)
+
+    def test_warm_readonly_plan_checks_snapshot_and_counts_all_three_clone_disks(self):
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan):
+            plan=self.controller.plan()
+        self.assertEqual(plan['cloud_worker_mode'],'warm')
+        self.assertEqual(plan['region'],'atl1')
+        self.assertEqual(plan['controller_region'],'mem1')
+        self.assertEqual(plan['cache_volume_gib'],200)
+        self.assertAlmostEqual(plan['cache_storage_hourly_usd_estimate'],.09)
+        self.assertAlmostEqual(plan['hourly_usd'],4.6315)
+        self.assertAlmostEqual(plan['maximum_estimated_usd'],4.6315*(1+120/3600)+.15)
+        self.assertTrue(any(args[:3]==['compute','snapshot','get'] for args in self.api.calls))
+        self.assertEqual(self.api.creates,[])
+        self.assertFalse(Path(self.config['runtime_dir']).exists())
+
+    def test_warm_snapshot_companion_and_reuse_guards_run_before_any_paid_create(self):
+        mutations=[
+            lambda c:c.update(cloud_worker_mode='typo'),
+            lambda c:c.pop('cloud_volume_id'),
+            lambda c:c.update(expected_cache_volume_hourly_rate=float('nan')),
+            lambda c:c['source_snapshots']['personal'].pop('dagger_engine_version'),
+            lambda c:c['source_snapshots']['personal'].update(cache_namespace='wrong-cache'),
+            lambda c:c['source_snapshots']['personal'].update(dagger_engine_version='0.0.2'),
+            lambda c:c['source_snapshots']['personal'].update(architecture='linux/arm64'),
+            lambda c:c['source_snapshots']['personal'].update(docker_data_root='/wrong-root'),
+        ]
+        labels=('mode','retained-id','price','missing-engine','namespace','engine-version','architecture','data-root')
+        for index, change in enumerate(mutations):
+            with self.subTest(guard=labels[index]):
+                config=copy.deepcopy(self.config)
+                change(config)
+                config['runtime_dir']=str(self.root/('rejected-'+str(index)))
+                api=LauncherAPI(config)
+                api.volumes=copy.deepcopy(self.api.volumes)
+                with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan), self.assertRaises(ValueError):
+                    controller=launch.CloudLauncher(config,api=api,run=self.run_command,now=lambda:NOW)
+                    controller.launch()
+                self.assertEqual(api.creates,[])
+                self.assertFalse(Path(config['runtime_dir']).exists())
+
+    def test_snapshot_worker_region_and_retained_controller_region_are_both_checked(self):
+        for target in ('worker','controller'):
+            with self.subTest(target=target):
+                config=copy.deepcopy(self.config)
+                if target=='worker':
+                    config['region']='wrong-region'
+                else:
+                    config['cloud_controller_region']='wrong-region'
+                with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan), self.assertRaises(ValueError):
+                    launch.CloudLauncher(config,api=self.api,run=self.run_command,now=lambda:NOW).launch()
+                self.assertEqual(self.api.creates,[])
+
+    def test_remote_contract_remaps_only_worker_clone_rate_and_keeps_control_region(self):
+        state={'campaign_started_at':START.isoformat(),'deadline':DEADLINE.isoformat(),
+               'controller':self.configured_controller(),
+               'ssh_key':{'id':123,'name':'fixture-cloud-controller-key','fingerprint':'aa:bb'},
+               'volume':{'id':VOLUME,'name':'fixture-cache'}}
+        remote=self.controller.remote_config(state)
+        normalized=cloud.validate_config(remote)
+        self.assertEqual(normalized['cloud_worker_mode'],'warm')
+        self.assertEqual(normalized['volume']['region'],'mem1')
+        self.assertEqual(normalized['fanout_config']['region'],'atl1')
+        self.assertEqual(normalized['expected_volume_hourly_rate'],.0015)
+        self.assertEqual(normalized['expected_cache_volume_hourly_rate'],.03)
+        self.assertEqual(normalized['fanout_config']['expected_volume_hourly_rate'],.03)
+        self.assertEqual(self.controller.config['expected_volume_hourly_rate'],.0015)
+
+    def configured_controller(self):
+        return {'name':'fixture-cloud-controller','ownership_tag':'fixture-owned',
+                'intent_at':START.isoformat(),'creation_intent_at':START.isoformat()}
+
+    def test_budget_that_fits_cold_workers_cannot_silently_omit_clone_storage(self):
+        config=dict(self.config,max_total_usd=4.88)
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan), self.assertRaisesRegex(ValueError,'budget'):
+            launch.CloudLauncher(config,api=self.api,run=self.run_command,now=lambda:NOW).launch()
+        self.assertEqual(self.api.creates,[])
+
+    def test_cold_mode_refuses_accidentally_ignored_snapshot_or_clone_price_settings(self):
+        cold=copy.deepcopy(self.config)
+        for field in ('cloud_worker_mode','source_snapshots','expected_cache_volume_hourly_rate'):
+            cold.pop(field,None)
+        cold.update(region='mem1',cloud_controller_region='mem1')
+        # Each rejected input is the only warm-only setting present.
+        for changes in ({'cloud_worker_mode':'unknown'}, {'expected_cache_volume_hourly_rate':.03},
+                        {'source_snapshots':self.config['source_snapshots']},
+                        {'source_snapshot_profile':{'cache_namespace':'fixturewarm'}}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                launch.CloudLauncher(dict(cold,**changes),api=self.api,run=self.run_command,now=lambda:NOW)
+        self.assertEqual(self.api.creates,[])
 
 
 if __name__ == '__main__':

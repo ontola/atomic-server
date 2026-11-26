@@ -3220,3 +3220,12 @@ Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and in
 Notification tests in `lib/src/notify/tests.rs` cover direct and inherited grants, changes after queueing, independently shared unread items, and the delivery channels. The native client helper tests cover the exact private push origin, including port matching. Server-side push requests use the filtered DNS resolver and disable redirects and proxies.
 
 TablePage stack integration (#2666, #2672, #2673): `useTableView.debounce.test.tsx` now carries a rejected initial table-link save through another rejected retry and a successful later edit, without creating a second View; it also checks queued links and late failures after moving to another view/table. `browser/e2e/tests/tablepage-2673-review.spec.ts` exercises first-view filter persistence after reload, unchecked column deletion retaining the Property and row data, inferred timer Duration predicates shared by the table and dashboard, and preserving a saved date format until an explicit replacement. The review cases attach actual desktop/mobile PNGs to the browser report. They require a matching app/server build; static inventory and TypeScript checks alone are not browser acceptance.
+
+Autonomous warm-worker regressions (`ci-fanout-cloud.test.py` and
+`ci-fanout-warm.test.py`) cover separate controller/worker regions, all three
+clone prices, explicit snapshot companions/pinned Dagger, actual producer-ledger
+to independent-reaper compatibility, lost API responses, foreign attachments,
+retained/source storage protection, bootstrap failure and expired deadlines.
+Generated SSH collectors/shell setup are checked and verify pre-Docker nonempty
+cache state plus mounted Docker/engine provenance without claiming cache hits.
+These fixtures are not real-cloud warm-run acceptance.
