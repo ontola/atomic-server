@@ -3229,3 +3229,11 @@ retained/source storage protection, bootstrap failure and expired deadlines.
 Generated SSH collectors/shell setup are checked and verify pre-Docker nonempty
 cache state plus mounted Docker/engine provenance without claiming cache hits.
 These fixtures are not real-cloud warm-run acceptance.
+
+
+Browser route lifecycle: `pnpm --filter @tomic/e2e test:route-lifecycle` runs a
+controlled real-HTTP/Chromium regression. An unowned route reproduces the native
+Playwright teardown error; production fixtures drain page, context and extra
+owned-context callbacks before closing, while an upstream reset still fails.
+This explicit browser regression needs the pinned Playwright Chromium install;
+it is separate from the Node-only script unit suite.
