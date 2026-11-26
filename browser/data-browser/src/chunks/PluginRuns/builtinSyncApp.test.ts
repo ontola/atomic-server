@@ -1897,6 +1897,80 @@ describe('shared entity tables and independent saved filters', () => {
     expect(set.store.ui.openResource).not.toHaveBeenCalled();
   });
 
+  it('chooses a Public source in place and saves the bound filter on this collection', async () => {
+    const document = withPublicEntrypoint();
+    const set = setup('collection', {
+      document,
+      principal: { kind: 'public' },
+      connectionId: undefined,
+      collection: bindCollection(document, {
+        collection: 'tasks',
+        context: { workspace_id: '42' },
+      }),
+    });
+    Object.assign(set.context, { rule: undefined });
+    const table = set.data.get(root)!;
+    table[P + 'parent'] = 'atomic:public-principal';
+    table[P + 'table-views'] = [];
+    table[prop('node-kind')] = 'collection';
+    set.data.delete('atomic:initial-rule');
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: { id: 200 },
+    });
+    const element = globalThis.document.createElement('div');
+    const button = (text: string) =>
+      [...element.querySelectorAll('button')].find(b => b.textContent === text);
+    await view({ root: element, store: set.store });
+    button('Choose source')!.click();
+    await vi.waitFor(() => expect(button('Save filter')).toBeDefined());
+    expect(set.store.ui.openResource).not.toHaveBeenCalled();
+    expect(set.request).not.toHaveBeenCalled();
+
+    const collection = element.querySelector<HTMLSelectElement>(
+      'select[aria-label="Source collection"]',
+    )!;
+    expect([...collection.options].map(option => option.value)).toEqual([
+      'tasks',
+    ]);
+    const source = element.querySelector<HTMLSelectElement>(
+      'select[aria-label="Source"]',
+    )!;
+    source.value = '/public/{team}/{space}';
+    source.dispatchEvent(new Event('change'));
+
+    for (const [label, value] of [
+      ['Filter name', 'Public tasks'],
+      ['Team reference', 'one'],
+      ['Workspace reference', 'two'],
+    ]) {
+      element.querySelector<HTMLInputElement>(
+        `input[aria-label="${label}"]`,
+      )!.value = value;
+    }
+
+    button('Save filter')!.click();
+    await vi.waitFor(() =>
+      expect(set.store.ui.openResource).toHaveBeenCalledOnce(),
+    );
+    const saved = ruleFor(set, root, 'tasks');
+    expect(set.store.ui.openResource).toHaveBeenCalledWith(saved);
+    expect(table[P + 'table-views']).toContain(saved);
+    expect(nodes(set.data, 'collection')).toEqual([[root, table]]);
+    expect(set.data.get(saved)?.[P + 'name']).toBe('Public tasks');
+    expect(config(set.data.get(saved)!).definition).toMatchObject({
+      source: {
+        kind: 'bound',
+        bound: { collection: 'tasks', pathParams: { workspace_id: '200' } },
+      },
+    });
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
+      'v2/public/one/two',
+    ]);
+    expect(set.request.mock.calls[0][0].connectionId).toBeUndefined();
+  });
+
   it('advances visible page progress without replacing the active Sync controls', async () => {
     vi.useFakeTimers();
 

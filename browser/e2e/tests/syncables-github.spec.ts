@@ -61,6 +61,7 @@ const FIRST_ISSUE_TITLE = 'GitHub Issues E2E example';
 const UPDATED_ISSUE_TITLE = 'Updated GitHub Issues E2E example';
 const RETAINED_ISSUE_TITLE = 'Issue omitted from the next read';
 const PULL_REQUEST_TITLE = 'Pull request returned by the GitHub Issues API';
+const SYNCABLE_COLLECTIONS_TAB = 'Syncable Collections';
 
 function publicIssueUrl(page: number): string {
   const url = `${PUBLIC_ISSUES}?per_page=100&page=${page}&state=all`;
@@ -910,8 +911,14 @@ async function browse(page: Page) {
   await expect(
     page.getByRole('tab', { name: 'Table', exact: true }),
   ).toBeVisible();
-  const directory = page.getByRole('tab', { name: 'Collection', exact: true });
-  await selectView(page, (await directory.count()) ? 'Collection' : 'Table');
+  const directory = page.getByRole('tab', {
+    name: SYNCABLE_COLLECTIONS_TAB,
+    exact: true,
+  });
+  await selectView(
+    page,
+    (await directory.count()) ? SYNCABLE_COLLECTIONS_TAB : 'Table',
+  );
   await expect(page.locator('iframe[title="App"]:visible')).toHaveCount(0);
 
   return page
@@ -923,6 +930,10 @@ async function browse(page: Page) {
 async function waitForInitialSync(page: Page, rowName: string) {
   const directory = await browse(page);
   await expect(directory.getByText(rowName, { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  // A row can become visible while the worker is still committing the page.
+  await expect(page.locator('iframe[title="App"]')).toHaveCount(0, {
     timeout: 60_000,
   });
 
@@ -1256,7 +1267,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       page.getByRole('tab', { name: 'Table', exact: true }),
     ).toHaveAttribute('aria-selected', 'true');
     await expect(
-      page.getByRole('tab', { name: 'Collection', exact: true }),
+      page.getByRole('tab', { name: /^(Collection|Syncable Collections)$/ }),
     ).toHaveCount(0);
     await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '2');
     await testInfo.attach('repositories-table-without-duplicate-collection', {
@@ -1266,7 +1277,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     tableUrl.searchParams.set('view', legacyView);
     await page.goto(tableUrl.href);
     await expect(
-      page.getByRole('tab', { name: 'Collection', exact: true }),
+      page.getByRole('tab', { name: /^(Collection|Syncable Collections)$/ }),
     ).toHaveCount(0);
     await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '4');
     await expect(page.locator('iframe[title="App"]')).toHaveCount(0);
@@ -1558,7 +1569,7 @@ test.describe('catalog-driven built-in Syncables', () => {
       organizationsUrl = page.url();
     const directory = await waitForInitialSync(page, 'ontola');
     await expect(
-      page.getByRole('tab', { name: 'Collection', exact: true }),
+      page.getByRole('tab', { name: /^(Collection|Syncable Collections)$/ }),
     ).toHaveCount(0);
     expect(requests.organizationRequests).toBe(1);
     await selectView(page, 'Sync');
@@ -2878,6 +2889,102 @@ test.describe('catalog-driven built-in Syncables', () => {
       replacement[0].subject,
     );
     expect(await principalApps(page)).toEqual(replacement);
+  });
+
+  test('chooses a Public Issues source inside the current collection', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    await mockIntegrationProxy(page);
+    const providerReads: string[] = [];
+    await page.route(GITHUB_API + '/**', async route => {
+      const request = route.request();
+      expect(request.method()).toBe('GET');
+      expect(request.frame()).toBe(page.mainFrame());
+      expect((await request.allHeaders()).authorization).toBeUndefined();
+      const url = new URL(request.url());
+      providerReads.push(url.origin + url.pathname);
+
+      if (url.href === PUBLIC_REPOSITORY) {
+        await route.fulfill({
+          headers: { 'access-control-allow-origin': '*' },
+          json: {
+            id: 456,
+            name: 'atomic-server',
+            full_name: REPOSITORY,
+            owner: { id: 123, login: 'ontola', type: 'Organization' },
+            private: false,
+            has_issues: true,
+          },
+        });
+
+        return;
+      }
+
+      expect(url.pathname).toBe('/repositories/456/issues');
+      expect(url.searchParams.get('state')).toBe('all');
+      await route.fulfill({
+        headers: { 'access-control-allow-origin': '*' },
+        json: [issue(9001, 15, FIRST_ISSUE_TITLE)],
+      });
+    });
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    await iframe
+      .getByRole('button', { name: 'Public', exact: true })
+      .click({ timeout: 45_000 });
+    await selectView(page, SYNCABLE_COLLECTIONS_TAB);
+    await openRow(page, 'Issues and pull requests');
+    const table = await getCurrentSubject(page);
+    await selectView(page, 'Sync');
+    const button = iframe.getByRole('button', {
+      name: 'Choose source',
+      exact: true,
+    });
+    await expect(button).toBeVisible({ timeout: 30_000 });
+    const syncUrl = page.url();
+    await button.click();
+    const sourceCollection = iframe.getByLabel('Source collection', {
+      exact: true,
+    });
+    await expect(sourceCollection).toBeVisible();
+    await expect(page).toHaveURL(syncUrl);
+    await expect(sourceCollection.locator('option')).toHaveCount(1);
+    await expect(sourceCollection).toHaveValue('repositoryIssues');
+    await iframe
+      .getByLabel('Source', { exact: true })
+      .selectOption('/repos/{owner}/{repo}');
+    await iframe.getByLabel('Repository owner', { exact: true }).fill('ontola');
+    await iframe
+      .getByLabel('Repository name', { exact: true })
+      .fill('atomic-server');
+    await iframe
+      .getByLabel('Filter name', { exact: true })
+      .fill('Atomic Server');
+    expect(providerReads).toEqual([]);
+    await testInfo.attach('choose-source-in-collection', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await iframe
+      .getByRole('button', { name: 'Save filter', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute('about', table);
+    const filters = page.getByRole('combobox', { name: 'Saved filter' });
+    await expect(filters.locator('option:checked')).toHaveText('Atomic Server');
+    expect(providerReads).toEqual([PUBLIC_REPOSITORY]);
+    await sync(page);
+    const grid = await browse(page);
+    await expect(
+      grid.getByText(FIRST_ISSUE_TITLE, { exact: true }),
+    ).toBeVisible();
+    expect(await getCurrentSubject(page)).toBe(table);
+    expect(providerReads).toEqual([PUBLIC_REPOSITORY, PUBLIC_ISSUES]);
   });
 
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({

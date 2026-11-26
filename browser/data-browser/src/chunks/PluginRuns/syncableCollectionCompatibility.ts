@@ -17,7 +17,17 @@ export function syncableEntityViewKind(
   return entity && kind === 'syncable-collection' ? 'table' : kind;
 }
 
-const defaultNames = new Set(['Collection', 'Browse', 'Syncable Collection']);
+const defaultNames = new Set([
+  'Collection',
+  'Browse',
+  'Syncable Collection',
+  'Syncable Collections',
+]);
+
+export function isDefaultSyncableCollectionName(name: unknown): boolean {
+  return typeof name === 'string' && defaultNames.has(name);
+}
+
 const baseProperties = new Set<string>([
   core.properties.name,
   core.properties.isA,
@@ -50,7 +60,7 @@ function isRedundantCollection(view: Resource): boolean {
     !view.loading &&
     !view.error &&
     view.get(dataBrowser.properties.viewKind) === 'syncable-collection' &&
-    defaultNames.has(String(view.get(core.properties.name))) &&
+    isDefaultSyncableCollectionName(view.get(core.properties.name)) &&
     view
       .getEntries()
       .every(

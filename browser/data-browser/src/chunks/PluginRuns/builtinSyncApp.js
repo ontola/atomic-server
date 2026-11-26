@@ -388,7 +388,7 @@ export function createSyncApp(store, context) {
     )?.subject;
 
     for (const [name, kind] of [
-      ...(!entity ? [['Collection', 'syncable-collection']] : []),
+      ...(!entity ? [['Syncable Collections', 'syncable-collection']] : []),
       ['Table', 'table'],
       ['Sync', 'syncables'],
     ]) {
@@ -967,15 +967,13 @@ export function createSyncApp(store, context) {
     if (!['principal', 'collection'].includes(context.kind))
       throw new Error('Choose a principal first');
     const collection = description(name);
-    if (context.principal.kind === 'public' && !collection.allowsAnonymous)
-      throw new Error('This collection requires an authenticated principal');
     if (
       context.kind === 'collection' &&
-      (sourcePath || collection.contextParams.length)
+      collection.resource !== context.resource
     )
-      throw new Error(
-        'Choose this parameterized source from the principal first',
-      );
+      throw new Error('Choose a source for this entity collection');
+    if (context.principal.kind === 'public' && !collection.allowsAnonymous)
+      throw new Error('This collection requires an authenticated principal');
     const doc = readDocument();
     const resolved = sourcePath
       ? await resolveCollectionNavigation(
@@ -997,11 +995,6 @@ export function createSyncApp(store, context) {
       context.kind === 'collection'
         ? await store.getResource(root)
         : await ensureEntityTable({ resource: collection.resource });
-    if (
-      context.kind === 'collection' &&
-      collection.resource !== context.resource
-    )
-      throw new Error('Choose a source for this entity collection');
     const rule = await ensureRule(
       table,
       {
@@ -1780,17 +1773,17 @@ export async function view({ root, store }) {
     context.kind === 'principal' ||
     (context.kind === 'collection' && !context.rule)
   ) {
-    if (context.kind === 'collection') {
+    if (context.kind === 'collection' && !context.resource) {
       root.append(el('h3', 'Saved filter sync'));
       root.append(
         el(
           'p',
-          'Select a saved filter above to see its sync history and controls. Table shows cached rows across filters.',
+          'Open the principal App to choose a source for this saved collection.',
           'muted',
         ),
       );
       root.append(
-        button('Choose source', async () =>
+        button('Open principal', async () =>
           store.ui.openResource(
             (await store.getResource(context.subject)).get(core.parent),
           ),
@@ -1801,7 +1794,8 @@ export async function view({ root, store }) {
       return;
     }
 
-    root.append(el('h3', 'Save a filter'));
+    const picker = el('div');
+    picker.append(el('h3', 'Save a filter'));
     const filterName = el('input');
     filterName.setAttribute('aria-label', 'Filter name');
     filterName.placeholder = 'Filter name';
@@ -1813,6 +1807,37 @@ export async function view({ root, store }) {
       .filter(item => !context.resource || item.resource === context.resource);
     const entrypoint = el('select');
     entrypoint.setAttribute('aria-label', 'Source');
+
+    if (context.kind === 'collection') {
+      root.append(
+        el('h3', 'Saved filter sync'),
+        el(
+          'p',
+          'Select a saved filter above for its sync controls, or choose a source to create one.',
+          'muted',
+        ),
+      );
+      picker.hidden = true;
+      const choose = button('Choose source', () => {
+        picker.hidden = false;
+        choose.hidden = true;
+        select.focus();
+      });
+      root.append(choose);
+    }
+
+    if (!definitions.length) {
+      picker.append(
+        el(
+          'p',
+          'No catalog sources are available for this collection.',
+          'muted',
+        ),
+      );
+      root.append(picker, ...warnings());
+
+      return;
+    }
 
     for (const collection of definitions) {
       const option = el(
@@ -1889,8 +1914,8 @@ export async function view({ root, store }) {
         ),
       ),
     );
-    root.append(controls, inputs);
-    root.append(...warnings());
+    picker.append(controls, inputs);
+    root.append(picker, ...warnings());
 
     return;
   }

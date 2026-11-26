@@ -13935,9 +13935,8 @@ msgstr "Buka aplikasi integrasi"
 msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan layanan untuk menjelajahi koleksi katalognya dan menyinkronkan data ke drive Anda."
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Collection"
-msgstr "Koleksi"
+#~ msgid "Collection"
+#~ msgstr "Koleksi"
 
 #: src/chunks/AppPage/AppExecutionRuntime.tsx
 msgid "The app did not start. Try again."
@@ -14069,3 +14068,7 @@ msgstr "Belum ada sinkronisasi yang selesai untuk filter ini. Pilih Semua baris 
 #: src/chunks/PluginRuns/SyncableRecordActions.tsx
 msgid "Related collections"
 msgstr "Koleksi terkait"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Syncable Collections"
+msgstr "Koleksi yang dapat disinkronkan"

@@ -778,6 +778,14 @@ export function syncProxyTransport(
       ? { namespace: context.principal.namespace }
       : {};
   const descriptions = describeAuthenticatedPrincipals(document);
+  const collectionEntrypoints =
+    context.kind === 'collection' && context.resource && !context.rule
+      ? describeCollections(document).filter(
+          collection =>
+            collection.resource === context.resource &&
+            collection.entrypoints.length > 0,
+        )
+      : [];
 
   const relay = async (
     request: TransportRequest,
@@ -1105,10 +1113,18 @@ export function syncProxyTransport(
       }
 
       if (
-        context.kind === 'principal' &&
-        validateCollectionEntryRead(document, request, {
-          publicOnly: publicSource,
-        })
+        (context.kind === 'principal' &&
+          validateCollectionEntryRead(document, request, {
+            publicOnly: publicSource,
+          })) ||
+        collectionEntrypoints.some(
+          collection =>
+            (!publicSource || collection.allowsAnonymous) &&
+            validateCollectionEntryRead(document, request, {
+              collection: collection.name,
+              publicOnly: publicSource,
+            }),
+        )
       ) {
         const verifiedActive = !publicSource
           ? await verify(slot!, signal)

@@ -74,6 +74,7 @@ import {
   selectableViewKinds,
   useSyncableCollectionView,
 } from '@chunks/PluginRuns/syncableCollectionViews';
+import { isDefaultSyncableCollectionName } from '@chunks/PluginRuns/syncableCollectionCompatibility';
 
 /** Tabs sit in a row: a dragged one must not wander off it. */
 const keepHorizontal: Modifier = ({ transform }) => ({ ...transform, y: 0 });
@@ -512,9 +513,8 @@ function ViewTab({
     : (fallbackName ?? 'View');
   const name =
     currentKind === 'syncable-collection' &&
-    (storedName === /* @wc-ignore */ 'Browse' ||
-      storedName === /* @wc-ignore */ 'Syncable Collection')
-      ? 'Collection'
+    isDefaultSyncableCollectionName(storedName)
+      ? 'Syncable Collections'
       : storedName;
   const ViewKindIcon = VIEW_KIND_ICONS[currentKind];
 

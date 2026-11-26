@@ -1389,6 +1389,12 @@ This does not yet prove restoration of the user's private staging workspace.
   target, failed signed read, pending delete, or competing source. The Chromium
   reinstall journey uses the Trash and Apps menus and checks that a second
   chooser visit reuses the new App.
+- The Public Issues Chromium journey opens Choose source on the collection's
+  Sync tab, saves a repository filter within that table, and syncs an issue.
+  Frame and transport tests verify that opening setup does no provider read and
+  that catalog entrypoint reads cannot reach unrelated collections or fetch rows
+  before the filter exists. Tab tests cover Syncable Collections labels for
+  existing and new directories, preserving custom titles and view records.
 - `embed/flutterHost.test.ts` covers native-host precedence, locked Flutter
   channel tokens and lazy standalone fixtures. The production embed size check
   keeps its existing first-use and total budgets; the main Data Browser build

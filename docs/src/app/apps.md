@@ -75,8 +75,9 @@ total when the provider supplies one for a single collection read.
 Each filter has its own sync state and **Pause**/**Resume** controls. Pausing one
 filter retains its rows and does not pause another. Runs continue while you
 browse other views or resources in the app. Closing the app stops them. Paused
-status survives a reload. The Sync view also offers source setup for new saved
-filters. Catalog inputs and relationships determine the available sources.
+status survives a reload. Use **Choose source** on an unconfigured collection's
+Sync tab to create a saved filter for that table. Catalog inputs and
+relationships determine the sources shown there.
 Sync history describes the selected filter, rather than every row in its table.
 The entry count shown in Sync belongs to its last read attempt. Existing rows
 alone do not imply that this particular filter has completed a successful read.
@@ -92,7 +93,7 @@ without a GitHub account. GitHub's Issues endpoint includes pull requests.
 Sync. The old unconfigured Collection tab is hidden, and opening the item
 table uses the ordinary Table settings. Existing Collection links open native
 Table with their saved settings and filter intact. Renamed or customized views
-are retained, and the principal App keeps its collection list.
+are retained, and the principal App lists its tables under **Syncable Collections**.
 Browsing stored rows remains available during a sync or a provider outage.
 Overlapping saved filters share one canonical row. Complete reads replace
 membership only for their own filter. Partial or interrupted reads retain prior

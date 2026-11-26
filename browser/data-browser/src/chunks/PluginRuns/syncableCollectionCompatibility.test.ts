@@ -76,38 +76,41 @@ it('uses native Table for canonical entity Collection links without changing any
   expect(resource.get(dataBrowser.properties.viewColumns)).toBe(columns);
 });
 
-it('hides the unconfigured duplicate only for entities with a loaded ordinary Table', () => {
-  const collection = view(
-    'atomic:collection-view',
-    'Collection',
-    'syncable-collection',
-    {
-      [commits.properties.createdAt]: 1_795_000_000,
-      [server.properties.createdBy]: 'atomic:agent',
-      [commits.properties.lastCommit]: 'atomic:commit',
-      'https://atomicdata.dev/properties/drive': 'atomic:drive',
-    },
-  );
-  const table = view('atomic:table', 'Table', 'table');
-  const sync = view('atomic:sync', 'Sync', 'syncables');
+it.each(['Collection', 'Syncable Collections'])(
+  'hides the unconfigured %s duplicate only for entities with a loaded ordinary Table',
+  name => {
+    const collection = view(
+      'atomic:collection-view',
+      name,
+      'syncable-collection',
+      {
+        [commits.properties.createdAt]: 1_795_000_000,
+        [server.properties.createdBy]: 'atomic:agent',
+        [commits.properties.lastCommit]: 'atomic:commit',
+        'https://atomicdata.dev/properties/drive': 'atomic:drive',
+      },
+    );
+    const table = view('atomic:table', 'Table', 'table');
+    const sync = view('atomic:sync', 'Sync', 'syncables');
 
-  expect(tabs(true, [collection, table, sync], collection.subject)).toEqual({
-    views: [table.subject, sync.subject],
-    activeView: table.subject,
-    hidden: new Set([collection.subject]),
-  });
-  expect(
-    tabs(false, [collection, table, sync], collection.subject).views,
-  ).toEqual([collection.subject, table.subject, sync.subject]);
-  expect(tabs(true, [collection, sync], collection.subject).views).toEqual([
-    collection.subject,
-    sync.subject,
-  ]);
-  table.loading = true;
-  expect(tabs(true, [collection, table], collection.subject).views).toContain(
-    collection.subject,
-  );
-});
+    expect(tabs(true, [collection, table, sync], collection.subject)).toEqual({
+      views: [table.subject, sync.subject],
+      activeView: table.subject,
+      hidden: new Set([collection.subject]),
+    });
+    expect(
+      tabs(false, [collection, table, sync], collection.subject).views,
+    ).toEqual([collection.subject, table.subject, sync.subject]);
+    expect(tabs(true, [collection, sync], collection.subject).views).toEqual([
+      collection.subject,
+      sync.subject,
+    ]);
+    table.loading = true;
+    expect(tabs(true, [collection, table], collection.subject).views).toContain(
+      collection.subject,
+    );
+  },
+);
 
 it('hides generated owner-only permissions and genesis metadata without altering either View', () => {
   const collection = view(

@@ -1120,6 +1120,44 @@ describe('catalog-derived host relay', () => {
       ),
     ).rejects.toThrow('endpoint');
   });
+
+  it('scopes an unselected Public collection picker to its own eligible entrypoints', async () => {
+    const doc = apiDocument();
+    const { proxy, readKeyed } = setupProxy();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({ handle: 'canonical' }));
+    const publicContext: SyncAppContext = {
+      ...context,
+      resource: 'workspace',
+      principal: { kind: 'public' },
+      connectionId: undefined,
+    };
+    const picker = (resource = publicContext.resource) =>
+      syncProxyTransport(
+        proxy,
+        { ...publicContext, resource },
+        () => undefined,
+        { document: doc },
+      ).request!;
+    const get = (path: string) =>
+      request(path, { connectionId: undefined, query: {} });
+    const address = get('v2/names/explicit-input');
+    await expect(picker()(address)).resolves.toMatchObject({ status: 200 });
+    await expect(picker('task')(address)).rejects.toThrow();
+    await expect(
+      picker()(get('v2/names/explicit-input/workspaces')),
+    ).rejects.toThrow();
+    await expect(picker()({ ...address, method: 'POST' })).rejects.toThrow();
+    doc.paths['/names/{handle}/workspaces']!.get!.security = [{ oauth: [] }];
+    await expect(picker()(address)).rejects.toThrow();
+    doc.paths['/names/{handle}/workspaces']!.get!.security = [];
+    doc.paths['/names/{handle}']!.get!.security = [{ oauth: [] }];
+    await expect(picker()(address)).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(readKeyed).not.toHaveBeenCalled();
+  });
+
   it('bounds provider reads even for repeated declared Public setup requests', async () => {
     const doc = apiDocument();
     const { proxy } = setupProxy();

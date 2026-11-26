@@ -13943,9 +13943,8 @@ msgstr "Open integration App"
 msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 msgstr "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Collection"
-msgstr "Collection"
+#~ msgid "Collection"
+#~ msgstr "Collection"
 
 #: src/chunks/AppPage/AppExecutionRuntime.tsx
 msgid "The app did not start. Try again."
@@ -14077,3 +14076,7 @@ msgstr "This filter has no completed sync yet. Choose All cached rows to browse 
 #: src/chunks/PluginRuns/SyncableRecordActions.tsx
 msgid "Related collections"
 msgstr "Related collections"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Syncable Collections"
+msgstr "Syncable Collections"

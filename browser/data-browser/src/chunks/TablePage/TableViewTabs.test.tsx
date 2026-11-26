@@ -232,7 +232,7 @@ it('keeps collection views out of a table without a valid descriptor', async () 
   await setup([['All pieces', 'table']]);
   const menu = await openMenu('All pieces');
 
-  expect(within(menu).queryByText('Collection')).toBeNull();
+  expect(within(menu).queryByText('Syncable Collections')).toBeNull();
   expect(within(menu).queryByText('Sync')).toBeNull();
 });
 
@@ -243,7 +243,7 @@ it('keeps Collection out of canonical entity tables even with a saved descriptor
   const menu = await screen.findByRole('menu');
 
   expect(
-    within(menu).queryByRole('menuitem', { name: 'Collection' }),
+    within(menu).queryByRole('menuitem', { name: 'Syncable Collections' }),
   ).toBeNull();
   expect(within(menu).getByRole('menuitem', { name: 'Table' })).toBeTruthy();
   expect(collectionView.lookup).toHaveBeenLastCalledWith(
@@ -259,12 +259,14 @@ it('manually adds an applicable generic collection view while keeping the Table 
   await setup([['All pieces', 'table']]);
   fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
   const menu = await screen.findByRole('menu');
-  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Collection' }));
+  fireEvent.click(
+    within(menu).getByRole('menuitem', { name: 'Syncable Collections' }),
+  );
 
   await waitFor(() =>
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual([
       'All pieces',
-      'Collection',
+      'Syncable Collections',
     ]),
   );
 });
@@ -277,7 +279,7 @@ it('offers the generic collection view in applicable add and change menus', asyn
   ]);
   const menu = await openMenu('All repositories');
   const choices = within(menu).getAllByRole('menuitem', {
-    name: 'Collection',
+    name: 'Syncable Collections',
   });
 
   expect(choices).toHaveLength(2);
@@ -289,18 +291,23 @@ it('offers the generic collection view in applicable add and change menus', asyn
   );
 });
 
-it('labels historical collection tabs without rewriting names or changing custom titles', async () => {
-  const { store, subjects } = await setup([
-    ['Browse', 'syncable-collection'],
-    ['My saved repositories', 'syncable-collection'],
-    ['Browse', 'table'],
-  ]);
-  expect(await screen.findByRole('tab', { name: 'Collection' })).toBeTruthy();
-  expect(
-    screen.getByRole('tab', { name: 'My saved repositories' }),
-  ).toBeTruthy();
-  expect(screen.getByRole('tab', { name: 'Browse' })).toBeTruthy();
-  expect((await store.getResource(subjects[0])).get(core.properties.name)).toBe(
-    'Browse',
-  );
-});
+it.each(['Collection', 'Browse', 'Syncable Collection'])(
+  'labels historical %s tabs without rewriting names or changing custom titles',
+  async storedName => {
+    const { store, subjects } = await setup([
+      [storedName, 'syncable-collection'],
+      ['My saved repositories', 'syncable-collection'],
+      ['Browse', 'table'],
+    ]);
+    expect(
+      await screen.findByRole('tab', { name: 'Syncable Collections' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('tab', { name: 'My saved repositories' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Browse' })).toBeTruthy();
+    expect(
+      (await store.getResource(subjects[0])).get(core.properties.name),
+    ).toBe(storedName);
+  },
+);

@@ -63,9 +63,10 @@ links render native Table with the same saved filters and view settings; only
 unconfigured duplicate Collection tabs are hidden. A bare item-table link uses
 ordinary Table settings when its stored default is such a duplicate. Genesis
 metadata and the creator's standard write permission are not view settings.
-New reference tables also start with Table and Sync. App directories retain their
-Collection view. Ordinary Table cells show stored resource links. Table Open and
-ordinary Resource actions share one guarded catalog relationship resolver.
+New reference tables also start with Table and Sync. App directories use the
+Syncable Collections label. Ordinary Table cells show stored resource links.
+Table Open and ordinary Resource actions share one guarded catalog relationship
+resolver.
 Imported organizations and embedded owner summaries with suitable evidence can
 open repositories and catalog-declared issue collections. Sync verifies the
 stored source against the current catalog before reading from the provider.
@@ -83,6 +84,8 @@ Canonical controls skip whole-integration legacy and adoption scans; actual
 workers and setup retain their full evidence checks. Running status shows the
 page being read and includes a total when declared for a single walk. Progress
 is held in the active host execution and status updates retain the same controls.
+Choose source opens the catalog form inside the item's Sync tab. Its host can
+resolve entrypoints for that table's entity type before a saved filter exists.
 Completed status belongs to the selected saved filter. Cached rows do not imply
 that a new filter has completed a sync or contains those rows. Column label
 changes retain stable Property IDs; API-owned cell values can change on the next
@@ -110,6 +113,12 @@ cold rows hydrate before ownership validation. Canonical `github` replaces
 is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
+
+- In-place collection source setup and the Syncable Collections label passed
+  112 focused tests, both typechecks, all six translation catalog checks, and
+  ten native Chromium journeys. The Public Issues test saved and ran a repository
+  filter on the same table. The report is under
+  `.e2e-runs/2026-11-26T17-07-07.981Z-4VjwAT/`.
 
 - The same-drive reinstall fix passed 183 focused tests and both typechecks.
   The native Chromium regression confirmed Public reinstallation after deletion,

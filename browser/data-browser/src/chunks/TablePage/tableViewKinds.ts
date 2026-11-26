@@ -73,7 +73,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   dashboard: 'Dashboard',
   issues: 'Issues',
   syncables: 'Sync',
-  'syncable-collection': 'Collection',
+  'syncable-collection': 'Syncable Collections',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {

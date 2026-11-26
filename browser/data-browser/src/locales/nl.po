@@ -13943,9 +13943,8 @@ msgstr "Integratie-app openen"
 msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
 msgstr "Van de ingestelde integratieproxy op <0/>. Voeg een dienst toe om door de cataloguscollecties te bladeren en gegevens naar je schijf te synchroniseren."
 
-#: src/chunks/TablePage/TableViewTabs.tsx
-msgid "Collection"
-msgstr "Collectie"
+#~ msgid "Collection"
+#~ msgstr "Collectie"
 
 #: src/chunks/AppPage/AppExecutionRuntime.tsx
 msgid "The app did not start. Try again."
@@ -14077,3 +14076,7 @@ msgstr "Voor dit filter is nog geen synchronisatie voltooid. Kies Alle opgeslage
 #: src/chunks/PluginRuns/SyncableRecordActions.tsx
 msgid "Related collections"
 msgstr "Gerelateerde collecties"
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Syncable Collections"
+msgstr "Synchroniseerbare collecties"
