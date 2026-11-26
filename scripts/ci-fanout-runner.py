@@ -188,6 +188,11 @@ def main(config_path):
             state['browser_exit_code'] = int((exported / 'test-exit-code').read_text().strip())
             report = json.loads((exported / 'test-results.json').read_text())
             if report.get('errors'):
+                # This remains FAILED. Only the controller can qualify complete
+                # terminal coverage from the independently retrieved receipts.
+                if (config['phase'] == 'browser' and isinstance(report['errors'], list)
+                        and state['browser_exit_code'] > 0):
+                    state['failure_scope'] = 'completed-export-browser-global'
                 raise RuntimeError('browser report contains global errors')
             if state['browser_exit_code'] != 0:
                 raise RuntimeError('browser tests exited ' + str(state['browser_exit_code']))

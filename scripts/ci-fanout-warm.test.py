@@ -602,6 +602,23 @@ class WarmTests(unittest.TestCase):
         self.assertFalse(proof['cache_hits_proven'])
         self.assertEqual(self.controller.read()['nodes'][node['id']]['cache_startup_proof'],proof)
 
+    def test_real_prepare_preserves_raw_failed_observation_before_validation_raises(self):
+        node,entry,observation=self.startup_fixture()
+        observation.update(restored_dagger_cache_nonempty=False,engine_images=[])
+        with mock.patch.object(base.Controller,'prepare',side_effect=lambda key:(self.controller.root/key).mkdir(exist_ok=True)), \
+             mock.patch.object(self.controller,'ssh',return_value=json.dumps(observation)):
+            with self.assertRaisesRegex(ValueError,'restored_dagger_cache_nonempty.*engine_images') as failure:
+                type(self.controller).prepare(self.controller,node['id'])
+        directory=self.controller.root/node['id']
+        raw=json.loads((directory/'cache-startup-observation.json').read_text())
+        self.assertEqual(raw,observation)
+        self.assertFalse((directory/'cache-startup.json').exists())
+        self.assertIn('observed=False',str(failure.exception))
+        state=self.controller.read()['nodes'][node['id']]
+        self.assertEqual(state['cache_startup_error'],str(failure.exception))
+        self.assertEqual(Path(state['cache_startup_observation_path']),directory/'cache-startup-observation.json')
+        self.assertNotIn('cache_startup_proof',state)
+
     def test_startup_proof_rejects_empty_or_different_restored_cache_and_runtime(self):
         node,entry,observation=self.startup_fixture()
         changes=[('volume_name','foreign'),('device','/dev/foreign'),('mount_target','/other'),
@@ -613,6 +630,11 @@ class WarmTests(unittest.TestCase):
         for field,value in changes:
             with self.subTest(field=field,value=value),self.assertRaises(ValueError):
                 warm.validate_startup_cache(self.config,node,entry,dict(observation,**{field:value}))
+
+    def test_diagnostic_validation_retains_strict_boolean_ownership_proof(self):
+        node,entry,observation=self.startup_fixture()
+        with self.assertRaisesRegex(ValueError,'ledger.absence_verified.*observed=1'):
+            warm.validate_startup_cache(self.config,node,dict(entry,absence_verified=1),observation)
 
     def test_readonly_plan_rejects_wrong_candidate_engine_and_snapshot_namespace_before_clones(self):
         for field,value in [('dagger_engine_version','0.0.2'),('cache_namespace','other'),

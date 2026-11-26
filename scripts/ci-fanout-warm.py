@@ -119,20 +119,38 @@ def validate_startup_cache(config, node, entry, observation):
     version = profile['dagger_engine_version']
     image_version = re.compile(r'^registry\.dagger\.io/engine:v?' + re.escape(version) + r'(?:@sha256:[a-f0-9]+)?$')
     account = next(account for account in config['accounts'] if account['context'] == node['account'])
-    if (entry.get('node_id') != node['id'] or entry.get('account') != node['account'] or not entry.get('id')
-            or entry.get('expected_uuid') != account['expected_uuid'] or entry.get('absence_verified') is not True
-            or entry.get('name') != node['name'] + '-cache'
-            or source.get('id') != profile['id'] or source.get('name') != profile['name']
-            or observation.get('volume_name') != entry['name'] or observation.get('device') != device
-            or observation.get('mount_target') != '/mnt/atomic-ci' or observation.get('filesystem_type') != 'ext4'
-            or not observation.get('filesystem_uuid')
-            or observation.get('device_realpath', device) != observation.get('mount_source_realpath', observation.get('mount_source'))
-            or observation.get('docker_root_dir') != profile['docker_data_root']
-            or type(observation.get('restored_docker_entries')) is not int or observation['restored_docker_entries'] <= 0
-            or observation.get('restored_dagger_cache_nonempty') is not True
-            or observation.get('engine_version') != version or observation.get('cache_namespace') != config['cache_namespace']
-            or not any(image_version.search(image) for image in observation.get('engine_images', []) if isinstance(image, str))):
-        raise ValueError('worker cache startup does not prove the intended nonempty restored engine')
+    failures = []
+    def expect(field, actual, expected):
+        if actual != expected:
+            failures.append(field + ' expected=' + repr(expected)[:180] + ' observed=' + repr(actual)[:400])
+    if not isinstance(observation, dict):
+        raise ValueError('worker cache startup observation must be an object')
+    for field, expected in (('node_id', node['id']), ('account', node['account']),
+                            ('expected_uuid', account['expected_uuid']),
+                            ('name', node['name'] + '-cache')):
+        expect('ledger.' + field, entry.get(field), expected)
+    if entry.get('absence_verified') is not True:
+        failures.append('ledger.absence_verified expected=True observed=' + repr(entry.get('absence_verified'))[:100])
+    expect('ledger.id_present', bool(entry.get('id')), True)
+    expect('snapshot.id', source.get('id'), profile['id'])
+    expect('snapshot.name', source.get('name'), profile['name'])
+    for field, expected in (('volume_name', entry['name']), ('device', device), ('mount_target', '/mnt/atomic-ci'),
+                            ('filesystem_type', 'ext4'), ('docker_root_dir', profile['docker_data_root']),
+                            ('engine_version', version), ('cache_namespace', config['cache_namespace'])):
+        expect(field, observation.get(field), expected)
+    expect('filesystem_uuid_present', bool(observation.get('filesystem_uuid')), True)
+    expect('mount_source_realpath', observation.get('mount_source_realpath', observation.get('mount_source')),
+           observation.get('device_realpath', device))
+    count = observation.get('restored_docker_entries')
+    if type(count) is not int or count <= 0:
+        failures.append('restored_docker_entries expected=positive integer observed=' + repr(count)[:100])
+    if observation.get('restored_dagger_cache_nonempty') is not True:
+        failures.append('restored_dagger_cache_nonempty expected=True observed=' + repr(observation.get('restored_dagger_cache_nonempty'))[:100])
+    images = observation.get('engine_images', [])
+    if not isinstance(images, list) or not any(image_version.search(image) for image in images if isinstance(image, str)):
+        failures.append('engine_images expected=registry.dagger.io/engine:v' + version + ' observed=' + repr(images)[:400])
+    if failures:
+        raise ValueError('worker cache startup does not prove the intended nonempty restored engine: ' + '; '.join(failures))
     return dict(observation, restoration_verified=True, cache_hits_proven=False, node_id=node['id'], account=node['account'],
                 volume_id=entry['id'], snapshot_id=profile['id'], dagger_engine_version=version,
                 cache_namespace_source='snapshot companion and current job configuration')
@@ -395,7 +413,14 @@ def controller_class(module, api_factory=None):
                 'docker_root_dir=info["DockerRootDir"],engine_images=images,engine_version=' + repr(profile['dagger_engine_version']) + ','
                 'cache_namespace=' + repr(self.config['cache_namespace']) + '); print(json.dumps(data))')
             observation = json.loads(self.ssh(node_id, 'python3 -c ' + shlex.quote(collector), timeout=60))
-            proof = validate_startup_cache(self.config, node, entry, observation)
+            observation_path = self.root / node_id / 'cache-startup-observation.json'
+            write_json(observation_path, observation)
+            self.node_update(node_id, cache_startup_observation_path=str(observation_path))
+            try:
+                proof = validate_startup_cache(self.config, node, entry, observation)
+            except ValueError as error:
+                self.node_update(node_id, cache_startup_error=str(error))
+                raise
             write_json(self.root / node_id / 'cache-startup.json', proof)
             self.node_update(node_id, cache_startup_proof=proof)
 

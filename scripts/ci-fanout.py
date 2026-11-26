@@ -81,6 +81,18 @@ def completed_phase_failure(node, result):
             and result.get('error') == 'RuntimeError: browser tests exited ' + str(browser_exit))
 
 
+def exported_browser_global_candidate(node, result):
+    """A runner hint only; retrieved execution evidence must qualify it separately."""
+    return (node.get('phase_kind') == 'browser' and node.get('phase') == 'browser'
+            and result.get('status') == 'failed'
+            and result.get('failure_scope') == 'completed-export-browser-global'
+            and result.get('error') == 'RuntimeError: browser report contains global errors'
+            and type(result.get('browser_exit_code')) is int and result['browser_exit_code'] > 0
+            and bool(result.get('commands'))
+            and all(type(item.get('exit_code')) is int and item['exit_code'] == 0
+                    for item in result['commands']))
+
+
 def utcnow():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -376,6 +388,59 @@ def unrun_browser_cases(report):
                 or (test.get('status') != 'skipped' and not test.get('results'))):
             result.append(identity)
     return result
+
+
+def verify_exported_browser_global_report(report, inventory, expected_commit, result, index, count):
+    """Qualify a completed export for diagnostics, never successful test coverage.
+
+    The bundle has a full-suite inventory, not a per-shard selection. Missing
+    unlisted cases are therefore checked by the exact union barrier afterwards.
+    Every observable case must have one terminal result. An expected-pass case
+    blocked by the global error may have a native skipped result, but remains
+    explicitly unrun and fails final validation. Interrupted/absent results do
+    not qualify. Missing unlisted cases also fail the later exact union gate.
+    """
+    if (not exported_browser_global_candidate({'phase_kind': 'browser', 'phase': 'browser'}, result)
+            or result.get('source_commit') != expected_commit):
+        raise ValueError('global browser failure did not complete on the pinned source')
+    if not isinstance(report.get('errors'), list) or not report['errors']:
+        raise ValueError('completed global browser failure lacks global errors')
+    if any(not isinstance(error, dict) or not any(
+            isinstance(error.get(field), str) and error[field].strip() for field in ('message', 'stack', 'value'))
+           for error in report['errors']):
+        raise ValueError('global browser report contains malformed global errors')
+    if report.get('config', {}).get('shard') != {'current': index, 'total': count}:
+        raise ValueError('browser report shard differs from the scheduled shard')
+    zero_retry_project(report)
+    known = {identity: spec.get('id') for identity, spec, _ in report_cases(inventory)}
+    cases = report_cases(report)
+    native_ids = set()
+    if not cases:
+        raise ValueError('global browser failure has no completed test coverage')
+    for identity, spec, test in cases:
+        test_id = spec.get('id')
+        if (identity not in known or not isinstance(test_id, str) or not test_id
+                or test_id != known[identity] or test_id in native_ids):
+            raise ValueError('global browser failure has unknown or ambiguous inventory identities')
+        native_ids.add(test_id)
+        attempts = test.get('results', [])
+        if len(attempts) != 1 or attempts[0].get('retry', 0) != 0:
+            raise ValueError('global browser export has absent or retried test results')
+        actual, status, expected = attempts[0].get('status'), test.get('status'), test.get('expectedStatus')
+        intentional_skip = expected == 'skipped' or any(
+            item.get('type') in ('skip', 'fixme') for item in test.get('annotations', []))
+        blocked = status == 'skipped' and actual == 'skipped' and expected == 'passed'
+        terminal = ((status == 'skipped' and actual == 'skipped' and intentional_skip) or blocked
+                    or (status == 'expected' and expected in ('passed', 'failed', 'timedOut')
+                        and actual == expected)
+                    or (status == 'unexpected' and actual in ('passed', 'failed', 'timedOut')
+                        and expected in ('passed', 'failed', 'timedOut') and actual != expected))
+        if not terminal:
+            raise ValueError('global browser failure contains an incomplete or inconsistent test')
+    counts = browser_stats(report)
+    if any(name in report.get('stats', {}) and report['stats'][name] != value for name, value in counts.items()):
+        raise ValueError('global browser report counts differ from its terminal test coverage')
+    return [identity for identity, _, _ in cases]
 
 
 def browser_stats(report):
@@ -891,7 +956,7 @@ dagger version
             self.update(lambda value: value['nodes'][node_id]['phase_results'].update({node['phase']: result}))
             self.node_update(node_id, status='waiting', last_result=result)
             if result['status'] != 'passed':
-                if completed_phase_failure(node, result):
+                if completed_phase_failure(node, result) or exported_browser_global_candidate(node, result):
                     raise PhaseFailure(node_id, node['phase'], result)
                 raise RuntimeError(node_id + ': ' + node['phase'] + ' failed')
             self.event(node_id + ': passed ' + node['phase'])
@@ -915,6 +980,8 @@ dagger version
     def record_phase_failure(self, error):
         failure = {'node_id': error.node_id, 'phase': error.phase,
                    'error': error.result.get('error'), 'finished_at': error.result.get('finished_at')}
+        if error.result.get('failure_scope'):
+            failure['failure_scope'] = error.result['failure_scope']
 
         def append(state):
             failures = state.setdefault('ci_failures', [])
@@ -980,8 +1047,9 @@ dagger version
         try:
             self.wait([node_id])
         except PhaseFailure as error:
+            identities = self.verify_browser(node_id, allow_failure=True)
             self.record_phase_failure(error)
-            return self.verify_browser(node_id, allow_failure=True)
+            return identities
         return self.verify_browser(node_id)
 
     def validate_first_pass(self, nodes):
@@ -1002,18 +1070,21 @@ dagger version
                         raise ValueError('selected CI phase is not complete: ' + key + ': ' + name)
                     if result['status'] == 'failed' and (key, name) not in recorded:
                         raise ValueError('selected CI phase failure was not collected: ' + key + ': ' + name)
-        reports = [[tuple(item[:4]) + (tuple(item[4]),)
-                    for item in state['nodes'][key]['browser_identities']] for key in nodes]
-        count = verify_suite_union(state['bundle']['inventory'], reports)
+        reports = []
         first_failed, unrun = [], []
         for key in nodes:
             node = state['nodes'][key]
             report = self.read_browser_report(key)
-            verify_browser_report(report, self.config['source_commit'], node['phase_results']['browser'],
-                                  node['shard_index'], state['plan']['nodes'], allow_failure=True)
-            failed_browser_cases(report)
+            if node.get('browser_global_failure_verified_at'):
+                identities = self.verify_exported_browser_global(key, report, node['phase_results']['browser'])
+            else:
+                identities = verify_browser_report(report, self.config['source_commit'], node['phase_results']['browser'],
+                                                   node['shard_index'], state['plan']['nodes'], allow_failure=True)
+                failed_browser_cases(report)
+            reports.append(identities)
             first_failed.extend(identity for identity, _, test in report_cases(report) if test['status'] == 'unexpected')
             unrun.extend(unrun_browser_cases(report))
+        count = verify_suite_union(state['bundle']['inventory'], reports)
         def record(value):
             value.update(full_browser_test_count=count, browser_first_failed_identities=first_failed,
                          browser_unrun_identities=unrun)
@@ -1043,6 +1114,22 @@ dagger version
         if int((root / 'test-exit-code').read_text()) != result.get('browser_exit_code'):
             raise ValueError('browser execution exit artifact differs from observed phase result')
         return receipt
+
+    def verify_exported_browser_global(self, node_id, report, result):
+        state = self.read()
+        node = state['nodes'][node_id]
+        self.verify_browser_receipt(node_id, 'browser', 'browser-first-pass')
+        identities = verify_exported_browser_global_report(report, state['bundle']['inventory'],
+            self.config['source_commit'], result, node['shard_index'], state['plan']['nodes'])
+        path = self.root / node_id / 'results/browser/browser/test-results/.last-run.json'
+        native = json.loads(path.read_text())
+        unrun = set(unrun_browser_cases(report))
+        failed_ids = [spec['id'] for identity, spec, test in report_cases(report)
+                      if test['status'] == 'unexpected' or identity in unrun]
+        if (native.get('status') != 'failed' or not isinstance(native.get('failedTests'), list)
+                or sorted(native['failedTests']) != sorted(failed_ids)):
+            raise ValueError('global browser native last-run differs from its terminal report')
+        return identities
 
     def browser_retry(self, node_id, builder):
         self.source_inputs([node_id])
@@ -1106,7 +1193,8 @@ dagger version
             return
         if state.get('browser_retry_started_at'):
             raise ValueError('an interrupted final retry round cannot be started again')
-        retry_nodes = [key for key in nodes if failed_browser_cases(self.read_browser_report(key))]
+        retry_nodes = [key for key in nodes if not state['nodes'][key].get('browser_global_failure_verified_at')
+                       and failed_browser_cases(self.read_browser_report(key))]
         if not self.config['retries']:
             retry_nodes = []
         if retry_nodes:
@@ -1125,7 +1213,8 @@ dagger version
         state = self.read()
         merged = None
         completed_reports = []
-        flaky, remaining, unrun = [], [], []
+        flaky, remaining, unrun, intentional_skipped = [], [], [], []
+        global_errors = []
         failed_nodes = set()
         counts = dict(expected=0, flaky=0, unexpected=0, skipped=0)
         for key in nodes:
@@ -1133,10 +1222,21 @@ dagger version
             path = node.get('browser_merged_report_path')
             report = json.loads(Path(path).read_text()) if path else self.read_browser_report(key)
             completed_reports.append(report)
+            for error in report.get('errors', []):
+                global_errors.append({'node_id': key, 'shard_index': node['shard_index'],
+                    'shard_count': state['plan']['nodes'], 'source_commit': self.config['source_commit'],
+                    'manifest_sha256': state['bundle']['manifest_sha256'],
+                    'report_path': str(self.root / key / 'results/browser/browser/test-results.json'),
+                    'error': copy.deepcopy(error)})
+            if report.get('errors'):
+                failed_nodes.add(key)
             cases = report_cases(report)
             flaky.extend(identity for identity, _, test in cases if test['status'] == 'flaky')
             remaining.extend(identity for identity, _, test in cases if test['status'] == 'unexpected')
-            unrun.extend(unrun_browser_cases(report))
+            local_unrun = unrun_browser_cases(report)
+            unrun.extend(local_unrun)
+            intentional_skipped.extend(identity for identity, _, test in cases
+                                       if test['status'] == 'skipped' and identity not in local_unrun)
             if browser_stats(report)['unexpected']:
                 failed_nodes.add(key)
             for _, _, test in cases:
@@ -1163,21 +1263,28 @@ dagger version
                 merged['config']['shard'] = None
             merged['suites'].extend(copy.deepcopy(report['suites']))
         merged['stats'] = dict(merged.get('stats', {}), **counts, **combined_browser_timing(completed_reports))
+        merged['errors'] = [dict(item['error'], fanout={key: value for key, value in item.items() if key != 'error'})
+                            if isinstance(item['error'], dict) else {'message': str(item['error']), 'fanout': item}
+                            for item in global_errors]
         merged['fanout'] = {'sourceCommit': self.config['source_commit'],
                             'manifestSha256': state['bundle']['manifest_sha256'],
                             'firstPassCompletedAt': state['first_pass_completed_at'],
                             'retryCompletedAt': state['browser_retry_finished_at'],
                             'timing': 'wall-clock span of all browser attempts, including time waiting for the final-round barrier',
-                            'rawReportsPreserved': True, 'unrunIdentities': unrun}
+                            'rawReportsPreserved': True, 'unrunIdentities': unrun,
+                            'intentionalSkippedIdentities': intentional_skipped,
+                            'globalErrors': global_errors}
         path = self.root / 'browser-merged.json'
         path.write_text(json.dumps(merged, indent=2) + '\n')
         unresolved = [item for item in state.get('ci_failures', [])
                       if item['phase'] not in ('browser', 'browser-retry') or item['node_id'] in failed_nodes]
         self.update(lambda value: value.update(browser_result_stats=counts, browser_flaky_identities=flaky,
                     browser_remaining_failed_identities=remaining, browser_unrun_identities=unrun,
+                    browser_intentional_skipped_identities=intentional_skipped,
                     browser_merged_report_path=str(path), unresolved_ci_failures=unresolved,
+                    browser_global_errors=global_errors,
                     validation_completed_at=stamp()))
-        if unresolved or remaining or unrun:
+        if unresolved or remaining or unrun or global_errors:
             raise CIValidationFailure('CI completed with failures: ' + '; '.join(
                 item['node_id'] + ': ' + item['phase'] for item in unresolved)
                 + ('; unexecuted browser tests=' + str(len(unrun)) if unrun else ''))
@@ -1502,8 +1609,21 @@ systemctl reload ssh
         if result != node['phase_results']['browser']:
             raise ValueError('retrieved browser result differs from observed result')
         report = json.loads((local / 'results/browser/browser/test-results.json').read_text())
-        identities = verify_browser_report(report, self.config['source_commit'], result,
-                                            node['shard_index'], state['plan']['nodes'], allow_failure)
+        global_failure = allow_failure and exported_browser_global_candidate(node, result)
+        if global_failure:
+            self.check_deadline()
+            identities = self.verify_exported_browser_global(node_id, report, result)
+            # Runner hints and reports cannot replace the controller's own
+            # post-execution source fingerprint check before canary expansion.
+            self.source_inputs([node_id])
+            self.check_deadline()
+            unrun = unrun_browser_cases(report)
+            self.node_update(node_id, browser_global_failure_verified_at=stamp(),
+                             browser_global_unrun_identities=unrun,
+                             browser_global_has_unrun_cases=bool(unrun))
+        else:
+            identities = verify_browser_report(report, self.config['source_commit'], result,
+                                                node['shard_index'], state['plan']['nodes'], allow_failure)
         self.node_update(node_id, browser_identities=identities, browser_completed_at=stamp(),
                          browser_stats=report.get('stats', {}), browser_passed=result['status'] == 'passed',
                          browser_verified_at=stamp() if result['status'] == 'passed' else None)

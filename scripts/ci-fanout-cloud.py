@@ -386,7 +386,7 @@ def evidence_allowed(relative):
     if len(parts) == 1:
         return parts[0] in {'state.json', 'config.json', 'browser-merged.json', 'source-input-reference.json', 'warm-volumes.json', 'warm-cleanup.json'} or parts[0].endswith('.log')
     return bool(re.fullmatch(r'node-\d{3}', parts[0])) and (parts[1] == 'results' or
-        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json'))))
+        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json', 'cache-startup-observation.json'))))
 
 
 def persist_evidence(config, final=False):

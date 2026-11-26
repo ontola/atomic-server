@@ -3188,3 +3188,14 @@ retained/source storage protection, bootstrap failure and expired deadlines.
 Generated SSH collectors/shell setup are checked and verify pre-Docker nonempty
 cache state plus mounted Docker/engine provenance without claiming cache hits.
 These fixtures are not real-cloud warm-run acceptance.
+
+
+Global browser-export failures are covered separately from ordinary test failures:
+runner/controller regressions use the observed 129-pass, one intentional-skip,
+one blocked-case report. Verified global exports let unrelated checks and shards
+finish while preserving aggregate failure and explicit unrun identities; such
+shards never retry. Receipt/source/transport/malformed-export/deadline failures
+still abort. Coverage is recomputed from raw reports at the full-union barrier,
+and merged errors retain every shard's provenance.
+Warm startup observations are preserved before validation, with per-field
+diagnostics and strict evidence-path filtering when restoration is rejected.

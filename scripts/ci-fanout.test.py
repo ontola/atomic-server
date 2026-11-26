@@ -214,6 +214,7 @@ class FakeController(fanout.Controller):
         self.fail_inputs = False
         self.fail_checks = set()
         self.fail_browser_nodes = set()
+        self.global_browser_reports = {}
         self.fail_retry_nodes = set()
         self.retry_reports = {}
         self.retry_global_error = False
@@ -278,6 +279,12 @@ class FakeController(fanout.Controller):
         self.check_deadline()
         for key in nodes:
             node = self.read()['nodes'][key]
+            if node.get('phase') == 'browser' and key in self.global_browser_reports:
+                result = dict(node['last_result'], status='failed', browser_exit_code=1,
+                    failure_scope='completed-export-browser-global', error='RuntimeError: browser report contains global errors')
+                self.update(lambda state: state['nodes'][key]['phase_results'].update(browser=result))
+                self.node_update(key, last_result=result)
+                raise fanout.PhaseFailure(key, 'browser', result)
             if (node.get('phase') in self.fail_checks
                     or (node.get('phase') == 'browser' and key in self.fail_browser_nodes)
                     or (node.get('phase') == 'browser-retry' and key in self.fail_retry_nodes)):
@@ -294,6 +301,11 @@ class FakeController(fanout.Controller):
     def read_bundle(self, builder):
         self.events.append(('bundle-ready', builder))
         bundle = {'inventory': report(range(1, self.plan()['nodes'] + 1)), 'manifest_sha256': 'b' * 64}
+        for key, value in self.global_browser_reports.items():
+            index = self.read()['nodes'][key]['shard_index']
+            specs = bundle['inventory']['suites'][0]['specs']
+            specs[:] = [item for item in specs if item['id'] != 'case-' + str(index)]
+            specs.extend(copy.deepcopy(value['suites'][0]['specs']))
         self.update(lambda state: state.update(bundle=bundle, builder=builder))
         self.node_update(builder, prepared_bundle={'path': '/opt/atomic-ci/share/bundle',
                          'source_commit': SHA, 'manifest_sha256': 'b' * 64})
@@ -309,6 +321,9 @@ class FakeController(fanout.Controller):
         node = self.read()['nodes'][node_id]
         if self.fail_canary and node['shard_index'] == 2:
             raise ValueError('canary exported a failing browser exit code')
+        if node_id in self.global_browser_reports:
+            self.write_browser_export(node_id, 'browser', self.global_browser_reports[node_id])
+            return fanout.Controller.verify_browser(self, node_id, allow_failure)
         value = report([node['shard_index']], node['shard_index'], self.plan()['nodes'])
         if node_id in self.fail_browser_nodes:
             test = value['suites'][0]['specs'][0]['tests'][0]
@@ -327,8 +342,10 @@ class FakeController(fanout.Controller):
         (root / 'result.json').write_text(json.dumps(result))
         (root / 'browser/test-results.json').write_text(json.dumps(value))
         (root / 'browser/test-exit-code').write_text(str(result['browser_exit_code']))
-        ids = [spec['id'] for _, spec, test in fanout.report_cases(value) if test['status'] == 'unexpected']
-        (root / 'browser/test-results/.last-run.json').write_text(json.dumps({'status': 'failed' if ids else 'passed', 'failedTests': ids}))
+        unrun = set(fanout.unrun_browser_cases(value))
+        ids = [spec['id'] for identity, spec, test in fanout.report_cases(value)
+               if test['status'] == 'unexpected' or identity in unrun]
+        (root / 'browser/test-results/.last-run.json').write_text(json.dumps({'status': 'failed' if ids or value.get('errors') else 'passed', 'failedTests': ids}))
         receipt = {'version': 1, 'kind': 'browser-first-pass' if phase == 'browser' else 'browser-deferred-retry',
                    'sourceCommit': SHA, 'manifestSha256': 'b' * 64, 'shardIndex': node['shard_index'],
                    'shardCount': self.plan()['nodes'], 'playwrightRetries': 0}
@@ -369,7 +386,260 @@ class FakeController(fanout.Controller):
         return self.root / node_id
 
 
+def completed_global_report(index, total, start=1000):
+    value = report(range(start, start + 131), index, total)
+    for spec in value['suites'][0]['specs'][-2:]:
+        spec['tests'][0].update(status='skipped', expectedStatus='skipped',
+                                results=[{'status': 'skipped', 'retry': 0}])
+    value['errors'] = [{'message': 'route.fetch: Test ended', 'stack': 'after test cleanup'}]
+    value['stats'] = dict(expected=129, unexpected=0, skipped=2, flaky=0)
+    return value
+
+
+class CompletedGlobalBrowserTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.controller = FakeController(config(self.root, 4), FakeAPI())
+        self.controller.global_browser_reports['node-002'] = completed_global_report(2, 4)
+        (self.root / 'probe').mkdir()
+        (self.root / 'probe/dagger.json').write_text('{}')
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def exported_global(self):
+        ctl = self.controller
+        ctl.initialize(ctl.plan())
+        ctl.read_bundle('node-001')
+        ctl.browser('node-002', 'node-001')
+        with self.assertRaises(fanout.PhaseFailure):
+            ctl.wait(['node-002'])
+        value = copy.deepcopy(ctl.global_browser_reports['node-002'])
+        ctl.write_browser_export('node-002', 'browser', value)
+        return value
+
+    def test_canary_and_other_global_shards_finish_all_checks_and_retry_only_ordinary_failure(self):
+        ctl = self.controller
+        ctl.global_browser_reports['node-003'] = completed_global_report(3, 4, 2000)
+        global_with_test_failure = ctl.global_browser_reports['node-003']
+        global_with_test_failure['suites'][0]['specs'][0]['tests'][0].update(
+            status='unexpected', results=[{'status': 'failed', 'retry': 0}])
+        global_with_test_failure['stats'].update(expected=128, unexpected=1)
+        ctl.fail_browser_nodes = {'node-004'}
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaises(fanout.CIValidationFailure):
+                ctl.run()
+        state = ctl.read()
+        checks = [phase for node in state['nodes'].values() for phase in node['phase_results'] if phase.startswith('check-')]
+        self.assertEqual(sorted(checks), sorted('check-' + name for name, _ in fanout.CHECKS))
+        self.assertTrue(all('browser' in node['phase_results'] for node in state['nodes'].values()))
+        self.assertEqual(state['full_browser_test_count'], 264)
+        self.assertEqual(state['browser_retry_nodes'], ['node-004'])
+        self.assertEqual(state['browser_result_stats'], dict(expected=258, flaky=1, unexpected=1, skipped=4))
+        self.assertEqual(len(state['browser_remaining_failed_identities']), 1)
+        self.assertEqual({item['node_id'] for item in state['browser_global_errors']}, {'node-002', 'node-003'})
+        self.assertEqual({item['node_id'] for item in state['unresolved_ci_failures']}, {'node-002', 'node-003'})
+        self.assertTrue(all(item['failure_scope'] == 'completed-export-browser-global' for item in state['unresolved_ci_failures']))
+        self.assertNotIn('validation_passed_at', state)
+        self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
+        merged = json.loads(Path(state['browser_merged_report_path']).read_text())
+        self.assertEqual(len(merged['errors']), 2)
+        self.assertEqual({error['fanout']['shard_index'] for error in merged['errors']}, {2, 3})
+        self.assertTrue(all(error['fanout']['source_commit'] == SHA for error in merged['errors']))
+        # A qualifying global canary is diagnostic coverage, never a passing phase.
+        self.assertFalse(state['nodes']['node-002']['browser_passed'])
+        self.assertIsNone(state['nodes']['node-002']['browser_verified_at'])
+        self.assertIn(('source-inputs', ('node-002',)), ctl.events)
+        self.assertEqual([event for event in ctl.events if isinstance(event, tuple) and event[0] == 'retry-barrier'],
+                         [('retry-barrier', 4)])
+
+    def test_global_qualification_rejects_missing_or_forged_evidence_and_nonterminal_coverage(self):
+        variants = ('receipt-missing', 'receipt-source', 'receipt-hash', 'native-missing', 'native-last-run',
+                    'invalid-json', 'source', 'scope', 'export', 'native-zero', 'shard', 'project', 'multi-project',
+                    'unknown', 'native-id', 'duplicate', 'interrupted', 'unrun', 'blocked-native-missing',
+                    'retry', 'counts', 'empty', 'no-global')
+        for variant in variants:
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                previous, root = self.controller, Path(temp)
+                self.controller = FakeController(config(root, 4), FakeAPI())
+                self.controller.global_browser_reports['node-002'] = completed_global_report(2, 4)
+                ctl = self.controller
+                value = self.exported_global()
+                test = value['suites'][0]['specs'][0]['tests'][0]
+                result = copy.deepcopy(ctl.read()['nodes']['node-002']['phase_results']['browser'])
+                if variant in ('source', 'scope', 'export', 'native-zero'):
+                    if variant == 'source': result['source_commit'] = 'c' * 40
+                    if variant == 'scope': result.pop('failure_scope')
+                    if variant == 'export': result['commands'][0]['exit_code'] = 1
+                    if variant == 'native-zero': result['browser_exit_code'] = 0
+                    ctl.update(lambda state: state['nodes']['node-002']['phase_results'].update(browser=result))
+                if variant == 'shard': value['config']['shard']['current'] = 3
+                if variant == 'project': test['projectName'] = 'unknown'
+                if variant == 'multi-project': value['config']['projects'].append({'name': 'other', 'retries': 0})
+                if variant == 'unknown': value['suites'][0]['specs'][0]['line'] = 99999
+                if variant == 'native-id': value['suites'][0]['specs'][0]['id'] = 'foreign'
+                if variant == 'interrupted': test['results'][0]['status'] = 'interrupted'
+                if variant == 'unrun': test['results'] = []
+                if variant == 'blocked-native-missing': test.update(status='skipped', results=[{'status': 'skipped'}])
+                if variant == 'retry': test['results'][0]['retry'] = 1
+                if variant == 'counts': value['stats']['expected'] = 130
+                if variant == 'empty': value['suites'] = []
+                if variant == 'no-global': value['errors'] = []
+                ctl.write_browser_export('node-002', 'browser', value)
+                exported = ctl.root / 'node-002/results/browser/browser'
+                receipt_path = exported / 'browser-run.json'
+                if variant == 'duplicate':
+                    value['suites'][0]['specs'].append(copy.deepcopy(value['suites'][0]['specs'][0]))
+                    (exported / 'test-results.json').write_text(json.dumps(value))
+                    receipt = json.loads(receipt_path.read_text())
+                    receipt['reportSha256'] = fanout.file_sha256(exported / 'test-results.json')
+                    receipt_path.write_text(json.dumps(receipt))
+                if variant == 'receipt-missing': receipt_path.unlink()
+                if variant == 'receipt-source':
+                    receipt = json.loads(receipt_path.read_text()); receipt['sourceCommit'] = 'c' * 40
+                    receipt_path.write_text(json.dumps(receipt))
+                if variant == 'receipt-hash': (exported / 'test-results.json').write_text(json.dumps(dict(value, errors=[])))
+                if variant == 'native-missing': (exported / 'test-exit-code').unlink()
+                if variant == 'invalid-json': (exported / 'test-results.json').write_text('{invalid')
+                if variant in ('native-last-run', 'blocked-native-missing'):
+                    native = exported / 'test-results/.last-run.json'
+                    native.write_text(json.dumps({'status': 'passed' if variant == 'native-last-run' else 'failed',
+                                                  'failedTests': []}))
+                    receipt = json.loads(receipt_path.read_text()); receipt['lastRunSha256'] = fanout.file_sha256(native)
+                    receipt_path.write_text(json.dumps(receipt))
+                with self.assertRaises((ValueError, RuntimeError, OSError)):
+                    fanout.Controller.verify_browser(ctl, 'node-002', allow_failure=True)
+                self.assertNotIn('browser_global_failure_verified_at', ctl.read()['nodes']['node-002'])
+                self.controller = previous
+
+    def test_actual_global_shape_keeps_blocked_native_skipped_case_unrun_while_other_jobs_finish(self):
+        ctl = self.controller
+        value = ctl.global_browser_reports['node-002']
+        blocked_spec = value['suites'][0]['specs'][-2]
+        # The collected 129-pass/2-native-skip report had one legitimate fixme
+        # and one expected-pass test blocked after a global route.fetch error.
+        blocked_spec['tests'][0].update(expectedStatus='passed', annotations=[],
+            results=[{'status': 'skipped', 'retry': 0, 'duration': 0, 'errors': [], 'annotations': []}])
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaises(fanout.CIValidationFailure):
+                ctl.run()
+        state = ctl.read()
+        checks = [phase for node in state['nodes'].values() for phase in node['phase_results'] if phase.startswith('check-')]
+        self.assertEqual(sorted(checks), sorted('check-' + name for name, _ in fanout.CHECKS))
+        self.assertTrue(all('browser' in node['phase_results'] for node in state['nodes'].values()))
+        self.assertEqual(len(state['browser_unrun_identities']), 1)
+        self.assertEqual(len(state['browser_intentional_skipped_identities']), 1)
+        self.assertEqual(len(state['browser_global_errors']), 1)
+        self.assertEqual(state['browser_retry_nodes'], [])
+        self.assertEqual(state['browser_result_stats'], dict(expected=132, unexpected=0, flaky=0, skipped=2))
+        node = state['nodes']['node-002']
+        self.assertTrue(node['browser_global_has_unrun_cases'])
+        self.assertEqual(node['browser_global_unrun_identities'], state['browser_unrun_identities'])
+        native = json.loads((ctl.root / 'node-002/results/browser/browser/test-results/.last-run.json').read_text())
+        self.assertEqual(native['failedTests'], [blocked_spec['id']])
+        self.assertEqual([item['node_id'] for item in state['unresolved_ci_failures']], ['node-002'])
+        self.assertNotIn('validation_passed_at', state)
+        self.assertTrue(all(node.get('deletion_verified') for node in state['nodes'].values()))
+
+    def test_observer_global_scope_is_only_a_candidate_until_independent_artifact_verification(self):
+        self.exported_global()
+        ctl = self.controller
+        result = dict(ctl.read()['nodes']['node-002']['phase_results']['browser'],
+                      batch_key=ctl.config['batch_key'], node_id='node-002', phase='browser')
+        with mock.patch.object(ctl, 'ssh', return_value=json.dumps(result)):
+            with self.assertRaises(fanout.PhaseFailure):
+                fanout.Controller.observe(ctl, 'node-002')
+        state = ctl.read()
+        self.assertNotIn('ci_failures', state)
+        self.assertNotIn('browser_global_failure_verified_at', state['nodes']['node-002'])
+        # The same error without the narrow marker retains immediate fatal behavior.
+        result.pop('failure_scope')
+        with mock.patch.object(ctl, 'ssh', return_value=json.dumps(result)):
+            with self.assertRaises(RuntimeError) as raised:
+                fanout.Controller.observe(ctl, 'node-002')
+        self.assertNotIsInstance(raised.exception, fanout.PhaseFailure)
+
+    def test_global_qualification_never_bypasses_post_execution_source_or_deadline_failure(self):
+        self.exported_global()
+        for guard, error in (('source_inputs', ValueError('source fingerprint differs')),
+                             ('check_deadline', TimeoutError('CI deadline reached'))):
+            with self.subTest(guard=guard), mock.patch.object(self.controller, guard, side_effect=error):
+                with self.assertRaises(type(error)):
+                    fanout.Controller.verify_browser(self.controller, 'node-002', allow_failure=True)
+                self.assertNotIn('browser_global_failure_verified_at', self.controller.read()['nodes']['node-002'])
+
+    def test_native_global_errors_require_message_stack_or_thrown_value_without_requiring_a_stack(self):
+        value = self.exported_global()
+        state = self.controller.read()
+        result = state['nodes']['node-002']['phase_results']['browser']
+        for error, valid in (({'message': 'test ended'}, True), ({'stack': 'native stack'}, True),
+                             ({'value': 'thrown primitive'}, True), ({}, False),
+                             ('not an error object', False), (None, False),
+                             ({'message': ' \n\t'}, False), ({'message': 42}, False)):
+            with self.subTest(error=error):
+                value['errors'] = [error]
+                args = (value, state['bundle']['inventory'], SHA, result, 2, 4)
+                if valid:
+                    self.assertEqual(len(fanout.verify_exported_browser_global_report(*args)), 131)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'malformed global errors'):
+                        fanout.verify_exported_browser_global_report(*args)
+
+    def test_missing_unlisted_case_stays_fatal_at_full_union_barrier(self):
+        ctl = self.controller
+        original = ctl.read_bundle
+        def missing_case(builder):
+            bundle = original(builder)
+            ctl.global_browser_reports['node-002']['suites'][0]['specs'].pop()
+            ctl.global_browser_reports['node-002']['stats']['skipped'] -= 1
+            return bundle
+        with mock.patch.object(ctl, 'read_bundle', side_effect=missing_case), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'exactly cover'):
+                ctl.run()
+        state = ctl.read()
+        self.assertTrue(all('browser' in node['phase_results'] for node in state['nodes'].values()))
+        self.assertNotIn('validation_passed_at', state)
+        self.assertNotIn('browser_retry_started_at', state)
+
+
 class RunnerResourceTests(unittest.TestCase):
+    def test_completed_global_browser_scope_is_failed_and_requires_successful_export_source_and_native_exit(self):
+        spec = importlib.util.spec_from_file_location('global_runner_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for variant in ('complete', 'export-failed', 'source-changed', 'native-zero', 'native-missing', 'invalid-json', 'retry'):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                phase = 'browser-retry' if variant == 'retry' else 'browser'
+                args = ['browser-retry'] if phase == 'browser-retry' else ['browser-shard', '--playwright-retries', '0']
+                path = root / 'config.json'
+                path.write_text(json.dumps(dict(batch_key='fixture', source_commit=SHA, node_id='node-001',
+                    phase=phase, kind='browser', args=args)))
+                def execute(command, directory, log):
+                    exported = root / 'results' / phase / 'browser'
+                    exported.mkdir()
+                    (exported / 'test-results.json').write_text('invalid' if variant == 'invalid-json' else
+                        json.dumps({'errors': [{'message': 'route.fetch: Test ended'}]}))
+                    if variant != 'native-missing':
+                        (exported / 'test-exit-code').write_text('0' if variant == 'native-zero' else '1')
+                    return 1 if variant == 'export-failed' else 0
+                identity = [None, ValueError('source changed')] if variant == 'source-changed' else None
+                with mock.patch.object(runner, 'ROOT', root), mock.patch.object(runner, 'check_prepared_bundle'), \
+                     mock.patch.object(runner, 'check_identity', side_effect=identity), \
+                     mock.patch.object(runner, 'run', side_effect=execute):
+                    self.assertEqual(runner.main(path), 1)
+                value = json.loads((root / 'results' / phase / 'result.json').read_text())
+                self.assertEqual(value['status'], 'failed')
+                self.assertEqual(value.get('failure_scope'), 'completed-export-browser-global' if variant == 'complete' else None)
+
     def test_failed_warm_runner_preflight_prevents_expensive_dagger_setup(self):
         spec = importlib.util.spec_from_file_location('warm_preflight_runner', Path(__file__).with_name('ci-fanout-runner.py'))
         runner = importlib.util.module_from_spec(spec)
