@@ -408,6 +408,13 @@ async function writeAsApp(
     return await noServerHost(store).appWrite(drive, app, request);
   }
 
+  // A drive that lives only on this device has no node to hold the app's key
+  // or take its writes. The person's own agent signs them here; the callers
+  // above have already confined the write to the app's subtree.
+  if (store.isLocalOnlyDrive(drive)) {
+    return await writeOnDevice(store, request);
+  }
+
   const agent = store.getAgent();
 
   if (!agent) throw new Error('Sign in to use this app');
@@ -434,6 +441,52 @@ async function writeAsApp(
   }
 
   return (await response.json()) as { subject: string };
+}
+
+/** `writeAsApp` for a local-only drive: the store saves it into the device's database. */
+async function writeOnDevice(
+  store: Store,
+  request: NativeAppWrite,
+): Promise<{ subject: string }> {
+  if (request.op === 'create') {
+    const resource = await store.newResource({
+      parent: request.parent,
+      isA: request.isA,
+    });
+
+    for (const [property, value] of Object.entries(request.propVals ?? {})) {
+      await resource.set(property, value as never);
+    }
+
+    await resource.save();
+
+    return { subject: resource.subject };
+  }
+
+  const subject = required(request.subject, 'subject');
+  const resource = await store.getResource(subject);
+
+  if (resource.error) throw resource.error;
+
+  if (request.op === 'destroy') {
+    await resource.destroy();
+
+    return { subject };
+  }
+
+  if (request.op === 'remove') {
+    for (const property of request.properties ?? []) {
+      resource.remove(property);
+    }
+  } else {
+    for (const [property, value] of Object.entries(request.propVals ?? {})) {
+      await resource.set(property, value as never);
+    }
+  }
+
+  await resource.save();
+
+  return { subject };
 }
 
 /**
@@ -464,6 +517,9 @@ async function destroyAsApp(
  * write already succeeded, so a failed refresh is not the view's error.
  */
 async function refresh(store: Store, subject: string): Promise<void> {
+  // A write on this device went through this store already.
+  if (store.isLocalOnlySubject(subject)) return;
+
   // Replace rather than merge: a merge keeps properties the write removed.
   // `applyIncoming` still refuses to clobber unsaved local edits.
   await store

@@ -213,6 +213,13 @@ export async function retryPendingAppKeys(store: Store): Promise<boolean> {
     )
       continue;
 
+    // A drive that became device-only after this was queued has no node to
+    // receive it; nothing will ever complete it.
+    if (store.isLocalOnlyDrive(pending.drive)) {
+      await del(pending.id);
+      continue;
+    }
+
     try {
       const rawKey = await getSessionDbKey(pending.owner);
       if (!rawKey) continue; // Signed out/locked: never create a replacement key.

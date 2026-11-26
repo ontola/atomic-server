@@ -500,6 +500,7 @@ export function GettingStartedFlow({
       onSignedIn: () => setRestoreAttempt(n => n + 1),
       initialEmail: restore.phase === 'ready' ? restore.email : undefined,
       hidePasskey: restoreUnlock.hasPasskey,
+      hideInfo: true,
     };
 
     return (
@@ -508,11 +509,7 @@ export function GettingStartedFlow({
           <CardSubtitle>
             Sign in again to open your account on this device.
           </CardSubtitle>
-        ) : (
-          // The panel both signs in and signs up; here it is for an account
-          // that already exists.
-          <AccountHeading>Your atomic.place account</AccountHeading>
-        )}
+        ) : null}
         {/* The same options either way; an app that cannot hold the
             account cookie finishes each one in the system browser. */}
         {canHoldProviderCookie(knownPortalUrl) ? (
@@ -1131,12 +1128,8 @@ export function GettingStartedFlow({
                         device.
                       </>
                     )
-                  ) : unlockOptions && !accountOffered ? (
+                  ) : accountOffered ? null : unlockOptions ? (
                     'Use your passkey, recovery code or secret.'
-                  ) : unlockOptions ? (
-                    'Sign in with your atomic.place account, or use your passkey, recovery code or secret.'
-                  ) : accountOffered ? (
-                    'Sign in with your atomic.place account, or paste your secret.'
                   ) : (
                     'Paste your secret.'
                   )}
@@ -1225,14 +1218,16 @@ export function GettingStartedFlow({
                 {/* The same passkey button and code-or-secret field as the
                     send-identity page. Without a backup this device can open,
                     it is just the field, for the agent secret. */}
+                {/* Two headed sections, the account and this device's own
+                    ways in, rather than a chain of "or"s. */}
                 {accountOffered ? (
-                  <OtherWaysLabel key='or-secret'>
+                  <AccountHeading key='or-secret'>
                     {unlockOptions ? (
-                      <>or use your passkey, code or secret</>
+                      <>Passkey, recovery code or secret</>
                     ) : (
-                      <>or paste your secret</>
+                      <>Your secret</>
                     )}
-                  </OtherWaysLabel>
+                  </AccountHeading>
                 ) : null}
                 <UnlockBackupForm
                   key='unlock'

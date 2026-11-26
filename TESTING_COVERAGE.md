@@ -1001,6 +1001,11 @@ replacement for `/iroh-node-id`.
 
 Paired-peer cards are covered too, by seeding `atomic-peers` in an init script.
 
+The desktop app runs without a browser database (`isClientDbEnabled()` is false),
+which the browser specs never exercise. `desktop-app.spec.ts` fakes the app via
+`pretendToBeTheApp` (test-utils) and covers creating a new drive; it regressed
+before because drive creation required local browser storage.
+
 Still uncovered: `PairingLinkHandler`'s deep-link entry (the system camera
 launching the app) and `IdentityReconcileGate`. Anything that genuinely calls
 `invoke` needs a real desktop harness, not a faked global.

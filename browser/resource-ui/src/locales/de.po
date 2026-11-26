@@ -1904,6 +1904,7 @@ msgstr "Subjekt"
 msgid "Edit value"
 msgstr "Wert bearbeiten"
 
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2087,6 +2088,8 @@ msgid "Add tag"
 msgstr "Tag hinzufügen"
 
 #. 0: label
+#. 0: label
+#: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Zu {0} wechseln"
@@ -2738,7 +2741,6 @@ msgstr "Klasse auswählen"
 #: ../data-browser/src/chunks/PluginRuns/ImportCollision.tsx
 #: ../data-browser/src/chunks/PluginRuns/ImportConflict.tsx
 #: src/components/LoroDocValue.tsx
-#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Leer"
 
@@ -5271,9 +5273,6 @@ msgstr "Code wird angefordert …"
 msgid "Android"
 msgstr "Android"
 
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -13746,6 +13745,28 @@ msgstr "Schreibe jemandem, den du eingeladen hast, etwa einer Kollegin oder eine
 msgid "Send a message here"
 msgstr "Sende hier eine Nachricht"
 
+#. 0: property.shortname
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to set {0}"
+msgstr "Klicken, um {0} festzulegen"
+
+#. 0: accountServiceHost
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+msgstr "Melde dich bei {0} an, um die enthaltene KI zu nutzen, oder füge einen OpenRouter-API-Schlüssel oder ein lokales Ollama-Modell hinzu. Du kannst währenddessen weitertippen."
+
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Nur dieses Gerät kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "Das Modell wurde beendet, ohne eine Antwort zu schreiben."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Details"
+
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
@@ -13875,25 +13896,13 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Verwende deinen Passkey, Wiederherstellungscode oder dein Geheimnis."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your atomic.place account"
-msgstr "Dein atomic.place-Konto"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr "Melde dich mit deinem atomic.place-Konto an, oder verwende deinen Passkey, Wiederherstellungscode oder dein Geheimnis."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr "Melde dich mit deinem atomic.place-Konto an, oder füge dein Geheimnis ein."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Füge dein Geheimnis ein."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or use your passkey, code or secret"
-msgstr "oder verwende deinen Passkey, Code oder dein Geheimnis"
+msgid "Passkey, recovery code or secret"
+msgstr "Passkey, Wiederherstellungscode oder Geheimnis"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or paste your secret"
-msgstr "oder füge dein Geheimnis ein"
+msgid "Your secret"
+msgstr "Dein Geheimnis"

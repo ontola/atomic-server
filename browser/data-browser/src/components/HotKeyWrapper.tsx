@@ -93,10 +93,16 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     e.preventDefault();
     runAction(themeSettings, ctx);
   });
-  useHotkeys(shortcuts.search, e => {
-    e.preventDefault();
-    openSearchOverlay();
-  });
+  // Search must open from anywhere, also from inside an input, the AI chat
+  // box or an editor: ⌘K is not a character anyone types there.
+  useHotkeys(
+    shortcuts.search,
+    e => {
+      e.preventDefault();
+      openSearchOverlay();
+    },
+    { enableOnFormTags: true, enableOnContentEditable: true },
+  );
   useHotkeys(shortcuts.keyboardShortcuts, e => {
     e.preventDefault();
     openShortcutsOverlay();

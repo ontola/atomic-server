@@ -1,5 +1,6 @@
 import { conversations, type Store } from '@tomic/react';
 import { hasMembers } from '../conversations/conversations';
+import { readManagedAccountBinding } from './binding';
 import {
   getManagedEnrollments,
   type ManagedEnrollmentSummary,
@@ -77,7 +78,12 @@ export async function healRefusedDrive(
     // all throw rather than read as an empty list.
     enrollments = await lookup();
   } catch {
-    return false;
+    // A device that was never linked to an account has nothing an account
+    // could host: its drives are the person's own, made here as a guest. Only
+    // a linked device that cannot ask has to leave the refusal alone.
+    if (readManagedAccountBinding()) return false;
+
+    enrollments = [];
   }
 
   const wanted = store.normalizeSubject(drive);

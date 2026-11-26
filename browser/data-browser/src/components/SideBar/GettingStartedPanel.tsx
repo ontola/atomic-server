@@ -34,6 +34,7 @@ import { Dialog, useDialog } from '../Dialog';
 import { NewMessageDialogBody } from '@views/Conversation/NewMessageDialog';
 import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { UiHint } from '../UiHint';
+import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
 import { SectionTitle } from '@views/Drive/SectionTitle';
 
 /** Where the list is shown: the sidebar panel, or a section of the drive page. */
@@ -168,9 +169,11 @@ function Steps({
       },
     },
     save: {
-      title: 'Save your work',
+      title: getAccountServiceUrl()
+        ? 'Register with email'
+        : 'Connect a device',
       hint: 'Register your email or connect a device to open it elsewhere',
-      pointer: 'Save your work here',
+      pointer: 'Register here',
       target: 'save-row',
       run: openSaveWorkDialog,
     },

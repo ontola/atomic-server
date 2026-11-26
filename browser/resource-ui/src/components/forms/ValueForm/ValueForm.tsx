@@ -98,7 +98,7 @@ export function ValueForm({
         title='Click to add a value'
         onClick={() => handleEditModeChange(true)}
       >
-        Empty
+        Click to set {property.shortname}
       </EmptyValue>
     );
   }

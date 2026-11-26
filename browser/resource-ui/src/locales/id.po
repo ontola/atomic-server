@@ -1904,6 +1904,7 @@ msgstr "subjek"
 msgid "Edit value"
 msgstr "Sunting nilai"
 
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2087,6 +2088,8 @@ msgid "Add tag"
 msgstr "Tambahkan tag"
 
 #. 0: label
+#. 0: label
+#: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Beralih ke {0}"
@@ -2737,7 +2740,6 @@ msgstr "Pilih kelas"
 #: ../data-browser/src/chunks/PluginRuns/ImportCollision.tsx
 #: ../data-browser/src/chunks/PluginRuns/ImportConflict.tsx
 #: src/components/LoroDocValue.tsx
-#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Kosong"
 
@@ -5272,9 +5274,6 @@ msgstr "Mendapatkan kode…"
 msgid "Android"
 msgstr "Android"
 
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -13738,6 +13737,28 @@ msgstr "Tulis kepada orang yang kamu undang, seperti rekan kerja atau teman"
 msgid "Send a message here"
 msgstr "Kirim pesan di sini"
 
+#. 0: property.shortname
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to set {0}"
+msgstr "Klik untuk mengatur {0}"
+
+#. 0: accountServiceHost
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+msgstr "Masuk ke {0} untuk memakai AI bawaan, atau tambahkan kunci API OpenRouter atau model Ollama lokal. Anda tetap bisa mengetik sementara itu."
+
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Hanya perangkat ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "Model selesai tanpa menulis jawaban."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Detail"
+
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
@@ -13867,25 +13888,13 @@ msgid "Use your passkey, recovery code or secret."
 msgstr "Gunakan passkey, kode pemulihan, atau kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Your atomic.place account"
-msgstr "Akun atomic.place-mu"
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or use your passkey, recovery code or secret."
-msgstr "Masuk dengan akun atomic.place-mu, atau gunakan passkey, kode pemulihan, atau kunci rahasiamu."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "Sign in with your atomic.place account, or paste your secret."
-msgstr "Masuk dengan akun atomic.place-mu, atau tempel kunci rahasiamu."
-
-#: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
 msgid "Paste your secret."
 msgstr "Tempel kunci rahasiamu."
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or use your passkey, code or secret"
-msgstr "atau gunakan passkey, kode, atau kunci rahasiamu"
+msgid "Passkey, recovery code or secret"
+msgstr "Passkey, kode pemulihan, atau kunci rahasia"
 
 #: ../data-browser/src/views/getting-started/GettingStartedFlow.tsx
-msgid "or paste your secret"
-msgstr "atau tempel kunci rahasiamu"
+msgid "Your secret"
+msgstr "Kunci rahasiamu"

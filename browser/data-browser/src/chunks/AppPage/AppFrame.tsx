@@ -180,7 +180,9 @@ function AppFrameSession({
 
     let cancelled = false;
 
-    if (store.noServer) {
+    // No node holds a local-only drive either, so its apps run from the
+    // source this device has.
+    if (store.noServer || store.isLocalOnlyDrive(drive)) {
       appSourceOf(store, drive, entrypoint)
         .then(source => {
           if (cancelled) return;
