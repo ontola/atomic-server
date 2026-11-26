@@ -160,7 +160,9 @@ export function SaveWorkDialogHost(): JSX.Element {
   return (
     <Dialog {...dialogProps}>
       <DialogTitle>
-        <h1>Save your work</h1>
+        <h1>
+          {getAccountServiceUrl() ? 'Register with email' : 'Connect a device'}
+        </h1>
       </DialogTitle>
       <DialogContent>
         {/* Only while open: the closed dialog stays in the DOM, and a hidden

@@ -1,4 +1,8 @@
 import { canonicalIdentifier, encodeB64 } from '@tomic/lib';
+import {
+  OtherAgentSecretError,
+  agentFromOwnSecret,
+} from '../verifyAgentSecret';
 import { base64ToBytes, randomBytes } from '@tomic/resource-ui/helpers/bytes';
 import { hasPasskeyApi } from '../passkeySupport';
 import { accountPasskey } from './accountPasskey';
@@ -1295,6 +1299,106 @@ export async function decryptEnvelopeV2(
   );
 }
 
+export type UnlockMethod =
+  | 'assisted'
+  | 'passkey'
+  | 'code'
+  | 'password'
+  | 'secret';
+
+/**
+ * The ways this backup opens, best first. Assisted needs the account that owns
+ * the backup to be the one signed in; a v1 backup only knows its password.
+ */
+export function unlockMethods(
+  recovery: RecoverySecret,
+  accountEmail: string | undefined,
+): UnlockMethod[] {
+  if (recovery.format_version < 2) return ['password'];
+
+  const { hasPasskey, hasCode } = envelopeWrapperKinds(recovery);
+  const methods: UnlockMethod[] = [];
+
+  if (hasAssistedWrapper(recovery) && accountEmail === recovery.owner_email) {
+    methods.push('assisted');
+  }
+
+  if (hasPasskey) methods.push('passkey');
+
+  if (hasCode) methods.push('code');
+
+  return methods;
+}
+
+/** The unlocked agent has to be the one the backup says it holds. */
+export async function assertSecretIsBackupAgent(
+  secret: string,
+  backupSubject: string,
+): Promise<void> {
+  try {
+    await agentFromOwnSecret(secret, backupSubject);
+  } catch (err) {
+    if (!(err instanceof OtherAgentSecretError)) throw err;
+
+    throw new Error('This backup holds a different identity than expected.');
+  }
+}
+
+async function openBackup(
+  recovery: RecoverySecret,
+  method: UnlockMethod,
+  input = '',
+): Promise<string> {
+  return method === 'secret'
+    ? input.trim()
+    : method === 'assisted'
+      ? await decryptEnvelopeWithAssisted(recovery)
+      : method === 'passkey'
+        ? await decryptEnvelopeWithPasskey(recovery)
+        : method === 'code'
+          ? await decryptEnvelopeV2(recovery, input.trim())
+          : await decryptRecoverySecret(recovery, input.trim());
+}
+
+/** Open the backup. Passkey and code unlocks also add the assisted wrapper. */
+export async function unlockBackup(
+  recovery: RecoverySecret,
+  method: UnlockMethod,
+  input = '',
+): Promise<string> {
+  const secret = await openBackup(recovery, method, input);
+
+  await assertSecretIsBackupAgent(secret, recovery.agent_subject);
+
+  return secret;
+}
+
+/**
+ * The silent part of unlocking: the account alone when it can, then the
+ * passkey on the same user gesture. Whatever is left (secret paste always
+ * works) comes back for the person to choose from.
+ */
+export async function tryAutoUnlock(
+  recovery: RecoverySecret,
+  accountEmail: string | undefined,
+): Promise<{ secret: string } | { methods: UnlockMethod[] }> {
+  const methods = unlockMethods(recovery, accountEmail);
+
+  for (const method of methods) {
+    if (method !== 'assisted' && method !== 'passkey') break;
+
+    // Cancelled or refused (Safari can, after network round trips): the
+    // choices stay.
+    try {
+      return { secret: await unlockBackup(recovery, method) };
+    } catch {
+      // Fall through to the next way.
+    }
+  }
+
+  return { methods: [...methods.filter(m => m !== 'assisted'), 'secret'] };
+}
+
 /**
  * Recover the plaintext agent secret from the stored backup.
  *
@@ -1316,21 +1420,21 @@ export async function revealSecretFromBackup(
 
   if (!recovery) return null;
 
-  const { hasPasskey, hasCode } = envelopeWrapperKinds(recovery);
-
-  if (hasPasskey && !recoveryCode) {
-    return decryptEnvelopeWithPasskey(recovery);
-  }
+  const [first] = unlockMethods(recovery, undefined);
 
   if (recoveryCode) {
-    return recovery.format_version >= 2
-      ? decryptEnvelopeV2(recovery, recoveryCode)
-      : decryptRecoverySecret(recovery, recoveryCode);
+    return openBackup(
+      recovery,
+      recovery.format_version >= 2 ? 'code' : 'password',
+      recoveryCode,
+    );
   }
 
-  if (hasCode || recovery.format_version < 2) {
+  if (first === 'passkey') return openBackup(recovery, 'passkey');
+
+  if (first) {
     throw new Error(
-      recovery.format_version < 2
+      first === 'password'
         ? 'Enter your recovery password to show your secret.'
         : 'Enter your recovery code to show your secret.',
     );

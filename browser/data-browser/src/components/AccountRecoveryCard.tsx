@@ -15,7 +15,7 @@ import {
 } from '@tomic/ui/components/forms/InputStyles';
 import {
   accountAddress,
-  getManagedAccount,
+  getManagedAccountOrNull,
   isAssistedRecoveryAvailable,
   PRODUCT_NAME,
   setAssistedRecovery,
@@ -118,7 +118,7 @@ export function AccountRecoveryCard({
 
     void (async () => {
       const [session, info, assisted] = await Promise.all([
-        getManagedAccount().catch(() => null),
+        getManagedAccountOrNull(),
         fetchManagedInfo(baseURL).catch(() => null),
         isAssistedRecoveryAvailable().catch(() => false),
       ]);

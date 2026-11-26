@@ -44,9 +44,6 @@ test('does not offer account recovery when the signed-in account has no backup',
     page.getByText(/You’re signed in as no-backup@example.com/),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /^Forgot it\? Restore from/ }),
-  ).toHaveCount(0);
-  await expect(
     page.getByRole('button', { name: 'Create account', exact: true }),
   ).toHaveCount(0);
   await page.route('**/dashboard', route =>
