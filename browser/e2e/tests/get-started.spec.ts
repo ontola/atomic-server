@@ -37,14 +37,13 @@ test('Get started opens a workspace of your own, without an account', async ({
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel).toContainText('Getting started');
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 4');
 
   for (const step of [
     'Name your drive',
     'Make something',
-    'Talk to the AI',
     'Invite someone',
-    'Save your work',
+    'Connect a device',
   ]) {
     await expect(panel.getByText(step, { exact: true })).toBeVisible();
   }
@@ -112,7 +111,7 @@ test('The Getting started sidebar panel is open, folds away and opens again, als
   const fold = panel.getByRole('button', { name: /Collapse Getting started/ });
   await fold.click();
   await expect(panel.getByText('Name your drive')).toBeHidden();
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 4');
 
   await page.reload();
   await expect(editableTitle(page)).toHaveText('Start here', {
@@ -170,14 +169,14 @@ test('A guest sees what to do next and the Save dialog opens in place', async ({
   // Not linked to an account: the panel's last row says so, with the next step.
   const row = panel.getByTestId('guest-save-row');
   await expect(row).toContainText('Only saved on this device');
-  await expect(row).toContainText('Save your work');
+  await expect(row).toContainText('Connect a device');
 
   // Clicking it opens the dialog and leaves the page where it is.
   const drive = page.url();
   await row.click();
   const dialog = currentDialog(page);
   await expect(
-    dialog.getByRole('heading', { name: 'Save your work' }),
+    dialog.getByRole('heading', { name: 'Connect a device' }),
   ).toBeVisible();
   await expect(dialog).toContainText('Only this browser can open your work');
   await expect(page).toHaveURL(drive);
@@ -358,7 +357,7 @@ test('The Getting started list is on the drive page of a phone, with the sidebar
   );
   const list = page.getByTestId('getting-started-page');
   await expect(list).toBeVisible({ timeout: 60_000 });
-  await expect(list).toContainText('0 of 5');
+  await expect(list).toContainText('0 of 4');
 
   // Sidebar closed: the page's own list is the way in.
   // (it only peeks out as a thin edge).
@@ -393,7 +392,7 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 4');
   // Share the drive, not the document landed on.
   await page
     .getByTestId('sidebar')
@@ -418,11 +417,11 @@ test('Copying an invite link ticks the Invite step, with no account portal', asy
   await expect(row).toContainText('Invite link');
   await expect(row).toContainText('Copied');
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 4', { timeout: 30_000 });
 
   // Derived from the record, so it survives a reload and shows in the list.
   await page.reload();
-  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 4', { timeout: 30_000 });
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await expect(
     currentDialog(page).locator('[data-test="share-invited"]'),
@@ -446,7 +445,7 @@ test('A denied clipboard still records the invite link and ticks the step', asyn
   const panel = page.getByTestId('getting-started');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('0 of 5');
+  await expect(panel).toContainText('0 of 4');
   // Share the drive, not the document landed on.
   await page
     .getByTestId('sidebar')
@@ -468,5 +467,5 @@ test('A denied clipboard still records the invite link and ticks the step', asyn
   const row = dialog.locator('[data-test="share-invited"]');
   await expect(row).toContainText('Invite link', { timeout: 30_000 });
   await page.keyboard.press('Escape');
-  await expect(panel).toContainText('1 of 5', { timeout: 30_000 });
+  await expect(panel).toContainText('1 of 4', { timeout: 30_000 });
 });
