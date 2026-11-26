@@ -2,6 +2,7 @@ import { styled } from 'styled-components';
 import { useStore, type Resource } from '@tomic/react';
 import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { AppFrame } from './AppFrame';
+import { HostedLitewriteFrame } from './HostedLitewriteFrame';
 
 /**
  * An app opens to its view.
@@ -22,9 +23,28 @@ export function AppPage({
     return <LoaderBlock />;
   }
 
+  // Development preview for a dedicated Litewrite app and its own table.
+  const preview = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get('hostedPreview')
+    : null;
+  const origin = preview === 'litewrite-local'
+    ? 'http://localhost:8000'
+    : preview === 'litewrite'
+      ? 'https://litewrite.pondersource.com'
+      : undefined;
+
   return (
     <PageWrapper>
-      <AppFrame app={resource.subject} drive={drive} />
+      {origin && origin !== window.location.origin ? (
+        <HostedLitewriteFrame
+          key={JSON.stringify([drive, resource.subject, origin])}
+          app={resource.subject}
+          drive={drive}
+          origin={origin}
+        />
+      ) : (
+        <AppFrame app={resource.subject} drive={drive} />
+      )}
     </PageWrapper>
   );
 }
