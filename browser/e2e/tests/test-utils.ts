@@ -2521,3 +2521,41 @@ export async function acceptInvite(
     40000,
   );
 }
+
+/**
+ * Make the page believe it is the desktop/mobile app.
+ *
+ * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, but once
+ * that is set the app also hardcodes its embedded server as
+ * `http://localhost:9883` (`getLocalServerOrigin`). Locally that is the real
+ * server; in dagger CI the server is `atomic.localhost` / `atomic`. Without a
+ * proxy, `useOwnNodeDid` never gets a node id and the paste form stays hidden
+ * behind `pairNodeId && …`.
+ */
+export async function pretendToBeTheApp(page: Page) {
+  const embeddedOrigin = 'http://localhost:9883';
+  // Fetch from Node via the service-binding host — not SERVER_URL's
+  // `atomic.localhost`, which only Chromium can resolve in dagger.
+  const realOrigin = nodeReachableServerUrl(SERVER_URL);
+
+  if (realOrigin !== embeddedOrigin) {
+    await page.route(`${embeddedOrigin}/**`, async route => {
+      const rewritten = route
+        .request()
+        .url()
+        .replace(embeddedOrigin, realOrigin);
+      const response = await route.fetch({ url: rewritten });
+      await route.fulfill({ response });
+    });
+  }
+
+  await page.addInitScript(() => {
+    (
+      window as unknown as { __TAURI_INTERNALS__: unknown }
+    ).__TAURI_INTERNALS__ = {
+      // Commands such as `adopt_agent` talk to the real shell. Nothing here
+      // needs their answer, so they resolve to nothing instead of failing.
+      invoke: () => Promise.resolve(null),
+    };
+  });
+}

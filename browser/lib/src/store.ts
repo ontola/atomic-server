@@ -2037,6 +2037,17 @@ export class Store {
       return;
     }
 
+    // A drive can become local-only (the server refused it) after edits to
+    // it were queued. Those entries must not reach the server: it would
+    // refuse every one and the drain would retry forever. The data itself
+    // already lives in the local database.
+    if (this.isLocalOnlySubject(subject)) {
+      this.outbox.discard(subject);
+      this.emitSyncStatus();
+
+      return;
+    }
+
     const endpoint = new URL('/commit', this.serverUrl).toString();
 
     // Step 0: a queued destroy supersedes everything else for this subject.

@@ -1,6 +1,6 @@
 import { isLoopbackHost, signRequest, type Agent } from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
-import { rememberManagedPortalUrl, safePortalUrl } from './managed/api';
+import { safePortalUrl } from './managed/api';
 import { isRunningInTauri } from './tauri';
 import { isOriginWithoutNode } from './originNode';
 
@@ -134,17 +134,15 @@ export async function fetchManagedInfo(
     // Anything but an https: URL (http: on localhost) is dropped here, so no
     // reader of `ManagedInfo` ever sees it. Whether it may *replace* the
     // remembered portal is rememberManagedPortalUrl's decision: not while
-    // this device holds a token for a different one.
+    // this device holds a token for a different one. And only the node serving
+    // this app may ask (AppSettings): any other server, such as a staging drive
+    // someone added, must not decide which account service this app offers.
     const portalUrl =
       safePortalUrl(
         rawPortalUrl && onLocalhost
           ? (managedPortalOverride() ?? 'http://localhost:49237')
           : rawPortalUrl,
       ) ?? null;
-
-    // The desktop app learns where the control plane lives ONLY from here —
-    // `tauri://localhost` has no same-origin `/api`. See rememberManagedPortalUrl.
-    rememberManagedPortalUrl(portalUrl);
 
     return {
       managed: Boolean(data?.[serverProps.managed]),

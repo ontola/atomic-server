@@ -1,3 +1,4 @@
+import { isRunningInTauri } from '../../helpers/tauri';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { toast } from 'react-hot-toast';
@@ -86,9 +87,9 @@ export function SaveWorkContent({
   return (
     <Column gap='1rem'>
       <p>
-        Only this browser can open your work. Sign in or register with your
-        email, or connect another device, so you can open it elsewhere and
-        don&apos;t lose access.
+        {isRunningInTauri()
+          ? "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+          : "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."}
       </p>
       {portalUrl &&
         (signedIn && timedOut ? (

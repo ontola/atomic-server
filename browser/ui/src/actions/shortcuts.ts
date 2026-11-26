@@ -34,16 +34,24 @@ export const shortcuts = {
   deleteLine: osAlt('backspace'),
 };
 
+// A function declaration (hoisted: `shortcuts` above calls it while this module
+// loads) with a regex, not a string: wuchale extracts 'Mac' as translatable text, and then
+// `shortcuts` (computed when this module loads, before the catalog has) read the
+// platform as not-Mac, so a Mac showed `ctrl+k`.
+function isMac(): boolean {
+  return /Mac/.test(navigator.platform);
+}
+
 function osCtrl(key: string): string {
   // react-hotkeys-hook v5 dropped the `cmd` modifier alias that v4 accepted —
   // it only recognizes `meta`/`mod`/`ctrl`/`control`. Emitting `cmd+…` meant
   // EVERY Cmd shortcut silently stopped matching on macOS (search, edit, new,
   // menu, …). Use `meta` for the Mac Cmd key.
-  return navigator.platform.includes('Mac') ? `meta+${key}` : `ctrl+${key}`;
+  return isMac() ? `meta+${key}` : `ctrl+${key}`;
 }
 
 function osAlt(key: string): string {
-  return navigator.platform.includes('Mac') ? `option+${key}` : `alt+${key}`;
+  return isMac() ? `option+${key}` : `alt+${key}`;
 }
 
 export function displayShortcut(shortcut: string): string {
@@ -52,7 +60,7 @@ export function displayShortcut(shortcut: string): string {
     .replace('shift+slash', '?')
     .replace('backslash', '\\');
 
-  if (navigator.platform.includes('Mac')) {
+  if (isMac()) {
     return readable
       .replace('meta+', '⌘')
       .replace('option+', '⌥')

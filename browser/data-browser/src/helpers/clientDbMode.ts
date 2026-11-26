@@ -1,3 +1,4 @@
+import { isHostedDistribution } from './managedServer';
 import { isRunningInTauri } from './tauri';
 
 const LOCAL_STORAGE_KEY = 'atomic-disable-client-db';
@@ -6,8 +7,11 @@ const LOCAL_STORAGE_KEY = 'atomic-disable-client-db';
  * Whether the WASM ClientDb / OPFS offline layer should be initialized.
  *
  * The platform default: on under the web (it IS the local database there),
- * off under Tauri (the embedded local server already persists everything;
- * OPFS would be redundant duplication). An explicit user/feature choice
+ * off under a self-built Tauri app (the embedded local server already persists
+ * everything; OPFS would be redundant duplication). On in the hosted desktop
+ * build: once signed in, the store talks to the account's server, which
+ * refuses drives it does not host, so a new drive can only live on this device
+ * in the client database. An explicit user/feature choice
  * (persisted in localStorage) overrides the default in either direction —
  * local-only drives need this on Tauri, since they never reach a server and
  * their queries can only be answered by the ClientDb.
@@ -23,7 +27,7 @@ export function isClientDbEnabled(): boolean {
     if (stored === '0') return true;
   }
 
-  return !isRunningInTauri();
+  return !isRunningInTauri() || isHostedDistribution();
 }
 
 export function setClientDbEnabled(enabled: boolean): void {

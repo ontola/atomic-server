@@ -47,6 +47,7 @@ function fakeStore() {
   };
   const store = {
     getAgent: () => state.agent,
+    isLocalOnlyDrive: () => false,
     getServerUrl: () => state.server,
     getSyncStatus: () => ({
       serverConnected: state.connected,

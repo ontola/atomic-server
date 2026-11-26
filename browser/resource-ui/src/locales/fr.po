@@ -1903,6 +1903,7 @@ msgstr "sujet"
 msgid "Edit value"
 msgstr "Modifier la valeur"
 
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2086,6 +2087,8 @@ msgid "Add tag"
 msgstr "Ajouter une étiquette"
 
 #. 0: label
+#. 0: label
+#: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Basculer vers {0}"
@@ -2737,7 +2740,6 @@ msgstr "Sélectionner une classe"
 #: ../data-browser/src/chunks/PluginRuns/ImportCollision.tsx
 #: ../data-browser/src/chunks/PluginRuns/ImportConflict.tsx
 #: src/components/LoroDocValue.tsx
-#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Vide"
 
@@ -5268,9 +5270,6 @@ msgstr "Obtention d’un code…"
 msgid "Android"
 msgstr "Android"
 
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -13742,6 +13741,28 @@ msgstr "Écrivez à quelqu'un que vous avez invité, comme un collègue ou un am
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Envoyez un message ici"
+
+#. 0: property.shortname
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to set {0}"
+msgstr "Cliquez pour définir {0}"
+
+#. 0: accountServiceHost
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+msgstr "Connectez-vous à {0} pour utiliser l’IA incluse, ou ajoutez une clé API OpenRouter ou un modèle Ollama local. Vous pouvez continuer à écrire en attendant."
+
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Seul cet appareil peut ouvrir ton travail. Connecte-toi ou inscris-toi avec ton e-mail, ou connecte un autre appareil, pour pouvoir l’ouvrir ailleurs et ne pas perdre l’accès."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "Le modèle s'est arrêté sans écrire de réponse."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Détails"
 
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx

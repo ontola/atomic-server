@@ -66,6 +66,8 @@ export type MessageMetadata = {
   /** Input tokens of the last model step: the context size, not the summed spend. */
   contextTokens?: number;
   outputTokensUsed?: number;
+  /** Why the model stopped last: `stop`, `length` (ran out of tokens), `tool-calls`, ... */
+  finishReason?: string;
   error?: string;
   isSummary?: boolean;
 };

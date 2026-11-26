@@ -4,9 +4,10 @@ import {
   server,
   useFileObjectUrl,
   useNumber,
+  useStore,
   useString,
 } from '@tomic/react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type FileInfo =
   | {
@@ -24,6 +25,72 @@ type FileInfo =
       bytes: number;
     };
 
+const DOWNLOAD_PATH = /^\/download\/files\/[^/]+$/;
+
+/**
+ * A node that does not have the blob may answer with its web app's index page
+ * (200, text/html) instead of a 404. Downloads are content-addressed, so the
+ * connected server's copy is the same file.
+ */
+function isAppShell(response: Response): boolean {
+  return (response.headers.get('content-type') ?? '').startsWith('text/html');
+}
+
+/**
+ * The File's own `downloadURL` names the node that first got the upload. A
+ * client that talks to another server (the desktop app's embedded one, which
+ * has no WASM client DB to serve the bytes locally) can hold the blob there
+ * while that node answers 404. Ask once; only a 404 or an app page switches to this
+ * client's own server. Any other answer, including a blocked request, keeps
+ * the resource's URL, which is what loaded before.
+ */
+function useConnectedServerFallback(
+  url: string | undefined,
+): string | undefined {
+  const serverUrl = useStore().getServerUrl();
+  const [answer, setAnswer] = useState<{ url: string; use?: string }>();
+
+  useEffect(() => {
+    if (!url || !serverUrl) return;
+
+    let target: URL;
+    let local: URL;
+
+    try {
+      target = new URL(url);
+      local = new URL(serverUrl);
+    } catch {
+      return;
+    }
+
+    if (
+      target.origin === local.origin ||
+      !DOWNLOAD_PATH.test(target.pathname)
+    ) {
+      return;
+    }
+
+    const alternative = new URL(target.pathname, local).toString();
+    const controller = new AbortController();
+
+    fetch(url, { method: 'HEAD', signal: controller.signal })
+      .then(response => {
+        setAnswer({
+          url,
+          use:
+            response.status === 404 || isAppShell(response)
+              ? alternative
+              : undefined,
+        });
+      })
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [url, serverUrl]);
+
+  return answer && answer.url === url ? (answer.use ?? url) : url;
+}
+
 export function useFileInfo(resource: Resource): FileInfo {
   const [serverDownloadUrl] = useString(
     resource,
@@ -36,7 +103,8 @@ export function useFileInfo(resource: Resource): FileInfo {
   // blob URL. The server `downloadURL` returns 404 immediately after upload
   // until the BLOB_RESPONSE round-trip completes — without this, the preview
   // would flash a broken image on its way to "loaded".
-  const downloadUrl = useFileObjectUrl(resource, serverDownloadUrl);
+  const objectUrl = useFileObjectUrl(resource, serverDownloadUrl);
+  const downloadUrl = useConnectedServerFallback(objectUrl);
 
   const downloadFile = useCallback(() => {
     // The URL is the resource's own claim; refuse anything that would run

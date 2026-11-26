@@ -47,7 +47,8 @@ function getTitle(resource: Resource): string {
 
 /**
  * Quick-switch between the user's drives: private drive plus the 10 most recently
- * visited drives. The full lists live in the Drive section of settings.
+ * visited drives. The others are found by typing in the filter, and all of
+ * them are listed in the Drive section of settings.
  */
 export function DriveSwitcher({
   Trigger = DefaultTrigger,
@@ -103,9 +104,13 @@ export function DriveSwitcher({
   const visitTime = (subject: string) =>
     driveVisits[canonicalizeScheme(subject)] ?? 0;
   // Array.prototype.sort is stable, so ties keep their original order.
-  const shownDrives = merged
-    .sort((a, b) => visitTime(b) - visitTime(a))
-    .slice(0, MAX_SHOWN_DRIVES);
+  const sortedDrives = merged.sort((a, b) => visitTime(b) - visitTime(a));
+  const shownDrives = sortedDrives.slice(0, MAX_SHOWN_DRIVES);
+  // The rest only show up while typing in the filter, so a drive outside the
+  // top 10 (a new device, a fresh origin) is still findable. Their names come
+  // from the catalog: loading every drive just to label it would defeat lazy
+  // loading of other drives.
+  const searchOnlyDrives = sortedDrives.slice(MAX_SHOWN_DRIVES);
 
   const shownDrivesMap = useResources(shownDrives);
 
@@ -147,6 +152,21 @@ export function DriveSwitcher({
         suffix: badge(subject),
         label,
         helper: `Switch to ${label}`,
+        disabled: false,
+        onClick: (): void => switchTo(subject),
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+      };
+    }),
+    ...searchOnlyDrives.map(subject => {
+      const label =
+        catalog.entries.find(e => e.drive_subject === subject)?.drive_name ||
+        driveDisplayName(undefined, subject);
+
+      return {
+        id: subject,
+        label,
+        helper: `Switch to ${label}`,
+        searchOnly: true,
         disabled: false,
         onClick: (): void => switchTo(subject),
         icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,

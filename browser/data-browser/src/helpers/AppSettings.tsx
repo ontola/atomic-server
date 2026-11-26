@@ -24,6 +24,7 @@ import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
+import { rememberManagedPortalUrl } from './managed/api';
 import { isTouchPrimary } from './pointer';
 import {
   reportSidebarIcons,
@@ -149,6 +150,10 @@ export const AppSettingsContextProvider = (
       : getLocalServerOrigin();
 
     fetchManagedInfo(currentOrigin).then(info => {
+      // Only the node this app is served from names its portal. See
+      // rememberManagedPortalUrl.
+      rememberManagedPortalUrl(info.portalUrl);
+
       if (isAtomicServer(info)) {
         serverURLStorage.addKnownServer(currentOrigin);
       } else {

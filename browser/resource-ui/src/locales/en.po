@@ -1903,6 +1903,7 @@ msgstr "subject"
 msgid "Edit value"
 msgstr "Edit value"
 
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2086,6 +2087,8 @@ msgid "Add tag"
 msgstr "Add tag"
 
 #. 0: label
+#. 0: label
+#: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 #: ../data-browser/src/components/SideBar/DriveSwitcher.tsx
 msgid "Switch to {0}"
 msgstr "Switch to {0}"
@@ -2737,7 +2740,6 @@ msgstr "Select a class"
 #: ../data-browser/src/chunks/PluginRuns/ImportCollision.tsx
 #: ../data-browser/src/chunks/PluginRuns/ImportConflict.tsx
 #: src/components/LoroDocValue.tsx
-#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Empty"
 msgstr "Empty"
 
@@ -5274,9 +5276,6 @@ msgstr "Getting a code…"
 msgid "Android"
 msgstr "Android"
 
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
-#: ../ui/src/actions/shortcuts.ts
 #: ../data-browser/src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -13748,6 +13747,28 @@ msgstr "Write to someone you invited, like a colleague or friend"
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Send a message here"
 msgstr "Send a message here"
+
+#. 0: property.shortname
+#: src/components/forms/ValueForm/ValueForm.tsx
+msgid "Click to set {0}"
+msgstr "Click to set {0}"
+
+#. 0: accountServiceHost
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+msgstr "Sign in to {0} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime."
+
+#: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
+msgid "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+msgstr "Only this device can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "The model finished without writing an answer."
+msgstr "The model finished without writing an answer."
+
+#: ../data-browser/src/chunks/AI/RealAIChat.tsx
+msgid "Details"
+msgstr "Details"
 
 #: ../table-page/src/TablePage/TableFilterChip.tsx
 #: ../table-page/src/TablePage/TableFilterValueInput.tsx
