@@ -1443,9 +1443,11 @@ impl Db {
             }
 
             if sled_path.exists() && key.is_some() {
-                return Err("A sled store cannot be migrated into an encrypted redb store; \
+                return Err(
+                    "A sled store cannot be migrated into an encrypted redb store; \
                             migrate it without a key first"
-                    .into());
+                        .into(),
+                );
             }
             if sled_path.exists() {
                 Self::migrate_from_sled(
