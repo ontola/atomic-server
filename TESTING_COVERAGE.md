@@ -6,6 +6,14 @@ packed-consumer checks verify the grid uses the host's UI module instance.
 TableCell's local fixture seeds createdAt metadata to avoid external HTTP reads
 while asserting cell commits. These changes do not introduce new state policies.
 
+TablePage saved-view browser journeys capture actual computed-column identities
+and assert the same column/value after renaming and reloading, then removal
+without losing the other column or row. Row-action journeys use the accessible
+action label before and after reload. Date-format acceptance seeds explicit
+property names so a pre-existing missing-name fallback cannot obscure the format
+assertions. Onboarding E2E checks the four basic self-hosted steps and the exact
+Connect a device route; existing progress/panel unit tests cover AI in Next steps.
+
 Shared UI extraction: `browser/data-browser/src/components/sharedUI.test.tsx`
 checks that compatibility paths and the extracted package share keyboard locks,
 the dialog tree and generated background CSS variables. Existing spinner,

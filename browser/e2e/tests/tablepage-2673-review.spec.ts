@@ -29,11 +29,16 @@ async function seedTable(page: Page, withTimer = false) {
       });
       await rowClass.save();
 
-      const property = async (shortname: string, datatype: string) => {
+      const property = async (
+        shortname: string,
+        datatype: string,
+        name: string,
+      ) => {
         const resource = await store.newResource({
           parent: rowClass.subject,
           isA: `${C}Property`,
           propVals: {
+            [`${P}name`]: name,
             [`${P}shortname`]: shortname,
             [`${P}description`]: `${shortname} review column`,
             [`${P}datatype`]: `https://atomicdata.dev/datatypes/${datatype}`,
@@ -44,10 +49,12 @@ async function seedTable(page: Page, withTimer = false) {
         return resource.subject;
       };
 
-      const age = await property('age', 'integer');
-      const birthday = await property('birthday', 'date');
-      const start = timer ? await property('start', 'timestamp') : undefined;
-      const end = timer ? await property('end', 'timestamp') : undefined;
+      const age = await property('age', 'integer', 'Age');
+      const birthday = await property('birthday', 'date', 'Birthday');
+      const start = timer
+        ? await property('start', 'timestamp', 'Start')
+        : undefined;
+      const end = timer ? await property('end', 'timestamp', 'End') : undefined;
       await rowClass.set(`${P}recommends`, [
         `${P}name`,
         age,
