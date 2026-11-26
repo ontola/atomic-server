@@ -13871,7 +13871,7 @@ msgstr "Kunci rahasiamu"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register here"
-msgstr ""
+msgstr "Daftar di sini"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx

@@ -13876,7 +13876,7 @@ msgstr "Votre secret"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register here"
-msgstr ""
+msgstr "Inscrivez-vous ici"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx

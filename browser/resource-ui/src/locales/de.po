@@ -13879,7 +13879,7 @@ msgstr "Dein Geheimnis"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register here"
-msgstr ""
+msgstr "Hier registrieren"
 
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
