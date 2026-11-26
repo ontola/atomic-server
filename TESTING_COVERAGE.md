@@ -1384,6 +1384,11 @@ This does not yet prove restoration of the user's private staging workspace.
   page status updates in place, including a valid Last link and an unknown
   total. Reference projector tests cover legacy writer IDs before and after
   server acknowledgement while still rejecting actual permission changes.
+- Principal App tests cover a same-drive Public reinstall after confirmed
+  permanent deletion and preserve the previous registration on a live
+  target, failed signed read, pending delete, or competing source. The Chromium
+  reinstall journey uses the Trash and Apps menus and checks that a second
+  chooser visit reuses the new App.
 - `embed/flutterHost.test.ts` covers native-host precedence, locked Flutter
   channel tokens and lazy standalone fixtures. The production embed size check
   keeps its existing first-use and total budgets; the main Data Browser build

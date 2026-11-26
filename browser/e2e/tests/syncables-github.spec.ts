@@ -13,6 +13,7 @@ import { enableIntegrationDiscovery } from './integration-settings-utils';
 import {
   before,
   clickAccountMenuItem,
+  contextMenuClick,
   currentDriveTitle,
   FRONTEND_URL,
   getCurrentSubject,
@@ -2740,6 +2741,143 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(writes).toHaveLength(existingWrites);
     await expect(storedGrid).toHaveAttribute('aria-busy', 'false');
     await expect(storedGrid).toHaveAttribute('aria-rowcount', '1');
+  });
+
+  test('reinstalls the Public App on the same drive after permanent deletion', async ({
+    page,
+    browserDiagnostics,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    await mockIntegrationProxy(page);
+    await before({ page }, testInfo);
+    await waitForSynced(page);
+    await waitForDriveSettled(page);
+    await enableIntegrationDiscovery(page);
+    await clickAccountMenuItem(page, 'Apps');
+    await page.getByRole('button', { name: 'Add GitHub to drive' }).click();
+
+    const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
+    const publicChoice = iframe.getByRole('button', {
+      name: 'Public',
+      exact: true,
+    });
+    await expect(publicChoice).toBeVisible({ timeout: 45_000 });
+    const managerSubject = await getCurrentSubject(page);
+    await publicChoice.click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    await browse(page);
+    const original = await principalApps(page);
+    expect(original).toHaveLength(1);
+    expect(original[0].config).toMatchObject({ principal: { kind: 'public' } });
+
+    await contextMenuClick('trash', page);
+    await waitForSynced(page);
+    browserDiagnostics.expect(
+      'error',
+      /Failed to load resource:.*404/,
+      'Trash displays the App class list as a single class URL.',
+      1,
+      /^https:\/\/atomicdata\.dev\/classes\/Table,atomic:/,
+      { optional: true },
+    );
+    browserDiagnostics.expect(
+      'error',
+      /^https:\/\/atomicdata\.dev\/classes\/Table,atomic:.*Resource not found/,
+      'The SDK reports the same Trash class lookup.',
+      1,
+      undefined,
+      { optional: true },
+    );
+    await clickAccountMenuItem(page, 'Trash');
+    await page
+      .getByRole('main')
+      .getByRole('link', { name: 'GitHub · Public', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      original[0].subject,
+    );
+    await contextMenuClick('delete', page);
+    const oldSubject = original[0].subject;
+    browserDiagnostics.expect(
+      'error',
+      /Failed to load resource:.*404/,
+      'The deleted App is absent from the server.',
+      3,
+      new RegExp(`/resource\\?subject=${encodeURIComponent(oldSubject)}$`),
+      { optional: true },
+    );
+    browserDiagnostics.expect(
+      'error',
+      new RegExp(`^${oldSubject} .*Resource not found`),
+      'The SDK reports the same signed read of the deleted App.',
+      3,
+      undefined,
+      { optional: true },
+    );
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await expect(page.getByRole('main')).not.toHaveAttribute(
+      'about',
+      oldSubject,
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          subject => window.store.hasPendingDestroy(subject),
+          oldSubject,
+        ),
+      )
+      .toBe(false);
+    await waitForSynced(page);
+    await expect
+      .poll(() =>
+        page.evaluate(async subject => {
+          try {
+            await window.store.readServerSnapshot(subject);
+
+            return 'present';
+          } catch (error) {
+            if (error instanceof Error && 'type' in error) return error.type;
+            throw error;
+          }
+        }, oldSubject),
+      )
+      .toBe('NotFound');
+
+    await clickAccountMenuItem(page, 'Apps');
+    await page
+      .getByRole('button', { name: 'Open GitHub', exact: true })
+      .click();
+    expect(await getCurrentSubject(page)).toBe(managerSubject);
+    await expect(publicChoice).toBeVisible({ timeout: 45_000 });
+    await publicChoice.click();
+    await expect.poll(() => getCurrentSubject(page)).not.toBe(managerSubject);
+    await browse(page);
+
+    const replacement = await principalApps(page);
+    expect(replacement).toHaveLength(1);
+    expect(replacement[0].subject).not.toBe(original[0].subject);
+    expect(replacement[0]).toMatchObject({
+      drive: original[0].drive,
+      parent: original[0].drive,
+      config: { principal: { kind: 'public' } },
+    });
+
+    await clickAccountMenuItem(page, 'Apps');
+    await page
+      .getByRole('button', { name: 'Open GitHub', exact: true })
+      .click();
+    await iframe
+      .getByRole('button', { name: 'GitHub · Public', exact: true })
+      .click({ timeout: 45_000 });
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      replacement[0].subject,
+    );
+    expect(await principalApps(page)).toEqual(replacement);
   });
 
   test('resolves catalog Public inputs into a shared entity table and adopts proven saved source aliases', async ({

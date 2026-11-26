@@ -38,6 +38,10 @@ selected drive. App binding changes revoke old workers; child sync inherits
 the verified current slot. Opening the chooser independently leaves account
 selection to the user.
 Existing conflicting data is preserved and reported rather than merged.
+Reinstalling after permanent deletion requires a signed server Not Found for
+the former App plus a complete drive-scoped identity check that includes
+Trash. The host retires the stale registration's local ID and uses the normal
+native uniqueness check to install the replacement.
 
 Apps and Sync reads, query results, subscriptions and writes stay in the selected
 Drive even while another is active or cached. Local and server queries retain
@@ -106,6 +110,11 @@ cold rows hydrate before ownership validation. Canonical `github` replaces
 is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
+
+- The same-drive reinstall fix passed 183 focused tests and both typechecks.
+  The native Chromium regression confirmed Public reinstallation after deletion,
+  and a subsequent visit reused the replacement. The other eight Syncables
+  journeys passed against the same build.
 
 - The OAuth return, first table sync, page progress and writer-ID fix passed
   3,221 Data Browser tests, both MCP tests, the app and E2E typechecks, and

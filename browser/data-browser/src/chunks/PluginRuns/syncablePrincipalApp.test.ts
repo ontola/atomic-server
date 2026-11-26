@@ -5,6 +5,8 @@ import {
   server,
   dataBrowser,
   collections,
+  AtomicError,
+  ErrorType,
   LoroLoader,
   findSchema,
   ensureSchema,
@@ -74,6 +76,7 @@ async function fixture() {
   const originalNew = f.store.newResource.bind(f.store);
   const cache = new Map<string, Awaited<ReturnType<typeof originalGet>>>();
   const persisted = new Set(f.resources.keys());
+  const pendingDestroys = new Set<string>();
   const legacyQueryMembers = new Set<string>();
   const actor = {
     current: 'actor',
@@ -192,10 +195,19 @@ async function fixture() {
             : undefined,
     };
   });
+  const readServerSnapshot = vi.fn(async (subject: string) => {
+    const values = f.resources.get(subject);
+    if (!values || !persisted.has(subject))
+      throw new AtomicError('No such resource', ErrorType.NotFound);
+
+    return structuredClone(values);
+  });
   Object.assign(f.store, {
     getAgent: () => ({ subject: actor.current }),
     getServerUrl: () => actor.server,
     fetchResourceFromServer: query,
+    readServerSnapshot,
+    hasPendingDestroy: (subject: string) => pendingDestroys.has(subject),
   });
   const store = f.store as unknown as Store;
   const setup = await ensureSyncablePlatform(store, {
@@ -261,6 +273,8 @@ async function fixture() {
     promote,
     actor,
     query,
+    readServerSnapshot,
+    pendingDestroys,
     persisted,
     legacyQueryMembers,
   };
@@ -375,6 +389,112 @@ describe('one native Syncables App per typed principal', () => {
         v => v[f.p['syncable-principal-app-key']],
       ),
     ).toHaveLength(1);
+  });
+  it('reinstalls Public after the server confirms the prior App was deleted', async () => {
+    const f = await fixture();
+    const publicIdentity = { kind: 'public' } as const;
+    const old = await f.add(publicIdentity, 'Public');
+    const account = await f.add();
+    await f.promote(old.subject, publicIdentity);
+    await f.promote(account.subject);
+    const targetProperty = f.p['syncable-principal-app-target'];
+    const [oldClaim, registration] = [...f.resources].find(
+      ([, values]) => values[targetProperty] === old.subject,
+    )!;
+    const localId = registration[core.properties.localId];
+    f.resources.delete(old.subject);
+    f.persisted.delete(old.subject);
+
+    const current = await f.add(publicIdentity, 'Public');
+    await expect(f.promote(current.subject, publicIdentity)).resolves.toBe(
+      current.subject,
+    );
+    await expect(f.promote(current.subject, publicIdentity)).resolves.toBe(
+      current.subject,
+    );
+    expect(f.readServerSnapshot).toHaveBeenCalledWith(old.subject);
+    expect(f.resources.get(oldClaim)).toMatchObject({
+      [targetProperty]: old.subject,
+    });
+    expect(f.resources.get(oldClaim)?.[core.properties.localId]).not.toBe(
+      localId,
+    );
+    const active = [...f.resources.values()].filter(
+      values => values[core.properties.localId] === localId,
+    );
+    expect(active).toHaveLength(1);
+    expect(active[0][targetProperty]).toBe(current.subject);
+    expect(
+      await findRegisteredSyncablePrincipalApp(f.store, {
+        ...scope,
+        principal: publicIdentity,
+      }),
+    ).toMatchObject({ subject: current.subject });
+    expect(
+      await findRegisteredSyncablePrincipalApp(f.store, {
+        ...scope,
+        principal,
+      }),
+    ).toMatchObject({ subject: account.subject });
+  });
+  it.each(['live', 'unauthorized', 'offline', 'pending destroy'] as const)(
+    'keeps the registration when its former target is %s',
+    async state => {
+      const f = await fixture();
+      const publicIdentity = { kind: 'public' } as const;
+      const old = await f.add(publicIdentity, 'Old Public');
+      await f.promote(old.subject, publicIdentity);
+      // Hide the old App from queries for this drive. Only an authoritative
+      // Not Found on its subject can distinguish deletion from a move.
+      await old.set(core.properties.parent, 'atomic:other-drive');
+      const read = f.readServerSnapshot.getMockImplementation()!;
+      f.readServerSnapshot.mockImplementation(async subject => {
+        if (subject === old.subject && state === 'unauthorized')
+          throw new AtomicError('Unauthorized', ErrorType.Unauthorized);
+        if (subject === old.subject && state === 'offline')
+          throw new Error('Network unavailable');
+
+        return read(subject);
+      });
+
+      if (state === 'pending destroy') {
+        f.resources.delete(old.subject);
+        f.persisted.delete(old.subject);
+        f.pendingDestroys.add(old.subject);
+      }
+
+      const current = await f.add(publicIdentity, 'Public');
+      const before = structuredClone([...f.resources]);
+      await expect(
+        f.promote(current.subject, publicIdentity),
+      ).rejects.toThrow();
+      expect([...f.resources]).toEqual(before);
+    },
+  );
+  it('keeps the old registration if a second candidate appears during deletion verification', async () => {
+    const f = await fixture();
+    const publicIdentity = { kind: 'public' } as const;
+    const old = await f.add(publicIdentity, 'Old Public');
+    await f.promote(old.subject, publicIdentity);
+    const targetProperty = f.p['syncable-principal-app-target'];
+    const [oldClaim, registration] = [...f.resources].find(
+      ([, values]) => values[targetProperty] === old.subject,
+    )!;
+    f.resources.delete(old.subject);
+    f.persisted.delete(old.subject);
+    const current = await f.add(publicIdentity, 'Public');
+    const read = f.readServerSnapshot.getMockImplementation()!;
+    f.readServerSnapshot.mockImplementationOnce(async subject => {
+      await f.add(publicIdentity, 'Other Public');
+
+      return read(subject);
+    });
+
+    await expect(f.promote(current.subject, publicIdentity)).rejects.toThrow(
+      'conflicting',
+    );
+    expect(f.resources.get(oldClaim)).toEqual(registration);
+    expect(current.get(core.properties.parent)).toBe(f.setup);
   });
   it('rejects conflicting sources without promoting or deleting either', async () => {
     const f = await fixture();
@@ -538,6 +658,7 @@ describe('one native Syncables App per typed principal', () => {
       expect(get.mock.calls.some(([subject]) => subject === foreign)).toBe(
         false,
       );
+      expect(f.readServerSnapshot).not.toHaveBeenCalledWith(foreign);
     },
   );
   it('finds the same registered App through a fresh host Store with no memory index', async () => {

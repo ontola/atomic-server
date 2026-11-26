@@ -1,9 +1,11 @@
 // @wc-ignore-file
 import {
+  canonicalIdentifier,
   core,
   dataBrowser,
   ensureSchema,
   findSchema,
+  isNotFound,
   pluginSchema,
   readConnectionSubjects,
   server,
@@ -490,18 +492,23 @@ async function promote(
     throw new Error(
       'The uninstalled principal moved; reopen its original connection manager',
     );
-  const matches = await principalSubjectsInDrive(
-    store,
-    drive,
-    t.h['syncable-source-key'],
-    expectedKey,
-    check,
-  );
-  check();
-  if (matches.length !== 1 || !same(matches[0], row.subject))
-    throw new Error(
-      'This principal source is missing or conflicting; review all existing copies',
+
+  const assertUniquePrincipal = async () => {
+    const matches = await principalSubjectsInDrive(
+      store,
+      drive,
+      t.h['syncable-source-key'],
+      expectedKey,
+      check,
     );
+    check();
+    if (matches.length !== 1 || !same(matches[0], row.subject))
+      throw new Error(
+        'This principal source is missing or conflicting; review all existing copies',
+      );
+  };
+
+  await assertUniquePrincipal();
   const ontologySubject = text(root.get(server.properties.defaultOntology));
   if (!ontologySubject)
     throw new Error('The drive has no native registration destination');
@@ -518,6 +525,18 @@ async function promote(
   for (const target of [root, row, ontology]) await assertWritable(target);
   const claimId =
     'syncables:principal-app:' + sourceConfigFingerprint(expectedKey);
+  const claimTarget = t.p['syncable-principal-app-target'];
+  const validClaim = (get: (property: string) => unknown) =>
+    list(get(core.properties.isA)).includes(
+      t.c['syncable-principal-app-registration'],
+    ) &&
+    get(core.properties.localId) === claimId &&
+    get(t.p['syncable-principal-app-key']) === expectedKey &&
+    same(get(core.properties.parent), ontology.subject);
+  const conflictingClaim = () =>
+    new Error(
+      'This principal already has another registered App; its saved data was retained',
+    );
 
   const findClaim = async () => {
     const subjects = await principalSubjectsInDrive(
@@ -542,52 +561,6 @@ async function promote(
     return found[0];
   };
 
-  let claim = await findClaim();
-  const resumedClaim = !!claim;
-
-  if (!claim) {
-    check();
-    const created = await store.newResource({
-      parent: ontology.subject,
-      isA: [t.c['syncable-principal-app-registration']],
-      propVals: {
-        [core.properties.localId]: claimId,
-        [core.properties.name]:
-          `${input.providerName} · ${String(row.get(core.properties.name) ?? (principal.kind === 'public' ? 'Public' : principal.subject))}`.slice(
-            0,
-            200,
-          ),
-        [t.p['syncable-principal-app-key']]: expectedKey,
-        [t.p['syncable-principal-app-target']]: row.subject,
-      },
-    });
-    check();
-
-    try {
-      await created.save();
-      check();
-      claim = created;
-    } catch (reason) {
-      check();
-      claim = await findClaim();
-      if (!claim) throw reason;
-    }
-  }
-
-  if (
-    !list(claim.get(core.properties.isA)).includes(
-      t.c['syncable-principal-app-registration'],
-    ) ||
-    claim.get(core.properties.localId) !== claimId ||
-    claim.get(t.p['syncable-principal-app-key']) !== expectedKey ||
-    !same(claim.get(t.p['syncable-principal-app-target']), row.subject) ||
-    !same(claim.get(core.properties.parent), ontology.subject)
-  )
-    throw new Error(
-      'This principal already has another registered App; its saved data was retained',
-    );
-  pinned.set(claim, stamp(claim));
-
   const write = async (property: string, value: JSONValue, target = row) => {
     check();
     if (
@@ -610,6 +583,77 @@ async function promote(
     await target.save();
     check();
   };
+
+  let claim = await findClaim();
+
+  if (claim && !same(claim.get(claimTarget), row.subject)) {
+    const previous = text(claim.get(claimTarget));
+    if (!previous || !validClaim(claim.get.bind(claim)))
+      throw conflictingClaim();
+    assertSyncableLocalSubject(store, previous);
+    if (store.hasPendingDestroy(previous)) throw conflictingClaim();
+    const saved = await store.readServerSnapshot(claim.subject);
+    check();
+    if (
+      !validClaim(property => saved[property]) ||
+      !same(saved[claimTarget], previous)
+    )
+      throw conflictingClaim();
+    const missing = await store
+      .readServerSnapshot(previous)
+      .then(() => false, isNotFound);
+    check();
+    if (!missing || store.hasPendingDestroy(previous)) throw conflictingClaim();
+    await assertUniquePrincipal();
+    await assertWritable(claim);
+    // Release only this stale registration's local ID. The existing
+    // server uniqueness check then arbitrates concurrent replacements.
+    await write(
+      core.properties.localId,
+      'syncables:retired-principal-app:' +
+        sourceConfigFingerprint(canonicalIdentifier(claim.subject)),
+      claim,
+    );
+    claim = await findClaim();
+  }
+
+  const resumedClaim = !!claim;
+
+  if (!claim) {
+    check();
+    const created = await store.newResource({
+      parent: ontology.subject,
+      isA: [t.c['syncable-principal-app-registration']],
+      propVals: {
+        [core.properties.localId]: claimId,
+        [core.properties.name]:
+          `${input.providerName} · ${String(row.get(core.properties.name) ?? (principal.kind === 'public' ? 'Public' : principal.subject))}`.slice(
+            0,
+            200,
+          ),
+        [t.p['syncable-principal-app-key']]: expectedKey,
+        [claimTarget]: row.subject,
+      },
+    });
+    check();
+
+    try {
+      await created.save();
+      check();
+      claim = created;
+    } catch (reason) {
+      check();
+      claim = await findClaim();
+      if (!claim) throw reason;
+    }
+  }
+
+  if (
+    !validClaim(claim.get.bind(claim)) ||
+    !same(claim.get(claimTarget), row.subject)
+  )
+    throw conflictingClaim();
+  pinned.set(claim, stamp(claim));
 
   if (
     input.connectionId &&

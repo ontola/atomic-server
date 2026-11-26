@@ -128,7 +128,9 @@ required bindings before making a provider request. A summary missing those fiel
 cannot start that read. Later imports enrich the same resource, retaining its
 identity and user fields. These references stay within the selected drive,
 provider and principal. A retained identity in Trash blocks replacement; restore
-it explicitly to resume syncing. Opening a view does not restore trashed data.
+it explicitly to resume syncing. To start over, permanently delete the
+principal App from Trash and install it again from Apps. Permanent deletion
+also removes the App's tables, cached rows and saved sync filters still inside it.
 
 The canonical catalog identifier is now `github`. Installations and other clients
 using the historical `github-issues` identifier need reinstalling or reconnecting.
