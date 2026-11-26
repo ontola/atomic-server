@@ -507,6 +507,45 @@ class CloudTests(unittest.TestCase):
         target = Path(self.config['volume']['mount_path']) / 'runs/fixture-cloud/runtime/node-001/results/report.json'
         self.assertEqual(target.read_text(), '{"failed":0}')
 
+    def test_mutable_evidence_refreshes_even_when_all_file_stat_fields_are_identical(self):
+        runtime = Path(self.config['fanout_config']['runtime_dir'])
+        files = {'node-001/results/browser/test-results.json': ('{"failed":1}', '{"failed":0}'),
+                 'node-001/results/browser/test-exit-code': ('1', '0')}
+        for name, (before, _) in files.items():
+            path = runtime / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(before)
+        original_stat = Path.stat
+        frozen = {runtime / name: (runtime / name).stat() for name in files}
+        def unchanged_metadata(path, *args, **kwargs):
+            return frozen[path] if path in frozen else original_stat(path, *args, **kwargs)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+             mock.patch.object(Path, 'stat', autospec=True, side_effect=unchanged_metadata):
+            cloud.persist_evidence(self.config)
+            for name, (_, after) in files.items():
+                (runtime / name).write_text(after)
+            cloud.persist_evidence(self.config)
+        retained = Path(self.config['volume']['mount_path']) / 'runs/fixture-cloud/runtime'
+        for name, (_, after) in files.items():
+            self.assertEqual((retained / name).read_text(), after, name)
+
+    def test_unchanged_large_trace_is_neither_rehashed_nor_recopied_on_each_preservation(self):
+        trace = Path(self.config['fanout_config']['runtime_dir']) / 'node-001/results/browser/failure.zip'
+        trace.parent.mkdir(parents=True)
+        trace.write_bytes(b'x' * (1024 * 1024))
+        original_open, writes = Path.open, []
+        def observe_open(path, mode='r', *args, **kwargs):
+            if path.name == 'failure.zip.tmp' and mode == 'wb':
+                writes.append(path)
+            return original_open(path, mode, *args, **kwargs)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+             mock.patch.object(Path, 'open', autospec=True, side_effect=observe_open), \
+             mock.patch.object(cloud, 'sha256', wraps=cloud.sha256) as hashes:
+            cloud.persist_evidence(self.config)
+            cloud.persist_evidence(self.config)
+        self.assertEqual(len(writes), 1)
+        self.assertNotIn(trace, [call.args[0] for call in hashes.call_args_list])
+
     def test_foreign_runtime_batch_source_or_account_cannot_authorize_cleanup(self):
         for field in ('batch', 'source', 'account'):
             with self.subTest(field=field):
