@@ -22,6 +22,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -44,6 +45,10 @@ CHECKS = (
 BUNDLE_FILES = ('manifest.json', 'atomic-server-binary', 'client.oci.tar', 'checks.oci.tar', 'test-inventory.json')
 BUNDLE_CHECKS = frozenset(('js-test', 'js-typecheck', 'typedoc-publish', 'js-test-integration'))
 MUTATIONS = {'create', 'delete', 'import'}
+
+
+class CommandExecutionError(RuntimeError):
+    """A subprocess completed unsuccessfully, rather than a controller defect."""
 
 
 class PhaseFailure(RuntimeError):
@@ -92,8 +97,30 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def execute(args, timeout=120, **kwargs):
-    result = subprocess.run(args, capture_output=True, timeout=timeout, **kwargs)
+def execute(args, timeout=120, cancel=None, **kwargs):
+    if cancel is None:
+        result = subprocess.run(args, capture_output=True, timeout=timeout, **kwargs)
+    else:
+        cutoff = time.monotonic() + timeout
+        with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, **kwargs) as child:
+            try:
+                while True:
+                    cancel()
+                    remaining = cutoff - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(args, timeout)
+                    try:
+                        stdout, stderr = child.communicate(timeout=min(.1, remaining))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+            except BaseException:
+                # scp owns an ssh child too; kill/reap the whole local transfer.
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(child.pid, signal.SIGKILL)
+                child.communicate()
+                raise
+            result = subprocess.CompletedProcess(args, child.returncode, stdout, stderr)
     if result.returncode:
         program = Path(str(args[0])).name
         error = result.stderr.decode(errors='replace') if isinstance(result.stderr, bytes) else result.stderr
@@ -115,36 +142,38 @@ def execute(args, timeout=120, **kwargs):
                 if fields:
                     diagnostics.append(': '.join(' '.join(field.split())[:750] for field in fields))
             error = '; '.join(diagnostics)
-        raise RuntimeError('Command failed: ' + program + ' (exit ' + str(result.returncode) + '): '
+        raise CommandExecutionError('Command failed: ' + program + ' (exit ' + str(result.returncode) + '): '
                            + ((error or '').strip()[-1500:] or 'no diagnostic output'))
     return result.stdout
 
 
-def file_sha256(path):
+def file_sha256(path, check=None):
     value = hashlib.sha256()
     with Path(path).open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            if check:
+                check()
             value.update(chunk)
     return value.hexdigest()
 
 
-def validate_archive(path, source):
+def validate_archive(path, source, check=None):
     path = Path(path)
     if path.is_symlink() or any((path / 'bundle' / name).is_symlink() for name in BUNDLE_FILES):
         raise ValueError('archive payload must be materialized regular files')
     receipt = json.loads((path / 'build-receipt.json').read_text())
     if receipt.get('version') != 1:
         raise ValueError('unsupported successful build receipt version')
-    if ((path / 'COMPLETED').read_text().strip() != file_sha256(path / 'build-receipt.json')
+    if ((path / 'COMPLETED').read_text().strip() != file_sha256(path / 'build-receipt.json', check)
             or receipt.get('source_commit') != source or receipt.get('build_exit_code') != 0):
         raise ValueError('archive does not prove a successful matching build')
     manifest = json.loads((path / 'bundle/manifest.json').read_text())
     if (manifest.get('version') != 2 or manifest.get('sourceCommit') != source or manifest.get('platform') != 'linux/amd64'
-            or receipt.get('manifest_sha256') != file_sha256(path / 'bundle/manifest.json')
+            or receipt.get('manifest_sha256') != file_sha256(path / 'bundle/manifest.json', check)
             or set(manifest.get('files', {})) != set(BUNDLE_FILES) - {'manifest.json'}):
         raise ValueError('archive manifest provenance mismatch')
     for name, expected in manifest['files'].items():
-        if file_sha256(path / 'bundle' / name) != expected:
+        if file_sha256(path / 'bundle' / name, check) != expected:
             raise ValueError('archive payload hash mismatch: ' + name)
     return receipt, manifest
 
@@ -174,6 +203,8 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
+    if type(config.setdefault('host_bundle_backup', False)) is not bool:
+        raise ValueError('host_bundle_backup must be a boolean')
     for field in ('test_run_key', 'cache_namespace'):
         value = config.setdefault(field, '')
         if not isinstance(value, str) or value and not safe_slug(value):
@@ -446,14 +477,25 @@ class Controller:
                                        else self.config['doctl_config'])
         self.runner = Path(__file__).with_name('ci-fanout-runner.py')
         self.local_lock = threading.RLock()
+        self.backup_thread = None
+        self.backup_cancel = threading.Event()
         if self.path.exists() and self.read()['config'] != self.config:
             raise ValueError('configuration differs from the immutable batch state')
 
     @contextlib.contextmanager
-    def lock(self, name):
+    def lock(self, name, check=None):
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         with (self.root / (name + '.lock')).open('a') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+            if check is None:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+            else:
+                while True:
+                    check()
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        time.sleep(.05)
             yield
 
     def read(self):
@@ -757,12 +799,12 @@ runcmd:
         return execute(['ssh', *self.ssh_options(node, first), 'root@' + node['ip'], command],
                        timeout=timeout, input=input, text=True)
 
-    def scp(self, node_id, sources, destination, download=False, timeout=180):
+    def scp(self, node_id, sources, destination, download=False, timeout=180, cancel=None):
         node = self.read()['nodes'][node_id]
         remote = 'root@' + node['ip'] + ':'
         args = ([remote + str(source) for source in sources] + [str(destination)] if download else
                 [str(source) for source in sources] + [remote + str(destination)])
-        return execute(['scp', *self.ssh_options(node), *args], timeout=timeout, text=True)
+        return execute(['scp', *self.ssh_options(node), *args], timeout=timeout, text=True, cancel=cancel)
 
     def prepare(self, node_id):
         began = time.monotonic()
@@ -1173,9 +1215,49 @@ dagger version
         self.wait([builder, canary])
         self.source_inputs([builder, canary])
 
+    def start_bundle_backup(self, builder):
+        """Optional laptop backup never sits between verified sharing and tests."""
+        if self.backup_thread is not None:
+            raise RuntimeError('bundle backup already started')
+        self.node_update(builder, bundle_backup_status='running', bundle_backup_started_at=stamp())
+        def backup():
+            try:
+                archived = self.archive_bundle(builder)
+                if archived is None:
+                    raise RuntimeError('no successful build archive was produced')
+                self.node_update(builder, bundle_backup_status='completed')
+            except Exception as error:
+                self.node_update(builder, bundle_backup_status='failed', bundle_backup_error=str(error),
+                                 bundle_backup_fatal=not isinstance(error, (OSError, subprocess.SubprocessError, cf.CancelledError)))
+            finally:
+                self.node_update(builder, bundle_backup_finished_at=stamp())
+        self.backup_thread = threading.Thread(target=backup, name='optional-bundle-backup')
+        self.backup_thread.start()
+
+    def stop_bundle_backup(self, raise_fatal=False):
+        # Lock waits, SCP and payload hashing all observe this cancellation.
+        self.backup_cancel.set()
+        if self.backup_thread is not None:
+            self.backup_thread.join()
+        if raise_fatal:
+            for node in self.read()['nodes'].values():
+                if node.get('bundle_backup_fatal'):
+                    raise ValueError('bundle backup provenance failed: ' + node['bundle_backup_error'])
+
     def archive_bundle(self, builder):
-        """Persist a successful build outside every temporary Droplet before tests."""
-        with self.lock('bundle-archive'):
+        """Make a validated optional archive within 120s and the original deadline."""
+        cutoff = time.monotonic() + 120
+        def check():
+            state = self.read()
+            if self.backup_cancel.is_set() or state.get('stop_requested'):
+                raise cf.CancelledError('optional bundle backup cancelled for cleanup')
+            remaining = cutoff - time.monotonic()
+            if state.get('deadline'):
+                remaining = min(remaining, (dt.datetime.fromisoformat(state['deadline']) - utcnow()).total_seconds())
+            if remaining <= 0:
+                raise TimeoutError('optional bundle backup deadline reached')
+            return remaining
+        with self.lock('bundle-archive', check):
             state = self.read()
             node = state['nodes'][builder]
             result = node.get('phase_results', {}).get('build')
@@ -1186,22 +1268,31 @@ dagger version
                     or result.get('batch_key') != self.config['batch_key']
                     or not result.get('commands') or any(item.get('exit_code') != 0 for item in result['commands'])):
                 raise ValueError('original successful build phase provenance mismatch')
-            bundle = state.get('bundle') or self.read_bundle(builder)
+            bundle = state.get('bundle')
+            if not bundle:
+                raise ValueError('bundle backup requires an already verified build manifest')
             root = Path(self.config['artifact_archive_dir'])
             root.mkdir(parents=True, exist_ok=True, mode=0o700)
             entry = root / (self.config['source_commit'] + '-' + bundle['manifest_sha256'])
             if entry.exists():
                 try:
-                    validate_archive(entry, self.config['source_commit'])
-                except (ValueError, OSError, json.JSONDecodeError):
+                    validate_archive(entry, self.config['source_commit'], check)
+                except (ValueError, OSError, json.JSONDecodeError) as error:
+                    if isinstance(error, TimeoutError):
+                        raise
                     entry.rename(entry.with_name(entry.name + '.corrupt-' + uuid.uuid4().hex))
             if not entry.exists():
                 partial = root / ('.' + entry.name + '.' + uuid.uuid4().hex + '.partial')
                 (partial / 'bundle').mkdir(parents=True)
                 try:
-                    timeout = self.artifact_transfer_timeout(allow_stopped=state.get('stop_requested', False))
-                    self.scp(builder, ['/opt/atomic-ci/share/bundle/' + name for name in BUNDLE_FILES],
-                             partial / 'bundle', download=True, timeout=timeout)
+                    timeout = check()
+                    try:
+                        self.scp(builder, ['/opt/atomic-ci/share/bundle/' + name for name in BUNDLE_FILES],
+                                 partial / 'bundle', download=True, timeout=timeout, cancel=check)
+                    except CommandExecutionError as error:
+                        # Only an actual failed backup command becomes optional
+                        # IO; arbitrary controller RuntimeError stays fatal.
+                        raise OSError('optional bundle transfer failed: ' + str(error)) from error
                     execution = result.get('browser_build', {})
                     receipt = execution.get('original_build')
                     if receipt is None:
@@ -1214,14 +1305,15 @@ dagger version
                             'build_command':commands[-1]['command'], 'manifest_sha256':bundle['manifest_sha256'],
                             'origin':'observed-build-phase'}
                     (partial / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
-                    checksum = file_sha256(partial / 'build-receipt.json')
+                    checksum = file_sha256(partial / 'build-receipt.json', check)
                     if execution.get('original_build_receipt_sha256', checksum) != checksum:
                         raise ValueError('original successful build receipt checksum differs')
                     (partial / 'COMPLETED').write_text(checksum + '\n')
                     (partial / 'archive-provenance.json').write_text(json.dumps({
                         'batch_key':self.config['batch_key'], 'node':builder, 'account':node['account'],
                         'droplet_id':node.get('droplet_id'), 'build_phase':result, 'archived_at':stamp()}, indent=2))
-                    validate_archive(partial, self.config['source_commit'])
+                    validate_archive(partial, self.config['source_commit'], check)
+                    check()
                     partial.replace(entry)
                 finally:
                     if partial.exists():
@@ -1454,30 +1546,13 @@ systemctl reload ssh
 
     def _cleanup(self, reason='manual cleanup', successful=False):
         self.update(lambda state: state.update(stop_requested=True, stop_reason=reason))
+        self.stop_bundle_backup()
         errors = []
         with self.lock('resources'):
             try:
                 self.recover_resources()
             except Exception as error:
                 errors.append('resource reconciliation: ' + str(error))
-        for key, node in self.read()['nodes'].items():
-            if node.get('phase_kind') == 'builder' and not node.get('phase_results', {}).get('build'):
-                try:
-                    raw = self.ssh(key, 'if test -f /opt/atomic-ci/results/build/result.json; then cat /opt/atomic-ci/results/build/result.json; fi')
-                    if raw.strip():
-                        result = json.loads(raw)
-                        if (result.get('source_commit') == self.config['source_commit']
-                                and result.get('node_id') == key and result.get('batch_key') == self.config['batch_key']):
-                            self.update(lambda state:state['nodes'][key]['phase_results'].update(build=result))
-                            node = self.read()['nodes'][key]
-                except Exception as error:
-                    self.node_update(key, bundle_backup_error=str(error))
-            if node.get('phase_results', {}).get('build', {}).get('status') == 'passed':
-                try:
-                    self.archive_bundle(key)
-                except Exception as error:
-                    self.node_update(key, bundle_backup_error=str(error))
-                    self.event('Successful build backup failed before bounded cleanup: ' + str(error))
         nodes = [key for key, node in self.read()['nodes'].items()
                  if node.get('droplet_id') and not node.get('deleted_at')]
 
@@ -1622,9 +1697,14 @@ systemctl reload ssh
                 time.sleep(5)
             build.result()
             self.read_bundle(builder)
-            self.archive_bundle(builder)
             self.share(builder, check_nodes)
             checks[builder] = check_pool.submit(self.run_check_worker, builder, pending)
+            # Keep the prepared bundle on DO for peer distribution. Downloading
+            # a laptop cache is explicit opt-in; existing archives may restore.
+            if self.config['host_bundle_backup']:
+                self.start_bundle_backup(builder)
+            else:
+                self.node_update(builder, bundle_backup_status='disabled')
 
             def run_browser(key):
                 if key in checks:
@@ -1644,6 +1724,7 @@ systemctl reload ssh
             jobs.extend(browser_pool.submit(run_browser, key) for key in remaining)
             for future in cf.as_completed(jobs):
                 future.result()
+            self.stop_bundle_backup(raise_fatal=True)
             self.finish_validation(node_ids)
             self.cleanup('all checks and complete browser suite passed', successful=True)
         except BaseException as error:

@@ -102,6 +102,50 @@ class CommandErrorTests(unittest.TestCase):
         self.assertIn('safe provider diagnostic', self.failure(output, b'', ['/usr/local/bin/doctl']))
         self.assertNotIn('safe provider diagnostic', self.failure(output, b'', ['other-program']))
 
+    def test_cancellable_command_reaps_its_child_on_cancel_and_timeout(self):
+        for timed_out in (False, True):
+            with self.subTest(timed_out=timed_out), tempfile.TemporaryDirectory() as temp:
+                pid_path = Path(temp) / 'pid'
+                def cancel():
+                    if pid_path.exists() and not timed_out:
+                        raise fanout.cf.CancelledError('backup cancelled')
+                script = 'import os,time,pathlib; pathlib.Path(' + repr(str(pid_path)) + ').write_text(str(os.getpid())); time.sleep(5)'
+                failure = subprocess.TimeoutExpired if timed_out else fanout.cf.CancelledError
+                with self.assertRaises(failure):
+                    fanout.execute([fanout.sys.executable, '-c', script], timeout=.25, cancel=cancel)
+                self.assertTrue(pid_path.exists())
+                with self.assertRaises(ProcessLookupError):
+                    fanout.os.kill(int(pid_path.read_text()), 0)
+
+    def test_cancellable_command_kills_grandchild_inheriting_transfer_pipes(self):
+        # Like scp -> ssh: the grandchild inherits stdout/stderr, so killing
+        # only the immediate child would leave communicate() waiting for EOF.
+        for timed_out in (False, True):
+            with self.subTest(timed_out=timed_out), tempfile.TemporaryDirectory() as temp:
+                pid_path = Path(temp) / 'pids'
+                def cancel():
+                    if pid_path.exists() and not timed_out:
+                        raise fanout.cf.CancelledError('backup cancelled')
+                script = ('import os,pathlib,subprocess,sys,time; '
+                          'grandchild=subprocess.Popen([sys.executable,"-c","import time; time.sleep(3)"]); '
+                          'pathlib.Path(' + repr(str(pid_path)) + ').write_text(str(os.getpid())+" "+str(grandchild.pid)); '
+                          'time.sleep(3)')
+                began = fanout.time.monotonic()
+                failure = subprocess.TimeoutExpired if timed_out else fanout.cf.CancelledError
+                with self.assertRaises(failure):
+                    fanout.execute([fanout.sys.executable, '-c', script], timeout=.5, cancel=cancel)
+                self.assertLess(fanout.time.monotonic() - began, 2)
+                self.assertTrue(pid_path.exists())
+                for pid in map(int, pid_path.read_text().split()):
+                    status = ''
+                    for _ in range(20):
+                        observed = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True, text=True)
+                        status = observed.stdout.strip()
+                        if not status or status.startswith('Z'):
+                            break
+                        fanout.time.sleep(.025)
+                    self.assertTrue(not status or status.startswith('Z'), f'owned transfer process {pid} still running: {status}')
+
     def test_success_still_returns_original_stdout_without_parsing(self):
         result = subprocess.CompletedProcess(['doctl'], 0, stdout=b'original output', stderr=b'')
         with mock.patch.object(fanout.subprocess, 'run', return_value=result):
@@ -216,6 +260,7 @@ class FakeController(fanout.Controller):
     def archive_bundle(self, builder):
         self.events.append(('archive', builder))
         self.node_update(builder, bundle_archived_at=fanout.stamp())
+        return self.root / 'fake-validated-archive'
 
     def restore_bundle(self, builder):
         self.events.append(('restore', builder))
@@ -495,6 +540,15 @@ class ResourceConfigTests(unittest.TestCase):
                 for value in bad_values:
                     with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                         fanout.validate_config(dict(settings, **{field: value}))
+
+    def test_host_bundle_backup_is_boolean_and_disabled_by_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = config(Path(temp), 4)
+            self.assertIs(settings['host_bundle_backup'], False)
+            self.assertIs(fanout.validate_config(dict(settings, host_bundle_backup=True))['host_bundle_backup'], True)
+            for value in (None, 0, 1, 'false', [], {}):
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'host_bundle_backup'):
+                    fanout.validate_config(dict(settings, host_bundle_backup=value))
 
 
 class AbsoluteDeadlineTests(unittest.TestCase):
@@ -1412,13 +1466,15 @@ class LifecycleTests(unittest.TestCase):
                 self.controller.run()
         created = [args for _, args in self.api.mutations if args[:3] == ['compute', 'droplet', 'create']]
         self.assertEqual(len(created), 11)
-        archive = self.controller.events.index(('archive', 'node-001'))
+        shared = next(index for index, event in enumerate(self.controller.events)
+                      if isinstance(event, tuple) and event[0] == 'share')
         browser = self.controller.events.index(('node-002', 'browser'))
-        self.assertLess(archive, browser)
+        self.assertLess(shared, browser)
         self.assertEqual(sum(len(value) for value in self.api.droplets.values()), 0)
         self.assertEqual(self.controller.read()['status'], 'stopped')
 
     def test_archive_preserves_real_payload_and_original_build_evidence_then_restores(self):
+        self.controller.config['artifact_archive_dir'] = str(self.root / 'archives')
         self.initialize()
         self.controller.create('node-001')
         payload = self.root / 'payload'
@@ -1434,7 +1490,7 @@ class LifecycleTests(unittest.TestCase):
         self.controller.update(lambda state:state.update(bundle={'manifest_sha256':fanout.file_sha256(payload / 'manifest.json')}))
         self.controller.update(lambda state:state['nodes']['node-001']['phase_results'].update(build=result))
         self.controller.update(lambda state:state.update(deadline=(fanout.utcnow()+dt.timedelta(seconds=10)).isoformat()))
-        def download(node, sources, destination, download=False, timeout=180):
+        def download(node, sources, destination, download=False, timeout=180, cancel=None):
             self.assertTrue(download)
             self.assertGreater(timeout,0)
             self.assertLessEqual(timeout,10)
@@ -1453,7 +1509,9 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.controller.read()['nodes']['node-001']['restored_bundle_archive'], str(archived))
         self.controller.update(lambda state:state.update(deadline=(fanout.utcnow()-dt.timedelta(seconds=1)).isoformat()))
         with mock.patch.object(self.controller,'scp') as no_copy:
-            self.assertEqual(fanout.Controller.archive_bundle(self.controller,'node-001'),archived)
+            with self.assertRaises(TimeoutError):
+                fanout.Controller.archive_bundle(self.controller,'node-001')
+            self.assertTrue(archived.is_dir())
             no_copy.assert_not_called()
             preserved = archived.with_name('preserved-successful-archive')
             archived.rename(preserved)
@@ -1465,15 +1523,164 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'payload hash mismatch'):
             fanout.validate_archive(archived, SHA)
 
-    def test_failed_backup_is_reported_without_stranding_paid_hosts(self):
-        self.initialize()
-        self.controller.create('node-001')
-        self.controller.update(lambda state:state['nodes']['node-001']['phase_results'].update({'build':{'status':'passed'}}))
-        with mock.patch.object(self.controller, 'archive_bundle', side_effect=TimeoutError('bounded archive copy failed')):
-            self.controller.cleanup('fixture failure')
+    def test_default_ci_completes_without_host_backup_but_still_shares_bundle(self):
+        self.controller = FakeController(config(self.root, 4), self.api)
+        with mock.patch.object(self.controller, 'archive_bundle') as archive, mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            self.controller.run()
+        archive.assert_not_called()
         state = self.controller.read()
-        self.assertIn('bounded archive', state['nodes']['node-001']['bundle_backup_error'])
-        self.assertTrue(state['nodes']['node-001']['deletion_verified'])
+        self.assertEqual(state['status'], 'passed')
+        self.assertTrue(state['validation_passed_at'])
+        self.assertEqual(state['full_browser_test_count'], 4)
+        self.assertEqual(state['nodes']['node-001']['bundle_backup_status'], 'disabled')
+        self.assertNotIn('bundle_backup_started_at', state['nodes']['node-001'])
+        self.assertIsNone(self.controller.backup_thread)
+        self.assertIn(('restore', 'node-001'), self.controller.events)
+        self.assertTrue(any(isinstance(event, tuple) and event[0] == 'share' for event in self.controller.events))
+        checks = [event[1] for event in self.controller.events if isinstance(event, tuple)
+                  and isinstance(event[1], str) and event[1].startswith('check-')]
+        self.assertCountEqual(checks, ['check-' + name for name, _ in fanout.CHECKS])
+        self.assertEqual(sum(map(len, self.api.droplets.values())), 0)
+
+    def test_slow_optional_backup_does_not_block_share_prepared_checks_or_browsers(self):
+        self.controller = FakeController(dict(config(self.root, 4), host_bundle_backup=True), self.api)
+        started = threading.Event()
+        browser_during_backup = threading.Event()
+        def slow_backup(builder):
+            self.assertTrue(any(isinstance(event, tuple) and event[0] == 'share' for event in self.controller.events))
+            started.set()
+            if not self.controller.backup_cancel.wait(5):
+                raise AssertionError('CI waited for the optional backup')
+            raise fanout.cf.CancelledError('optional backup cancelled')
+        original = self.controller.run_browser_shard
+        def browser(key, builder):
+            self.assertTrue(started.wait(1))
+            self.assertTrue(self.controller.backup_thread.is_alive())
+            browser_during_backup.set()
+            return original(key, builder)
+        with mock.patch.object(self.controller, 'archive_bundle', side_effect=slow_backup), mock.patch.object(self.controller, 'run_browser_shard', side_effect=browser), mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            self.controller.run()
+        state = self.controller.read()
+        self.assertTrue(browser_during_backup.is_set())
+        self.assertEqual(state['status'], 'passed')
+        self.assertEqual(state['full_browser_test_count'], 4)
+        self.assertTrue(state['validation_passed_at'])
+        self.assertEqual(state['nodes']['node-001']['bundle_backup_status'], 'failed')
+        self.assertFalse(self.controller.backup_thread.is_alive())
+        checks = [event[1] for event in self.controller.events if isinstance(event, tuple)
+                  and isinstance(event[1], str) and event[1].startswith('check-')]
+        self.assertCountEqual(checks, ['check-' + name for name, _ in fanout.CHECKS])
+        self.assertEqual(sum(map(len, self.api.droplets.values())), 0)
+
+    def test_backup_io_failure_is_nonfatal_but_provenance_failure_remains_fatal(self):
+        for failure, check_failed in ((OSError('laptop disk unavailable'), False),
+                                      (OSError('laptop disk unavailable'), True),
+                                      (ValueError('archive manifest provenance mismatch'), False)):
+            with self.subTest(failure=failure, check_failed=check_failed), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                (root / 'probe').mkdir()
+                (root / 'probe/dagger.json').write_text('{}')
+                controller = FakeController(dict(config(root, 4), host_bundle_backup=True), FakeAPI())
+                if check_failed:
+                    controller.fail_checks = {'check-rust-fmt'}
+                with mock.patch.object(controller, 'archive_bundle', side_effect=failure), mock.patch.object(fanout.subprocess, 'Popen') as process:
+                    process.return_value.poll.return_value = 0
+                    process.return_value.pid = 12345
+                    if isinstance(failure, ValueError):
+                        with self.assertRaisesRegex(ValueError, 'provenance'):
+                            controller.run()
+                    elif check_failed:
+                        with self.assertRaises(fanout.CIValidationFailure):
+                            controller.run()
+                    else:
+                        controller.run()
+                state = controller.read()
+                self.assertEqual(state['nodes']['node-001']['bundle_backup_status'], 'failed')
+                self.assertIn(str(failure), state['nodes']['node-001']['bundle_backup_error'])
+                self.assertNotIn('bundle_archived_at', state['nodes']['node-001'])
+                self.assertEqual('validation_passed_at' in state, not isinstance(failure, ValueError) and not check_failed)
+                self.assertFalse(controller.backup_thread.is_alive())
+                self.assertEqual(sum(map(len, controller.api.droplets.values())), 0)
+
+    def test_backup_programming_error_or_missing_archive_cannot_be_ignored(self):
+        for outcome in (RuntimeError('unexpected controller defect'), None):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temp:
+                controller = FakeController(config(Path(temp), 4), FakeAPI())
+                controller.initialize(controller.plan())
+                patch = {'side_effect': outcome} if isinstance(outcome, Exception) else {'return_value': outcome}
+                with mock.patch.object(controller, 'archive_bundle', **patch):
+                    controller.start_bundle_backup('node-001')
+                    controller.backup_thread.join(2)
+                    with self.assertRaisesRegex(ValueError, 'unexpected controller defect|no successful build archive'):
+                        controller.stop_bundle_backup(raise_fatal=True)
+                node = controller.read()['nodes']['node-001']
+                self.assertEqual(node['bundle_backup_status'], 'failed')
+                self.assertTrue(node['bundle_backup_fatal'])
+                self.assertNotIn('bundle_archived_at', node)
+                self.assertFalse(controller.backup_thread.is_alive())
+
+    def test_actual_failed_backup_command_is_optional_io_with_no_published_archive(self):
+        self.controller.config['artifact_archive_dir'] = str(self.root / 'archives')
+        self.initialize()
+        self.controller.node_update('node-001', ip='127.0.0.1')
+        result = {'status': 'passed', 'source_commit': SHA, 'node_id': 'node-001', 'phase': 'build',
+                  'batch_key': self.controller.config['batch_key'], 'commands': [{'exit_code': 0}]}
+        self.controller.update(lambda state: state['nodes']['node-001']['phase_results'].update(build=result))
+        self.controller.update(lambda state: state.update(bundle={'manifest_sha256': 'b' * 64}))
+        with mock.patch.object(self.controller, 'archive_bundle', side_effect=lambda builder: fanout.Controller.archive_bundle(self.controller, builder)), mock.patch.object(fanout, 'execute', side_effect=fanout.CommandExecutionError('Command failed: scp (exit 1): permission denied')) as command:
+            self.controller.start_bundle_backup('node-001')
+            self.controller.backup_thread.join(2)
+            self.controller.stop_bundle_backup(raise_fatal=True)
+        self.assertEqual(command.call_args.args[0][0], 'scp')
+        node = self.controller.read()['nodes']['node-001']
+        self.assertEqual(node['bundle_backup_status'], 'failed')
+        self.assertFalse(node['bundle_backup_fatal'])
+        self.assertIn('permission denied', node['bundle_backup_error'])
+        self.assertNotIn('bundle_archived_at', node)
+        self.assertEqual(list(Path(self.controller.config['artifact_archive_dir']).iterdir()), [])
+
+    def test_cleanup_cancels_backup_waiting_on_an_existing_archive_lock(self):
+        self.initialize()
+        attempted = threading.Event()
+        def archive(builder):
+            attempted.set()
+            return fanout.Controller.archive_bundle(self.controller, builder)
+        with self.controller.lock('bundle-archive'), mock.patch.object(self.controller, 'archive_bundle', side_effect=archive):
+            self.controller.start_bundle_backup('node-001')
+            self.assertTrue(attempted.wait(1))
+            self.controller.stop_bundle_backup()
+            self.assertFalse(self.controller.backup_thread.is_alive())
+        self.assertEqual(self.controller.read()['nodes']['node-001']['bundle_backup_status'], 'failed')
+
+    def test_timed_out_backup_removes_partial_and_never_claims_completed_archive(self):
+        self.controller.config['artifact_archive_dir'] = str(self.root / 'archives')
+        self.initialize()
+        result = {'status': 'passed', 'source_commit': SHA, 'node_id': 'node-001', 'phase': 'build',
+                  'batch_key': self.controller.config['batch_key'], 'commands': [{'exit_code': 0}]}
+        self.controller.update(lambda state: state['nodes']['node-001']['phase_results'].update(build=result))
+        self.controller.update(lambda state: state.update(bundle={'manifest_sha256': 'b' * 64},
+            deadline=(fanout.utcnow() + dt.timedelta(hours=1)).isoformat()))
+        def interrupted_copy(node, sources, destination, download=False, timeout=180, cancel=None):
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, 120)
+            self.assertTrue(callable(cancel))
+            (destination / 'client.oci.tar').write_text('incomplete transfer')
+            raise subprocess.TimeoutExpired(['scp'], timeout)
+        with mock.patch.object(self.controller, 'archive_bundle', side_effect=lambda builder: fanout.Controller.archive_bundle(self.controller, builder)), mock.patch.object(self.controller, 'scp', side_effect=interrupted_copy):
+            self.controller.start_bundle_backup('node-001')
+            self.controller.backup_thread.join(2)
+            self.controller.stop_bundle_backup()
+        node = self.controller.read()['nodes']['node-001']
+        self.assertEqual(node['bundle_backup_status'], 'failed')
+        self.assertFalse(self.controller.backup_thread.is_alive())
+        self.assertNotIn('bundle_archived_at', node)
+        self.assertEqual(list(Path(self.controller.config['artifact_archive_dir']).iterdir()), [])
+        with self.controller.lock('bundle-archive'):
+            pass
 
     def test_success_runs_checks_once_and_all_twenty_distinct_shards_then_cleans(self):
         with mock.patch.object(fanout.subprocess, 'Popen') as process:

@@ -193,6 +193,23 @@ crates is a remaining optimization; do not remove the timestamp guard blindly.
 The original failures and fixes are traced in
 [cargo-cache-history.md](cargo-cache-history.md).
 
+## Optional laptop backup
+
+Large build artifacts are shared directly between DO machines after manifest and
+source validation. Laptop backup is disabled by default (`host_bundle_backup:
+false`), so a slow home connection cannot block check or browser execution.
+Existing completed host archives can still be restored. When explicitly enabled,
+the backup runs in the background with a 120-second budget clipped to the
+campaign deadline. Cleanup cancels and joins it, kills its local transfer process
+group and discards partial files. IO/timeouts are reported as backup failures;
+invalid source/manifest/receipt proof remains fatal. Only a fully validated
+archive is eligible for reuse.
+
+The temporary builder's cache disappears when its VM is deleted unless it is
+explicitly preserved in authorized DO storage. Persistent Spaces or snapshot
+storage has its own retention/cost scope; never silently keep a paid VM to retain
+a build. The current runner does not provide a Spaces archive backend.
+
 ## Monitor, interpret and clean up
 
 Keep the controller alive and the laptop awake if it owns orchestration; an
