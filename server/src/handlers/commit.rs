@@ -58,6 +58,10 @@ pub async fn post_commit(
     let message = apply_commit_json(store, &context.origin, &body, None).await?;
 
     Ok(HttpResponse::Ok()
+        .insert_header((
+            super::storage_receipt::CAPABILITY_HEADER,
+            atomic_lib::sync::protocol::CAP_SERVER_STORAGE_RECEIPTS_V1,
+        ))
         .insert_header((crate::write_load::PACE_HEADER, guard.pace_ms().to_string()))
         .content_type("application/ad+json")
         .body(message))

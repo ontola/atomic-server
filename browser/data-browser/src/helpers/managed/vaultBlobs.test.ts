@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   backupDrive,
+  backupBlobs,
   restoreDrive,
   type VaultBlobDb,
   type VaultBlobPlan,
@@ -63,7 +64,7 @@ function fakeDb(
       objectsUnreadable: 0,
     })),
     vaultCommitSegment: vi.fn(),
-    vaultFileHashes: vi.fn(async () => referenced),
+    vaultFileHashes: vi.fn(async (_drive?: string) => referenced),
     vaultBlobPresent: vi.fn(async (hash: string) => local.has(hash)),
     vaultBlobOpen: vi.fn(
       async (
@@ -83,7 +84,7 @@ function fakeDb(
           size: bytes.length,
           blobId: idOf(hash),
           chunks: Array.from(
-            { length: Math.ceil(bytes.length / CHUNK) },
+            { length: Math.max(1, Math.ceil(bytes.length / CHUNK)) },
             (_, i) => {
               const length = Math.min(CHUNK, bytes.length - i * CHUNK);
 
@@ -99,7 +100,12 @@ function fakeDb(
       },
     ),
     vaultBlobChunk: vi.fn(
-      async (hash: string, _key: Uint8Array, _epoch: number, i: number) => {
+      async (
+        hash: string,
+        _key: Uint8Array,
+        _epoch: number,
+        i: number,
+      ): Promise<Uint8Array> => {
         expect(open).toBe(hash);
         const plain = local.get(hash)!.slice(i * CHUNK, (i + 1) * CHUNK);
 
@@ -296,6 +302,260 @@ const stored = (hash: string, n: number) => ({
 });
 
 describe('backing up file bytes', () => {
+  it('backs up an empty file as one authenticated sealed chunk before confirming its hash', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(0) });
+    const p = portal();
+    const confirmed = vi.fn(async (_hashes: readonly string[]) => {});
+    await backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed });
+    expect(p.calls.filter(call => call.method === 'PUT')).toHaveLength(1);
+    expect(p.calls.find(call => call.method === 'PUT')!.body).toHaveLength(
+      OVERHEAD,
+    );
+    expect(confirmed).toHaveBeenCalledExactlyOnceWith([HASH_A]);
+  });
+
+  it('confirms only the exact hashes after all new sealed chunks and confirmation succeed', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
+    const p = portal();
+    const confirmed = vi.fn(async (_hashes: readonly string[]) => {});
+    await backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed });
+    expect(confirmed).toHaveBeenCalledExactlyOnceWith([HASH_A]);
+    expect(urls(p, '/confirm-upload')).toHaveLength(1);
+  });
+  it('does not turn cached/listed chunk presence into proof without complete decrypt verification', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(8).fill(1) });
+    const p = portal({
+      objects: [stored(HASH_A, 0), stored(HASH_A, 1)],
+      downloads: {
+        [key(idOf(HASH_A), 0)]: new Uint8Array([0xff]),
+        [key(idOf(HASH_A), 1)]: new Uint8Array([SEALED]),
+      },
+    });
+    const confirmed = vi.fn(async (_hashes: readonly string[]) => {});
+    await backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed });
+    expect(db.vaultBlobRestore).toHaveBeenCalledOnce();
+    expect(confirmed).not.toHaveBeenCalled();
+    expect(p.calls.filter(call => call.method === 'PUT')).toHaveLength(0);
+  });
+  it('verifies every reused encrypted chunk before confirming the expected plain hash', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(8).fill(1) });
+    portal({
+      objects: [stored(HASH_A, 0), stored(HASH_A, 1)],
+      downloads: {
+        [key(idOf(HASH_A), 0)]: new Uint8Array([SEALED]),
+        [key(idOf(HASH_A), 1)]: new Uint8Array([SEALED]),
+      },
+    });
+    const confirmed = vi.fn(async (_hashes: readonly string[]) => {});
+    await backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed });
+    expect(db.vaultBlobRestore).toHaveBeenCalledWith(
+      PASS.driveKey,
+      1,
+      idOf(HASH_A),
+      expect.arrayContaining([expect.any(Uint8Array)]),
+      [HASH_A],
+    );
+    expect(confirmed).toHaveBeenCalledExactlyOnceWith([HASH_A]);
+  });
+  it('withholds proof on failed upload and isolates diagnostic callback failures', async () => {
+    const db = fakeDb({ [HASH_A]: new Uint8Array(4).fill(1) });
+    const p = portal({ putStatus: 503 });
+    const confirmed = vi.fn(async () => {
+      throw new Error('ledger unavailable');
+    });
+    await expect(
+      backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed }),
+    ).rejects.toThrow('503');
+    expect(confirmed).not.toHaveBeenCalled();
+    p.putStatus = 200;
+    await expect(
+      backupDrive({ db, ...PASS, onAttachmentHashesConfirmed: confirmed }),
+    ).resolves.toMatchObject({ blobs: { uploaded: 1 } });
+    expect(confirmed).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a second drive out of the shared file cache until the first drive closes it', async () => {
+    const db = fakeDb({
+      [HASH_A]: new Uint8Array(4),
+      [HASH_B]: new Uint8Array(4),
+    });
+    db.vaultFileHashes.mockImplementation(async drive =>
+      drive === 'drive-a' ? [HASH_A] : [HASH_B],
+    );
+    portal();
+    const closeStarted = Promise.withResolvers<void>();
+    const finishClose = Promise.withResolvers<void>();
+    const finishSecondChunk = Promise.withResolvers<void>();
+    const close = db.vaultBlobClose.getMockImplementation()!;
+    const chunk = db.vaultBlobChunk.getMockImplementation()!;
+    db.vaultBlobClose.mockImplementationOnce(async () => {
+      closeStarted.resolve();
+      await finishClose.promise;
+      await close();
+    });
+    db.vaultBlobChunk.mockImplementation(async (...args) => {
+      if (args[0] === HASH_B) await finishSecondChunk.promise;
+
+      return chunk(...args);
+    });
+    const first = backupBlobs({
+      db,
+      ...PASS,
+      keyEpoch: 1,
+      driveSubject: 'drive-a',
+    });
+    await closeStarted.promise;
+    const second = backupBlobs({
+      db,
+      ...PASS,
+      keyEpoch: 1,
+      driveSubject: 'drive-b',
+      drivePseudonym: 'second-vault',
+    });
+    const results = Promise.allSettled([first, second]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const secondOpenedBeforeClose = db.opened.includes(HASH_B);
+    finishClose.resolve();
+    finishSecondChunk.resolve();
+    const outcomes = await results;
+    expect(secondOpenedBeforeClose).toBe(false);
+    expect(outcomes).toEqual([
+      { status: 'fulfilled', value: expect.objectContaining({ uploaded: 1 }) },
+      { status: 'fulfilled', value: expect.objectContaining({ uploaded: 1 }) },
+    ]);
+  });
+
+  it.each(['failure', 'abort'] as const)(
+    'releases the next drive after the active pass ends with %s',
+    async ending => {
+      const db = fakeDb({
+        [HASH_A]: new Uint8Array(4),
+        [HASH_B]: new Uint8Array(4),
+      });
+      db.vaultFileHashes.mockImplementation(async drive =>
+        drive === 'drive-a' ? [HASH_A] : [HASH_B],
+      );
+      portal();
+      const sealing = Promise.withResolvers<Uint8Array>();
+      const controller = new AbortController();
+      db.vaultBlobChunk.mockReturnValueOnce(sealing.promise);
+      const first = backupBlobs({
+        db,
+        ...PASS,
+        keyEpoch: 1,
+        driveSubject: 'drive-a',
+        signal: controller.signal,
+      });
+      const rejected =
+        ending === 'failure'
+          ? expect(first).rejects.toThrow('Sealing failed')
+          : expect(first).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(db.vaultBlobChunk).toHaveBeenCalledOnce());
+      const second = backupBlobs({
+        db,
+        ...PASS,
+        keyEpoch: 1,
+        driveSubject: 'drive-b',
+        drivePseudonym: 'second-vault',
+      });
+
+      if (ending === 'failure') sealing.reject(new Error('Sealing failed'));
+      else {
+        controller.abort();
+        sealing.resolve(new Uint8Array(CHUNK + OVERHEAD).fill(SEALED));
+      }
+
+      await rejected;
+      await expect(second).resolves.toMatchObject({ uploaded: 1 });
+      expect(db.vaultBlobClose).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('does not hold a different database’s file cache while one database closes', async () => {
+    const firstDb = fakeDb({ [HASH_A]: new Uint8Array(4) });
+    const secondDb = fakeDb({ [HASH_B]: new Uint8Array(4) });
+    portal();
+    const closeStarted = Promise.withResolvers<void>();
+    const finishClose = Promise.withResolvers<void>();
+    const close = firstDb.vaultBlobClose.getMockImplementation()!;
+    firstDb.vaultBlobClose.mockImplementationOnce(async () => {
+      closeStarted.resolve();
+      await finishClose.promise;
+      await close();
+    });
+    const first = backupBlobs({ db: firstDb, ...PASS, keyEpoch: 1 });
+    await closeStarted.promise;
+
+    try {
+      await expect(
+        backupBlobs({
+          db: secondDb,
+          ...PASS,
+          keyEpoch: 1,
+          drivePseudonym: 'second-vault',
+        }),
+      ).resolves.toMatchObject({ uploaded: 1 });
+      expect(secondDb.vaultBlobClose).toHaveBeenCalledOnce();
+    } finally {
+      finishClose.resolve();
+      await first;
+    }
+  });
+
+  it('skips a queued aborted drive and releases the following drive without opening or closing its cache', async () => {
+    const db = fakeDb({
+      [HASH_A]: new Uint8Array(4),
+      [HASH_B]: new Uint8Array(4),
+    });
+    db.vaultFileHashes.mockImplementation(async drive =>
+      drive === 'drive-a' ? [HASH_A] : [HASH_B],
+    );
+    portal();
+    const closeStarted = Promise.withResolvers<void>();
+    const finishClose = Promise.withResolvers<void>();
+    const close = db.vaultBlobClose.getMockImplementation()!;
+    db.vaultBlobClose.mockImplementationOnce(async () => {
+      closeStarted.resolve();
+      await finishClose.promise;
+      await close();
+    });
+    const first = backupBlobs({
+      db,
+      ...PASS,
+      keyEpoch: 1,
+      driveSubject: 'drive-a',
+    });
+    await closeStarted.promise;
+    const cancelled = new AbortController();
+    const second = backupBlobs({
+      db,
+      ...PASS,
+      keyEpoch: 1,
+      driveSubject: 'cancelled-drive',
+      signal: cancelled.signal,
+    });
+    const rejected = expect(second).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    const third = backupBlobs({
+      db,
+      ...PASS,
+      keyEpoch: 1,
+      driveSubject: 'drive-b',
+      drivePseudonym: 'third-vault',
+    });
+    cancelled.abort();
+    finishClose.resolve();
+    await first;
+    await rejected;
+    await expect(third).resolves.toMatchObject({ uploaded: 1 });
+    expect(db.vaultFileHashes.mock.calls.map(call => call[0])).toEqual([
+      'drive-a',
+      'drive-b',
+    ]);
+    expect(db.vaultBlobClose).toHaveBeenCalledTimes(2);
+  });
+
   it('uploads sealed chunks under the per-vault id and confirms them together', async () => {
     const db = fakeDb({ [HASH_A]: new Uint8Array(10).fill(1) });
     const p = portal();

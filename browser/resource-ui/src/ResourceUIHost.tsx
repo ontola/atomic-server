@@ -36,6 +36,7 @@ export type WorkspaceSection = 'connections' | 'automations';
 
 /** Shell integration only; record fields and all built-in table views remain SDK-aware components. */
 export interface ResourceUIHost {
+  ResourceSyncIndicator?: ComponentType<{ resource: Resource }>;
   settings: {
     drive: string;
     contentLanguage: string;

@@ -149,7 +149,13 @@ function ResourceLines({ items }: { items: ActivityRow[] }): JSX.Element {
             key={subject}
             onClickCapture={
               kind === 'commented'
-                ? () => setPanelOpen('comments', true)
+                ? event => {
+                    if (
+                      (event.target as Element).closest('[data-resource-sync]')
+                    )
+                      return;
+                    setPanelOpen('comments', true);
+                  }
                 : undefined
             }
           >

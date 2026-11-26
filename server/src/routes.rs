@@ -349,7 +349,18 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .guard(guard::Method(Method::POST))
             .to(handlers::commit::post_commit),
     )
+    .service(
+        web::resource("/storage-receipt")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::storage_receipt::post_storage_receipt),
+    )
     .service(web::resource("/download/{path:[^{}]+}").to(handlers::download::handle_download))
+    .service(
+        web::resource("/attachment-evidence")
+            .app_data(web::PayloadConfig::new(64 * 1024))
+            .guard(guard::Method(Method::POST))
+            .to(handlers::attachment_evidence::attachment_evidence),
+    )
     .service(
         web::resource("/blob/{hash}")
             .guard(guard::Method(Method::PUT))
@@ -387,6 +398,10 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     .service(web::resource("/ws").to(handlers::web_sockets::web_socket_handler))
     .service(web::resource("/genesis").route(web::get().to(handlers::genesis::handle_genesis)))
+    .service(
+        web::resource("/drive-sync-confirmation")
+            .to(handlers::drive_sync_confirmation::handle_drive_sync_confirmation),
+    )
     .service(web::resource("/drive-usage").to(handlers::drive_usage::handle_drive_usage))
     .service(
         web::resource("/drive-usage/breakdown")

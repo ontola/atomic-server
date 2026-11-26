@@ -2008,3 +2008,285 @@ describe('compacting the backup', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('per-resource backup receipts', () => {
+  const exportedVersions = { 'did:ad:changed': { '41': 3 } };
+
+  function exportedObject(kind: 'pack' | 'checkpoint' = 'pack') {
+    return {
+      ...(kind === 'pack' ? sealedPack(PACK_KEY) : sealedCheckpoint(CKPT_KEY)),
+      resourceVersions: structuredClone(exportedVersions),
+    };
+  }
+
+  function receiptDb(
+    object: ReturnType<typeof exportedObject> | null,
+  ): VaultCapableDb {
+    return {
+      vaultExport: vi.fn(async () => object),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+  }
+
+  function receiptNetwork(
+    object: ReturnType<typeof exportedObject>,
+    failedStep?: 'put' | 'confirm' | 'publish',
+  ) {
+    return mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'receipt-object',
+                object_key: object.objectKey,
+                url: 'https://s3.test/receipt-object',
+                method: 'PUT',
+                headers: [],
+                size_bytes: object.sealed.length,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (
+        (failedStep === 'put' && url === 'https://s3.test/receipt-object') ||
+        (failedStep === 'confirm' && url.endsWith('/confirm-upload')) ||
+        (failedStep === 'publish' && url.endsWith('/checkpoint'))
+      ) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ error: 'Deliberate unavailable destination' }),
+        };
+      }
+    });
+  }
+
+  it('does not mint receipts for a no-op or an older exporter without a version manifest', async () => {
+    const onResourceVersionsConfirmed = vi.fn();
+    const calls = mockFetch(() => undefined);
+    await expect(
+      backupDrive({
+        ...PASS,
+        db: receiptDb(null),
+        onResourceVersionsConfirmed,
+      }),
+    ).resolves.toEqual({ status: 'nothing-to-do' });
+    expect(calls).toHaveLength(0);
+    const oldExport = sealedPack(PACK_KEY);
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => oldExport),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    receiptNetwork(exportedObject());
+    await expect(
+      backupDrive({ ...PASS, db, onResourceVersionsConfirmed }),
+    ).resolves.toMatchObject({ status: 'backed-up' });
+    expect(onResourceVersionsConfirmed).not.toHaveBeenCalled();
+  });
+
+  it('does not mint proof merely because export completed before cancellation', async () => {
+    const object = exportedObject();
+    const controller = new AbortController();
+    const db = receiptDb(object);
+    db.vaultExport = vi.fn(async () => {
+      controller.abort();
+
+      return object;
+    });
+    const onResourceVersionsConfirmed = vi.fn();
+    const calls = receiptNetwork(object);
+    await expect(
+      backupDrive({
+        ...PASS,
+        db,
+        signal: controller.signal,
+        onResourceVersionsConfirmed,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(calls).toHaveLength(0);
+    expect(onResourceVersionsConfirmed).not.toHaveBeenCalled();
+  });
+
+  for (const failedStep of ['put', 'confirm', 'publish'] as const) {
+    it(`withholds resource proof when ${failedStep} fails`, async () => {
+      const object = exportedObject(
+        failedStep === 'publish' ? 'checkpoint' : 'pack',
+      );
+      const db = receiptDb(object);
+      const onResourceVersionsConfirmed = vi.fn();
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      receiptNetwork(object, failedStep);
+      const outcome = backupDrive({ ...PASS, db, onResourceVersionsConfirmed });
+
+      if (failedStep === 'publish') {
+        // Legacy backup outcome tolerates a checkpoint collision. Resource
+        // proof is stricter: this particular object must be published.
+        await expect(outcome).resolves.toMatchObject({ status: 'backed-up' });
+        expect(warning).toHaveBeenCalled();
+      } else {
+        await expect(outcome).rejects.toThrow();
+      }
+
+      expect(onResourceVersionsConfirmed).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const kind of ['pack', 'checkpoint'] as const) {
+    it(`confirms only the exported ${kind} manifest after publication and cursor commit`, async () => {
+      const object = exportedObject(kind);
+      const db = receiptDb(object);
+      const calls = receiptNetwork(object);
+      const onResourceVersionsConfirmed = vi.fn(async () => {
+        expect(db.vaultCommitSegment).toHaveBeenCalledOnce();
+        expect(calls.at(-1)?.url).toMatch(
+          kind === 'pack' ? /\/confirm-upload$/ : /\/checkpoint$/,
+        );
+      });
+      await expect(
+        backupDrive({ ...PASS, db, onResourceVersionsConfirmed }),
+      ).resolves.toMatchObject({ status: 'backed-up' });
+      // Exact equality also excludes unchanged resources omitted by the exporter.
+      expect(onResourceVersionsConfirmed).toHaveBeenCalledExactlyOnceWith({
+        objectKey: object.objectKey,
+        resourceVersions: exportedVersions,
+        confirmedAt: expect.any(Number),
+      });
+    });
+  }
+
+  it('keeps the exported version when a resource changes while the PUT is in flight', async () => {
+    let currentVersion = 3;
+    const object = exportedObject();
+    const db = receiptDb(object);
+    db.vaultExport = vi.fn(async () => ({
+      ...object,
+      resourceVersions: { 'did:ad:changed': { '41': currentVersion } },
+    }));
+    let releasePut!: () => void;
+    let putStarted!: () => void;
+    const started = new Promise<void>(resolve => {
+      putStarted = resolve;
+    });
+    const pendingPut = new Promise<void>(resolve => {
+      releasePut = resolve;
+    });
+    const normalFetch = receiptNetwork(object);
+    const fetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === 'https://s3.test/receipt-object') {
+          putStarted();
+          await pendingPut;
+        }
+
+        return fetch(url, init);
+      }),
+    );
+    const onResourceVersionsConfirmed = vi.fn();
+    const pending = backupDrive({ ...PASS, db, onResourceVersionsConfirmed });
+    await started;
+    expect(onResourceVersionsConfirmed).not.toHaveBeenCalled();
+    currentVersion = 4;
+    releasePut();
+    await pending;
+    expect(normalFetch.some(call => call.url.endsWith('/confirm-upload'))).toBe(
+      true,
+    );
+    expect(onResourceVersionsConfirmed).toHaveBeenCalledExactlyOnceWith({
+      objectKey: PACK_KEY,
+      resourceVersions: exportedVersions,
+      confirmedAt: expect.any(Number),
+    });
+  });
+
+  it('confirms only the successful retry manifest after an occupied checkpoint collision', async () => {
+    const first = exportedObject('checkpoint');
+    const second = {
+      ...exportedObject('checkpoint'),
+      objectKey: CKPT_KEY.replace('000001', '000002'),
+      resourceVersions: {
+        'did:ad:changed': { '41': 4 },
+        'did:ad:added': { '42': 1 },
+      },
+    };
+    const db = receiptDb(first);
+    db.vaultExport = vi
+      .fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+    let reservations = 0;
+    mockFetch(url => {
+      if (!url.endsWith('/upload-urls')) return;
+      const occupied = reservations++ === 0;
+      const object = occupied ? first : second;
+
+      return {
+        ok: true,
+        json: async () => ({
+          uploads: [
+            {
+              object_id: occupied ? 'occupied' : 'fresh',
+              object_key: object.objectKey,
+              already_stored: occupied,
+              url: 'https://s3.test/fresh',
+              headers: [],
+              size_bytes: object.sealed.length,
+            },
+          ],
+        }),
+      };
+    });
+    const onResourceVersionsConfirmed = vi.fn();
+    await backupDrive({ ...PASS, db, onResourceVersionsConfirmed });
+    expect(db.vaultExport).toHaveBeenCalledTimes(2);
+    expect(onResourceVersionsConfirmed).toHaveBeenCalledExactlyOnceWith({
+      objectKey: second.objectKey,
+      resourceVersions: second.resourceVersions,
+      confirmedAt: expect.any(Number),
+    });
+  });
+
+  it('does not fail a completed backup when persisting diagnostic proof fails', async () => {
+    const object = exportedObject();
+    receiptNetwork(object);
+    const onResourceVersionsConfirmed = vi.fn(async () => {
+      throw new Error('Receipt storage unavailable');
+    });
+    await expect(
+      backupDrive({
+        ...PASS,
+        db: receiptDb(object),
+        onResourceVersionsConfirmed,
+      }),
+    ).resolves.toMatchObject({ status: 'backed-up' });
+    expect(onResourceVersionsConfirmed).toHaveBeenCalledOnce();
+  });
+
+  it('withholds proof without failing a completed backup when its final account guard fails', async () => {
+    const object = exportedObject();
+    const db = receiptDb(object);
+    receiptNetwork(object);
+    const onResourceVersionsConfirmed = vi.fn();
+    const beforeNetworkWrite = vi.fn(async () => {
+      if (vi.mocked(db.vaultCommitSegment).mock.calls.length)
+        throw new Error('Account verification unavailable');
+    });
+    await expect(
+      backupDrive({
+        ...PASS,
+        db,
+        beforeNetworkWrite,
+        onResourceVersionsConfirmed,
+      }),
+    ).resolves.toMatchObject({ status: 'backed-up' });
+    expect(db.vaultCommitSegment).toHaveBeenCalledOnce();
+    expect(onResourceVersionsConfirmed).not.toHaveBeenCalled();
+  });
+});

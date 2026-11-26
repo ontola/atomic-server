@@ -52,6 +52,7 @@ export * from './uuid.js';
 export { decodeB64, encodeB64 } from './base64.js';
 export * from './authentication.js';
 export * from './client.js';
+export type { ServerReplicaReceipt } from './server-receipts.js';
 export * from './genesis.js';
 export * from './commit.js';
 export * from './error.js';
@@ -92,10 +93,18 @@ export { EventManager } from './EventManager.js';
 export * from './parse.js';
 export * from './search.js';
 export * from './resource.js';
+export * from './replica-evidence.js';
 export * from './chat-log.js';
 export * from './forks.js';
 export * from './copy.js';
 export * from './store.js';
+export * from './resource-vault-evidence.js';
+export type { ResourceSyncStatus } from './resource-sync-status.js';
+export type {
+  ResourceSyncScope,
+  ResourceSyncEvidence,
+  SerializedServerReceipt,
+} from './resource-sync-evidence.js';
 export * from './property-identity.js';
 export { getOrCreateDriveLocation } from './drive-location.js';
 export { readTrashFolder, type IsTrashedOptions } from './trash.js';
@@ -174,6 +183,7 @@ export {
   BrowserPeerSync,
   randomPeerToken,
   type BrowserPeerOptions,
+  type BrowserReplicaReceipt,
 } from './browser-peer-sync.js';
 
 export { decodeBrowserInvite } from './browser-peer-invite.js';
@@ -442,3 +452,20 @@ export {
   prepareAppPackageImport,
 } from './app-package.js';
 export type { AppPackage } from './app-package.js';
+
+export type {
+  ResourcePeerSyncStatus,
+  ResourcePeerCopy,
+} from './resource-peer-sync-status.js';
+export type { ReplicaIdentity } from './peer-receipts.js';
+
+export type {
+  ResourcePeerEvidence,
+  ResourcePeerEvidenceConnection,
+  ResourcePeerEvidenceReceipt,
+  ResourcePeerEvidenceProvider,
+} from './resource-peer-evidence.js';
+
+export * from './resource-attachment-evidence.js';
+
+export * from './persistence-evidence.js';

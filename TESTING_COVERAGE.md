@@ -583,6 +583,20 @@ verifies Clippy dispatch, staged input, and failure propagation; this fixture do
 
 ## Browser WebRTC transport (issue #1396)
 
+Automatic storage receipts (#2538/#2586): `peer-receipts.test.ts` and browser
+connection regressions cover capability gating, exact saved versions, correlated
+nonces, bounded retry/rotation, identity/database replacement, callback isolation
+and legacy compatibility. Native browser-peer and Redb tests cover authenticated
+state-vector coverage, authorization, failed flush, pending write batches,
+memory exclusion and persisted scoped identity across reopen/clone/recreation.
+`verify-peer-receipts.mjs` exercises two real Chromium contexts with authenticated
+WebRTC and OPFS; discovery/SDP alone is relayed in-process. It observes automatic
+receipts for consecutive save versions without application probes, then verifies
+same-store tabs, leader handoff and database reopen. It does not prove device
+independence, power-loss survival, current retention, blobs or complete recovery.
+The Node/WASM outbox integration suite also checks that the real memory backend
+returns no persistent replica identity.
+
 `browser/lib/src/webrtc-transport.test.ts` covers frame fragmentation/order,
 backpressure and cancellation, bounded queues, caller buffer ownership, malformed
 input and close behavior. `browser/e2e/scripts/verify-webrtc.mjs` establishes real
@@ -853,6 +867,199 @@ Two things worth knowing about the runners:
 
 ## Sync and pairing
 
+### Per-resource copies and sync
+
+`browser/lib/src/resource-sync-status.test.ts` covers evidence from actual sent
+and persisted Loro versions: connected/drive-synced is not a receipt, newer edits
+remain unconfirmed, successful server saves remain confirmed while offline,
+local writes wait for persistence and expose failures, and identity/server/DB
+changes cannot inherit acknowledgements. It also covers identifier aliases,
+resource renaming, foreign/custom transports and subscriber exception isolation.
+Authoritative incoming server updates extend only the version carried by their
+bytes; peer traffic and superseded connections cannot create server receipts.
+
+The data-browser's `components/ResourceSync/*.test.ts(x)` exercises status copy,
+resource-specific subscriptions and panel interactions; `views/ResourceRow.test.tsx`
+checks that nested controls do not navigate and noninteractive rows do not gain
+buttons. `browser/e2e/tests/resource-sync.spec.ts` creates and saves a real resource,
+opens its panel, checks keyboard dismissal/focus, edits offline, and checks the
+narrow layout. A separate offline-reload journey disables all browser networking,
+recovers both confirmations with the original server timestamp, then persists an
+offline edit and reloads again to prove that the old server receipt cannot cover it.
+
+`lib/src/db/sync_receipts.rs` tests version merging, account/server isolation,
+malformed records, deletion cleanup, concurrent writers and reopening a disk DB.
+The worker and Node adapter tests cover capability fallback and propagation of
+durability failures. Store/tracker recovery tests cover delayed reads and scope
+changes, older adapters, missing/corrupt evidence and persistence failures. The
+own-echo regression verifies that server-added metadata is also persisted locally.
+Cloud Vault export tests bind the local-only resource-version manifest to actual
+sealed update entries, excluding unchanged cursors and later edits. Scoped Vault
+receipt tests cover durable recovery, monotonic merging, malformed evidence,
+account/provider/drive/key-epoch isolation, deletion and explicit disable cleanup.
+The app-level Vault ledger and backup tests require upload confirmation and
+checkpoint publication, fence stale account/resource operations and avoid
+manufacturing proof on no-op passes or failed uploads.
+
+`browser/e2e/tests/resource-vault-sync.spec.ts` exercises the production browser,
+real WASM encryption and local receipt storage against a test-owned HTTP service.
+The manual-enable journeys begin with the drive opted out so boot enrollment
+cannot race the enable button; the real UI clears that preference.
+It covers a saved resource, same-account reload without a new upload, another
+account, edits during a held upload, failed upload and attachment wording. This
+is not validation of real S3 or the production control plane; the separate
+Vault backup/restore suite still requires an explicitly supplied portal.
+Browser peer receipt tests cover authenticated, nonce-correlated exact versions,
+actual persistent storage identity, failed flushes, unresolved dependencies,
+authorization, unsupported backends and legacy peers. The session-only peer
+ledger tests current versus older versions, shared-storage deduplication, local
+storage exclusion, disconnect, account/database replacement and late replies
+after resource removal. UI tests cover the purple peer indicator, copy counts,
+confirmation times, newer edits, departure and local/server/Vault precedence.
+
+`browser/e2e/tests/resource-peer-sync.spec.ts` uses isolated browser contexts
+with real WebRTC data channels, authenticated WASM peer sessions and local
+storage. Only the signaling rendezvous is test-owned. The resource is created
+after both drive copies are local-only; server inventory must not contain it.
+The journey pauses the receiver for a newer edit, resumes to obtain a fresh
+receipt, opens a shared-storage tab without inflating the copy count, and checks
+departure and reload. It does not validate physical-device independence,
+production signaling or TURN. This journey covers resource metadata; separate
+attachment-byte journeys are described below. Native WebRTC uses the shared
+receipt responder and bounded native requester, with its separate session token
+and evidence namespace. Its mixed browser/native acceptance is described below.
+
+Native resource receipts use the shared stored-state/flush producer and optional
+`iroh-storage-receipts-v1` negotiation. `sync::iroh_receipts` unit tests cover
+exact request correlation, retries and bounds, account/storage/connection
+changes, live ledger recovery, HTTP storage keys, permission checks and deletion.
+Removal regressions cover identical-version recreation through a separate agent
+view, pending/accepted late replies, direct tombstones and monotonic removal epochs.
+Protocol tests validate receipt envelopes and both supported base64 encodings;
+BrowserPeerSession regressions preserve browser behavior and reject unknown HTTP
+subjects without fetching them. Native evidence queries fence concurrent resource
+and permission changes around asynchronous authorization.
+
+`lib/tests/iroh_receipts.rs` runs separate source and receiver processes with real
+QUIC, authentication, disk databases and storage barriers. It checks bulk and
+subsequent live versions, source/replica identity, actual EmbedHost output,
+receiver death, reopening the same durable database and fresh connection proof.
+Only discovery is replaced with a local address exchange. Its ignored receiver
+entry point is invoked by the parent test.
+
+`browser/lib/src/native-resource-peer-sync.test.ts` exercises Store and
+NativeClientDb with real Loro versions and a controlled host channel: current
+versus newer edits, source/replica deduplication, missing evidence, account/DB
+replacement, view subscription lifetime, transient errors and malformed replies,
+old-host fallback and a hung host with a bounded underlying RPC. Browser peer
+proof stays independent when the native bridge fails.
+
+`browser/e2e/tests/native-resource-peer-sync.spec.ts` is an opt-in real native
+renderer journey: build `dist-embed` and the `iroh_receipts` integration binary,
+then set `ATOMIC_NATIVE_EMBED_TEST_BINARY` to that binary. It forwards the existing
+NativeChannel into the actual EmbedHost of the two-process Iroh fixture, renders
+the peer count and timestamp, reloads the view while its host remains alive,
+checks mobile layout and removes the confirmation after peer departure. It uses
+no fabricated receipts or production hooks. This does not exercise packaged
+Flutter/Tauri builds, physical devices or the legacy Tauri renderer's local
+HTTP path. Native WebRTC has a separate opt-in journey below.
+
+### Native WebRTC resource confirmations
+
+`sync::webrtc_link` reuses the native receipt scheduler with WebRTC-specific
+liveness and raw-frame delivery. Unit regressions cover mutually authenticated
+capabilities (bare, attachment-only and metadata-only), actual stored bytes,
+late correlated replies after close, fatal input, Drop/reconnect, account
+A→B→A changes, bounded AUTH_OK parsing and no Iroh-specific broadcast events.
+A handshake during an open local batch retries setup after commit on periodic
+reconciliation without starting duplicate requesters. Shared receipt tests retain
+nonce/frontier/manifest correlation, removal epochs, permissions, bounds and byte
+expiry. DB-only/WASM builds preserve responder behavior without the optional
+native requester runtime.
+
+The Store/NativeClientDb lifecycle tests run against both native transport
+namespaces. They verify authoritative removal of omitted attachment proof,
+cross-transport storage deduplication and metadata/bytes matching within the same
+connection. The focused native/attachment library selection passes 52 tests.
+
+`native-webrtc-resource-sync.spec.ts` and `lib/tests/webrtc_receipts.rs` use a real
+browser/WASM peer and a real native database, WebRtcPeerLink and EmbedHost. A
+transport-only Chromium page carries native frames over the production ordered
+RTCDataChannel/framing/DTLS binding through a test-owned process bridge. The
+fixture controls rendezvous and holds actual blob frames, not receipt answers.
+Assertions cover metadata before bytes, complete copies, replacement contents,
+embedded-view reload, disconnect and desktop/mobile rendering. The mixed WebRTC/native journey passed 1/1 locally (73.622s), and the existing
+Iroh renderer regression passed 1/1 (75.543s), with strict diagnostics and zero
+retries. The 32 focused Rust WebRTC/shared-receipt cases also passed. It does not
+validate the packaged Flutter WebRTC plugin, physical-device networking or
+production TURN/signaling. The ignored Rust fixture entry point is driven by
+Playwright rather than counted as standalone Rust acceptance.
+
+### Attachment content confirmations
+
+The attachment phase's focused library and Vault unit suites passed locally.
+All seven matching web acceptance journeys passed locally with zero retries:
+five in the final full run and the two corrected fixtures in a focused rerun.
+The opt-in native renderer journey also passed with zero retries. These runs
+include actual byte assertions, not only the previous metadata checks.
+
+`lib/src/sync/attachment_receipts.rs` tests actual missing/corrupt bytes, cached
+verification invalidation, empty files, ordered chunk hashes and the whole-file
+hash, direct attachment references, child edits without parent edits, and exact
+wire manifest correlation. Protocol and native-ledger tests cover negotiated
+attachment receipts, deletion generations, fresh probes and expiry. Content
+proof is separate from metadata proof: peer byte confirmations refresh after
+ten seconds and expire after thirty seconds without a fresh acknowledgement.
+The verifier has bounded concurrency, per-blob and batch read limits, and a
+cooperative time budget. Missing or oversized data stays unconfirmed. Root and
+File state is read locally; inherited ACL checks may resolve uncached ancestors.
+The server endpoint additionally has a hard request timeout. A private browser
+cache without a Rust default agent confirms its local bytes and Vault inventory,
+including assembled chunks; the same resources remain unreadable to anonymous
+remote requests.
+
+`server/src/handlers/attachment_evidence.rs` tests required version-2 method/body
+signatures, tampered bodies, anonymous and private-resource denial, batch limits,
+missing contents and a verified `no-store` response. External object storage
+requires its explicit object/version contract and actual hash verification;
+local database flushes alone do not certify S3 contents. Real S3 acceptance is
+not implied by these tests.
+
+`browser/lib/src/resource-attachment-sync.test.ts` uses real Loro state with
+controlled storage/host responses to cover readonly getters, metadata-before-
+bytes, rename versus replacement, direct child edits, chunk ordering, account
+and database ABA changes, eviction, reload verification, signed HTTP requests,
+transient failures and peer expiry. `attachment-peer-receipts.test.ts` checks
+capability gating, exact captured manifests, fresh nonces, attached-child removal
+and periodic re-probing. UI tests require metadata and bytes at the same
+connection/storage identity, deduplicate copies and preserve pending/error
+precedence.
+
+Vault helper tests confirm only successfully uploaded and acknowledged hashes.
+Reused encrypted objects require a complete decrypt/hash check, not a listing or
+local hash cache. They cover partial/failed uploads, empty files, account/generation
+fences, persistence failures, old versus replaced content and unloaded persisted
+manifest capture. Rust Vault regressions cover authenticated empty-file restore
+and recovery of both aggregate bytes and original chunks for chunked Files.
+
+The validated acceptance set comprises:
+
+- `resource-sync.spec.ts` (two existing local/server and offline-reload journeys)
+  and `resource-peer-sync.spec.ts` (existing real WebRTC metadata/dedup/departure).
+- `resource-attachment-sync.spec.ts` (two new journeys): actual local and server
+  bytes after metadata-only confirmation, rename/reload/replacement, and a
+  local-only WebRTC File plus direct attachment whose bytes reach a second
+  browser before its complete-copy count increases.
+- `resource-vault-sync.spec.ts` (two journeys): a real 8 MiB-plus file with one
+  encrypted chunk held back, complete confirmation only after release,
+  same-account recovery and changed-account exclusion; and the existing held
+  metadata export/newer edit/failed upload regression. Its HTTP control-plane
+  boundary is test-owned; WASM hashing and encryption are real.
+- `native-resource-peer-sync.spec.ts` (one opt-in journey): actual File/direct-
+  attachment evidence from two Iroh processes through EmbedHost, desktop/mobile
+  rendering, view reload and peer departure. The Rust two-process integration
+  and matching renderer acceptance both passed locally with zero retries.
+
 ### Protocol — well covered
 
 | Flow | Where |
@@ -884,6 +1091,130 @@ Two things worth knowing about the runners:
 | `DbEvent::Destroyed` for a removed resource and its cascade-deleted children arrives only after the removal is applied (the store no longer holds them when a listener hears), each subject announced exactly once | `lib/src/db/test.rs` (`destroyed_events_follow_the_applied_removal`) |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
+### Automatic native resource receipts (#2538/#2589)
+
+`lib/tests/iroh_receipts.rs` runs production Iroh sync between separate processes
+with persistent Redb stores. It subscribes before bulk sync, observes an exact
+bulk target and consecutive live targets without application-issued probes, then
+kills the receiving process and reopens its database to verify the same scoped
+identity and coverage of the receipted versions. Only discovery is replaced by
+exchanging the direct QUIC address through a temporary file.
+
+`sync::iroh_receipts` tests cover exact target/nonce correlation, delayed older
+versions, retry expiry and bounded queues. Protocol and shared browser-producer
+tests cover malformed identities/frontiers, authentication, read authorization,
+missing dependencies, pending batches, failed flushes, memory exclusion and
+persisted identity. Loopback HTTP regressions verify absent receipt targets never
+trigger fetches; unsolicited native receipts are rejected before resource reads.
+The Db account-epoch regression checks account replacement,
+logout and away-and-back changes, including independent agent handles.
+
+These receipts are historical resource-state observations. Tests do not establish
+physical device independence, storage retention, blob/key completeness or full
+backup recovery. Native change notifications may coalesce before target capture;
+there is no every-intermediate-save receipt guarantee.
+
+### Automatic HTTP/WebSocket server receipts (#2538/#2592)
+
+`browser/lib/tests/server-receipts.integration.test.ts` runs the SDK against a
+real server with persistent Redb storage. HTTP and WebSocket saves automatically
+produce evidence for consecutive exact captured versions, including clients with
+no local database. The HTTP test holds an already-produced response while the
+next save completes, then verifies the older evidence retains its original
+target. A real WASM memory client reconnects and obtains fresh WS evidence for
+existing state without another save. The tests check actual transport provenance,
+stable scoped receiving identity, absent fabricated source identity and immutable
+event payloads.
+
+`server/tests/it/storage_receipts.rs` exercises signed HTTP and negotiated WS
+adapters, CORS capability discovery, authentication, URL/body tampering, wrong
+drives, denied reads, missing/uncovered state and bounded wire input. The
+`handlers::storage_receipt` cancellation regression first reproduced premature
+load-slot release, then verified the slot remains occupied until a held flush
+actually completes after its caller is canceled. A deterministic held-proof WS
+reauthentication test remains a coverage gap; the actor's epoch guard has been
+reviewed. Shared producer tests remain the
+coverage for persistent flush failures, memory exclusion, pending dependencies,
+open batches and local-only target reads. These adapter tests do not establish
+power-loss survival, endpoint trust, physical independence, future retention,
+blob/key completeness or recoverable backup guarantees.
+
+`browser/lib/src/server-receipts.test.ts` covers exact correlation, older targets,
+optional source identity, account/database/connection replacement, observer
+reentrancy, stalled worker cancellation, bounded retries and rotating inventories
+larger than the queue. HTTP adapter tests cover capability discovery, redirect
+refusal, signed-body requests and size limits. Existing WebSocket, save-receipt
+and commit-fallback regressions preserve normal save semantics.
+
+### Automatic browser background receipts (#2538/#2596)
+
+`browser/lib/src/server-receipts-background.test.ts` exercises accepted background
+updates and unloaded genesis outboxes without an active save call or synthetic
+`SaveReceipt` event. `server-receipts.test.ts` covers refreshed stored frontiers
+and bounded scheduling alongside exact target correlation and stale-context
+rejection. Browser collection reads applied state from stored snapshots rather
+than memory editors or snapshot-header oplog vectors.
+
+`websockets.test.ts` covers serialized authentication, delayed/unsolicited
+acknowledgements, raw AUTH invalidation and account-generation fencing. Because
+AUTH acknowledgements have no request id, ambiguous authentication disables
+receipt eligibility until reconnect.
+
+`browser/lib/tests/server-receipts.integration.test.ts` includes real-server cold
+genesis/update outbox delivery, newly imported state without an observer save,
+and reconnect evidence matched to actual stored snapshots. The standalone
+`browser/e2e/scripts/verify-server-receipts.mjs` harness uses Chromium, the real
+ClientDbWorker and OPFS, and an isolated production API server. It covers offline
+close/reopen, background delivery, stored imports and reconnect with persistent
+source identity. Its Vite page loads library source directly; it is not a test of
+the application's rendered UI or the TablePage extraction.
+
+These tests do not establish every-intermediate-save delivery, browser eviction
+resistance, power-loss survival, physical independence, future retention,
+attachment/key coverage or complete backup recovery.
+
+The cold-genesis investigation also exposed a separate outbox replay gap: when a
+stored genesis envelope is followed by another offline edit before a cold drain,
+the drain can clear the entry after sending only the older genesis. The receipt
+correctly covers that sent frontier, not the newer queued snapshot. The genesis
+acceptance test isolates one creation; the update case covers edits to an already
+accepted resource. Fixing replay of edits after an unsent genesis remains open.
+
+### Automatic native WebSocket and Flutter receipts (#2538/#2594)
+
+`server/tests/it/native_ws_receipts.rs` runs the native collector against the
+production persistent server. It covers bulk replication, already-matching
+state, consecutive live versions, offline outbox delivery, reconnect without
+another save, optional source identity for memory clients, and delegated
+authentication preserving distinct local and authenticated client identities.
+No application-issued receipt probes are used. Independently captured Loro
+frontiers are compared by all counters; byte-for-byte response correlation is
+tested in the requester itself.
+
+The `client::ws_receipts` and native WebSocket tests exercise correlation,
+unsupported peers, source-identity mismatches, canceled AUTH with delayed
+acknowledgements, account/handle isolation, and bounded retries. A real
+300-resource local inventory verifies queue saturation pauses its cursor and
+eventually visits every resource. Version normalization removes zero counters
+and keeps equivalent multi-peer frontiers stable across insertion orders.
+Flutter's `api::server_receipts` tests cover continuous bridge delivery, idle
+cancellation and per-handle/session filtering. Its opt-in
+`bridge_receipts_real_server` test uses `ATOMIC_TEST_SERVER` to run the actual
+bridge session against a built server, including outbox/reconnect behavior.
+`packages/atomic_store_flutter/test/replica_receipts_test.dart` checks typed
+mapping and stream lifecycle without requiring native FFI, including in Chrome.
+`replica_receipts_fake_test.dart` checks the public exports and fake adapter.
+
+These are historical metadata observations, not every-save acknowledgements.
+They do not establish power-loss survival, endpoint trust, independent hardware,
+future retention, attachment/key coverage or complete backup recovery. The
+Flutter server integration test must be explicitly selected with a built native
+server; the existing Flutter package workflow runs Dart tests and regenerated
+binding checks, not that native server test.
+The exact account-change interleaving during collector construction has been
+reviewed and fenced before any drive is followed, but does not have an injected
+barrier regression; tests cover subsequent account invalidation.
+
 ### Cross-process — covered since 2026-07
 
 Both matter because `iroh_transport` holds the router and node identity in
@@ -896,6 +1227,10 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Paired peer + its relay/direct addresses survive a kill | `lib/tests/identity_durability.rs` |
 | Two whole servers pair via `POST /iroh-sync` and reconcile | `server/tests/it/iroh_pairing.rs` |
 | `/iroh-sync` refuses malformed node ids with a UI-showable error | `server/tests/it/iroh_pairing.rs` |
+| An interrupted file write preserves the previous full sync date, then reconnecting with matching file metadata fetches the missing bytes and advances the date | `lib/src/sync/iroh_e2e.rs` |
+| The accepting Iroh peer retries a failed file write while the connection stays open | `lib/src/sync/iroh_e2e.rs` |
+| An Iroh peer stores the exact bytes of a file at the HTTP upload limit | `lib/src/sync/iroh_e2e.rs` |
+| Sync settings shows the selected drive's confirmed date for one peer and sync activity for another | `browser/e2e/tests/peer-full-sync-status.spec.ts` |
 
 ### Glue
 
@@ -1390,6 +1725,28 @@ native clients.
 
 ### Save durability and identity lifecycle regressions
 
+- `replica-evidence.test.ts` exercises the public pure evidence evaluator:
+  default unsupported, incomplete evidence unknown, supported but nonqualifying
+  evidence pending, and trusted exact-version persistent evidence satisfied.
+  Adversarial cases include wrong resource/version, null versions, same-store
+  sessions/generation changes, shared-device versus separate-storage policies,
+  unknown/untrusted provenance, stale generations, memory/failed barriers,
+  duplicates, policy exceptions and detached immutable results. These are SDK
+  contract tests using adapter fixtures, not real peer durability or independent
+  storage proofs. The evaluator tests alone do not cover wire producers, persisted identities,
+  crash/reopen, retention, blob/key/dependency closure or backup recovery. Browser
+  producer coverage is described under Browser WebRTC transport (#2537/#2538).
+- `save-receipt.test.ts` checks the additive `saveWithReceipt` contract through
+  real Resource/outbox code with controlled write/transport completion. It covers
+  captured local and accepted server versions, later edits, absent evidence,
+  optional mirror failures/deadlines, identity/database replacement, custom host
+  transports, no-op/concurrent calls and accepted-commit bookkeeping failures.
+  The actual WASM memory-backend cases in
+  `tests/outbox-client-db.integration.test.ts` verify offline/local-only writes
+  produce readable stored JSON/snapshots but no local durability receipt. Existing
+  `client-db-durable-put.test.ts` checks worker acknowledgement follows flush.
+  These establish attribution and completion boundaries, not new browser crash
+  durability, server fsync or independent replica guarantees (#2538).
 - `local-save-persistence.test.ts` checks required offline/local-only save
   persistence through the real Resource/signing/outbox path with a stubbed worker
   boundary: missing, unsupported and failing storage reject; edits and signed
@@ -1561,6 +1918,35 @@ the reader's active drive to receive live updates.
 
 
 ### Per-drive Cloud Server display
+
+`components/SideBar/syncStatus.test.tsx` mounts the sidebar status hook against a
+real Store. It covers a connected server with a local-only selected drive,
+registration/promotion, selected-drive receipts, foreign/absent drives, server
+and identity changes, unsaved edits, a later edit during an unacknowledged save,
+new/removed resources, the embedded desktop node, and red progress/warning states. Counters
+remain store-wide. These tests do not establish Cloud Vault or peer durability.
+`local-only-drive.test.ts` distinguishes locally settled commits from server
+acceptance. `websockets.test.ts` covers deferred flushes across context changes
+and late `SYNC_OK`/`SYNC_DIFF` responses after a drive becomes local-only.
+It also covers all-chunk acknowledgement, both orders of bidirectional sync,
+bounded remove-only verification, rejected transfers, and retry after terminal
+authentication, send and flush failures.
+`sidebar-drive-sync.spec.ts` uses a real server connection and local database to
+exercise the red local-only indicator, Sync page explanation, local activity
+wording, save/reload persistence, and switching back to a server-synced drive.
+Account/drive routing preferences remain browser-wide; #2411 owns isolation and
+the two-identity shared-drive transition tests. These indicator tests do not
+establish that isolation.
+Ordinary server resource-state receipts do not establish attachment presence.
+`components/SideBar/driveConfirmation.test.tsx` exercises the separate exact-hash
+copy check, stale responses, context/DB changes, missing/old/malformed endpoints,
+retry and local-only exclusions. Rust `sync::confirmation` tests check stored
+files and chunks, missing/corrupt bytes, strict reads and a drive-scoped inventory;
+the handler test exercises signed requests and rejects foreign drives. Object
+revision-cache tests require fresh presence/revision checks and rehash changed
+content. The browser attachment journey deliberately acknowledges a blob PUT
+without storing its bytes, requires red with the real confirmation endpoint,
+then uploads the bytes and waits for a confirmed copy.
 
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
@@ -2119,6 +2505,19 @@ requests, even if a server request would have succeeded.
   on a free port, and preserves its report/build logs. `--preview` opts into Vite.
   Failure traces are retained. Real Cloud Vault integration requires an explicitly
   supplied `ATOMIC_VAULT_PORTAL_URL`; the runner never discovers unrelated portals.
+- `vault-first-backup-status.spec.ts` uses the real signup, local database, and
+  Vault export with a mocked account service and object store. It holds and
+  fails the first storage PUT, also tests an enrollment refusal, verifies a
+  local edit survives reload with the notice, and keeps the notice visible
+  until a retry is confirmed. A later failed backup retains the last success
+  time in Sync settings. Turning off a confirmed Vault backup for a
+  browser-only workspace shows a hard warning that survives reload and links
+  to Sync settings. The spec checks a medium warning at two days, a hard
+  warning at eight days, and a manual backup of an unchanged drive writing
+  a new confirmed checkpoint that clears the warning.
+- `server-full-sync-warning.spec.ts` saves a folder to a standalone Atomic
+  Server with Cloud Vault off and checks that a verified full sync clears the
+  drive warning, including after reload.
 
 ## Boolean reads and managed development origins
 
@@ -2214,9 +2613,9 @@ backup-file restores skip files. `helpers/managed/vaultRestore.test.ts`
 picking a snapshot restores the file bytes its resources name and reports
 files left behind. The atomic-saas side (quota per enrollment, `already_stored`) is covered in that repo.
 
-Not covered: the WASM bindings themselves (`vaultBlob*` run only in a browser
-build, and no Playwright spec uploads a file to a real control plane), the
-worker RPC pass-through, and files larger than memory.
+Not covered: uploads to a provisioned real control plane and files larger than
+memory. The attachment acceptance above exercises the WASM and worker boundary
+against a test-owned HTTP control plane using the production app build.
 
 ### Blob garbage collection
 
@@ -3288,3 +3687,24 @@ Nov27 focused native validation of the seven affected/current regression journey
 7/7 passed, then 35/35 passed across five repetitions with four workers and no
 retries, skips, or global errors. This is targeted evidence, not a full CI result;
 the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.
+
+Cloud Vault file repair (#2579): `helpers/managed/vaultFileRepair.test.ts` covers a peer-first attempt, selective encrypted fallback, current references, cancellation, session changes, concurrent attempts, partial results and retry without importing resource history. `automaticFileRecovery.test.ts` covers shared requests, per-drive batching, peer-only recovery without Vault credentials, bounded failure/retry, stalled account/key/repair deadlines, independent late requests, native-shaped local presence and stale scopes. Mounted `browser/react/src/useFileObjectUrl.test.tsx` verifies automatic refresh, cache reuse, fallback, connectivity retries and database/drive/account changes. WebSocket and browser-peer tests cover late verified contents refreshing readers after persistence, including stale connection/database suppression. `websiteMedia.test.ts` verifies selected-image export recovers missing bytes before packaging. `useVaultBackup.repair.test.tsx` and `VaultPanel.test.tsx` cover the optional full-drive scan, cancellation, progress and retry. `lib/src/vault/sync.rs` covers BLOB-only records and refusing a late file result after deletion. `sync/peer.rs` covers exact requested hashes and live peer read permissions. `browser/e2e/tests/vault-file-repair.spec.ts` exercises actual WASM file sealing and recovery both by opening a file and through the Sync action with mocked Vault storage, asserting exact recovered contents and unchanged drive version vectors and file metadata. Live production Vault storage and a physical Tauri device are not covered by these browser checks. Native late arrivals: `db::blob_backend::blob_write_notification_tests` verifies notification after successful readable persistence, no notification after failed storage or invalid/unrequested sync bytes, and shared subscriptions across Db clones. `desktop/src/blob_events.rs` tests hash-only forwarding, receiver lag and shutdown. `nodeVault.test.ts`, automatic-recovery tests and mounted `nativeFileRecovery.test.tsx` cover listener registration/disposal, per-hash cooldown release after the 30-second timeout and automatic refresh of the same native preview with a fresh local download URL. These native bridge tests simulate the WebView/IPC boundary; a packaged-device transfer is not covered.
+
+Native real-peer acceptance (2026-11-18): `desktop/NATIVE_FILE_RECOVERY_ACCEPTANCE.md` records an actual macOS Tauri app with bundled assets and a separate real Iroh peer. `lib/examples/native_late_file_peer.rs` gates only its source blob read; the normal sync engine delivers the bytes after explicit release. Two fresh-storage native runs passed: recovery timed out after 30,112 / 30,106 ms; following explicit peer release, native presence was confirmed after 816 / 424 ms and the image rendered after 1,222 / 558 ms while retry cooldowns remained active. The file view stayed open without reload, native HTTP bytes matched the source, and the repeat compared all 12 materialized file property values unchanged. `desktop/scripts/native-late-file-acceptance.mjs` supplies diagnostic bridge controls and the local stalled-account endpoint; it is an operator harness, not an unattended native suite. The run used a nonpersistent WebView and fresh node directories. Installed release packages and a second physical device remain outside this run.
+
+
+Native real-Vault acceptance (2026-11-18): `desktop/NATIVE_VAULT_RECOVERY_ACCEPTANCE.md` records two actual macOS Tauri runs using the real Cloud Vault API and real MinIO S3 storage hosted locally, genuine signup/device authorization and native-agent linking. Native backup exported a unique 490-byte image as 536 bytes of ciphertext. With no peers and the native blob deliberately absent, opening the file caused one signed S3 download and one native blob restore, zero history imports, exact recovered bytes and automatic preview refresh (recovery 5,440 / 5,908 ms; repeat image load 6,092 ms). Materialized values, current version and newer description stayed unchanged. The repeat also compared identical persisted drive Resources, complete Loro snapshots and signed envelopes; the first run's derived projection normalization is documented separately. `desktop/src/vault_blob_export.rs` tests multi-chunk encryption/restore and missing/corrupt content; `nodeVault.test.ts` covers the export capability and base64 boundary. `vaultBlobs.test.ts` reproduces concurrent drives closing each other's shared export cache and covers serialized passes, failure/abort release and independent databases. `desktop/scripts/native-vault-acceptance.mjs` and guarded `lib/examples/native_vault_remove_blob.rs` provide account/session and offline corruption/fingerprint operations. This does not certify production endpoints, installed release packages or physical-device keychain behavior.
+
+Unattended native recovery (2026-11-19): `desktop/scripts/native-recovery/run.mjs` runs the actual Linux Tauri/WebKitGTK app under Xvfb and DBus with isolated identities. The real Iroh peer case waits through the actual 30-second timeout and checks automatic visible refresh, exact bytes and unchanged metadata/version/view. The Vault case uses the real API and MinIO, verifies ciphertext, removes only a guarded real blob and opens the ordinary preview with no peers. The default-off `native-recovery-tests` feature pauses the genuine restore after S3 download to capture the exact native state before persistence; it supplies no bytes, result or stored-file event. Full file values (including lastCommit), Loro version and all three drive trees remain identical after restore and native shutdown. Two fresh local Linux arm64 runs passed: peer deadlines 30,181/30,131 ms, visible refresh 463/262 ms after release, Vault recovery 6,339/6,539 ms, one real S3 GET and native restore, zero history imports. A wrong-hash fixture request is rejected without deleting the original blob. Main now requires the trusted hosted native job; hosted x86_64 execution awaits shared CI. See `desktop/NATIVE_RECOVERY_CI.md`; macOS keychain behavior and installed release bundles remain separate acceptance coverage.
+
+
+File-recovery refactor: `helpers/managed/fileRecoveryRuntime.ts` shares the current-reference scan, guarded cancellable await and delay across automatic/manual recovery while preserving their distinct peer-request lifetimes and queues. `lib/src/vault/blob_export.rs` shares verified file preparation, plan serialization and chunk sealing between WASM and native caches. Existing native exporter tests continue to exercise that shared path; all dedicated regression files and Rust test bodies are retained. The preview hook uses one memoized request identity with the existing stale-result, cache and native-download guards.
+
+Durable pending-dependency recovery (#2621 integration):
+`browser/lib/src/durable-pending-deps-recovery.test.ts` attaches an actual durable
+worker fake to the Store and rejects an online delta after its snapshot/outbox
+checkpoint. The regression checks both the next drain and a fresh Store reload:
+the persisted replay baseline is rewound, the resend imports without missing
+Loro dependencies, both old and new edits survive, and the pending entry clears.
+This controls the worker persistence boundary; it does not prove crash survival
+of a real OPFS database or reproduce the separate first-Share Agent flake #2688.

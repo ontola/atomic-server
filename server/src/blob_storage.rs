@@ -11,12 +11,14 @@ use std::sync::Arc;
 pub struct ObjectBlobBackend {
     store: Arc<dyn ObjectStore>,
     prefix: Path,
+    durable: bool,
 }
 
 impl ObjectBlobBackend {
     pub fn new(store: Arc<dyn ObjectStore>, prefix: &str) -> AtomicResult<Self> {
         Ok(Self {
             store,
+            durable: false,
             prefix: Path::parse(prefix).map_err(|e| e.to_string())?,
         })
     }
@@ -49,6 +51,48 @@ impl BlobBackend for ObjectBlobBackend {
             Err(object_store::Error::NotFound { .. }) => Ok(None),
             Err(error) => Err(error.to_string().into()),
         }
+    }
+
+    async fn verification_token(&self, key: &[u8]) -> AtomicResult<Option<(u64, String)>> {
+        match self.store.head(&self.path(key)).await {
+            Ok(meta) => {
+                let version = meta
+                    .version
+                    .filter(|v| !v.is_empty() && v != "null")
+                    .map(|v| format!("version:{v}"));
+                let tag = meta
+                    .e_tag
+                    .filter(|v| !v.is_empty() && !v.starts_with("W/"))
+                    .map(|v| format!("etag:{v}"));
+                Ok(version.or(tag).map(|version| (meta.size, version)))
+            }
+            Err(object_store::Error::NotFound { .. }) => Ok(None),
+            Err(error) => Err(error.to_string().into()),
+        }
+    }
+
+    async fn durable_token(&self, keys: &[Vec<u8>]) -> AtomicResult<Option<String>> {
+        // Only the configured S3 implementation opts in. Generic ObjectStore
+        // implementations (including in-memory test stores) are not durable.
+        if !self.durable {
+            return Ok(None);
+        }
+        let mut digest = blake3::Hasher::new();
+        digest.update(format!("{:p}:{}", Arc::as_ptr(&self.store), self.prefix).as_bytes());
+        for key in keys {
+            let meta = match self.store.head(&self.path(key)).await {
+                Ok(meta) => meta,
+                Err(object_store::Error::NotFound { .. }) => return Ok(None),
+                Err(error) => return Err(error.to_string().into()),
+            };
+            if meta.e_tag.is_none() && meta.version.is_none() {
+                return Ok(None);
+            }
+            digest.update(key);
+            digest.update(&meta.size.to_be_bytes());
+            digest.update(&serde_json::to_vec(&(meta.e_tag, meta.version))?);
+        }
+        Ok(Some(digest.finalize().to_hex().to_string()))
     }
 
     /// Everything under the prefix whose name is a BLAKE3 hash. Objects with
@@ -135,10 +179,12 @@ pub fn from_config(
         );
     }
     let prefix = env("ATOMIC_S3_PREFIX").unwrap_or_else(|| "blobs".into());
-    Ok(Some(Arc::new(ObjectBlobBackend::new(
+    let mut backend = ObjectBlobBackend::new(
         Arc::new(builder.build().map_err(|e| e.to_string())?),
         &prefix,
-    )?)))
+    )?;
+    backend.durable = true;
+    Ok(Some(Arc::new(backend)))
 }
 
 /// The object `configure` writes to prove read/write access. Not a file, so
@@ -293,6 +339,67 @@ mod tests {
     use super::*;
     use atomic_lib::{db::trees::Tree, Db};
 
+    #[tokio::test]
+    async fn attachment_object_tokens_track_overwrite_delete_and_backend_instance() {
+        let objects = Arc::new(object_store::memory::InMemory::new());
+        let mut backend = ObjectBlobBackend::new(objects.clone(), "files").unwrap();
+        let key = blake3::hash(b"same length content").as_bytes().to_vec();
+        backend.put(&key, b"same length content").await.unwrap();
+        assert!(
+            backend
+                .durable_token(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .is_none(),
+            "generic object stores must not imply persistence"
+        );
+        // Test the S3 token algorithm separately from its production opt-in.
+        backend.durable = true;
+        let first = backend
+            .durable_token(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            backend
+                .durable_token(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .as_ref(),
+            Some(&first)
+        );
+        backend.put(&key, b"fake length content").await.unwrap();
+        assert_ne!(
+            backend
+                .durable_token(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .as_ref(),
+            Some(&first)
+        );
+        backend.delete(&key).await.unwrap();
+        assert!(backend
+            .durable_token(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .is_none());
+        backend.put(&key, b"same length content").await.unwrap();
+        let other_objects = Arc::new(object_store::memory::InMemory::new());
+        let mut replacement = ObjectBlobBackend::new(other_objects, "files").unwrap();
+        replacement.durable = true;
+        replacement.put(&key, b"same length content").await.unwrap();
+        assert_ne!(
+            replacement
+                .durable_token(std::slice::from_ref(&key))
+                .await
+                .unwrap(),
+            backend
+                .durable_token(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+        );
+    }
+
     async fn exercise_remote_storage(backend: Arc<dyn BlobBackend>) {
         let mut first = Db::init_redb(None).await.unwrap();
         first.blob_backend = Some(backend.clone());
@@ -327,6 +434,22 @@ mod tests {
             )
             .unwrap(),
         )
+    }
+
+    #[tokio::test]
+    async fn confirmation_cache_does_not_trust_a_replaced_or_missing_object() {
+        let backend = remote();
+        let mut db = Db::init_redb(None).await.unwrap();
+        db.blob_backend = Some(backend.clone());
+        let bytes = b"good";
+        let hash = blake3::hash(bytes);
+        db.put_blob(hash.as_bytes(), bytes).await.unwrap();
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        assert!(db.verified_blob(hash.as_bytes()).await.unwrap());
+        db.put_blob(hash.as_bytes(), b"evil").await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
+        backend.delete(hash.as_bytes()).await.unwrap();
+        assert!(!db.verified_blob(hash.as_bytes()).await.unwrap());
     }
 
     #[tokio::test]

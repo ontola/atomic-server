@@ -62,8 +62,17 @@ export function isOutboxDatabase(db: unknown): db is OutboxDatabase {
   );
 }
 
+/** Private checkpoint, never a graph row or a publish request while held. */
+export interface DraftCheckpoint {
+  snapshot: string;
+  baseVersion?: string;
+  waitingForParent?: string;
+  held: boolean;
+}
+
 export interface OutboxEntry {
   subject: string;
+  draft?: DraftCheckpoint;
   /** When this subject first became dirty since the last successful drain.
    *  Used for ordering and stale-entry detection. */
   enqueuedAt: number;
@@ -451,6 +460,7 @@ interface PersistedEntry {
   signedDestroy?: unknown;
   baseVersion?: string;
   blockedNotified?: boolean;
+  draft?: DraftCheckpoint;
 }
 
 export class LocalOutbox {
@@ -625,6 +635,7 @@ export class LocalOutbox {
         live.signedGenesis ??= stored.signedGenesis;
         live.signedDestroy ??= stored.signedDestroy;
         live.baseVersion ??= stored.baseVersion;
+        live.draft ??= stored.draft;
       } else {
         this.entries.set(stored.subject, stored);
         added.push(stored);
@@ -726,6 +737,7 @@ export class LocalOutbox {
       ? {
           ...(existing ?? { subject, enqueuedAt: Date.now() }),
           baseVersion: existing?.baseVersion ?? opts.baseVersion,
+          draft: undefined,
         }
       : undefined;
     const db = this.database;
@@ -751,11 +763,44 @@ export class LocalOutbox {
       this.setBaseVersion(subject, opts.baseVersion);
     }
 
+    const live = this.entries.get(subject);
+    if (live) live.draft = undefined;
     if (opts.dirty) this.markDirty(subject);
 
     if (wrote && value !== undefined && this.database === db) {
       this.written.set(subject, value);
     }
+  }
+
+  async recordDraft(
+    subject: string,
+    draft: DraftCheckpoint,
+    genesis?: Commit,
+  ): Promise<void> {
+    const db = this.database;
+    const generation = this.bindGeneration;
+    if (!db) throw new Error('Draft storage is unavailable');
+    const previous = this.entries.get(subject);
+    if (previous && !previous.draft)
+      throw new Error('A published item cannot become a draft');
+    this.entries.set(subject, {
+      subject,
+      enqueuedAt: previous?.enqueuedAt ?? Date.now(),
+      signedGenesis: genesis ?? previous?.signedGenesis,
+      baseVersion: draft.baseVersion,
+      draft,
+    });
+    this.changed(subject);
+    await this.flush();
+    if (this.database !== db || generation !== this.bindGeneration)
+      throw new RequestCancelledError('Draft storage changed during save');
+  }
+
+  releaseDraft(subject: string): void {
+    const entry = this.entries.get(subject);
+    if (!entry?.draft) return;
+    entry.draft = { ...entry.draft, held: false, waitingForParent: undefined };
+    this.changed(subject);
   }
 
   /** Mark a subject as having local Loro edits that need to drain.
@@ -991,7 +1036,7 @@ export class LocalOutbox {
       // Blocked entries never become due on their own — they wait for a fresh
       // `markDirty`. Excluding them lets `nextDueAt` return undefined when
       // nothing is drainable, so the scheduler doesn't arm a no-op timer.
-      if (e.blocked) continue;
+      if (e.blocked || e.draft?.held) continue;
 
       const due = this.dueAtOf(e, now);
 
@@ -1167,7 +1212,7 @@ export class LocalOutbox {
 
       // Blocked: an unrecoverable failure (e.g. 401) parked this entry. It
       // waits for a fresh `markDirty` to re-arm — never retried on its own.
-      if (live.blocked) return;
+      if (live.blocked || live.draft?.held) return;
 
       // Not due yet: still inside its post-failure backoff, a BUSY wait, or
       // the commit pace since this subject's last commit. The next drain
@@ -1480,8 +1525,10 @@ export class LocalOutbox {
 
 /** The stored form of an entry: the fields a reload needs. Failure counts
  *  and backoff are per session. */
-function toPersisted(e: OutboxEntry): PersistedEntry {
-  return {
+function toPersisted(
+  e: OutboxEntry,
+): PersistedEntry | { privateDraftV1: PersistedEntry } {
+  const value: PersistedEntry = {
     subject: e.subject,
     enqueuedAt: e.enqueuedAt,
     signedGenesis: e.signedGenesis
@@ -1492,7 +1539,12 @@ function toPersisted(e: OutboxEntry): PersistedEntry {
       : undefined,
     baseVersion: e.baseVersion,
     blockedNotified: e.blockedNotified ? true : undefined,
+    draft: e.draft,
   };
+
+  // Old clients reject a row without a top-level subject. They must never
+  // interpret a private checkpoint as a legacy publish request on rollback.
+  return e.draft ? { privateDraftV1: value } : value;
 }
 
 /** One database row: the same shape as an element of the localStorage blob,
@@ -1504,10 +1556,42 @@ function serializeEntry(e: OutboxEntry): string {
 /** An entry from its stored form; `undefined` for garbage. */
 function parseEntry(p: unknown): OutboxEntry | undefined {
   if (typeof p !== 'object' || p === null) return undefined;
-  const obj = p as Record<string, unknown>;
+  const outer = p as Record<string, unknown>;
+  const obj =
+    outer.privateDraftV1 === undefined
+      ? outer
+      : (outer.privateDraftV1 as Record<string, unknown>);
+  if (
+    !obj ||
+    typeof obj !== 'object' ||
+    (outer.privateDraftV1 !== undefined && !obj.draft)
+  )
+    return undefined;
   if (typeof obj.subject !== 'string') return undefined;
   // Queued by an older build that let commit pages mark themselves dirty.
   if (isCommitSubject(obj.subject)) return undefined;
+
+  let draft: DraftCheckpoint | undefined;
+
+  if (obj.draft !== undefined) {
+    const d = obj.draft as Partial<DraftCheckpoint>;
+    if (
+      !d ||
+      typeof d.snapshot !== 'string' ||
+      !d.snapshot ||
+      typeof d.held !== 'boolean' ||
+      (d.baseVersion !== undefined && typeof d.baseVersion !== 'string') ||
+      (d.waitingForParent !== undefined &&
+        typeof d.waitingForParent !== 'string')
+    )
+      return;
+    draft = {
+      snapshot: d.snapshot,
+      baseVersion: d.baseVersion,
+      waitingForParent: d.waitingForParent,
+      held: d.held,
+    };
+  }
 
   let signedGenesis: Commit | undefined;
 
@@ -1543,6 +1627,7 @@ function parseEntry(p: unknown): OutboxEntry | undefined {
   return {
     subject: obj.subject,
     enqueuedAt,
+    draft,
     signedGenesis,
     signedDestroy,
     baseVersion:

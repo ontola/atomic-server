@@ -40,6 +40,7 @@ use crate::{appstate::AppState, config::Opts};
 pub(crate) fn any_origin() -> Cors {
     Cors::permissive().expose_headers([
         crate::serve::SERVER_VERSION_HEADER,
+        crate::handlers::storage_receipt::CAPABILITY_HEADER,
         crate::write_load::PACE_HEADER,
         crate::write_load::RETRY_AFTER_MS_HEADER,
         "Retry-After",

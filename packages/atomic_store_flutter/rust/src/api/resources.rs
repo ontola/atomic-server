@@ -675,6 +675,23 @@ impl AtomicStore {
         self.sync.close().await;
     }
 
+    /// Register before connecting. One continuous subscription survives reconnects.
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn subscribe_server_replica_receipts(
+        &self,
+    ) -> super::server_receipts::ServerReceiptSubscription {
+        super::server_receipts::ServerReceiptSubscription::new(&self.db, self.sync.clone())
+    }
+
+    /// Recheck after crossing the asynchronous native-to-Dart boundary.
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn is_server_replica_receipt_current(
+        &self,
+        receipt: super::server_receipts::ServerReplicaReceiptData,
+    ) -> bool {
+        self.sync.accepts_receipt(&receipt.into())
+    }
+
     /// The server this handle's session was last opened on.
     #[flutter_rust_bridge::frb(sync)]
     pub fn connected_server(&self) -> Option<String> {

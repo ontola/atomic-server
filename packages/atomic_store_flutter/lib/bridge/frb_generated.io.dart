@@ -9,6 +9,7 @@ import 'api/embed.dart';
 import 'api/error.dart';
 import 'api/node.dart';
 import 'api/resources.dart';
+import 'api/server_receipts.dart';
 import 'api/simple/agent.dart';
 import 'api/simple/drive.dart';
 import 'api/simple/files.dart';
@@ -38,12 +39,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       get rust_arc_decrement_strong_count_AtomicStorePtr => wire
           ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStorePtr;
 
+  CrossPlatformFinalizerArg
+      get rust_arc_decrement_strong_count_ServerReceiptSubscriptionPtr => wire
+          ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscriptionPtr;
+
   CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_WebRtcLinkPtr =>
       wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWebRtcLinkPtr;
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
   AtomicStore
       dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
+          dynamic raw);
+
+  @protected
+  ServerReceiptSubscription
+      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
           dynamic raw);
 
   @protected
@@ -54,6 +67,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   AtomicStore
       dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
+          dynamic raw);
+
+  @protected
+  ServerReceiptSubscription
+      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
           dynamic raw);
 
   @protected
@@ -70,9 +88,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           dynamic raw);
 
   @protected
+  ServerReceiptSubscription
+      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+          dynamic raw);
+
+  @protected
   WebRtcLink
       dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWebRtcLink(
           dynamic raw);
+
+  @protected
+  RustStreamSink<ServerReplicaReceiptData>
+      dco_decode_StreamSink_server_replica_receipt_data_Sse(dynamic raw);
 
   @protected
   String dco_decode_String(dynamic raw);
@@ -103,6 +130,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ReplicaIdentityData dco_decode_box_autoadd_replica_identity_data(dynamic raw);
+
+  @protected
+  ServerReplicaReceiptData dco_decode_box_autoadd_server_replica_receipt_data(
+      dynamic raw);
 
   @protected
   StoreRecovery dco_decode_box_autoadd_store_recovery(dynamic raw);
@@ -183,6 +217,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
+  ReplicaIdentityData? dco_decode_opt_box_autoadd_replica_identity_data(
+      dynamic raw);
+
+  @protected
   StoreRecovery? dco_decode_opt_box_autoadd_store_recovery(dynamic raw);
 
   @protected
@@ -207,6 +245,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, int) dco_decode_record_string_u_32(dynamic raw);
 
   @protected
+  ReplicaIdentityData dco_decode_replica_identity_data(dynamic raw);
+
+  @protected
   ResourceData dco_decode_resource_data(dynamic raw);
 
   @protected
@@ -216,7 +257,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchHit dco_decode_search_hit(dynamic raw);
 
   @protected
+  ServerReplicaReceiptData dco_decode_server_replica_receipt_data(dynamic raw);
+
+  @protected
   SetupResult dco_decode_setup_result(dynamic raw);
+
+  @protected
+  StorageReceiptData dco_decode_storage_receipt_data(dynamic raw);
 
   @protected
   StoreAgentLoad dco_decode_store_agent_load(dynamic raw);
@@ -258,8 +305,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WebRtcLinkStart dco_decode_web_rtc_link_start(dynamic raw);
 
   @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
   AtomicStore
       sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
+          SseDeserializer deserializer);
+
+  @protected
+  ServerReceiptSubscription
+      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
           SseDeserializer deserializer);
 
   @protected
@@ -270,6 +325,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   AtomicStore
       sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
+          SseDeserializer deserializer);
+
+  @protected
+  ServerReceiptSubscription
+      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
           SseDeserializer deserializer);
 
   @protected
@@ -287,8 +347,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  ServerReceiptSubscription
+      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+          SseDeserializer deserializer);
+
+  @protected
   WebRtcLink
       sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWebRtcLink(
+          SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<ServerReplicaReceiptData>
+      sse_decode_StreamSink_server_replica_receipt_data_Sse(
           SseDeserializer deserializer);
 
   @protected
@@ -321,6 +391,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ReplicaIdentityData sse_decode_box_autoadd_replica_identity_data(
+      SseDeserializer deserializer);
+
+  @protected
+  ServerReplicaReceiptData sse_decode_box_autoadd_server_replica_receipt_data(
+      SseDeserializer deserializer);
 
   @protected
   StoreRecovery sse_decode_box_autoadd_store_recovery(
@@ -410,6 +488,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  ReplicaIdentityData? sse_decode_opt_box_autoadd_replica_identity_data(
+      SseDeserializer deserializer);
+
+  @protected
   StoreRecovery? sse_decode_opt_box_autoadd_store_recovery(
       SseDeserializer deserializer);
 
@@ -435,6 +517,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, int) sse_decode_record_string_u_32(SseDeserializer deserializer);
 
   @protected
+  ReplicaIdentityData sse_decode_replica_identity_data(
+      SseDeserializer deserializer);
+
+  @protected
   ResourceData sse_decode_resource_data(SseDeserializer deserializer);
 
   @protected
@@ -444,7 +530,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchHit sse_decode_search_hit(SseDeserializer deserializer);
 
   @protected
+  ServerReplicaReceiptData sse_decode_server_replica_receipt_data(
+      SseDeserializer deserializer);
+
+  @protected
   SetupResult sse_decode_setup_result(SseDeserializer deserializer);
+
+  @protected
+  StorageReceiptData sse_decode_storage_receipt_data(
+      SseDeserializer deserializer);
 
   @protected
   StoreAgentLoad sse_decode_store_agent_load(SseDeserializer deserializer);
@@ -486,9 +580,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WebRtcLinkStart sse_decode_web_rtc_link_start(SseDeserializer deserializer);
 
   @protected
+  void sse_encode_AnyhowException(
+      AnyhowException self, SseSerializer serializer);
+
+  @protected
   void
       sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
           AtomicStore self, SseSerializer serializer);
+
+  @protected
+  void
+      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+          ServerReceiptSubscription self, SseSerializer serializer);
 
   @protected
   void
@@ -499,6 +602,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
       sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore(
           AtomicStore self, SseSerializer serializer);
+
+  @protected
+  void
+      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+          ServerReceiptSubscription self, SseSerializer serializer);
 
   @protected
   void
@@ -516,8 +624,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
+      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+          ServerReceiptSubscription self, SseSerializer serializer);
+
+  @protected
+  void
       sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWebRtcLink(
           WebRtcLink self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_StreamSink_server_replica_receipt_data_Sse(
+      RustStreamSink<ServerReplicaReceiptData> self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -552,6 +669,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_i_64(
       PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_replica_identity_data(
+      ReplicaIdentityData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_server_replica_receipt_data(
+      ServerReplicaReceiptData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_store_recovery(
@@ -646,6 +771,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PlatformInt64? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_replica_identity_data(
+      ReplicaIdentityData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_store_recovery(
       StoreRecovery? self, SseSerializer serializer);
 
@@ -675,6 +804,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       (String, int) self, SseSerializer serializer);
 
   @protected
+  void sse_encode_replica_identity_data(
+      ReplicaIdentityData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_resource_data(ResourceData self, SseSerializer serializer);
 
   @protected
@@ -684,7 +817,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_search_hit(SearchHit self, SseSerializer serializer);
 
   @protected
+  void sse_encode_server_replica_receipt_data(
+      ServerReplicaReceiptData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_setup_result(SetupResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_storage_receipt_data(
+      StorageReceiptData self, SseSerializer serializer);
 
   @protected
   void sse_encode_store_agent_load(
@@ -774,6 +915,38 @@ class RustLibWire implements BaseWire {
           'frbgen_atomic_store_flutter_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore');
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStore =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAtomicStorePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscriptionPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'frbgen_atomic_store_flutter_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription');
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscriptionPtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void
+      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscriptionPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'frbgen_atomic_store_flutter_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription');
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscription =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerServerReceiptSubscriptionPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void

@@ -57,6 +57,8 @@ pub enum Tree {
     /// whole snapshots. Same key as [`Tree::LoroSnapshots`], written and
     /// removed with it. See `db::version_vectors`.
     VersionVectors,
+    /// Private, per-agent and server resource-version acknowledgements.
+    SyncReceipts,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -89,10 +91,11 @@ const SEARCH_TRIGRAMS: &str = "search_trigrams_v2";
 const ENVELOPES: &str = "envelopes_v1";
 const OUTBOX: &str = "outbox_v1";
 const VERSION_VECTORS: &str = "version_vectors_v1";
+const SYNC_RECEIPTS: &str = "sync_receipts_v1";
 
 impl Tree {
     /// Every tree, in the order backends create them.
-    pub const ALL: [Tree; 20] = [
+    pub const ALL: [Tree; 21] = [
         Tree::Resources,
         Tree::WatchedQueries,
         Tree::PropValSub,
@@ -113,6 +116,7 @@ impl Tree {
         Tree::Envelopes,
         Tree::Outbox,
         Tree::VersionVectors,
+        Tree::SyncReceipts,
     ];
 
     /// The on-disk name of this tree. Every backend (sled tree, redb table)
@@ -140,6 +144,7 @@ impl Tree {
             Tree::Envelopes => ENVELOPES,
             Tree::Outbox => OUTBOX,
             Tree::VersionVectors => VERSION_VECTORS,
+            Tree::SyncReceipts => SYNC_RECEIPTS,
         }
     }
 }

@@ -41,6 +41,8 @@ pub enum WsMessage {
     /// Server confirmed authentication. Its advertised capabilities are
     /// available via [`WsClient::server_capabilities`].
     Authenticated,
+    /// A validated storage barrier; consumers must correlate it to a pending request.
+    StorageReceipt(protocol::StorageReceipt),
     /// The server echoed a `KEEPALIVE` (0x41) we sent.
     Keepalive,
     /// A `BLOB_RESPONSE` (0x35) frame: server returned the bytes for a
@@ -144,14 +146,70 @@ pub struct WsClient {
     /// server binds an AUTH proof to its own origin, so a proof signed for
     /// anything else (the agent's own subject, another server) is refused.
     origin: String,
-    /// Capability names the server advertised in its `AUTH_OK` payload.
-    /// Empty until authenticated, and for servers older than 2026-09.
-    server_capabilities: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    auth: std::sync::Arc<std::sync::Mutex<AuthState>>,
+    auth_serial: tokio::sync::Mutex<()>,
+    connection_id: String,
     /// The nonce from the server's `CHALLENGE`, once it arrived. `None` on a
     /// server that predates the frame.
     challenge: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Flips to `true` when the reader task ends, i.e. the socket closed.
     closed: watch::Receiver<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct WsAuthContext {
+    pub generation: u64,
+    pub agent: String,
+}
+
+#[derive(Default)]
+struct AuthState {
+    generation: u64,
+    pending: Option<String>,
+    accepted: Option<String>,
+    caps: Vec<String>,
+    // AUTH_OK has no request id. After an untracked/cancelled AUTH, an old
+    // acknowledgement cannot safely identify a later attempt on this socket.
+    uncorrelated: bool,
+}
+impl AuthState {
+    fn invalidate(&mut self, uncorrelated: bool) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending = None;
+        self.accepted = None;
+        self.caps.clear();
+        self.uncorrelated |= uncorrelated;
+    }
+    fn accept(&mut self, caps: Vec<String>) {
+        if let Some(agent) = self.pending.take() {
+            self.accepted = Some(agent);
+            self.caps = caps;
+        }
+    }
+    fn context(&self) -> Option<WsAuthContext> {
+        if self.uncorrelated {
+            return None;
+        }
+        Some(WsAuthContext {
+            generation: self.generation,
+            agent: self.accepted.clone()?,
+        })
+    }
+}
+struct AuthAttempt {
+    auth: std::sync::Arc<std::sync::Mutex<AuthState>>,
+    generation: u64,
+    completed: bool,
+}
+impl Drop for AuthAttempt {
+    fn drop(&mut self) {
+        if !self.completed {
+            let mut auth = self.auth.lock().unwrap();
+            if auth.generation == self.generation {
+                auth.invalidate(true);
+            }
+        }
+    }
 }
 
 /// How long `authenticate` waits for the server's `CHALLENGE` when it has
@@ -180,6 +238,43 @@ fn http_origin_of_ws_url(url: &str) -> String {
 }
 
 impl WsClient {
+    #[cfg(test)]
+    pub(crate) fn receipt_test_client(
+        agent: &str,
+        capability: bool,
+    ) -> (
+        std::sync::Arc<Self>,
+        mpsc::Receiver<Message>,
+        watch::Sender<bool>,
+    ) {
+        let (tx, rx) = mpsc::channel(64);
+        let (closed_tx, closed) = watch::channel(false);
+        let auth = AuthState {
+            generation: 1,
+            accepted: Some(agent.into()),
+            caps: if capability {
+                vec![protocol::CAP_SERVER_STORAGE_RECEIPTS_V1.into()]
+            } else {
+                vec![]
+            },
+            ..Default::default()
+        };
+        (
+            std::sync::Arc::new(Self {
+                tx,
+                broadcast_tx: broadcast::channel(256).0,
+                origin: "https://server.example".into(),
+                auth: std::sync::Arc::new(std::sync::Mutex::new(auth)),
+                auth_serial: tokio::sync::Mutex::new(()),
+                connection_id: protocol::new_challenge_nonce(),
+                challenge: Default::default(),
+                closed,
+            }),
+            rx,
+            closed_tx,
+        )
+    }
+
     /// Connect to an AtomicServer WebSocket endpoint.
     /// The URL should be `ws://` or `wss://` (e.g. `ws://localhost:9883/ws`).
     pub async fn connect(url: &str) -> AtomicResult<Self> {
@@ -208,8 +303,8 @@ impl WsClient {
             connected.map_err(|e| format!("WebSocket connection failed to {}: {}", url, e))?;
 
         let origin = http_origin_of_ws_url(url);
-        let server_capabilities = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let caps_for_reader = server_capabilities.clone();
+        let auth = std::sync::Arc::new(std::sync::Mutex::new(AuthState::default()));
+        let auth_for_reader = auth.clone();
         let challenge = std::sync::Arc::new(std::sync::Mutex::new(None));
         let challenge_for_reader = challenge.clone();
 
@@ -235,9 +330,10 @@ impl WsClient {
                     Message::Text(text) => Some(parse_server_message(&text)),
                     Message::Binary(bin) => {
                         if bin.first() == Some(&protocol::tag::AUTH_OK) {
-                            if let Ok(mut caps) = caps_for_reader.lock() {
-                                *caps = protocol::decode_auth_ok(&bin[1..]);
-                            }
+                            auth_for_reader
+                                .lock()
+                                .unwrap()
+                                .accept(protocol::decode_auth_ok(&bin[1..]));
                         }
                         if bin.first() == Some(&protocol::tag::CHALLENGE) {
                             if let (Some(nonce), Ok(mut slot)) = (
@@ -255,6 +351,7 @@ impl WsClient {
                     let _ = broadcast_tx_clone.send(parsed);
                 }
             }
+            auth_for_reader.lock().unwrap().invalidate(true);
             let _ = closed_tx.send(true);
         });
 
@@ -262,17 +359,21 @@ impl WsClient {
             tx,
             broadcast_tx,
             origin,
-            server_capabilities,
+            auth,
+            auth_serial: tokio::sync::Mutex::new(()),
+            connection_id: protocol::new_challenge_nonce(),
             challenge,
             closed: closed_rx,
         };
         // Introduce ourselves: the capabilities we speak, so the server can
         // answer COMMIT with a slim COMMIT_OK. A pre-2026-09 server drops the
         // frame unread.
+        let mut capabilities = protocol::CLIENT_CAPABILITIES.to_vec();
+        capabilities.push(protocol::CAP_SERVER_STORAGE_RECEIPTS_V1);
         client
             .send_binary(protocol::encode_hello_with_caps(
                 "atomic_lib WsClient",
-                protocol::CLIENT_CAPABILITIES,
+                &capabilities,
             ))
             .await?;
         Ok(client)
@@ -338,10 +439,58 @@ impl WsClient {
     /// `protocol::CAPABILITIES`). Empty before authentication and for servers
     /// that predate the list.
     pub fn server_capabilities(&self) -> Vec<String> {
-        self.server_capabilities
-            .lock()
-            .map(|c| c.clone())
-            .unwrap_or_default()
+        let auth = self.auth.lock().unwrap();
+        if auth.context().is_none() || self.is_closed() {
+            Vec::new()
+        } else {
+            auth.caps.clone()
+        }
+    }
+
+    /// Unique to this physical WebSocket, including after reconnecting to the same URL.
+    pub fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+
+    pub(crate) fn receipt_context(&self) -> Option<WsAuthContext> {
+        if self.is_closed() {
+            return None;
+        }
+        let auth = self.auth.lock().unwrap();
+        if !auth
+            .caps
+            .iter()
+            .any(|cap| cap == protocol::CAP_SERVER_STORAGE_RECEIPTS_V1)
+        {
+            return None;
+        }
+        auth.context()
+    }
+
+    /// Serialize evidence publication with AUTH invalidation. No async work may
+    /// happen inside this callback.
+    pub(crate) fn with_receipt_context<T>(
+        &self,
+        expected: &WsAuthContext,
+        action: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let auth = self.auth.lock().unwrap();
+        if self.is_closed()
+            || auth.context().as_ref() != Some(expected)
+            || !auth
+                .caps
+                .iter()
+                .any(|cap| cap == protocol::CAP_SERVER_STORAGE_RECEIPTS_V1)
+        {
+            return None;
+        }
+        Some(action())
+    }
+
+    /// Call only inside `with_receipt_context`; the collector also holds its
+    /// lifecycle and local-agent publication guards while admitting the frame.
+    pub(crate) fn try_send_receipt_unchecked(&self, frame: Vec<u8>) -> bool {
+        self.tx.try_send(Message::Binary(frame.into())).is_ok()
     }
 
     /// Subscribe to incoming messages. Returns a broadcast receiver.
@@ -368,31 +517,50 @@ impl WsClient {
     /// remote — without ever holding the user's key. The frame is
     /// timestamp-bound, so mint it immediately before connecting.
     pub async fn authenticate_with_frame(&self, frame: Vec<u8>) -> AtomicResult<()> {
-        // Subscribe BEFORE sending so we don't miss the response
+        let _serial = self.auth_serial.lock().await;
+        if frame.first() != Some(&protocol::tag::AUTH) {
+            return Err("Expected AUTH frame".into());
+        }
+        let proof: crate::authentication::AuthValues = serde_json::from_slice(&frame[1..])?;
+        let agent = proof.agent_subject;
         let mut rx = self.subscribe();
-
-        self.send_binary(frame).await?;
-        let timeout = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            while let Ok(msg) = rx.recv().await {
-                match msg {
-                    WsMessage::Authenticated => return Ok(()),
-                    // A refused AUTH is answered with request_id 0.
-                    WsMessage::Error {
-                        request_id: 0,
-                        message,
-                        ..
-                    } => {
-                        return Err(AtomicError::from(format!("Auth failed: {}", message)));
+        let generation = {
+            let mut auth = self.auth.lock().unwrap();
+            auth.invalidate(false);
+            auth.pending = Some(agent.clone());
+            auth.generation
+        };
+        let mut attempt = AuthAttempt {
+            auth: self.auth.clone(),
+            generation,
+            completed: false,
+        };
+        // Managed authentication bypasses the deliberately conservative raw-AUTH gate.
+        self.tx
+            .send(Message::Binary(frame.into()))
+            .await
+            .map_err(|e| format!("AUTH send failed: {e}"))?;
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                tokio::select! {
+                    _ = self.wait_closed() => return Err(AtomicError::from("WebSocket closed during authentication")),
+                    message = rx.recv() => match message {
+                        Ok(WsMessage::Authenticated) => {
+                            let auth = self.auth.lock().unwrap();
+                            if auth.generation != generation { return Err("Authentication context changed".into()); }
+                            if auth.accepted.as_deref() == Some(&agent) { return Ok(()); }
+                        }
+                        Ok(WsMessage::Error { request_id: 0, message, .. }) => return Err(format!("Auth failed: {message}").into()),
+                        Err(_) => return Err("WebSocket authentication receiver closed".into()),
+                        _ => {}
                     }
-                    _ => continue,
                 }
             }
-            Err(AtomicError::from("WebSocket closed during authentication"))
-        });
-
-        timeout
-            .await
-            .map_err(|_| AtomicError::from("Authentication timed out"))?
+        }).await.map_err(|_| AtomicError::from("Authentication timed out"))?;
+        if result.is_ok() {
+            attempt.completed = true;
+        }
+        result
     }
 
     /// Subscribe to commit notifications for one resource (binary `SUB`,
@@ -499,6 +667,9 @@ impl WsClient {
 
     /// Send a raw binary frame over the WebSocket (v2 protocol).
     pub async fn send_binary(&self, bytes: Vec<u8>) -> AtomicResult<()> {
+        if bytes.first() == Some(&protocol::tag::AUTH) {
+            self.auth.lock().unwrap().invalidate(true);
+        }
         self.tx
             .send(Message::Binary(bytes.into()))
             .await
@@ -638,6 +809,9 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
     let tag = *bin.first()?;
     match tag {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
+        tag::STORAGE_RECEIPT => {
+            protocol::StorageReceipt::decode(&bin[1..]).map(WsMessage::StorageReceipt)
+        }
         tag::KEEPALIVE => Some(WsMessage::Keepalive),
         tag::ERROR => Some(match protocol::decode_error(&bin[1..]) {
             // A notice, not a failure: it is not tied to any request, and
@@ -758,4 +932,100 @@ fn decode_update_frame(payload: &[u8]) -> Option<WsMessage> {
         is_snapshot: decoded.flag_bits & flags::SNAPSHOT != 0,
         is_push: decoded.flag_bits & flags::PUSH != 0,
     })
+}
+
+#[cfg(test)]
+mod receipt_auth_tests {
+    use super::*;
+
+    fn acknowledge(client: &WsClient) {
+        client
+            .auth
+            .lock()
+            .unwrap()
+            .accept(vec![protocol::CAP_SERVER_STORAGE_RECEIPTS_V1.into()]);
+        let _ = client.broadcast_tx.send(WsMessage::Authenticated);
+    }
+
+    #[test]
+    fn unsolicited_ack_does_not_advertise_authenticated_capability() {
+        let mut state = AuthState::default();
+        state.accept(vec![protocol::CAP_SERVER_STORAGE_RECEIPTS_V1.into()]);
+        assert!(state.context().is_none());
+        assert!(state.caps.is_empty());
+    }
+
+    #[tokio::test]
+    async fn managed_auth_attempts_serialize_and_replace_the_accepted_epoch() {
+        let (client, mut outgoing, _closed) = WsClient::receipt_test_client("old", true);
+        let agent = crate::agents::Agent::new(None).unwrap();
+        let frame = protocol::encode_auth(&agent, client.origin()).unwrap();
+        let before = client.receipt_context().unwrap();
+        let first = tokio::spawn({
+            let client = client.clone();
+            let frame = frame.clone();
+            async move { client.authenticate_with_frame(frame).await }
+        });
+        outgoing.recv().await.unwrap();
+        assert!(client.receipt_context().is_none());
+        let second = tokio::spawn({
+            let client = client.clone();
+            async move { client.authenticate_with_frame(frame).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            outgoing.try_recv().is_err(),
+            "second AUTH cannot overtake the first ACK"
+        );
+        acknowledge(&client);
+        first.await.unwrap().unwrap();
+        outgoing.recv().await.unwrap();
+        assert!(client.receipt_context().is_none());
+        acknowledge(&client);
+        second.await.unwrap().unwrap();
+        let after = client.receipt_context().unwrap();
+        assert_eq!(after.agent, agent.subject);
+        assert!(after.generation > before.generation);
+    }
+
+    #[tokio::test]
+    async fn cancelled_auth_then_delayed_ack_cannot_certify_a_new_attempt() {
+        let (client, mut outgoing, _closed) = WsClient::receipt_test_client("old", true);
+        let agent = crate::agents::Agent::new(None).unwrap();
+        let frame = protocol::encode_auth(&agent, client.origin()).unwrap();
+        let task = tokio::spawn({
+            let client = client.clone();
+            let frame = frame.clone();
+            async move { client.authenticate_with_frame(frame).await }
+        });
+        outgoing.recv().await.unwrap();
+        task.abort();
+        let _ = task.await;
+        assert!(client.receipt_context().is_none());
+        let later = tokio::spawn({
+            let client = client.clone();
+            async move { client.authenticate_with_frame(frame).await }
+        });
+        outgoing.recv().await.unwrap();
+        // An uncorrelated old ACK may satisfy legacy authentication waiting,
+        // but cannot ever establish receipt provenance on this socket again.
+        acknowledge(&client);
+        later.await.unwrap().unwrap();
+        assert!(client.receipt_context().is_none());
+        assert!(client.server_capabilities().is_empty());
+    }
+
+    #[tokio::test]
+    async fn raw_auth_and_disconnect_immediately_revoke_receipt_context() {
+        let (client, _outgoing, closed) = WsClient::receipt_test_client("old", true);
+        let context = client.receipt_context().unwrap();
+        client.send_binary(vec![protocol::tag::AUTH]).await.unwrap();
+        acknowledge(&client);
+        assert!(client.with_receipt_context(&context, || ()).is_none());
+        let (fresh, _outgoing, closed_fresh) = WsClient::receipt_test_client("old", true);
+        assert!(fresh.receipt_context().is_some());
+        closed_fresh.send(true).unwrap();
+        assert!(fresh.receipt_context().is_none());
+        drop(closed);
+    }
 }

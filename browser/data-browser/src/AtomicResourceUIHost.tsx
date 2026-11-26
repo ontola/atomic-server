@@ -15,6 +15,22 @@ import { holdBootSplash } from './helpers/bootSplash';
 import { isEmbedded } from './helpers/embedMode';
 import { loadAtomicWasm } from './helpers/managed/recovery';
 import { useDriveApps } from './chunks/AppPage/useDriveApps';
+const LazyResourceSyncIndicator = lazy(() =>
+  import('./components/ResourceSync/ResourceSyncIndicator').then(module => ({
+    default: module.ResourceSyncIndicator,
+  })),
+);
+
+function ResourceSyncIndicator(
+  props: React.ComponentProps<typeof LazyResourceSyncIndicator>,
+) {
+  return (
+    <Suspense fallback={null}>
+      <LazyResourceSyncIndicator {...props} />
+    </Suspense>
+  );
+}
+
 const LazyAppFrame = lazy(() =>
   import('./chunks/AppPage/AppFrame').then(m => ({ default: m.AppFrame })),
 );
@@ -114,6 +130,7 @@ export function AtomicResourceUIHost({ children }: PropsWithChildren) {
       loadAtomicWasm,
       DriveApps,
       AppFrame,
+      ResourceSyncIndicator,
       WorkspaceControls,
       ResourceCard: EmbeddedResource,
       errorFallback: ErrorFallback,

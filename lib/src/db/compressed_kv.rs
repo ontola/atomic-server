@@ -27,7 +27,7 @@
 use crate::errors::AtomicResult;
 
 use super::{
-    kv_store::{KvIter, KvPair, KvStore},
+    kv_store::{KvIter, KvPair, KvStore, ReplicaIdentity},
     trees::{Method, Operation, Tree},
     write_log::{logged_subject, WriteLog},
 };
@@ -351,6 +351,10 @@ impl CompressedKv {
 }
 
 impl KvStore for CompressedKv {
+    fn replica_identity(&self, scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+        self.inner.replica_identity(scope)
+    }
+
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
         let found = self.inner.get(tree, key)?;
         match found {
@@ -362,6 +366,8 @@ impl KvStore for CompressedKv {
     }
 
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
+        let _mutation = self.log.mutation();
         if tree == Tree::LoroSnapshots {
             // The snapshot and its version vector row land together.
             self.inner.apply_batch(&[
@@ -384,6 +390,8 @@ impl KvStore for CompressedKv {
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
+        let _mutation = self.log.mutation();
         if tree == Tree::LoroSnapshots {
             self.inner.apply_batch(&[
                 Operation {
@@ -466,6 +474,8 @@ impl KvStore for CompressedKv {
     }
 
     fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(tree == Tree::Blobs);
+        let _mutation = self.log.mutation();
         self.inner.clear_tree(tree)?;
         if tree == Tree::LoroSnapshots {
             self.inner.clear_tree(Tree::VersionVectors)?;
@@ -477,6 +487,10 @@ impl KvStore for CompressedKv {
     }
 
     fn apply_batch(&self, operations: &[Operation]) -> AtomicResult<()> {
+        let _blob_write = self
+            .log
+            .blob_write(operations.iter().any(|op| op.tree == Tree::Blobs));
+        let _mutation = self.log.mutation();
         if !operations.iter().any(|op| {
             op.tree == Tree::LoroSnapshots || (is_compressed_tree(op.tree) && op.val.is_some())
         }) {
@@ -517,6 +531,8 @@ impl KvStore for CompressedKv {
     }
 
     fn commit_batch(&self) -> AtomicResult<()> {
+        let _blob_write = self.log.blob_write(true);
+        let _mutation = self.log.mutation();
         let committed = self.inner.commit_batch();
         let buffered = self.batched.lock().ok().and_then(|mut b| b.take());
         if let Err(e) = committed {

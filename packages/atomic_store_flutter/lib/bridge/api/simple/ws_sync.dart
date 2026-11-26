@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `access_key`, `catch_up_drive`, `catch_up_drive`, `check`, `clear_denied`, `clear`, `client`, `close`, `denied_lock`, `deny`, `drain_outbox`, `drive_belongs_to_origin`, `ensure_drive_materialized`, `fetch_resource_state`, `follow_drive`, `follow_drive`, `handle_ws_message`, `host_of`, `is_access_denied`, `is_denied_anywhere`, `is_drive_denied`, `is_open`, `key`, `open`, `origin`, `post_commit`, `set_origin`, `spawn_presence_forwarder`, `subscribe_presence`
+// These functions are ignored because they are not marked as `pub`: `accepts_receipt`, `access_key`, `catch_up_drive`, `catch_up_drive`, `check`, `clear_denied`, `clear`, `client`, `close`, `denied_lock`, `deny`, `drain_outbox`, `drive_belongs_to_origin`, `ensure_drive_materialized`, `fetch_resource_state`, `follow_drive`, `follow_drive`, `follow_receipts`, `handle_ws_message`, `host_of`, `is_access_denied`, `is_denied_anywhere`, `is_drive_denied`, `is_open`, `key`, `open_is_current`, `open`, `origin`, `post_commit`, `replace_session`, `set_origin`, `spawn_presence_forwarder`, `subscribe_presence`
 // These functions are ignored because they have generic arguments: `post`, `post`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DeniedDrives`, `SinkTransport`, `SyncSession`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `post_commit`
