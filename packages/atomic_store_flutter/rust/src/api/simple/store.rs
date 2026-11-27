@@ -47,7 +47,7 @@ pub async fn open_db(path: String) -> Result<(), String> {
         return Ok(());
     }
 
-    let (store, recovery, fresh) = open_shared(std::path::Path::new(&path)).await?;
+    let (store, recovery, fresh) = open_shared(std::path::Path::new(&path), None).await?;
     if let Some(recovery) = recovery {
         #[cfg(not(target_arch = "wasm32"))]
         state::set_store_recovery(recovery);
@@ -70,11 +70,13 @@ pub async fn open_db(path: String) -> Result<(), String> {
 }
 
 /// The store at `path`, opened once per process: the `Db` another open of the
-/// same file made is shared, never opened again. The caller holds
+/// same file made is shared, never opened again (so a later `store_key` does
+/// not apply to it). The caller holds
 /// `state::OPEN_DB_LOCK` (not on wasm). The last value says the store was
 /// opened by this call (and a damaged one set aside, in the second).
 pub(crate) async fn open_shared(
     path: &std::path::Path,
+    store_key: Option<[u8; 32]>,
 ) -> Result<(state::OpenStore, Option<StoreRecovery>, bool), String> {
     #[cfg(not(target_arch = "wasm32"))]
     let key = {
@@ -89,7 +91,7 @@ pub(crate) async fn open_shared(
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    let (store, recovery) = open_native_store(path).await?;
+    let (store, recovery) = open_native_store(path, store_key.as_ref()).await?;
     #[cfg(target_arch = "wasm32")]
     let (store, recovery) = (
         atomic_lib::Db::init_redb_opfs(None, "atomic.redb")
@@ -98,9 +100,19 @@ pub(crate) async fn open_shared(
         None,
     );
 
+    #[cfg(not(target_arch = "wasm32"))]
+    let encrypted = atomic_lib::db::recovery::file_encryption(&path.join("atomic.redb"))
+        .map(|e| e == atomic_lib::db::recovery::FileEncryption::Encrypted)
+        .unwrap_or(false);
+    #[cfg(target_arch = "wasm32")]
+    let encrypted = {
+        let _ = &store_key;
+        false
+    };
     let store = state::OpenStore {
         db: std::sync::Arc::new(store),
         recents: Default::default(),
+        encrypted,
     };
     state::register_store(key, store.clone());
     Ok((store, recovery, true))
@@ -147,34 +159,64 @@ pub fn flush_db() -> Result<(), String> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn open_native_store(
     base_path: &std::path::Path,
+    store_key: Option<&[u8; 32]>,
 ) -> Result<(atomic_lib::Db, Option<StoreRecovery>), String> {
-    use atomic_lib::db::recovery;
+    use atomic_lib::db::recovery::{self, FileEncryption};
     let db_path = base_path.join("atomic.redb");
     let before = recovery::inspect(&db_path).ok().flatten();
     let started = std::time::Instant::now();
 
-    let (store, recovered) = match open_store_catching(base_path).await {
+    // What is on disk decides, not what the caller asked for. An encrypted
+    // file without its key is an error here, never "damage": the damaged-store
+    // path below would set the person's data aside. A plaintext store stays
+    // plaintext (no silent migration), whatever key came with it.
+    let on_disk = recovery::file_encryption(&db_path)
+        .map_err(|e| format!("Could not read {}: {e}", db_path.display()))?;
+    let store_key = match (on_disk, store_key) {
+        (FileEncryption::Encrypted, None) => {
+            return Err(format!(
+                "The store {} is encrypted at rest and needs its key (pass store_key)",
+                db_path.display()
+            ))
+        }
+        (FileEncryption::Plain, Some(_)) => {
+            tracing::warn!(
+                "{} is a plaintext store; opening it unencrypted. Stores are not migrated.",
+                db_path.display()
+            );
+            None
+        }
+        (_, key) => key,
+    };
+
+    let (store, recovered) = match open_store_catching(base_path, store_key).await {
         Ok(store) => (store, None),
         Err(e) if recovery::is_damaged_store_error(&e) => {
             tracing::error!("The store could not be opened, setting it aside: {e} ({before:?})");
             let kept = recovery::set_aside(&db_path).map_err(|io| {
                 format!("The store could not be opened ({e}) nor moved aside: {io}")
             })?;
-            let mut repaired = match recovery::repair_copy(&kept, &db_path) {
-                Ok(()) => true,
-                Err(repair) => {
+            // Repair works on plain redb files; an encrypted store is only
+            // kept aside and a new encrypted one started under the same key.
+            let mut repaired = match (store_key, recovery::repair_copy(&kept, &db_path)) {
+                (None, Ok(())) => true,
+                (None, Err(repair)) => {
                     tracing::warn!("Repairing a copy of the store failed: {repair}");
                     false
                 }
+                (Some(_), _) => {
+                    let _ = std::fs::remove_file(&db_path);
+                    false
+                }
             };
-            let store = match open_store_catching(base_path).await {
+            let store = match open_store_catching(base_path, store_key).await {
                 Ok(store) => store,
                 Err(again) if repaired => {
                     // Only the repaired copy goes; the original is `kept`.
                     tracing::warn!("The repaired store did not open either: {again}");
                     let _ = std::fs::remove_file(&db_path);
                     repaired = false;
-                    open_store_catching(base_path).await?
+                    open_store_catching(base_path, store_key).await?
                 }
                 Err(again) => return Err(again),
             };
@@ -234,18 +276,22 @@ pub(crate) const REDB_CACHE_BYTES: usize = 48 * 1024 * 1024;
 /// `Db::init_redb_file` with any panic inside it turned into a "damaged"
 /// error: a panic must not escape to the app, which then never draws.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn open_store_catching(base_path: &std::path::Path) -> Result<atomic_lib::Db, String> {
+pub(crate) async fn open_store_catching(
+    base_path: &std::path::Path,
+    store_key: Option<&[u8; 32]>,
+) -> Result<atomic_lib::Db, String> {
     use futures::FutureExt;
     let uploads_path = base_path.join("uploads");
     let now = state::now_ms();
     let policy = compaction_check::startup_policy(base_path, now);
     let checks = policy.enabled;
-    let opening = atomic_lib::Db::init_redb_file_with_cache(
+    let opening = atomic_lib::Db::init_redb_file_with_key(
         base_path,
         None,
         &uploads_path,
         &policy,
         Some(REDB_CACHE_BYTES),
+        store_key,
     );
     match std::panic::AssertUnwindSafe(opening).catch_unwind().await {
         Ok(Ok(store)) => {

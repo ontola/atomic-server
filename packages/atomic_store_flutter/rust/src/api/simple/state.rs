@@ -60,6 +60,8 @@ pub(super) fn set_db(store: OpenStore) {
 pub(crate) struct OpenStore {
     pub db: Arc<atomic_lib::Db>,
     pub recents: Arc<atomic_lib::host::recents::RecentsIndex>,
+    /// The file is encrypted at rest.
+    pub encrypted: bool,
 }
 
 impl OpenStore {

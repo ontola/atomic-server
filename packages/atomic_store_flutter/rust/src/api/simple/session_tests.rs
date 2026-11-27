@@ -44,7 +44,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 }
 
 async fn open(dir: &std::path::Path) -> AtomicStore {
-    AtomicStore::open(dir.to_string_lossy().into_owned(), None, None)
+    AtomicStore::open(dir.to_string_lossy().into_owned(), None, None, None)
         .await
         .unwrap()
 }
