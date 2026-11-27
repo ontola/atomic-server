@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -433,7 +434,74 @@ def evidence_allowed(relative):
         (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json', 'cache-startup-observation.json', 'scratch-startup.json'))))
 
 
+class PrivateEvidenceError(ValueError):
+    """Only private material is excluded; integrity errors remain fatal."""
+
+
+def evidence_signature(path):
+    info = path.stat()
+    value = [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+    if path.suffix.lower() == '.json' or info.st_size <= 64 * 1024:
+        value.append(sha256(path))
+    return value
+
+
+def owned_evidence_file(path, device=None):
+    if any(parent.is_symlink() for parent in path.parents):
+        raise ValueError('evidence file cannot traverse symlinks')
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+            or device is not None and info.st_dev != device):
+        raise ValueError('evidence must be an owned regular file on its verified filesystem')
+    return info
+
+
+def scan_evidence(path, private, output=None):
+    """Hash and privacy-scan exact stable bytes, including chunk boundaries."""
+    owned_evidence_file(path)
+    before = evidence_signature(path)
+    digest, tail = hashlib.sha256(), b''
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            block = tail + chunk
+            if any(marker in block for marker in private):
+                raise PrivateEvidenceError('private material excluded from evidence')
+            digest.update(chunk)
+            if output is not None:
+                output.write(chunk)
+            tail = block[-max(map(len, private)):]
+    if evidence_signature(path) != before:
+        raise ValueError('evidence changed during verified read')
+    return digest.hexdigest()
+
+
+def large_browser_attachment(relative, size):
+    parts = relative.parts
+    return (size > 64 * 1024 and relative.suffix.lower() in ('.zip', '.png', '.webm')
+            and len(parts) > 4 and parts[0] == 'runtime'
+            and re.fullmatch(r'node-\d{3}', parts[1]) and parts[2] == 'results'
+            and 'browser' in parts[3:-1])
+
+
 def persist_evidence(config, final=False):
+    """One writer owns copy state and aliases, including independent reapers."""
+    root = Path(config['root'])
+    if root.is_symlink() or any(parent.is_symlink() for parent in root.parents):
+        raise ValueError('evidence lock root cannot traverse symlinks')
+    root.mkdir(parents=True, exist_ok=True)
+    info = root.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+        raise ValueError('evidence lock root is not owned')
+    fd = os.open(root / 'evidence-copy.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'r+') as lock:
+        info = os.fstat(lock.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+            raise ValueError('evidence lock must be an owned unshared regular file')
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _persist_evidence_locked(config, final)
+
+
+def _persist_evidence_locked(config, final=False):
     mount = verify_mount(config)
     destination = mount / 'runs' / config['batch_key']
     if any(path.is_symlink() for path in (destination, destination.parent, mount)):
@@ -447,6 +515,8 @@ def persist_evidence(config, final=False):
     if runtime.is_symlink():
         raise ValueError('runtime evidence root cannot be a symlink')
     copy_path = Path(config['root']) / 'evidence-copy-state.json'
+    if copy_path.is_symlink():
+        raise ValueError('evidence copy state cannot be a symlink')
     copy_state = read_json(copy_path, {})
     sources = []
     for directory, dirs, files in os.walk(runtime, followlinks=False):
@@ -460,45 +530,105 @@ def persist_evidence(config, final=False):
         path = Path(config['root']) / name
         if path.is_file() and not path.is_symlink():
             sources.append((path, Path(name)))
-    def signature(path):
-        stat = path.stat()
-        value = [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
-        # Same-size writes can share ctime on Linux even when mtime is restored.
-        # Mutable reports/receipts and small exit markers need content identity;
-        # leave large immutable traces on the inexpensive metadata shortcut.
-        if path.suffix.lower() == '.json' or stat.st_size <= 64 * 1024:
-            value.append(sha256(path))
-        return value
+    device = mount.stat().st_dev
+    attachments = {}
     for source, relative in sources:
         target = destination / relative
         if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
             raise ValueError('evidence destination cannot traverse symlinks')
         target.parent.mkdir(parents=True, exist_ok=True)
-        observed = signature(source)
+        if target.parent.stat().st_dev != device:
+            raise ValueError('evidence destination is outside its verified filesystem')
+        owned_evidence_file(source)
+        observed = evidence_signature(source)
         prior = copy_state.get(str(relative), {})
-        if target.exists() and prior.get('source') == observed and prior.get('destination') == signature(target):
-            copied.append(str(relative))
-            continue
+        current = None
+        if target.exists():
+            owned_evidence_file(target, device)
+            current = evidence_signature(target)
+        unchanged = prior.get('source') == observed and prior.get('destination') == current and current is not None
+        attachment = large_browser_attachment(relative, observed[2])
         temporary = target.with_name(target.name + '.tmp')
-        if temporary.is_symlink():
-            raise ValueError('temporary evidence copy cannot be a symlink')
+        if temporary.exists() or temporary.is_symlink():
+            raise ValueError('temporary evidence copy already exists; reconciliation required')
         try:
-            with source.open('rb') as src, temporary.open('wb') as out:
-                tail = b''
-                for chunk in iter(lambda: src.read(1024 * 1024), b''):
-                    block = tail + chunk
-                    if any(marker in block for marker in private):
-                        raise ValueError('private material excluded from evidence')
-                    out.write(chunk)
-                    tail = block[-max(map(len, private)):]
-            temporary.replace(target)
-            copy_state[str(relative)] = {'source': observed, 'destination': signature(target)}
+            content = prior.get('content_sha256') if unchanged and attachment else None
+            if attachment and not content:
+                content = scan_evidence(source, private)
+            candidate = attachments.get((observed[2], content)) if attachment else None
+            if candidate:
+                other, proof = candidate
+                owned_evidence_file(other, device)
+                if evidence_signature(other) != proof:
+                    if scan_evidence(other, private) != content:
+                        candidate = None
+            if candidate and current and current[:2] == evidence_signature(candidate[0])[:2]:
+                unchanged = True
+            elif candidate:
+                other = candidate[0]
+                proof = evidence_signature(other)
+                os.link(other, temporary, follow_symlinks=False)
+                owned_evidence_file(temporary, device)
+                linked = evidence_signature(temporary)
+                # link(2) changes ctime only; bytes and inode must stay exact.
+                if linked[:4] != proof[:4] or evidence_signature(source) != observed:
+                    raise ValueError('attachment changed while creating verified alias')
+                temporary.replace(target)
+                unchanged = True
+            if not unchanged:
+                # An earlier interrupted copy can be reused only after full
+                # content/privacy proof; this also enables existing-report repair.
+                if attachment and current and scan_evidence(target, private) == content:
+                    unchanged = True
+                else:
+                    with temporary.open('xb') as out:
+                        copied_hash = scan_evidence(source, private, out)
+                    if content is not None and copied_hash != content:
+                        raise ValueError('attachment changed between verified reads')
+                    temporary.replace(target)
+            owned_evidence_file(target, device)
+            record = {'source': observed, 'destination': evidence_signature(target)}
+            if attachment:
+                record['content_sha256'] = content
+                attachments[(observed[2], content)] = (target, record['destination'])
+            copy_state[str(relative)] = record
             copied.append(str(relative))
-        except ValueError:
+        except PrivateEvidenceError:
             excluded.append(str(relative))
             target.unlink(missing_ok=True)
+            copy_state.pop(str(relative), None)
         finally:
             temporary.unlink(missing_ok=True)
+    # Creating or removing an alias changes every sibling inode's ctime. Save
+    # all resulting signatures together, so the next unchanged pass is a no-op.
+    alias_proofs = {}
+    for relative, record in list(copy_state.items()):
+        relative_path = Path(relative)
+        if (relative_path.is_absolute() or '..' in relative_path.parts
+                or (relative_path.parts[:1] == ('runtime',)
+                    and not evidence_allowed(Path(*relative_path.parts[1:])))
+                or relative_path.parts[:1] != ('runtime',) and relative not in
+                    ('controller.log', 'supervisor.log', 'reaper.log', 'cache-maintenance.json')):
+            raise ValueError('cached evidence identity is outside the retained report')
+        path = destination / relative_path
+        if path.exists():
+            owned_evidence_file(path, device)
+            current = evidence_signature(path)
+            previous = record['destination']
+            if current != previous:
+                content = record.get('content_sha256')
+                if current[:4] != previous[:4] or not isinstance(content, str) or not re.fullmatch(r'[a-f0-9]{64}',content):
+                    raise ValueError('retained evidence changed outside alias bookkeeping')
+                # Prove bytes before accepting changed ctime. Link count updates
+                # must never bless an unrelated in-place mutation of a shared blob.
+                identity = tuple(current)
+                if identity not in alias_proofs:
+                    alias_proofs[identity] = scan_evidence(path, private)
+                if alias_proofs[identity] != content:
+                    raise ValueError('shared attachment changed during preservation')
+            record['destination'] = current
+        else:
+            copy_state.pop(relative)
     write_json(copy_path, copy_state)
     for name in ('cloud-status.json', 'cleanup-proof.json'):
         value = read_json(Path(config['root']) / name)
