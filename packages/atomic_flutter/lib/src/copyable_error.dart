@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'click_cursor.dart';
 import 'error_snack.dart';
 import 'package:flutter/services.dart';
+import 'strings.dart';
 
 /// Error or diagnostic text a person can select and copy for a bug report:
 /// [SelectableText] in the error colour (long-press / right-click gives the
@@ -67,6 +68,7 @@ class _ErrorTextState extends State<ErrorText> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AtomicStrings.of(context);
     final color = widget.color ?? Theme.of(context).colorScheme.error;
     final collapsed = _long && !_expanded;
     final body = Column(
@@ -88,7 +90,7 @@ class _ErrorTextState extends State<ErrorText> {
               onTap: () => setState(() => _expanded = !_expanded),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(_expanded ? 'Show less' : 'Show more',
+                child: Text(_expanded ? s.showLess : s.showMore,
                     style: TextStyle(
                         color: color,
                         fontSize: widget.fontSize - 1,
@@ -106,13 +108,13 @@ class _ErrorTextState extends State<ErrorText> {
         if (_copied)
           Padding(
             padding: const EdgeInsets.only(left: 8, top: 8),
-            child: Text('Copied',
+            child: Text(s.copiedShort,
                 style: TextStyle(color: color, fontSize: widget.fontSize - 1)),
           )
         else
           IconButton(
             icon: Icon(Icons.copy, size: 18, color: color),
-            tooltip: 'Copy',
+            tooltip: s.copy,
             onPressed: _copy,
             constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             padding: EdgeInsets.zero,
