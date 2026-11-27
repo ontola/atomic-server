@@ -1380,6 +1380,26 @@ impl Db {
         policy: &compaction::CompactionPolicy,
         cache_bytes: Option<usize>,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_key(path, base_domain, uploads_path, policy, cache_bytes, None)
+            .await
+    }
+
+    /// `init_redb_file_with_cache`, with the file encrypted at rest under
+    /// `key` when given (XChaCha20-Poly1305, see
+    /// [`db::encrypted_backend::EncryptedBackend`]). A new store is created
+    /// encrypted; an existing one must already be encrypted and match `key`.
+    /// A plaintext file is refused, not migrated: ask
+    /// [`db::recovery::file_encryption`] first. Startup compaction does not
+    /// run on an encrypted file.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_key(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
+        key: Option<&[u8; 32]>,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -1422,6 +1442,13 @@ impl Db {
                 }
             }
 
+            if sled_path.exists() && key.is_some() {
+                return Err(
+                    "A sled store cannot be migrated into an encrypted redb store; \
+                            migrate it without a key first"
+                        .into(),
+                );
+            }
             if sled_path.exists() {
                 Self::migrate_from_sled(
                     &sled_path,
@@ -1439,7 +1466,7 @@ impl Db {
         let _ = uploads_path;
 
         let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_options(&redb_path, policy, cache_bytes)?;
+            redb_store::RedbStore::new_file_with_key(&redb_path, policy, cache_bytes, key)?;
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 

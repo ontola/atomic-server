@@ -4,14 +4,13 @@ import { useStore, type Store } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import * as Sentry from '@sentry/react';
 import { useSettings } from '../helpers/AppSettings';
+import { endAccountSession } from '../helpers/managed/signOut';
 import { archiveStoredAgent } from '../helpers/agentStorage';
 import {
-  clearManagedAccountBinding,
   evaluateIdentityReconciliation,
   evaluateServerReconciliation,
   linkAgentToAccount,
   localAgentWorkspace,
-  logoutManagedSession,
   PRODUCT_NAME,
   readManagedAccountBinding,
   sameAgent,
@@ -371,8 +370,7 @@ export function IdentityReconcileGate({
     setResolving(true);
 
     try {
-      clearManagedAccountBinding();
-      await logoutManagedSession();
+      await endAccountSession();
     } finally {
       setResolving(false);
       setConflict(null);

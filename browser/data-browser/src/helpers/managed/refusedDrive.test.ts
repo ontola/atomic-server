@@ -3,6 +3,9 @@ import { conversations, core } from '@tomic/react';
 import { healRefusedDrive } from './refusedDrive';
 import { setManagedDeviceToken } from './api';
 import { noteManagedSessionChanged } from './session';
+import { readManagedAccountBinding } from './binding';
+
+vi.mock('./binding', () => ({ readManagedAccountBinding: vi.fn() }));
 
 const DRIVE = 'did:ad:W2Q3';
 const ME = 'did:ad:agent:me';
@@ -39,7 +42,14 @@ function setup(local = false, found: unknown = resource()) {
 describe('a drive the node refuses as not enrolled', () => {
   // The session answer is cached; a signed-out answer from one test must not
   // stand in for the next test's control plane.
-  beforeEach(() => noteManagedSessionChanged());
+  beforeEach(() => {
+    noteManagedSessionChanged();
+    // Linked to an account, unless a test says it never was.
+    vi.mocked(readManagedAccountBinding).mockReturnValue({
+      owner_email: 'a@example.com',
+      expected_agent_subject: ME,
+    });
+  });
 
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -89,6 +99,18 @@ describe('a drive the node refuses as not enrolled', () => {
       }),
     ).toBe(false);
     expect(store.makeDriveLocal).not.toHaveBeenCalled();
+  });
+
+  it('moves a guest drive when the device was never linked to an account', async () => {
+    vi.mocked(readManagedAccountBinding).mockReturnValue(null);
+    const store = setup();
+
+    expect(
+      await healRefusedDrive(store, DRIVE, async () => {
+        throw new Error('Sign in to check Cloud Server hosting.');
+      }),
+    ).toBe(true);
+    expect(store.makeDriveLocal).toHaveBeenCalledExactlyOnceWith(DRIVE);
   });
 
   it('does not move a drive when nobody is signed in', async () => {

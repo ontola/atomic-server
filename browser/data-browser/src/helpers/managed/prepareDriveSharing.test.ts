@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { prepareDriveSharing } from './prepareDriveSharing';
+import { isClientDbEnabled } from '../clientDbMode';
+
+vi.mock('../clientDbMode', () => ({ isClientDbEnabled: vi.fn(() => true) }));
 
 const drive = 'did:ad:drive';
 
@@ -44,6 +47,15 @@ describe('sharing an unenrolled drive with a saved server connection', () => {
   it('does not migrate an already local drive', async () => {
     const store = setup(true);
     expect(await prepareDriveSharing(store, drive, [])).toBe(true);
+    expect(store.makeDriveLocal).not.toHaveBeenCalled();
+  });
+});
+
+describe('the desktop app (no browser database)', () => {
+  it('leaves the drive on the embedded node instead of asking for local storage', async () => {
+    vi.mocked(isClientDbEnabled).mockReturnValueOnce(false);
+    const store = setup();
+    expect(await prepareDriveSharing(store, drive, [])).toBe(false);
     expect(store.makeDriveLocal).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import 'package:flutter/services.dart';
 
 import 'atomic_spinner.dart';
 import 'theme.dart';
+import 'strings.dart';
 
 export 'atomic_spinner.dart';
 
@@ -270,7 +271,8 @@ class KeyValueRow extends StatelessWidget {
         ? () {
             Clipboard.setData(ClipboardData(text: copy!));
             ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-                content: Text('${copyLabel ?? label} copied'),
+                content:
+                    Text(AtomicStrings.of(context).copied(copyLabel ?? label)),
                 duration: const Duration(seconds: 2)));
           }
         : onTap;

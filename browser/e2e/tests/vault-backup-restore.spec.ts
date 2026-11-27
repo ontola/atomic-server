@@ -356,19 +356,16 @@ test.describe('Cloud Vault backup and restore', () => {
       await fresh.waitForURL(url => !url.searchParams.has('token'));
       await fresh.goto(driveUrl);
 
-      // "Forgot it? Restore from …" is the portal path: the account is known from
-      // the session cookie the magic link just set, so all it needs is the
-      // recovery code. Minting a second agent here instead would leave the
-      // vault's key envelope unopenable — the objects would still be stored and
-      // permanently unreadable, which is the worst failure this feature has.
+      // The portal path: the account is known from the session cookie the
+      // magic link just set, so the sign-in step shows the backup's own unlock
+      // form and all it needs is the recovery code. Minting a second agent here
+      // instead would leave the vault's key envelope unopenable — the objects
+      // would still be stored and permanently unreadable, which is the worst
+      // failure this feature has.
       await fresh
-        .getByRole('button', { name: /^Forgot it\? Restore from/ })
-        .click({ timeout: 30_000 });
-      await expect(
-        fresh.getByRole('heading', { name: 'Restore account' }),
-      ).toBeVisible({ timeout: 30_000 });
-      await fresh.getByLabel('Recovery code').fill(recoveryCode);
-      await fresh.getByRole('button', { name: 'Restore & sign in' }).click();
+        .getByLabel('Recovery code or secret')
+        .fill(recoveryCode, { timeout: 30_000 });
+      await fresh.getByRole('button', { name: 'Continue' }).click();
 
       // The server still knows the original drive, so sign-in opens it.
       // Only Vault knows the canary created in local-only mode above.

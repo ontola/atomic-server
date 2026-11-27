@@ -15,7 +15,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import {
   accountAddress,
-  getManagedAccount,
+  getManagedAccountOrNull,
   PRODUCT_NAME,
   safePortalUrl,
   type ManagedAccount,
@@ -55,7 +55,7 @@ export function AgentProfileHeader({ subject }: { subject: string }) {
 
     void (async () => {
       const [session, info] = await Promise.all([
-        getManagedAccount().catch(() => null),
+        getManagedAccountOrNull(),
         fetchManagedInfo(baseURL).catch(() => null),
       ]);
 

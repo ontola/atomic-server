@@ -97,6 +97,10 @@ On the next launch, pass the saved secret and the same path: `AtomicFlutter.open
 The node signs as the same agent, works in the Drive it was last in, and the local store already holds the data.
 Open a database path once per process and keep the `AtomicNode`.
 
+For data that must not sit in the clear on the device (health records, say), pass `encryptAtRest: true` when you first open a new path.
+The database file is then encrypted (XChaCha20-Poly1305) with a random key kept in the OS keychain or keystore next to the agent secret.
+An existing plaintext database is not migrated and stays plaintext (`node.encryptedAtRest` tells you); a lost key means the data cannot be read.
+
 For a second device of the same person, open with the same secret and a new path.
 `node.driveNeedsSync` is then `true`: the Drive arrives when you `connect` to a server that holds it, or `pair` with a device that has it.
 `node.sync.discover(drive)` looks up servers for a Drive through its public record, and each must prove it hosts the Drive.

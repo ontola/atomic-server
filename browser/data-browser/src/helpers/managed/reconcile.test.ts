@@ -5,6 +5,7 @@ import {
   connectHostedDrive,
   localAgentIsDisposable,
 } from './reconcile';
+import { AtomicError, ErrorType } from '@tomic/react';
 import { setManagedDeviceToken } from './api';
 import type { ManagedEnrollmentSummary } from './enrollmentApi';
 
@@ -400,6 +401,15 @@ describe('localAgentIsDisposable', () => {
   it('treats a guest (no personal drive) as disposable', async () => {
     expect(
       await localAgentIsDisposable(reader({ props: {} }), 'did:ad:agent:a'),
+    ).toBe(true);
+  });
+
+  it('treats an agent the server does not know as disposable', async () => {
+    expect(
+      await localAgentIsDisposable(
+        reader({ error: new AtomicError('gone', ErrorType.NotFound) }),
+        'did:ad:agent:a',
+      ),
     ).toBe(true);
   });
 

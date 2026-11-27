@@ -70,8 +70,7 @@ export interface KeyboardHandler {
 export function handlerMatchesModifier(
   handler: Pick<KeyboardHandler, 'mod'>,
   event: { metaKey: boolean; ctrlKey: boolean },
-  isMac = typeof navigator !== 'undefined' &&
-    navigator.platform.includes('Mac'),
+  isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform),
 ): boolean {
   return (handler.mod ?? false) === (isMac ? event.metaKey : event.ctrlKey);
 }

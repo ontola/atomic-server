@@ -128,6 +128,84 @@ pub fn create_database_with_cache(
     }
 }
 
+/// How the store file at a path is held, read from its first bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileEncryption {
+    /// No file, or an empty one: a new store, which may be created either way.
+    Missing,
+    /// A redb file in the clear.
+    Plain,
+    /// Carries the `ATOMENC1` header of [`super::encrypted_backend`].
+    Encrypted,
+}
+
+/// Which of [`FileEncryption`] the file at `path` is. Anything that is not
+/// the encrypted header counts as plain, including a damaged file, so that
+/// the damage handling for plaintext stores keeps applying to it.
+pub fn file_encryption(path: &Path) -> std::io::Result<FileEncryption> {
+    use std::io::Read;
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(FileEncryption::Missing),
+        Err(e) => return Err(e),
+    };
+    let mut head = [0u8; 8];
+    let mut n = 0;
+    while n < head.len() {
+        match file.read(&mut head[n..])? {
+            0 => break,
+            k => n += k,
+        }
+    }
+    Ok(if n == 0 {
+        FileEncryption::Missing
+    } else if n == head.len() && &head == super::encrypted_backend::MAGIC {
+        FileEncryption::Encrypted
+    } else {
+        FileEncryption::Plain
+    })
+}
+
+/// [`create_database_with_cache`] for an encrypted file: redb on a
+/// file backend wrapped in [`super::encrypted_backend::EncryptedBackend`].
+/// A wrong key is reported as such (never as damage: the file is fine, and
+/// treating it as damaged would set the user's data aside).
+pub fn create_encrypted_database(
+    path: &Path,
+    cache_bytes: Option<usize>,
+    key: &[u8; 32],
+) -> AtomicResult<Database> {
+    let (builder, _) = database_builder(cache_bytes);
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|e| format!("Failed to open {}: {e}", path.display()))?;
+    let backend = redb::backends::FileBackend::new(file)
+        .map_err(|e| format!("Failed to lock {}: {e}", path.display()))?;
+    let backend = super::encrypted_backend::EncryptedBackend::new(backend, key)
+        .map_err(|e| format!("Failed to open the encrypted store {}: {e}", path.display()))?;
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        builder.create_with_backend(backend)
+    })) {
+        Ok(Ok(db)) => Ok(db),
+        Ok(Err(e)) if is_damage(&e) => Err(format!(
+            "The {DAMAGED_STORE}: redb could not read {}: {e}",
+            path.display()
+        )
+        .into()),
+        Ok(Err(e)) => Err(format!("Failed to create redb at {}: {e}", path.display()).into()),
+        Err(panic) => Err(format!(
+            "The {DAMAGED_STORE}: redb panicked opening {}: {}",
+            path.display(),
+            panic_message(&panic)
+        )
+        .into()),
+    }
+}
+
 /// redb's errors for a file that is not (or no longer) a readable store:
 /// a checksum or format failure, a wrong magic number (`InvalidData`) or a
 /// file that ends early. A lock or a permission problem is not damage.

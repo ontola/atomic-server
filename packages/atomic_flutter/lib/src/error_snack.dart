@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'strings.dart';
 
 /// Error text for a person: without Dart's exception prefixes ("Bad state: ",
 /// "Exception: "), wherever they sit in a composed message. The one place
@@ -33,7 +34,7 @@ void showErrorSnack(BuildContext context, String message) {
       closeIconColor: scheme.onInverseSurface,
       behavior: SnackBarBehavior.floating,
       action: SnackBarAction(
-        label: 'Copy',
+        label: AtomicStrings.of(context).copy,
         textColor: scheme.inversePrimary,
         onPressed: () {
           Clipboard.setData(ClipboardData(text: message));

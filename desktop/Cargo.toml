@@ -10,7 +10,7 @@ name = "atomic-server-tauri"
 # crates.io forbids — see the note on `publish` in ../wasm/Cargo.toml.
 publish = false
 repository = "https://github.com/atomicdata-dev/atomic-server"
-version = "0.41.0-beta.9"
+version = "0.41.0"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -79,8 +79,13 @@ name = "atomic_server_tauri"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "atomic-server-tauri"
+name = "atomic-place"
 path = "src/main.rs"
+
+# Release builds only (see tauri.updater.conf.json): the updater refuses to
+# start without the public half of the release signing key.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = { version = "2", optional = true }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
@@ -91,3 +96,5 @@ devtools = ["tauri/devtools"]
 # Enables the loopback-only WebView diagnostic bridge in the local acceptance
 # package. Shipping release builds do not enable this feature.
 account-acceptance = []
+# The app looks for, downloads and installs newer releases itself.
+updater = ["dep:tauri-plugin-updater"]

@@ -34,7 +34,7 @@ use chacha20poly1305::{
 };
 use redb::StorageBackend;
 
-const MAGIC: &[u8; 8] = b"ATOMENC1";
+pub(crate) const MAGIC: &[u8; 8] = b"ATOMENC1";
 const VERSION: u32 = 1;
 const HEADER_LEN: u64 = 64;
 const BLOCK: usize = 4096;

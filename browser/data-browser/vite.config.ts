@@ -19,6 +19,11 @@ import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
 // doesn't happen), no PWA service worker (tauri:// isn't HTTP), separate
 // outDir so the server build keeps its own nonce'd dist.
 const isTauri = process.env.TAURI === '1';
+
+// The packaged and dev desktop app is the atomic.place product, so it is a
+// hosted distribution unless a build says otherwise. A plain web build from
+// source stays the neutral, self-hostable AtomicServer.
+if (isTauri) process.env.VITE_ATOMIC_HOSTED_DISTRIBUTION ??= 'true';
 const isVitest = process.env.VITEST === 'true';
 
 // Source maps are 28MB of the 48MB dist -- and that dist is compiled into the
@@ -98,6 +103,32 @@ const wasmVersionHash = wasmVersion();
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+
+  // The desktop app's account service is atomic.place unless a local .env
+  // names another (a dev control plane). Without this a portal remembered from
+  // some server it once asked (staging) wins over the product's own.
+  if (
+    isTauri &&
+    !process.env.VITE_MANAGED_PORTAL_URL &&
+    !env.VITE_MANAGED_PORTAL_URL
+  ) {
+    process.env.VITE_MANAGED_PORTAL_URL = 'https://atomic.place';
+  }
+
+  // Feedback needs a Sentry DSN, and the desktop app is not served by a node
+  // that could inject one, so "Send feedback" would be greyed out. The DSN is
+  // public (it only allows sending). A dev app reports as its own environment,
+  // apart from released builds.
+  if (isTauri && !process.env.VITE_SENTRY_DSN && !env.VITE_SENTRY_DSN) {
+    process.env.VITE_SENTRY_DSN =
+      'https://b08842f7f4ac1d5bea3415049eb226c0@o1378995.ingest.us.sentry.io/4512015907291136';
+
+    if (!process.env.VITE_SENTRY_ENVIRONMENT && !env.VITE_SENTRY_ENVIRONMENT) {
+      process.env.VITE_SENTRY_ENVIRONMENT =
+        mode === 'development' ? 'desktop-dev' : 'production';
+    }
+  }
+
   const atomicServerUrl =
     process.env.VITE_ATOMIC_SERVER_URL ??
     env.VITE_ATOMIC_SERVER_URL ??

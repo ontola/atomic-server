@@ -1,3 +1,5 @@
+import { isClientDbEnabled } from '../clientDbMode';
+
 type SharingStore = {
   isLocalOnlyDrive(drive: string): boolean;
   makeDriveLocal(drive: string): Promise<void>;
@@ -14,6 +16,11 @@ export async function prepareDriveSharing(
     enrollments.some(e => e.drive_subject === drive && e.status !== 'Disabled')
   )
     return false;
+  // The desktop app keeps no browser copy: its embedded node already holds the
+  // drive, so there is nothing to move and nothing to wait for. Asking for a
+  // local copy there failed every new drive with "needs local storage in this
+  // browser".
+  if (!isClientDbEnabled()) return false;
   await store.makeDriveLocal(drive);
 
   return true;

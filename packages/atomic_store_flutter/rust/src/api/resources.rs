@@ -282,6 +282,8 @@ pub struct AtomicStore {
     pub(crate) profiles: AgentProfiles,
     /// A run of `follow_conversations` is going.
     pub(crate) following: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The store file is encrypted at rest.
+    encrypted: bool,
 }
 
 impl AtomicStore {
@@ -303,6 +305,7 @@ impl AtomicStore {
             chat_rooms: ChatRooms::new(profiles.clone()),
             profiles,
             following: Default::default(),
+            encrypted: open.encrypted,
         }
     }
 
@@ -317,16 +320,35 @@ impl AtomicStore {
     /// Open the store in the directory `path` (created when missing) for
     /// `agent_secret` (none: no agent yet, see [`AtomicStore::setup`]),
     /// working in `drive` (none: the store's active drive).
+    ///
+    /// With `store_key` (32 bytes) the file is encrypted at rest: a new
+    /// store is created encrypted, an encrypted one opens only with its key
+    /// (a wrong key is an error that says so, the file stays as it is), and a
+    /// store that already exists in plaintext stays plaintext (see
+    /// [`AtomicStore::is_encrypted_at_rest`]). An encrypted store opened
+    /// without a key is an error. Where the key lives is up to the caller
+    /// (`AtomicFlutter.open` keeps it in the keychain / keystore).
     pub async fn open(
         path: String,
         agent_secret: Option<String>,
         drive: Option<String>,
+        store_key: Option<Vec<u8>>,
     ) -> Result<AtomicStore, AtomicError> {
+        let store_key: Option<[u8; 32]> = store_key
+            .map(|k| {
+                k.try_into().map_err(|k: Vec<u8>| {
+                    AtomicError::invalid(format!(
+                        "store_key must be 32 bytes, got {}",
+                        k.len()
+                    ))
+                })
+            })
+            .transpose()?;
         use super::simple::state::OPEN_DB_LOCK;
         #[cfg(not(target_arch = "wasm32"))]
         let _opening = OPEN_DB_LOCK.lock().await;
         let (shared, _recovery, fresh) =
-            super::simple::open_shared(std::path::Path::new(&path))
+            super::simple::open_shared(std::path::Path::new(&path), store_key)
                 .await
                 .map_err(AtomicError::storage)?;
         #[cfg(not(target_arch = "wasm32"))]
@@ -376,6 +398,13 @@ impl AtomicStore {
         if !self.default {
             *self.drive.lock().unwrap_or_else(|e| e.into_inner()) = Some(drive.to_string());
         }
+    }
+
+    /// Whether the store file is encrypted at rest. False for a store that
+    /// was created before encryption was asked for (it stays plaintext).
+    #[flutter_rust_bridge::frb(sync)]
+    pub fn is_encrypted_at_rest(&self) -> bool {
+        self.encrypted
     }
 
     /// Whether both handles are on the same open store.
@@ -1025,7 +1054,7 @@ mod tests {
     }
 
     async fn open(dir: &std::path::Path) -> AtomicStore {
-        AtomicStore::open(dir.to_string_lossy().into_owned(), None, None)
+        AtomicStore::open(dir.to_string_lossy().into_owned(), None, None, None)
             .await
             .unwrap()
     }
@@ -1063,6 +1092,7 @@ mod tests {
             dir_a.to_string_lossy().into_owned(),
             Some(sa.agent_secret.clone()),
             Some(sa.drive.clone()),
+            None,
         )
         .await
         .unwrap();
@@ -1211,6 +1241,7 @@ mod tests {
         let b = AtomicStore::open(
             dir_b.to_string_lossy().into_owned(),
             Some(made.agent_secret.clone()),
+            None,
             None,
         )
         .await

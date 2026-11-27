@@ -1,4 +1,4 @@
-import { core } from '@tomic/react';
+import { core, isNotFound } from '@tomic/react';
 import { withDeadline } from '../withDeadline';
 import { PRODUCT_NAME } from './product';
 import {
@@ -298,6 +298,10 @@ export async function localAgentWorkspace(
 ): Promise<'some' | 'none' | 'unknown'> {
   try {
     const resource = await store.getResource(agentSubject);
+
+    // An agent the server has never heard of is a guest that never made a
+    // workspace, not one we failed to read: asking a node answered "not found".
+    if (isNotFound(resource.error as Error | undefined)) return 'none';
 
     if (resource.error) return 'unknown';
 

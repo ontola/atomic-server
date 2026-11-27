@@ -71,7 +71,7 @@ pub async fn handle_download(
                 return Ok(user_blob_response(mimetype, bytes));
             }
             let hash_bytes = hex::decode(hash_hex).expect("validated hash");
-            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate).await;
+            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate, mimetype).await;
         }
     }
 
@@ -273,7 +273,7 @@ pub async fn download_file_handler_partial(
     // under a deterministic synthetic hash so future requests with the same
     // params hit the cache and any peer that has produced the same rendition
     // can serve it content-addressably.
-    serve_processed_image(&bytes, &hash_bytes, params, appstate).await
+    serve_processed_image(&bytes, &hash_bytes, params, appstate, mimetype).await
 }
 
 #[cfg(feature = "img")]
@@ -282,6 +282,7 @@ async fn serve_processed_image(
     source_hash: &[u8],
     params: &web::Query<DownloadParams>,
     appstate: &AppState,
+    _original_mimetype: String,
 ) -> AtomicServerResult<HttpResponse> {
     use crate::handlers::image::{is_image_bytes, process_image_bytes};
 
@@ -304,14 +305,18 @@ async fn serve_processed_image(
     Ok(user_blob_response(mimetype_for(&format), encoded))
 }
 
+/// Embedded builds (the desktop app) have no image encoder. A client asking for
+/// a smaller or AVIF rendition is better served by the original than by a 500
+/// the browser cannot fall back from.
 #[cfg(not(feature = "img"))]
 async fn serve_processed_image(
-    _source_bytes: &[u8],
+    source_bytes: &[u8],
     _source_hash: &[u8],
     _params: &web::Query<DownloadParams>,
     _appstate: &AppState,
+    original_mimetype: String,
 ) -> AtomicServerResult<HttpResponse> {
-    Err("Image processing is not enabled in this build (compile with the `img` feature)".into())
+    Ok(user_blob_response(original_mimetype, source_bytes.to_vec()))
 }
 
 /// Deterministic 32-byte cache key for a processed rendition. Same source

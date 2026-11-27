@@ -134,7 +134,7 @@ is linked, and sign-out removes it. `AtomicNodeSettings(node, accountProvider:
 ## What you get
 
 - `AtomicFlutter.init()` loads the native library (call it once).
-- `AtomicFlutter.open(path:, agentSecret:, agentName:, drive:)` opens the
+- `AtomicFlutter.open(path:, agentSecret:, agentName:, drive:, encryptAtRest:)` opens the
   database in `path`, and returns an `AtomicNode`:
   - `node.store`: the `Store`, working in `node.drive`;
   - `node.agentSecret`: **the identity**. First run creates a new agent and a
@@ -200,6 +200,36 @@ database. Setup:
   secrets are not moved when you start using a group: the first open with a
   group makes or finds the secret under the new key, so pass the old
   `agentSecret` once to carry an identity over.
+
+**Encryption at rest (opt in).** `AtomicFlutter.open(path:, encryptAtRest:
+true)` keeps the database file encrypted on disk (XChaCha20-Poly1305 over the
+whole redb file: resources, history, the search index and the device's peer
+identity). Use it for sensitive data such as health records.
+
+- On first open of a new `path` a random 32-byte key is made and saved in the
+  same `secretStore` as the agent secret (keychain / keystore by default),
+  under `atomic_store_key:<path>` (hex). It is saved before the file is made.
+  It is always per `path`, also with a `keychainGroup`.
+- Once a key is saved for a `path`, every later open uses it, with or without
+  the flag. Pass `encryptAtRest: true` on every start anyway; it documents the
+  intent.
+- Default is off, because turning it on for existing stores is not possible
+  without a migration. **An existing plaintext database is not migrated**: it
+  keeps opening and stays plaintext, and `node.encryptedAtRest` is `false`.
+  Apps that must not store data in the clear check that flag (and can start a
+  new `path`, then sync the data over).
+- The key is the data. If it is lost (keychain wiped, `MemoryAgentSecrets`),
+  the file cannot be read: a missing or wrong key is a `StoreException`
+  ("wrong encryption key for local database" or "needs its key"), and the file
+  is left as it is (never set aside as damaged, nothing is deleted).
+- Costs: a larger file (about 1% overhead, grown in 1 MiB steps), no automatic
+  startup compaction for encrypted stores, and a damaged encrypted store is set
+  aside and replaced by an empty one without the repair attempt plaintext stores
+  get.
+- Native platforms only; the web build keeps its own OPFS storage and ignores
+  the flag. Only the database file is encrypted: files you write yourself,
+  downloads and caches are not, and the key sits in the OS keychain, so it
+  protects against a stolen file or backup, not a compromised device.
 
 Pass `secretStore: MemoryAgentSecrets()` to keep nothing, or your own
 `AgentSecretStore` to keep it elsewhere. An explicit `agentSecret` wins and is

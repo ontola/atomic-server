@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'device_stats.dart';
 import 'server_info.dart';
+import 'strings.dart';
 
 /// Public identity only. Secrets are retrieved on explicit user action.
 class AtomicIdentity {
@@ -41,6 +42,11 @@ class ProfilePicture {
 /// Implementations must throw on failure; widgets only update after success.
 /// No database, native bridge, global singleton or audio thread is owned here.
 abstract class AtomicSettingsBackend {
+  /// The language of the notes this backend writes itself (after a sign-in or
+  /// an invite). The panel sets it from its locale each time it builds; a host
+  /// that has no panel can set it too.
+  AtomicStrings strings = AtomicStrings.en;
+
   Future<AtomicIdentity?> getActiveAgent();
   Future<String> exportSecret();
   Future<List<String>> listDrives();
@@ -86,12 +92,12 @@ abstract class AtomicSettingsBackend {
   /// read); null when nobody is. Only asked when [accountProviderName] is set.
   Future<String?> linkedAccount() async => null;
 
-  /// Opens a pasted invite (a link or its token), makes the invited workspace
+  /// Opens a pasted invite (a link or its token), makes the invited drive
   /// the active one and says what happened, in a line to show. Throws a
   /// sentence for a link that does not work. Null: no "Open an invite" row.
   Future<String> Function(String linkOrToken)? get openInvite => null;
 
-  /// A link that invites someone to the active workspace. Null: no invite row.
+  /// A link that invites someone to the active drive. Null: no invite row.
   Future<String> Function({required bool canEdit})? get inviteLink => null;
 
   /// The active agent now and after every change of it, here or on another
