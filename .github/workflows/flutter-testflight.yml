@@ -30,7 +30,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   ios:
-    runs-on: macos-latest
+    # Apple requires the iOS 27 SDK (Xcode 27) for uploads from April 2027
+    # (ITMS-90725). macos-latest is macOS 26 with Xcode 26.x; the xcode-27
+    # image carries Xcode 27.
+    runs-on: xcode-27
     timeout-minutes: 60
     env:
       ATOMIC_CARGO_TARGET_DIR: ${{ github.workspace }}/packages/atomic_store_flutter/rust/target
@@ -47,6 +50,11 @@ jobs:
           n=$(( $(date +%s) / 60 ))
           echo "build_number=$n" >> "$GITHUB_OUTPUT"
           echo "Build number $n (minutes since the Unix epoch)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Select Xcode 27
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.2.app
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.7'
