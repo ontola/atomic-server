@@ -56,14 +56,30 @@ fn is_a(resource: &Resource) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn kind_order(resource: &Resource) -> u8 {
-    let classes = is_a(resource);
-    if classes.iter().any(|c| c == urls::ONTOLOGY) {
-        0
-    } else if classes.iter().any(|c| c == urls::PROPERTY) {
-        1
+/// The class SelectProperty has no constant in `urls`.
+const SELECT_PROPERTY: &str = "https://atomicdata.dev/classes/SelectProperty";
+
+/// What a bundle resource is, in the order terms must be stored: Ontology,
+/// Properties (a Property may also be a SelectProperty), Tags (the options of a
+/// select, parented to their property), Classes. `None` for anything else.
+fn kind_order(resource: &Resource) -> Option<u8> {
+    let mut classes = is_a(resource);
+    classes.sort();
+    let one = |c: &str| classes.len() == 1 && classes[0] == c;
+    if one(urls::ONTOLOGY) {
+        Some(0)
+    } else if one(urls::PROPERTY)
+        || (classes.len() == 2
+            && classes.iter().any(|c| c == urls::PROPERTY)
+            && classes.iter().any(|c| c == SELECT_PROPERTY))
+    {
+        Some(1)
+    } else if one(urls::TAG) {
+        Some(2)
+    } else if one(urls::CLASS) {
+        Some(3)
     } else {
-        2
+        None
     }
 }
 
@@ -74,8 +90,8 @@ fn kind_order(resource: &Resource) -> u8 {
 /// - Refuses, writing nothing, when a term is stored with a different meaning:
 ///   any field other than `name`, `description` (and the ontology's member
 ///   lists, which may grow) must match what is stored.
-/// - The bundle may only hold an Ontology of class [`urls::ONTOLOGY`], Classes
-///   and Properties, each at an absolute `https://` subject. Exactly one
+/// - The bundle may only hold an Ontology of class [`urls::ONTOLOGY`], Classes,
+///   Properties (also SelectProperties) and Tags, each at an absolute `https://` subject. Exactly one
 ///   Ontology. Subjects in the reserved shared-vocabulary namespaces
 ///   ([`Subject::is_canonical_vocabulary`]) are refused.
 /// - A store that serves a subject's address itself (its own base domain) is
@@ -93,9 +109,18 @@ pub async fn install_ontology_bundle(
         ..ParseOpts::default()
     };
     let mut wanted = parse_json_ad_string(bundle, store, &opts).await?;
+    if let Some(bad) = wanted.iter().find(|r| kind_order(r).is_none()) {
+        return Err(format!(
+            "{} is not an Ontology ({}), Class, Property or Tag; found {:?}",
+            bad.get_subject(),
+            urls::ONTOLOGY,
+            is_a(bad)
+        )
+        .into());
+    }
     wanted.sort_by_key(kind_order);
 
-    let ontologies: Vec<&Resource> = wanted.iter().filter(|r| kind_order(r) == 0).collect();
+    let ontologies: Vec<&Resource> = wanted.iter().filter(|r| kind_order(r) == Some(0)).collect();
     if ontologies.len() != 1 {
         return Err("An ontology bundle holds exactly one Ontology".into());
     }
@@ -131,16 +156,6 @@ pub async fn install_ontology_bundle(
         if Subject::is_canonical_vocabulary(url.as_str()) {
             return Err(format!("{subject} belongs to the shared vocabulary").into());
         }
-        let classes = is_a(resource);
-        let allowed = [urls::ONTOLOGY, urls::CLASS, urls::PROPERTY];
-        if classes.len() != 1 || !allowed.contains(&classes[0].as_str()) {
-            return Err(format!(
-                "{subject} is not an Ontology ({}), Class or Property; found {:?}",
-                urls::ONTOLOGY,
-                classes
-            )
-            .into());
-        }
     }
 
     // Plan everything before writing anything: a refusal leaves no half install.
@@ -148,7 +163,7 @@ pub async fn install_ontology_bundle(
     let mut report = InstallReport::default();
     for wanted_resource in &wanted {
         let subject = wanted_resource.get_subject().clone();
-        let is_ontology = kind_order(wanted_resource) == 0;
+        let is_ontology = kind_order(wanted_resource) == Some(0);
 
         // Stored-only read: `get_resource` would fetch a missing https subject.
         if !store.has_stored_resource(&subject) {

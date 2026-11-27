@@ -20,6 +20,8 @@ const DESCRIPTION = 'https://atomicdata.dev/properties/description';
 const ONTOLOGY = 'https://atomicdata.dev/class/ontology';
 const CLASS = 'https://atomicdata.dev/classes/Class';
 const PROPERTY = 'https://atomicdata.dev/classes/Property';
+const SELECT_PROPERTY = 'https://atomicdata.dev/classes/SelectProperty';
+const TAG = 'https://atomicdata.dev/classes/Tag';
 const ONTOLOGY_LISTS = [
   'https://atomicdata.dev/properties/classes',
   'https://atomicdata.dev/properties/properties',
@@ -51,17 +53,30 @@ const canonical = (value: unknown): string =>
 const asList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(v => String(v)) : [];
 
+/** Ontology 0, Property (or SelectProperty) 1, Tag 2, Class 3, anything else -1. */
 const kindOf = (item: JSONObject): number => {
-  const classes = asList(item[IS_A]);
+  const classes = asList(item[IS_A]).sort();
+  const only = (c: string) => classes.length === 1 && classes[0] === c;
 
-  if (classes.length !== 1) return -1;
+  if (only(ONTOLOGY)) return 0;
 
-  return [ONTOLOGY, PROPERTY, CLASS].indexOf(classes[0]);
+  if (
+    only(PROPERTY) ||
+    (classes.length === 2 &&
+      classes.includes(PROPERTY) &&
+      classes.includes(SELECT_PROPERTY))
+  ) {
+    return 1;
+  }
+
+  if (only(TAG)) return 2;
+
+  return only(CLASS) ? 3 : -1;
 };
 
 /**
  * Store an ontology bundle (a JSON-AD array of one Ontology plus its Classes
- * and Properties) in the local store under the subjects it names, as if each
+ * and Properties, Tags) in the local store under the subjects it names, as if each
  * had been fetched from its address. No network request, no commit, nothing is
  * signed, queued or synced.
  *
@@ -70,7 +85,7 @@ const kindOf = (item: JSONObject): number => {
  *   every field except `name`, `description` (and the ontology's member lists,
  *   which may grow) must match what is stored.
  * - Only an Ontology (class `https://atomicdata.dev/class/ontology`), Classes and
- *   Properties at absolute `https://` subjects. Exactly one Ontology. The
+ *   Properties and Tags at absolute `https://` subjects. Exactly one Ontology. The
  *   reserved vocabulary namespaces and the own server's address are refused.
  *
  * Mirrors `atomic_lib::ontology_bundle::install_ontology_bundle`; both run the
@@ -128,7 +143,7 @@ export async function installOntologyBundle(
 
     if (kindOf(item) < 0) {
       throw new Error(
-        `${subject} is not an Ontology (${ONTOLOGY}), Class or Property`,
+        `${subject} is not an Ontology (${ONTOLOGY}), Class, Property or Tag`,
       );
     }
   }

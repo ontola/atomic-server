@@ -52,6 +52,26 @@ async fn stores_at_fixed_subjects_offline_and_is_idempotent() {
     assert_eq!(again.unchanged.len(), 26);
 }
 
+/// Select properties (two classes) and their Tag options.
+#[tokio::test]
+async fn stores_select_properties_and_their_tags() {
+    const SELECT: &str = include_str!("fixtures/ontology-bundle-select.json");
+    let db = Db::init_temp("ontology_bundle_select").await.unwrap();
+    let started = Instant::now();
+    let report = install_ontology_bundle(&db, SELECT).await.unwrap();
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert_eq!(report.created.len(), 56);
+    let tag = db
+        .get_resource(&"https://atomicdata.dev/education/v1/value/submission-status-todo".into())
+        .await
+        .unwrap();
+    assert_eq!(tag.get(urls::SHORTNAME).unwrap().to_string(), "todo");
+
+    let again = install_ontology_bundle(&db, SELECT).await.unwrap();
+    assert!(again.created.is_empty() && again.updated.is_empty());
+    assert_eq!(again.unchanged.len(), 56);
+}
+
 #[tokio::test]
 async fn refuses_a_changed_meaning_but_takes_a_new_label() {
     let db = Db::init_temp("ontology_bundle_conflict").await.unwrap();
@@ -110,7 +130,7 @@ async fn refuses_a_bundle_that_is_not_schema_and_writes_nothing() {
         .await
         .unwrap_err()
         .to_string();
-    assert!(err.contains("exactly one Ontology"), "{err}");
+    assert!(err.contains("not an Ontology"), "{err}");
 
     // A reserved vocabulary namespace is refused.
     let reserved = BUNDLE.replace(

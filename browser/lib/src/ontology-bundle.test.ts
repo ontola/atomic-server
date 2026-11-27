@@ -45,6 +45,35 @@ describe('installOntology', () => {
     expect(store.outbox.hasPending(CLASS)).toBe(false);
   });
 
+  it('stores select properties and their tags, then does nothing', async ({
+    expect,
+  }) => {
+    const select = JSON.parse(
+      readFileSync(
+        new URL(
+          '../../../lib/tests/fixtures/ontology-bundle-select.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+    const store = await newStore();
+    const report = await store.installOntology(select);
+
+    expect(report.created).toHaveLength(56);
+    expect(
+      store.resources
+        .get('https://atomicdata.dev/education/v1/value/submission-status-todo')
+        ?.get(core.properties.shortname),
+    ).toBe('todo');
+
+    const again = await store.installOntology(select);
+
+    expect(again.created).toEqual([]);
+    expect(again.updated).toEqual([]);
+    expect(again.unchanged).toHaveLength(56);
+  });
+
   it('does nothing the second time', async ({ expect }) => {
     const store = await newStore();
     await store.installOntology(bundle);
