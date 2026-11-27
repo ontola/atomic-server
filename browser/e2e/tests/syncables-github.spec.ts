@@ -96,6 +96,7 @@ interface MockState {
   expiredPrincipalConnection?: string;
   principalConnections: string[];
   issueGate?: Promise<void>;
+  organizationGate?: Promise<void>;
 }
 
 const sha256 = (value: string | Buffer) => createHash('sha256').update(value);
@@ -484,6 +485,7 @@ async function mockIntegrationProxy(
     if (providerPath === '/user/orgs') {
       state.organizationRequests++;
       expect(url.searchParams.get('per_page')).toBe('100');
+      await state.organizationGate;
       await send([
         { id: 123, login: 'ontola' },
         { id: 124, login: 'reporting' },
@@ -1564,21 +1566,71 @@ test.describe('catalog-driven built-in Syncables', () => {
     ).toBeVisible();
     expect(requests.providerRequests).toHaveLength(setupReads);
     expect(requests.documentRequests).toHaveLength(setupDocuments);
-    await openRow(page, 'Issues and pull requests');
-    await browse(page);
+    let releaseOrganizations: (() => void) | undefined;
+    requests.organizationGate = new Promise(resolve => {
+      releaseOrganizations = resolve;
+    });
+
+    // Related source workers publish shared identities and run in order.
+    try {
+      await openRow(page, 'Issues and pull requests');
+      await browse(page);
+      await expect
+        .poll(() => requests.organizationRequests, { timeout: 60_000 })
+        .toBe(1);
+      expect(requests.repositoryRequests).toBe(0);
+    } finally {
+      releaseOrganizations?.();
+      requests.organizationGate = undefined;
+    }
+
+    // The empty Table keeps preparing the next source in the background.
+    await expect
+      .poll(
+        () => [requests.organizationRequests, requests.repositoryRequests],
+        {
+          timeout: 60_000,
+        },
+      )
+      .toEqual([1, 1]);
     expect(requests.issueConnections).toEqual([]);
     await selectView(page, 'Sync');
+    const organizations = iframe.getByRole('combobox', {
+      name: 'Organizations',
+      exact: true,
+    });
+    const repositories = iframe.getByRole('combobox', {
+      name: 'Repositories',
+      exact: true,
+    });
+    await expect(organizations).toBeVisible({ timeout: 30_000 });
+    await expect(repositories).toBeVisible();
     await expect(
       iframe.getByLabel('Repository owner', { exact: true }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toHaveCount(0);
     await expect(
       iframe.getByLabel('Repository name', { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
+    await expect(
+      organizations.getByRole('option', { name: 'ontola', exact: true }),
+    ).toHaveCount(1, { timeout: 60_000 });
+    await expect(
+      repositories.getByRole('option', { name: 'notes', exact: true }),
+    ).toHaveCount(1, { timeout: 60_000 });
+    await organizations.selectOption({ label: 'ontola' });
+    await expect(
+      repositories.getByRole('option', { name: 'notes', exact: true }),
+    ).toHaveCount(0);
+    await repositories.selectOption({ label: 'atomic-server' });
+    await expect(
+      iframe.getByRole('button', { name: 'Save filter', exact: true }),
+    ).toBeEnabled();
     await expect(
       page.getByRole('combobox', { name: 'Saved filter', exact: true }),
     ).toHaveCount(0);
     expect(requests.issueConnections).toEqual([]);
-    expect(requests.providerRequests).toHaveLength(setupReads);
+    expect(requests.organizationRequests).toBe(1);
+    expect(requests.repositoryRequests).toBe(1);
     await testInfo.attach('github-issues-sync-repository-scope', {
       body: await page.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',

@@ -64,10 +64,12 @@ import {
   canonicalValue,
 } from './builtinSyncIdentity.js';
 import {
+  needsInitialSync,
   parseSyncableRuleConfig,
   readSyncableRuleStatus,
   type SyncableRuleRun,
 } from './syncableRules';
+import { resolveSyncablePickerSources } from './syncablePickerSources';
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
@@ -751,6 +753,60 @@ export async function appProfile(
         )
       : undefined;
   assertCurrent();
+  const pickerSources = worker
+    ? []
+    : await resolveSyncablePickerSources(
+        store,
+        context,
+        document,
+        apiSchema,
+        assertCurrent,
+        trusted.querySelection,
+      );
+  const warmSources = new Map<string, string>();
+  for (const source of pickerSources)
+    for (const { table: sibling, ruleSubjects } of [
+      ...(source.groups ?? []),
+      source,
+    ])
+      if (sibling)
+        for (const rule of ruleSubjects) warmSources.set(rule, sibling);
+
+  const queueSource = async (ruleSubjectToWarm: string, sibling: string) => {
+    const execution = syncableExecutionKey(drive, sibling, ruleSubjectToWarm);
+    const view = await store.getResource(ruleSubjectToWarm);
+
+    const canStart = () => {
+      assertCurrent();
+
+      return (
+        !registry.isRunning(execution) &&
+        needsInitialSync(view.get(p['syncable-mirror-status']))
+      );
+    };
+
+    if (!canStart() || !(await view.canWrite(actorSubject))[0] || !canStart())
+      return;
+    const spec = await appProfile(
+      store,
+      drive,
+      sibling,
+      registry,
+      signal,
+      false,
+      undefined,
+      ruleSubjectToWarm,
+    );
+    if (canStart()) await spec.profile.execution?.('start');
+  };
+
+  void (async () => {
+    for (const [rule, sibling] of warmSources) {
+      if (signal.aborted) return;
+      await queueSource(rule, sibling).catch(() => undefined);
+    }
+  })();
+
   let page = 0;
   let total: number | undefined;
 
@@ -785,6 +841,7 @@ export async function appProfile(
       ...context,
       ...(context.kind === 'platform' ? { principalApps } : {}),
       ...(preferredConnectionId ? { preferredConnectionId } : {}),
+      ...(pickerSources.length ? { pickerSources } : {}),
       document,
       querySelection: trusted.querySelection,
       apiSchema,
@@ -910,7 +967,12 @@ export async function appProfile(
 
             return spec;
           },
-          { group: JSON.stringify([drive, table]), subscribe, failed },
+          {
+            // Related tables can publish the same linked identities.
+            group: JSON.stringify([drive, context.principalApp ?? table]),
+            subscribe,
+            failed,
+          },
         );
       }
 

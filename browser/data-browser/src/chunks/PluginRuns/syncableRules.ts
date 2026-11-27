@@ -132,6 +132,22 @@ export function readSyncableRuleStatus(raw: unknown): Record<
   };
 }
 
+export function needsInitialSync(raw: unknown): boolean {
+  try {
+    const status = readSyncableRuleStatus(raw);
+
+    return (
+      !status.paused &&
+      status.enabled !== false &&
+      !status.lastSuccess &&
+      !status.run &&
+      !status.error
+    );
+  } catch {
+    return false;
+  }
+}
+
 export interface ResolveSyncableRuleOptions {
   drive: string;
   table: string;

@@ -103,9 +103,20 @@ Partial-reference resources retain actual identity evidence until required API
 and class fields are proved. Raw values and richer/user-authored data remain
 stored; reference-only targets claim no invented collection read or membership.
 Trash, ambiguity, unproven ancestry and changed permissions fail closed. The
-reference guard compares write grants by canonical writer ID, including when
-the server acknowledges a legacy writer with the current scheme. Link
+reference guard compares write grants as a set of canonical writer IDs.
+Genesis can publish the signer in both schemes, and reordered entries grant
+the same rights. A distinct writer added or removed still stops the import. Link
 schema/view migration preserves existing row/class IDs and user column choices.
+
+The Sync setup for an authenticated collection uses catalog relationships to find
+enumerable sources in the same principal and Drive. Opening an empty dependent
+Table without a saved filter, or opening its Sync setup, starts the sources'
+eligible first saved-filter syncs through the existing background runtime.
+The runtime serializes reads for the same principal and Drive to avoid races
+when those reads publish a shared linked record. The picker browses stored
+source records and groups them by a declared Atomic link when available. Saving
+a choice uses a related selection tied to its stable identity. Public collections
+can still use catalog entry points when they have no enumerable sources.
 
 Proven legacy sources preserve subjects, local IDs, user fields and read plans.
 Ambiguous/unprovable sources block competing allocations. Out-of-root moves remain

@@ -44,6 +44,21 @@ const same = (left, right) =>
   JSON.stringify(canonicalValue(left)) ===
   JSON.stringify(canonicalValue(right));
 
+const relatedSelection = (navigation, origin) => ({
+  version: 1,
+  resource: navigation.resource,
+  source: {
+    kind: 'related',
+    origin,
+    via: {
+      collection: navigation.collection,
+      kind: navigation.kind === 'responseLink' ? 'responseLink' : 'identity',
+      ...(navigation.reference ? { reference: navigation.reference } : {}),
+      ...(navigation.link ? { link: navigation.link } : {}),
+    },
+  },
+});
+
 class PrincipalAuthorizationError extends Error {
   constructor(connectionId, expired) {
     super(
@@ -1012,6 +1027,91 @@ export function createSyncApp(store, context) {
     return rule;
   }
 
+  async function pickerRows(source) {
+    if (!source.table) return [];
+    const rows = await resources({
+      property: property('syncable-entity-table'),
+      value: source.table,
+    });
+
+    return rows.flatMap(row => {
+      const origin = row.get(property('syncable-source-config'));
+      const name = row.get(core.name);
+      if (
+        origin?.version !== 3 ||
+        origin.kind !== 'record' ||
+        origin.proxyOrigin !== context.proxyOrigin ||
+        origin.platform !== context.platform ||
+        !same(origin.principal, context.principal) ||
+        row.get(property('syncable-entity-table')) !== source.table ||
+        origin.resource !== source.resource ||
+        origin.entityIdentity?.resource !== source.resource ||
+        !origin.record ||
+        typeof origin.record !== 'object' ||
+        Array.isArray(origin.record) ||
+        typeof name !== 'string' ||
+        !name.trim()
+      )
+        return [];
+
+      try {
+        if (
+          row.get(property('syncable-source-key')) === entitySourceKey(origin)
+        )
+          return [{ row, name, origin }];
+      } catch {
+        // Incomplete cached records are not selectable origins.
+      }
+
+      return [];
+    });
+  }
+
+  function pickerDefinition(collection, origin) {
+    const reads = relatedCollectionReads(readDocument(), {
+      resource: origin.resource,
+      record: origin.record,
+      context: origin.context,
+    }).filter(read => read.collection === collection.name);
+    if (reads.length !== 1) return;
+    const [read] = reads;
+
+    return relatedSelection(read, {
+      entity: origin.entityIdentity,
+      record: origin.record,
+      context: origin.context ?? {},
+      ...(origin.read ? { read: origin.read } : {}),
+    });
+  }
+
+  async function createPickerCollection(name, source, choice, filterName) {
+    const collection = description(name);
+    if (
+      context.kind !== 'collection' ||
+      collection.resource !== context.resource ||
+      !source.collections.includes(name)
+    )
+      throw new Error('Choose a source for this entity collection');
+    const current = await store.getResource(choice.row.subject);
+    if (
+      current.error ||
+      current.get(property('syncable-entity-table')) !== source.table ||
+      !same(current.get(property('syncable-source-config')), choice.origin)
+    )
+      throw new Error(
+        'The stored source changed. Open Sync again to reload it.',
+      );
+    const definition = pickerDefinition(collection, choice.origin);
+    if (!definition)
+      throw new Error('This record has no matching catalog read');
+    const table = await store.getResource(root);
+    const rule = await ensureRule(table, definition, filterName || choice.name);
+    await adoptFlatRows(context.principal, collection.resource);
+    await store.ui.openResource(rule.subject);
+
+    return rule;
+  }
+
   const statusSubject = () => context.rule?.subject ?? root;
 
   async function status() {
@@ -1287,30 +1387,12 @@ export function createSyncApp(store, context) {
         resource: navigation.resource,
         sourceEntityKey: key,
         label: description(navigation.collection).presentation.title,
-        definition: {
-          version: 1,
-          resource: navigation.resource,
-          source: {
-            kind: 'related',
-            origin: {
-              entity: item.entity,
-              record: referenceRecord,
-              context: item.context,
-              read: item.provenance.read,
-            },
-            via: {
-              collection: navigation.collection,
-              kind:
-                navigation.kind === 'responseLink'
-                  ? 'responseLink'
-                  : 'identity',
-              ...(navigation.reference
-                ? { reference: navigation.reference }
-                : {}),
-              ...(navigation.link ? { link: navigation.link } : {}),
-            },
-          },
-        },
+        definition: relatedSelection(navigation, {
+          entity: item.entity,
+          record: referenceRecord,
+          context: item.context,
+          read: item.provenance.read,
+        }),
       }));
       let name = item.projected.name;
 
@@ -1595,6 +1677,9 @@ export function createSyncApp(store, context) {
     openPrincipal,
     openPublic,
     createCollection,
+    createPickerCollection,
+    pickerRows,
+    pickerDefinition,
     availableCollections: () =>
       descriptions().filter(
         collection =>
@@ -1614,6 +1699,174 @@ function el(tag, text, className) {
   if (className) node.className = className;
 
   return node;
+}
+
+function mountStoredSourcePicker({
+  app,
+  store,
+  context,
+  collection,
+  source,
+  inputs,
+  save,
+  showError,
+}) {
+  const groups = (source.groups ?? []).map(group => ({
+    ...group,
+    select: el('select'),
+  }));
+  const select = el('select');
+  const status = el('p', 'Loading saved sources…', 'muted');
+  status.setAttribute('role', 'status');
+
+  const field = (title, control) => {
+    const label = el('label', title);
+    control.setAttribute('aria-label', title);
+    label.append(control);
+    inputs.append(label);
+  };
+
+  for (const group of groups) field(group.title, group.select);
+  field(source.title, select);
+  inputs.append(status);
+
+  const setOptions = (control, placeholder, options) => {
+    const previous = control.value;
+    const first = el('option', placeholder);
+    first.value = '';
+    control.replaceChildren(
+      first,
+      ...options.map(({ row, name }) => {
+        const option = el('option', name);
+        option.value = row.subject;
+
+        return option;
+      }),
+    );
+    if (options.some(({ row }) => row.subject === previous))
+      control.value = previous;
+    control.disabled = options.length === 0;
+  };
+
+  const ruleSubjects = [
+    ...new Set([
+      ...source.ruleSubjects,
+      ...groups.flatMap(group => group.ruleSubjects),
+    ]),
+  ];
+  let options = [];
+  let choices = [];
+  let disposed = false;
+  let changed = false;
+  let pending;
+  const selected = () =>
+    choices.find(({ row }) => row.subject === select.value);
+
+  const filter = () => {
+    choices = options.filter(({ row }) =>
+      groups.every(group => {
+        if (!group.select.value) return true;
+        const linked = row.get(group.property);
+
+        return Array.isArray(linked)
+          ? linked.includes(group.select.value)
+          : linked === group.select.value;
+      }),
+    );
+    setOptions(select, 'Select one', choices);
+    save.disabled = !selected();
+  };
+
+  for (const group of groups) {
+    setOptions(group.select, 'All', []);
+    group.select.addEventListener('change', filter);
+  }
+
+  select.addEventListener('change', () => {
+    save.disabled = !selected();
+  });
+  filter();
+
+  const byName = (a, b) => a.name.localeCompare(b.name);
+
+  const refresh = () => {
+    changed = true;
+    if (pending || disposed) return;
+    pending = (async () => {
+      while (changed && !disposed) {
+        changed = false;
+        const [rows, groupRows, rules] = await Promise.all([
+          app.pickerRows(source),
+          Promise.all(groups.map(group => app.pickerRows(group))),
+          store.getMany(ruleSubjects),
+        ]);
+        if (disposed) return;
+        const eligible = rows.filter(({ origin }) =>
+          app.pickerDefinition(collection, origin),
+        );
+        const counts = new Map();
+        for (const { name } of eligible)
+          counts.set(name, (counts.get(name) ?? 0) + 1);
+        const groupNames = new Map(
+          groupRows.flat().map(({ row, name }) => [row.subject, name]),
+        );
+        options = eligible
+          .map(choice => {
+            if (counts.get(choice.name) === 1) return choice;
+            const groupName = groups
+              .map(group => groupNames.get(choice.row.get(group.property)))
+              .find(Boolean);
+
+            return {
+              ...choice,
+              name: `${choice.name} · ${groupName ?? choice.origin.entityIdentity.path}`,
+            };
+          })
+          .sort(byName);
+        for (const [index, group] of groups.entries())
+          setOptions(group.select, 'All', groupRows[index].sort(byName));
+        filter();
+
+        const states = rules.map(rule =>
+          rule.get(context.schema.properties['syncable-mirror-status']),
+        );
+        status.textContent = states.some(state => state?.error)
+          ? 'A source sync needs attention. Open its Sync tab to retry.'
+          : states.some(
+                state =>
+                  !state?.lastSuccess &&
+                  !state?.paused &&
+                  state?.enabled !== false,
+              )
+            ? 'Fetching sources in the background. You can choose from the records already stored.'
+            : options.length
+              ? ''
+              : 'No saved records are available for this source yet.';
+        status.hidden = !status.textContent;
+      }
+    })()
+      .catch(error => {
+        if (!disposed) showError(error);
+      })
+      .finally(() => {
+        pending = undefined;
+        if (changed) refresh();
+      });
+  };
+
+  const subscriptions = ruleSubjects.map(subject =>
+    store.subscribe?.(subject, refresh),
+  );
+  refresh();
+
+  return {
+    source,
+    selected,
+    dispose: () => {
+      disposed = true;
+      for (const unsubscribe of subscriptions) unsubscribe?.();
+    },
+  };
 }
 
 /** The visible controls read saved state. Accepted executions run separately. */
@@ -1853,8 +2106,54 @@ export async function view({ root, store }) {
           context.principal?.kind !== 'public' || source.allowsAnonymous,
       );
 
+    let storedPicker;
+    const sourceType = el('select');
+    sourceType.setAttribute('aria-label', 'Source record type');
+
     const renderInputs = () => {
+      storedPicker?.dispose();
+      storedPicker = undefined;
       inputs.replaceChildren();
+      const definition = selectedDefinition();
+      const stored = (context.pickerSources ?? []).filter(source =>
+        source.collections.includes(definition?.name),
+      );
+      sourceControls.hidden =
+        !selectedEntrypoints().length || stored.length > 0;
+
+      if (stored.length) {
+        if (stored.length > 1) {
+          const previous = sourceType.value;
+          sourceType.replaceChildren(
+            ...stored.map(source => {
+              const option = el('option', source.title);
+              option.value = source.resource;
+
+              return option;
+            }),
+          );
+          if (stored.some(source => source.resource === previous))
+            sourceType.value = previous;
+          inputs.append(sourceType);
+        }
+
+        storedPicker = mountStoredSourcePicker({
+          app,
+          store,
+          context,
+          collection: definition,
+          source:
+            stored.find(source => source.resource === sourceType.value) ??
+            stored[0],
+          inputs,
+          save,
+          showError,
+        });
+
+        return;
+      }
+
+      save.disabled = false;
       const source = selectedEntrypoints().find(
         item => item.sourcePath === entrypoint.value,
       );
@@ -1886,7 +2185,6 @@ export async function view({ root, store }) {
       const direct = el('option', 'Collection parameters');
       direct.value = '';
       entrypoint.append(direct);
-      sourceControls.hidden = !sources.length;
       const advancedOnly = collectionView && sources.length === 1;
 
       if (advancedOnly) {
@@ -1900,8 +2198,21 @@ export async function view({ root, store }) {
 
     select.addEventListener('change', renderEntrypoints);
     entrypoint.addEventListener('change', renderInputs);
-    renderEntrypoints();
+    sourceType.addEventListener('change', renderInputs);
     const save = button('Save filter', () => {
+      if (storedPicker) {
+        const choice = storedPicker.selected();
+        if (choice)
+          return app.createPickerCollection(
+            select.value,
+            storedPicker.source,
+            choice,
+            filterName.value.trim(),
+          );
+
+        return;
+      }
+
       const parameters = [...inputs.querySelectorAll('input')];
 
       for (const input of parameters) {
@@ -1932,6 +2243,7 @@ export async function view({ root, store }) {
     }
 
     root.append(picker, ...warnings());
+    renderEntrypoints();
 
     return;
   }

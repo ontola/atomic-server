@@ -1382,8 +1382,15 @@ This does not yet prove restoration of the user's private staging workspace.
   saved filter, and the Sync tab selecting that filter. Frame tests cover the
   scoped connection handoff and the chooser fallback. They also verify the
   page status updates in place, including a valid Last link and an unknown
-  total. Reference projector tests cover legacy writer IDs before and after
-  server acknowledgement while still rejecting actual permission changes.
+  total. Reference projector tests cover duplicate legacy and canonical writer
+  IDs during and after server acknowledgement, reordered grants, and rejection
+  of actual grant additions and removals.
+- Authenticated source pickers use same-principal, same-drive catalog root
+  filters. Unit coverage verifies readable moved tables and the Public fallback,
+  selection through a typed group link, and saving a related rule without a
+  remote lookup. The GitHub Chromium journey verifies Organizations and
+  Repositories begin syncing when the empty Issues Table opens, and a stored
+  repository can be chosen in Sync.
 - Principal App tests cover a same-drive Public reinstall after confirmed
   permanent deletion and preserve the previous registration on a live
   target, failed signed read, pending delete, or competing source. The Chromium

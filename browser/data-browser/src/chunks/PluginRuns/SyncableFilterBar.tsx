@@ -4,7 +4,7 @@ import { getTableDrive } from '../TablePage/tableDrive';
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { useAppExecutions } from '../AppPage/AppExecutionRuntime';
 import { appProfile, syncableExecutionKey } from './BuiltinSyncablesApp';
-import { readSyncableRuleStatus } from './syncableRules';
+import { needsInitialSync } from './syncableRules';
 import {
   core,
   dataBrowser,
@@ -19,22 +19,6 @@ import { useSyncableFilters } from './useSyncableFilters';
 
 const noSubscribe = () => () => {};
 const idleExecution = () => 'idle' as const;
-
-function canHydrateRule(rule: Resource, statusProperty: string): boolean {
-  try {
-    const status = readSyncableRuleStatus(rule.get(statusProperty));
-
-    return (
-      !status.paused &&
-      status.enabled !== false &&
-      !status.lastSuccess &&
-      !status.run &&
-      !status.error
-    );
-  } catch {
-    return false;
-  }
-}
 
 /** One saved provider scope across the native data views and Sync controls. */
 export function SyncableFilterBar({
@@ -101,6 +85,25 @@ export function SyncableFilterBar({
   );
   const queued = execution === 'queued';
   const running = execution === 'running';
+  const loadSources =
+    hydrate &&
+    tableView &&
+    state.rules.length === 0 &&
+    state.source?.principal.kind === 'authenticated';
+
+  useEffect(() => {
+    if (!loadSources || !registry || !drive) return;
+    const controller = new AbortController();
+    void appProfile(
+      store,
+      drive,
+      tableSubject,
+      registry,
+      controller.signal,
+    ).catch(() => undefined);
+
+    return () => controller.abort();
+  }, [drive, loadSources, registry, store, tableSubject]);
 
   useEffect(() => {
     if (
@@ -121,7 +124,7 @@ export function SyncableFilterBar({
       !controller.signal.aborted &&
       store.getAgent() === actor &&
       !registry.isRunning(hydrationKey) &&
-      canHydrateRule(directRule, statusProperty);
+      needsInitialSync(directRule.get(statusProperty));
 
     if (!canStart()) return;
 
@@ -324,6 +327,11 @@ export function SyncableFilterBar({
           }}
         >
           Rename filter
+        </Button>
+      )}
+      {selected && syncView && canWrite && (
+        <Button subtle onClick={() => choose('')}>
+          Add sync filter
         </Button>
       )}
       {selected && renaming && (

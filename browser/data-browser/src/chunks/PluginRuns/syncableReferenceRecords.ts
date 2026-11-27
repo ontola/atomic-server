@@ -93,13 +93,15 @@ const localId = (key: string) => 'syncables:node:' + encodeURIComponent(key);
 const copy = <T>(value: T): T => structuredClone(value);
 
 function guardedPropertyValue(property: string, value: unknown): unknown {
-  // Persisted write grants use canonical subjects, even if the active agent
-  // still signs with the older scheme. Keep every writer and the list shape.
-  return property === core.properties.write && Array.isArray(value)
-    ? value.map(writer =>
-        typeof writer === 'string' ? canonicalizeScheme(writer) : writer,
-      )
-    : value;
+  if (
+    property !== core.properties.write ||
+    !Array.isArray(value) ||
+    !value.every(writer => typeof writer === 'string')
+  )
+    return value;
+
+  // Write grants are a set. Genesis can publish both schemes for one signer.
+  return [...new Set(value.map(canonicalizeScheme))].sort();
 }
 
 export { validateSyncableReferenceEvidence } from './builtinSyncReferenceIdentity.js';

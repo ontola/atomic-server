@@ -1898,6 +1898,124 @@ describe('shared entity tables and independent saved filters', () => {
     expect(set.store.ui.openResource).not.toHaveBeenCalled();
   });
 
+  it('filters stored sources by the selected group and saves a related read without a provider lookup', async () => {
+    const set = await ready();
+    const taskTable = tableFor(set, 'task');
+    const workspaceTable = tableFor(set, 'workspace');
+    const teamTable = tableFor(set, 'team');
+    const workspaceRule = ruleFor(set, workspaceTable);
+    const teamRule = ruleFor(set, teamTable);
+    set.request.mockImplementation(async ({ path }) => ({
+      status: 200,
+      headers: {},
+      body: path.endsWith('/teams')
+        ? [team]
+        : [workspace, { ...workspace, id: 201, name: 'Another workspace' }],
+    }));
+    await worker(set, workspaceTable, workspaceRule).refresh();
+    await worker(set, teamTable, teamRule).refresh();
+    const teamSubject = nodes(set.data, 'record').find(
+      ([, row]) => config(row).resource === 'team',
+    )![0];
+    const [, workspaceRow] = nodes(set.data, 'record').find(
+      ([, row]) => row[P + 'name'] === 'A workspace',
+    )!;
+    const groupProperty = 'atomic:workspace-team-link';
+    workspaceRow[groupProperty] = teamSubject;
+    const taskTableData = set.data.get(taskTable)!;
+    Object.assign(set.context, config(taskTableData), {
+      subject: taskTable,
+      sourceKey: taskTableData[prop('source-key')],
+      pickerSources: [
+        {
+          resource: 'workspace',
+          title: 'Workspaces',
+          table: workspaceTable,
+          ruleSubjects: [workspaceRule],
+          collections: ['tasks'],
+          groups: [
+            {
+              resource: 'team',
+              title: 'Teams',
+              table: teamTable,
+              ruleSubjects: [teamRule],
+              property: groupProperty,
+            },
+          ],
+        },
+      ],
+    });
+    set.request.mockClear();
+    set.store.ui.openResource.mockClear();
+
+    const element = document.createElement('div');
+    await view({ root: element, store: set.store });
+    const select = (label: string) =>
+      element.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+
+    const pick = (input: HTMLSelectElement, label: string) => {
+      const option = [...input.options].find(item => item.text === label)!;
+      expect(option).toBeDefined();
+      input.value = option.value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const options = (label: string) =>
+      [...(select(label)?.options ?? [])].map(item => item.text);
+
+    await vi.waitFor(() => {
+      expect(options('Workspaces')).toEqual(
+        expect.arrayContaining(['A workspace', 'Another workspace']),
+      );
+      expect(options('Teams')).toContain('A team');
+    });
+    expect(
+      element.querySelector('input[aria-label="Workspace ID"]'),
+    ).toBeNull();
+    pick(select('Teams')!, 'A team');
+    await vi.waitFor(() => {
+      expect(options('Workspaces')).toContain('A workspace');
+      expect(options('Workspaces')).not.toContain('Another workspace');
+    });
+    pick(select('Workspaces')!, 'A workspace');
+    const save = [...element.querySelectorAll('button')].find(
+      button => button.textContent === 'Save filter',
+    )!;
+    save.click();
+    await vi.waitFor(() =>
+      expect(set.store.ui.openResource).toHaveBeenCalledOnce(),
+    );
+    expect(set.request).not.toHaveBeenCalled();
+
+    const saved = ruleFor(set, taskTable);
+    expect(set.store.ui.openResource).toHaveBeenCalledWith(saved);
+    expect(config(set.data.get(saved)!)).toMatchObject({
+      kind: 'rule',
+      resource: 'task',
+      definition: {
+        source: {
+          kind: 'related',
+          origin: { entity: config(workspaceRow).entityIdentity },
+          via: { kind: 'identity', collection: 'tasks' },
+        },
+      },
+    });
+    set.request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: [{ id: 'task-1', name: 'A task' }],
+    });
+    await expect(
+      worker(set, taskTable, saved).refresh(),
+    ).resolves.toMatchObject({
+      rows: 1,
+      incomplete: false,
+    });
+    expect(set.request.mock.calls.map(([request]) => request.path)).toEqual([
+      'v2/workspaces/200/tasks',
+    ]);
+  });
+
   it('shows Public scope fields immediately and saves the bound filter on this collection', async () => {
     const document = withPublicEntrypoint();
     const set = setup('collection', {

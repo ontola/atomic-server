@@ -975,16 +975,25 @@ describe('native direct reference records', () => {
   });
 
   it.each([
-    ['at acknowledgement', 'atomic:agent:me'],
-    ['after the next publication', 'atomic:agent:me'],
-    ['at acknowledgement', 'did:ad:agent:me'],
-    ['after the next publication', 'did:ad:agent:me'],
+    ['at acknowledgement', 'atomic:agent:me', ['atomic:agent:me']],
+    ['after the next publication', 'atomic:agent:me', ['atomic:agent:me']],
+    ['at acknowledgement', 'did:ad:agent:me', ['atomic:agent:me']],
+    ['after the next publication', 'did:ad:agent:me', ['atomic:agent:me']],
+    [
+      'at acknowledgement',
+      'did:ad:agent:me',
+      ['did:ad:agent:me', 'atomic:agent:me'],
+    ],
+    [
+      'after the next publication',
+      'did:ad:agent:me',
+      ['did:ad:agent:me', 'atomic:agent:me'],
+    ],
   ] as const)(
-    'preserves the native genesis writer %s for %s',
-    async (timing, actorSubject) => {
+    'preserves the native genesis writer %s for %s with writers %j',
+    async (timing, actorSubject, storedWriters) => {
       const f = await fixture();
       f.actor.subject = actorSubject;
-      const storedWriter = 'atomic:agent:me';
       const published = new Set<string>();
       let delayed: string | undefined;
 
@@ -992,9 +1001,9 @@ describe('native direct reference records', () => {
         if (published.has(subject)) return;
         const row = f.resources.get(subject)!;
         expect(row[core.properties.write]).toEqual([actorSubject]);
-        // The database projection canonicalizes legacy references when
-        // persisting ACLs and serving them back to the browser.
-        row[core.properties.write] = [storedWriter];
+        // The delayed publication can contain canonical subjects alongside
+        // the original signer spelling.
+        row[core.properties.write] = [...storedWriters];
         published.add(subject);
       };
 
@@ -1019,9 +1028,9 @@ describe('native direct reference records', () => {
         tableId,
         ...(table[dataBrowser.properties.tableViews] as string[]),
       ]) {
-        expect(f.resources.get(subject)![core.properties.write]).toEqual([
-          storedWriter,
-        ]);
+        expect(f.resources.get(subject)![core.properties.write]).toEqual(
+          storedWriters,
+        );
         expect(published.has(subject)).toBe(true);
       }
 
@@ -1037,6 +1046,43 @@ describe('native direct reference records', () => {
       ]);
     },
   );
+
+  it('allows the same retained writers to arrive in a different order', async () => {
+    const f = await fixture();
+    const id = f.owner(await f.run({ owner: person() }));
+    const row = f.resources.get(id)!;
+    const collaborator = 'atomic:agent:existing-collaborator';
+    row[core.properties.write] = [f.actor.subject, collaborator];
+
+    f.actor.beforeSet = () => {
+      row[core.properties.write] = [collaborator, f.actor.subject];
+    };
+
+    expect(
+      f.owner(await f.run({ owner: person({ email: 'new@example.test' }) })),
+    ).toBe(id);
+    expect(row[core.properties.write]).toEqual([collaborator, f.actor.subject]);
+  });
+
+  it('rejects a writer being removed from a retained reference during an update', async () => {
+    const f = await fixture();
+    const id = f.owner(await f.run({ owner: person() }));
+    const row = f.resources.get(id)!;
+    row[core.properties.write] = [
+      f.actor.subject,
+      'atomic:agent:existing-collaborator',
+    ];
+
+    f.actor.beforeSet = () => {
+      row[core.properties.write] = [f.actor.subject];
+    };
+
+    f.writes.length = 0;
+    await expect(
+      f.run({ owner: person({ email: 'new@example.test' }) }),
+    ).rejects.toThrow(`${id}; ${core.properties.write}`);
+    expect(f.writes).toEqual([]);
+  });
 
   it('still rejects an unexpected writer added while publishing a new native reference', async () => {
     const f = await fixture();
