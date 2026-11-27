@@ -237,6 +237,20 @@ python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json 
 python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json finalize
 ```
 
+For routine investigation, use `collect --metadata-only`. It downloads the JSON
+results, logs and diagnostic text while keeping raw screenshots, videos and
+traces on the retained DO volume. `COLLECTION-SCOPE.json` records the source,
+selected files and omitted artifact sizes; a metadata collection is not a full
+trace download. The default `collect` still exports everything. Both modes keep
+the existing credential and path guards.
+
+Playwright's HTML report and test-results directory can contain identical copies
+of each attachment. Preservation verifies those immutable files before sharing
+their storage with hard links, retaining every original path and byte. Full
+exports expand the links into regular files. Transfer archives are hashed as a
+stream, so simultaneous multi-GB report retrieval does not require loading each
+archive into controller memory.
+
 The one-hour clock starts with the first controller creation request, before
 its installation and source checkout. Cloud-init installs separate supervisor
 and reaper units before bootstrap work; monitoring SSH is optional after launch.

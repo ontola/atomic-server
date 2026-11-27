@@ -20,9 +20,11 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import uuid
 
 sys.dont_write_bytecode = True
@@ -584,25 +586,104 @@ class CloudLauncher:
                 summary['remote'] = {'status': 'not reachable; bootstrap may still be in progress'}
         return summary
 
-    def collect(self):
+    def collect(self, metadata_only=False):
+        if type(metadata_only) is not bool:
+            raise ValueError('metadata_only must be a boolean')
+        fd = os.open(self.root / 'collection.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'r+') as lock:
+            info = os.fstat(lock.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+                raise ValueError('collection lock must be an owned unshared regular file')
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return self._collect_locked(metadata_only)
+
+    def _collect_locked(self, metadata_only):
         self.api.identity(self.account)
         if not self.reconcile_controller():
             raise RuntimeError('controller is absent; reports remain on the retained volume for a future authorized mount')
         batch = self.config['batch_key']
         # The supervisor only preserves an allowlist in this one run directory.
         source = MOUNT + '/runs/' + batch
-        command = "python3 - <<'PYREMOTE'\nimport pathlib,tarfile\np=pathlib.Path(" + repr(source) + ")\nif not p.is_dir() or p.is_symlink(): raise ValueError('run reports are not available')\nwith tarfile.open('/tmp/atomic-ci-reports.tgz','w:gz') as a:\n for f in p.rglob('*'):\n  if f.is_file() and not f.is_symlink() and not any(q in " + repr(sorted(FORBIDDEN)) + " for q in f.relative_to(p).parts):\n   a.add(f,arcname='reports/'+str(f.relative_to(p)),recursive=False)\nPYREMOTE"
-        self.ssh(command, timeout=120)
+        collection_id = uuid.uuid4().hex
+        remote_archive = '/tmp/atomic-ci-reports-' + collection_id + '.tgz'
+        script = '''import fcntl,io,json,os,pathlib,stat,tarfile
+os.umask(0o077)
+p=pathlib.Path(SOURCE)
+if not p.is_dir() or p.is_symlink(): raise ValueError('run reports are not available')
+lock=pathlib.Path(LOCK)
+if any(parent.is_symlink() for parent in lock.parents): raise ValueError('report lock cannot traverse symlinks')
+fd=os.open(lock,os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
+with os.fdopen(fd,'r+') as lease:
+ info=os.fstat(lease.fileno())
+ if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid() or info.st_nlink!=1: raise ValueError('report lock must be owned and unshared')
+ fcntl.flock(lease,fcntl.LOCK_SH)
+ if (p/'COLLECTION-SCOPE.json').exists(): raise ValueError('reserved report collection metadata already exists')
+ scope={'version':1,'source_commit':COMMIT,'scope':'metadata-only' if METADATA_ONLY else 'full',
+        'retained_raw_reports':str(p),'selected_files':0,'selected_bytes':0,'omitted_files':0,'omitted_bytes':0}
+ with tarfile.open(ARCHIVE,'x:gz',dereference=True) as archive:
+  for f in p.rglob('*'):
+   relative=f.relative_to(p)
+   if not f.is_file() or f.is_symlink() or any(q in FORBIDDEN for q in relative.parts): continue
+   if any(parent.is_symlink() for parent in f.parents): raise ValueError('report path traverses a symlink')
+   size=f.stat().st_size
+   if METADATA_ONLY and (f.suffix.lower() not in ('.json','.jsonl','.log','.md','.txt') or size>32*1024*1024):
+    scope['omitted_files']+=1; scope['omitted_bytes']+=size; continue
+   scope['selected_files']+=1; scope['selected_bytes']+=size
+   if METADATA_ONLY and scope['selected_bytes']>512*1024*1024: raise ValueError('metadata collection exceeds its bounded size')
+   archive.add(f,arcname='reports/'+str(relative),recursive=False)
+  payload=json.dumps(scope,sort_keys=True).encode();entry=tarfile.TarInfo('reports/COLLECTION-SCOPE.json');entry.size=len(payload);entry.mode=0o600
+  archive.addfile(entry,io.BytesIO(payload))
+'''
+        substitutions = {'SOURCE': repr(source), 'LOCK': repr(ROOT + '/evidence-copy.lock'),
+                         'COMMIT': repr(self.config['source_commit']), 'METADATA_ONLY': repr(metadata_only),
+                         'FORBIDDEN': repr(sorted(FORBIDDEN)), 'ARCHIVE': repr(remote_archive)}
+        # Substitute whole identifier tokens, never text inside paths or data.
+        script = re.sub(r'\b(?:SOURCE|LOCK|COMMIT|METADATA_ONLY|FORBIDDEN|ARCHIVE)\b',
+                        lambda match: substitutions[match.group()], script)
+        command = "python3 - <<'PYREMOTE'\n" + script + '\nPYREMOTE'
+        try:
+            self.ssh(command, timeout=120)
+        except Exception:
+            with contextlib.suppress(RuntimeError, subprocess.TimeoutExpired):
+                self.ssh('rm -f -- ' + shlex.quote(remote_archive), timeout=15)
+            raise
         node = self.read()['controller']
         archive = self.root / 'reports.tgz'
         options = ['-i', str(self.root / 'controller-key'), '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
                    '-o', 'IdentityAgent=none', '-o', 'StrictHostKeyChecking=yes',
                    '-o', 'UserKnownHostsFile=' + str(self.root / 'controller.known-hosts')]
-        self.run(['scp', *options, 'root@' + node['ip'] + ':/tmp/atomic-ci-reports.tgz', str(archive)], timeout=180)
-        extract_reports(archive, self.root)
+        with tempfile.TemporaryDirectory(prefix='.collection-', dir=self.root) as staging:
+            staging = Path(staging)
+            candidate = staging / 'reports.tgz'
+            try:
+                self.run(['scp', *options, 'root@' + node['ip'] + ':' + remote_archive, str(candidate)], timeout=180)
+                extract_reports(candidate, staging)
+                reports = staging / 'reports'
+                scope = json.loads((reports / 'COLLECTION-SCOPE.json').read_text())
+                expected_scope = 'metadata-only' if metadata_only else 'full'
+                selected = [p for p in reports.rglob('*') if p.is_file() and p != reports / 'COLLECTION-SCOPE.json']
+                if (scope.get('version') != 1 or scope.get('source_commit') != self.config['source_commit']
+                        or scope.get('scope') != expected_scope or scope.get('retained_raw_reports') != source
+                        or scope.get('selected_files') != len(selected)
+                        or scope.get('selected_bytes') != sum(p.stat().st_size for p in selected)
+                        or any(type(scope.get(key)) is not int or scope[key] < 0 for key in ('omitted_files', 'omitted_bytes'))
+                        or (not metadata_only and (scope['omitted_files'] or scope['omitted_bytes']))):
+                    raise ValueError('collected report scope or source does not match the request')
+                previous = self.root / 'reports'
+                if previous.is_symlink():
+                    raise ValueError('report destination cannot be a symlink')
+                if previous.exists():
+                    previous.rename(self.root / ('reports-previous-' + collection_id))
+                reports.rename(previous)
+                candidate.replace(archive)
+            finally:
+                with contextlib.suppress(RuntimeError, subprocess.TimeoutExpired):
+                    self.ssh('rm -f -- ' + shlex.quote(remote_archive), timeout=15)
         self.update(lambda state: state.update(reports_collected_at=self.now().isoformat(),
-                    reports_sha256=BASE.file_sha256(archive)))
-        return {'reports': str(self.root / 'reports'), 'archive_sha256': self.read()['reports_sha256']}
+                    reports_sha256=BASE.file_sha256(archive),
+                    reports_collection_scope='metadata-only' if metadata_only else 'full'))
+        return {'reports': str(self.root / 'reports'), 'archive_sha256': self.read()['reports_sha256'],
+                'collection_scope': self.read()['reports_collection_scope'], 'retained_raw_reports': source}
 
     def finalize(self):
         if not self.read().get('reports_collected_at'):
@@ -618,10 +699,14 @@ class CloudLauncher:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
+    parser.add_argument('--metadata-only', action='store_true', help='collect small reports; retain raw traces on DO')
     parser.add_argument('command', choices=('plan', 'launch', 'status', 'collect', 'finalize'))
     args = parser.parse_args()
+    if args.metadata_only and args.command != 'collect':
+        parser.error('--metadata-only applies only to collect')
     launcher = CloudLauncher(json.loads(args.config.read_text()))
-    print(json.dumps(getattr(launcher, args.command)(), indent=2))
+    result = launcher.collect(metadata_only=args.metadata_only) if args.command == 'collect' else getattr(launcher, args.command)()
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == '__main__':

@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -559,6 +560,128 @@ class CloudTests(unittest.TestCase):
         self.assertEqual((runtime / 'node-001/results/browser/report.json').read_text(), files['node-001/results/browser/report.json'])
         self.assertNotIn('dop_v1_FIXTURE_SECRET', json.dumps(receipt))
 
+    def attachment_sources(self):
+        runtime = Path(self.config['fanout_config']['runtime_dir'])
+        paths = [runtime/'node-001/results/browser/browser/playwright-report/data/trace.zip',
+                 runtime/'node-001/results/browser/browser/test-results/case/trace.zip']
+        data = b'PK immutable public browser trace' * 4096
+        for path in paths:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        retained = Path(self.config['volume']['mount_path'])/'runs'/self.config['batch_key']/'runtime'
+        return paths, [retained/path.relative_to(runtime) for path in paths], data
+
+    def test_duplicate_attachments_keep_all_paths_and_next_pass_does_not_recopy_or_rehash(self):
+        sources, targets, data = self.attachment_sources()
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+            self.assertEqual([path.read_bytes() for path in targets],[data,data])
+            self.assertEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+            with mock.patch.object(cloud,'scan_evidence',side_effect=AssertionError('unchanged aliases must not be scanned')), \
+                    mock.patch.object(cloud.os,'link',side_effect=AssertionError('unchanged aliases must not be rewritten')):
+                cloud.persist_evidence(self.config)
+        state=cloud.read_json(Path(self.config['root'])/'evidence-copy-state.json')
+        self.assertEqual(len(state),2)
+        self.assertEqual([path.read_bytes() for path in sources],[data,data])
+        self.assertTrue(all(record['destination']==cloud.evidence_signature(path)
+                            for record,path in zip(state.values(),targets)))
+
+    def test_changed_source_breaks_sharing_without_mutating_its_old_alias(self):
+        sources,targets,data=self.attachment_sources()
+        changed=b'changed source trace bytes' * 5000
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+            sources[0].write_bytes(changed)
+            cloud.persist_evidence(self.config)
+            cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].read_bytes(),changed)
+        self.assertEqual(targets[1].read_bytes(),data)
+        self.assertNotEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        self.assertEqual(sources[1].read_bytes(),data)
+
+    def test_existing_separate_report_copies_are_repaired_without_losing_logical_paths(self):
+        sources,targets,data=self.attachment_sources()
+        for path in targets:
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_bytes(data)
+        runtime=Path(self.config['fanout_config']['runtime_dir'])
+        cloud.write_json(Path(self.config['root'])/'evidence-copy-state.json', {
+            'runtime/'+str(source.relative_to(runtime)): {
+                'source':cloud.evidence_signature(source),
+                'destination':cloud.evidence_signature(target)}
+            for source,target in zip(sources,targets)})
+        self.assertNotEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        self.assertEqual([path.read_bytes() for path in targets],[data,data])
+
+    def test_large_private_attachment_is_never_shared_or_preserved_even_across_chunk_boundary(self):
+        sources,targets,data=self.attachment_sources()
+        marker=b'dop_v1_FIXTURE_SECRET'
+        sources[1].write_bytes(b'x' * (1024*1024-5)+marker+b'end')
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            receipt=cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].read_bytes(),data)
+        self.assertFalse(targets[1].exists())
+        self.assertEqual(len(receipt['excluded_private_files']),1)
+        self.assertNotIn(marker.decode(),json.dumps(receipt))
+
+    def test_symlinked_retained_candidate_or_copy_lock_is_rejected(self):
+        _,targets,data=self.attachment_sources()
+        outside=self.root/'outside-trace.zip';outside.write_bytes(data)
+        targets[0].parent.mkdir(parents=True,exist_ok=True)
+        targets[0].symlink_to(outside)
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])), \
+                self.assertRaises(ValueError):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(outside.read_bytes(),data)
+        targets[0].unlink()
+        lock=Path(self.config['root'])/'evidence-copy.lock'
+        lock.unlink();lock.symlink_to(outside)
+        with mock.patch.object(cloud,'_persist_evidence_locked') as body, self.assertRaises(OSError):
+            cloud.persist_evidence(self.config)
+        body.assert_not_called()
+        self.assertEqual(outside.read_bytes(),data)
+
+    def test_concurrent_preservation_passes_serialize_under_the_owned_root_lock(self):
+        first_entered, second_attempted, release = (threading.Event() for _ in range(3))
+        calls, errors = [], []
+        original_flock = cloud.fcntl.flock
+        def flock(fd, operation):
+            if threading.current_thread().name == 'evidence-second':
+                second_attempted.set()
+            return original_flock(fd, operation)
+        def body(config, final):
+            calls.append(threading.current_thread().name)
+            if len(calls) == 1:
+                first_entered.set()
+                if not release.wait(3):
+                    raise AssertionError('test release timed out')
+            return {}
+        def run():
+            try:
+                cloud.persist_evidence(self.config)
+            except BaseException as error:
+                errors.append(error)
+        first=threading.Thread(target=run,name='evidence-first')
+        second=threading.Thread(target=run,name='evidence-second')
+        with mock.patch.object(cloud,'_persist_evidence_locked',side_effect=body), \
+                mock.patch.object(cloud.fcntl,'flock',side_effect=flock):
+            try:
+                first.start()
+                self.assertTrue(first_entered.wait(2))
+                second.start()
+                self.assertTrue(second_attempted.wait(2))
+                self.assertEqual(calls,['evidence-first'])
+            finally:
+                release.set()
+                first.join(3)
+                if second.ident is not None:second.join(3)
+        self.assertFalse(first.is_alive() or second.is_alive())
+        self.assertEqual(errors,[])
+        self.assertEqual(calls,['evidence-first','evidence-second'])
+
     def test_nonfinite_prices_and_budget_are_rejected(self):
         for value in (float('nan'), float('inf'), -float('inf')):
             for field in ('controller_rate', 'worker_rate', 'volume_rate', 'budget', 'egress'):
@@ -656,7 +779,7 @@ class CloudTests(unittest.TestCase):
         trace.write_bytes(b'x' * (1024 * 1024))
         original_open, writes = Path.open, []
         def observe_open(path, mode='r', *args, **kwargs):
-            if path.name == 'failure.zip.tmp' and mode == 'wb':
+            if path.name == 'failure.zip.tmp' and mode in ('wb', 'xb'):
                 writes.append(path)
             return original_open(path, mode, *args, **kwargs)
         with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \

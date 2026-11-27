@@ -1680,7 +1680,7 @@ systemctl reload ssh
                     path.parent.mkdir(parents=True, exist_ok=True)
                     with archive.extractfile(member) as source, path.open('wb') as target:
                         shutil.copyfileobj(source, target)
-        self.node_update(node_id, artifact_sha256=digest((local / 'results.tgz').read_bytes()),
+        self.node_update(node_id, artifact_sha256=file_sha256(local / 'results.tgz'),
                          artifacts_retrieved_at=stamp())
         return local
 
