@@ -301,6 +301,30 @@ Playwright's immediate retries. Choose these widths for the actual CPU and
 memory budget rather than assuming more parallel tests always finish sooner.
 Standalone Dagger calls can use constructor `--build-jobs N` to override the
 host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+
+`server_workers` (default 0) requests 1–128 HTTP worker threads; 0 leaves the
+server's existing automatic default, at most eight. The process descriptor
+budget can reduce a requested width. It applies to browser services and native
+JavaScript integration fixtures, including the final browser retry, and never
+to the custom OCI probe module. Standalone Dagger calls use constructor
+`--http-workers N`; the server itself accepts `--http-workers N` or
+`ATOMIC_HTTP_WORKERS=N` (positive values only).
+
+An optional `"worker_profile": "64-core"` chooses 32 HTTP workers and 24
+Playwright workers per host; `"32-core"` chooses 16 and 12. These are opt-in
+measurement profiles, not demonstrated fastest settings. Explicit `workers` or
+`server_workers` values override their respective profile defaults, including
+`workers: 1` and `server_workers: 0`. Without a profile the existing defaults
+stay unchanged. Specify the matching machine `size` and rate: the read-only
+provider plan rejects a profile whose vCPU count differs from that size. The
+cloud launcher otherwise retains its existing 64-vCPU worker requirement.
+Plans, phase results and retained summaries identify requested runtime widths;
+server startup logs report the effective HTTP width after descriptor capping.
+Browser receipts bind the requested widths to the scheduled source and shard.
+A three-host 64-core profile can run up to 72 Playwright workers against three
+isolated servers. This may increase contention, memory use and flakes; measure
+latency, first-pass failures, CPU and total time/cost before adopting it.
+
 For a warm-cache measurement, optional `cache_namespace` keeps the seeded Cargo
 volume names stable across cloned engines; omitting it retains the per-batch/node
 namespace. Give `test_run_key` a fresh safe identifier that differs from seed and

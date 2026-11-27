@@ -255,7 +255,9 @@ class CloudLauncher:
         if any(item['name'] == self.config['batch_key'] + '-controller' for item in droplets):
             raise ValueError('controller name already exists; refusing a second fleet')
         sizes = self.api.call(self.account, ['compute', 'size', 'list'])
-        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'], 64, self.config['region']),
+        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'],
+                                      BASE.WORKER_PROFILES.get(self.config['worker_profile'], {}).get('vcpus', 64),
+                                      self.config['region']),
                                       (self.config['cloud_controller_size'], self.config['expected_controller_hourly_rate'], None, self.config['cloud_controller_region'])):
             item = next((value for value in sizes if value['slug'] == slug), None)
             if (not item or not item.get('available') or region not in item.get('regions', [])
@@ -294,6 +296,7 @@ class CloudLauncher:
                  if self.config.get('check_only') else {})
         return {**scope, 'source_commit': self.config['source_commit'],
                 'test_nodes': 1 if self.config.get('check_only') else 3,
+                'worker_budget': BASE.worker_budget(self.config),
                 'controller_size': self.config['cloud_controller_size'], 'region': self.config['region'],
                 'controller_region': self.config['cloud_controller_region'], 'cloud_worker_mode': self.config['cloud_worker_mode'],
                 'cache_volume_gib': WARM.VOLUME_GIB if cache_hourly else 0,

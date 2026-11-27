@@ -190,7 +190,29 @@ def validate_archive(path, source, check=None):
     return receipt, manifest
 
 
+WORKER_PROFILES = {
+    '64-core': {'vcpus': 64, 'workers': 24, 'server_workers': 32},
+    '32-core': {'vcpus': 32, 'workers': 12, 'server_workers': 16},
+}
+
+
+def worker_budget(config):
+    """Requested runtime widths; actual HTTP width may be FD-capped by the server."""
+    profile = config.get('worker_profile', '')
+    return {'profile': profile, 'profile_vcpus': WORKER_PROFILES.get(profile, {}).get('vcpus'),
+            'playwright_workers_per_host': config['workers'],
+            'http_workers_requested': config['server_workers']}
+
+
 def validate_config(config):
+    profile = config.setdefault('worker_profile', '')
+    if not isinstance(profile, str) or profile not in ('', *WORKER_PROFILES):
+        raise ValueError('worker_profile must be empty, 32-core or 64-core')
+    # Resolve before defaults: an explicitly supplied width (including PW 1 or
+    # HTTP 0/default) always wins, and repeated validation is idempotent.
+    for key in ('workers', 'server_workers'):
+        if profile:
+            config.setdefault(key, WORKER_PROFILES[profile][key])
     if 'check_only' in config and config['check_only'] != 'flutter-test':
         raise ValueError('check_only supports only the standalone flutter-test check')
     if not safe_slug(config.get('batch_key')):
@@ -210,6 +232,7 @@ def validate_config(config):
     if Path(config['runtime_dir']).is_relative_to(Path(config['worktree'])):
         raise ValueError('runtime_dir must be outside the repository')
     for field, default, low, high in (('max_hours', 4, .01, 4), ('workers', 1, 1, 64),
+                                     ('server_workers', 0, 0, 128),
                                      ('retries', 1, 0, 1), ('build_jobs', 4, 1, 128),
                                      ('rust_test_threads', 0, 0, 128)):
         value = config.setdefault(field, default)
@@ -615,10 +638,14 @@ class Controller:
                 raise RuntimeError('Requested size/region unavailable for ' + account['context'])
             if abs(size['price_hourly'] - self.config['expected_hourly_rate']) > .000001:
                 raise RuntimeError('Hourly price differs from configured budget')
+            expected_vcpus = WORKER_PROFILES.get(self.config['worker_profile'], {}).get('vcpus')
+            if expected_vcpus is not None and size.get('vcpus') != expected_vcpus:
+                raise ValueError('worker_profile differs from provider machine vCPUs')
             accounts.append({'context': account['context'], 'nodes': account['nodes'],
                              'existing_droplets': len(existing), 'limit': info['droplet_limit']})
         total = sum(account['nodes'] for account in self.config['accounts'])
         plan = {'source_commit': actual, 'dagger_version': engine, 'accounts': accounts,
+                'worker_budget': worker_budget(self.config),
                 'nodes': total, 'hourly_usd': total * self.config['expected_hourly_rate'],
                 'maximum_hours': self.config['max_hours'], 'check_jobs': [name for name, _ in CHECKS],
                 'browser_shards': total, 'initial_nodes': min(total, len(CHECKS) + 1),
@@ -940,6 +967,9 @@ dagger version
                       'artifact_cache_dir': self.config['artifact_cache_dir'],
                       'build_jobs': self.config['build_jobs'],
                       'rust_test_threads': self.config['rust_test_threads'],
+                      'server_workers': 0 if module else self.config['server_workers'],
+                      'playwright_workers': self.config['workers'],
+                      'worker_profile': self.config['worker_profile'],
                       'test_run_key': self.config['test_run_key'],
                       'cache_namespace': self.config['cache_namespace']}
             path = self.root / node_id / (name + '.json')
@@ -1117,9 +1147,13 @@ dagger version
         receipt = json.loads((root / 'browser-run.json').read_text())
         expected = {'version': 1, 'kind': kind, 'sourceCommit': self.config['source_commit'],
                     'manifestSha256': state['bundle']['manifest_sha256'], 'shardIndex': node['shard_index'],
-                    'shardCount': state['plan']['nodes'], 'playwrightRetries': 0}
+                    'shardCount': state['plan']['nodes'], 'playwrightRetries': 0,
+                    'httpWorkersRequested': self.config['server_workers'],
+                    'playwrightWorkers': self.config['workers']}
         if any(receipt.get(key) != value for key, value in expected.items()):
             raise ValueError('browser execution receipt identity differs from the scheduled run')
+        if any(type(receipt.get(key)) is not int for key in ('httpWorkersRequested', 'playwrightWorkers')):
+            raise ValueError('browser execution receipt worker budget is not an integer')
         for field, name in [('reportSha256', 'test-results.json'),
                             ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
             if receipt.get(field) != file_sha256(root / name):
