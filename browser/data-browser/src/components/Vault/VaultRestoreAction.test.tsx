@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../styling';
-import { VaultRestoreAction } from './VaultRestoreAction';
+import { VaultRestoreAction, resetAutoRestored } from './VaultRestoreAction';
 
 const mocks = vi.hoisted(() => ({
   agent: { subject: 'did:ad:agent:x' } as unknown,
@@ -41,6 +41,7 @@ function show(subject = 'atomic:drive1', autoStart = true) {
 
 afterEach(() => {
   cleanup();
+  resetAutoRestored();
   restore.mockReset();
   mocks.agent = { subject: 'did:ad:agent:x' };
 });
@@ -58,6 +59,15 @@ describe('VaultRestoreAction', () => {
         <VaultRestoreAction subject='atomic:drive1' autoStart />
       </ThemeProvider>,
     );
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores once per subject even when unmounted and remounted', () => {
+    setVault();
+    show().unmount();
+    show().unmount();
+    show();
+
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
