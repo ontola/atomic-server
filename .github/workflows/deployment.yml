@@ -61,11 +61,12 @@ jobs:
       #
       # `/server` is the cheapest endpoint that proves the store opened and the
       # thing is actually serving. Retried because a real start takes a few
-      # seconds, and a database migration can take considerably longer.
+      # seconds, and a database migration can take considerably longer: the
+      # first 0.41 start converts a sled store to redb, so allow 15 minutes.
       - name: Wait for the deployed server to answer
         id: health
         run: |
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 90); do
             code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
               "https://${{ inputs.remote_host }}/server" || echo 000)
 
