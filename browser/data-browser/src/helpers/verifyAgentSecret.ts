@@ -1,5 +1,5 @@
 import { Agent, agentSubject, decodeSecret } from '@tomic/react';
-import { canonicalIdentifier } from '@tomic/lib';
+import { canonicalIdentifier, currentAgentSubject } from '@tomic/lib';
 
 /** Whether `value` parses as an agent secret (no key is imported). */
 export function isAgentSecret(value: string): boolean {
@@ -36,7 +36,11 @@ export async function agentFromOwnSecret(
   const agent = await Agent.fromSecret(secret);
   const derived = agentSubject(await agent.getPublicKey());
 
-  if (canonicalIdentifier(derived) !== canonicalIdentifier(expectedSubject)) {
+  // A backup saved by an old account names its agent as the pre-DID
+  // `https://server/agents/{key}` URL: the same key, another spelling.
+  const expected = canonicalIdentifier(currentAgentSubject(expectedSubject));
+
+  if (canonicalIdentifier(derived) !== expected) {
     throw new OtherAgentSecretError();
   }
 

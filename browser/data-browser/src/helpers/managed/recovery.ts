@@ -1,4 +1,8 @@
-import { canonicalIdentifier, encodeB64 } from '@tomic/lib';
+import {
+  canonicalIdentifier,
+  currentAgentSubject,
+  encodeB64,
+} from '@tomic/lib';
 import {
   OtherAgentSecretError,
   agentFromOwnSecret,
@@ -79,7 +83,10 @@ export type RecoverySecret = {
  * two, and the reconcile gate then switches identities and signs out.
  */
 export function sameAgent(a: string, b: string): boolean {
-  return canonicalIdentifier(a) === canonicalIdentifier(b);
+  return (
+    canonicalIdentifier(currentAgentSubject(a)) ===
+    canonicalIdentifier(currentAgentSubject(b))
+  );
 }
 
 /** A pasted secret that opens a different agent than the signed-in account's. */

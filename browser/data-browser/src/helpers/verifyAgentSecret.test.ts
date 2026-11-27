@@ -39,4 +39,14 @@ describe('agentFromOwnSecret', () => {
       agentFromOwnSecret(forged.secret, mine.subject),
     ).rejects.toBeInstanceOf(OtherAgentSecretError);
   });
+
+  it('accepts a backup that names its agent by the pre-DID URL', async () => {
+    const { secret, subject } = await makeSecret();
+    const key = subject.slice('atomic:agent:'.length);
+    const agent = await agentFromOwnSecret(
+      secret,
+      `https://atomicdata.dev/agents/${key}`,
+    );
+    expect(agentSubject(await agent.getPublicKey())).toBe(subject);
+  });
 });
