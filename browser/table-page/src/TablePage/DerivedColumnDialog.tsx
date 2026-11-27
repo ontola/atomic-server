@@ -9,12 +9,13 @@ import {
   useDialog,
 } from '@tomic/resource-ui/components/Dialog/index';
 import { Button } from '@tomic/ui/components/Button';
+import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
+import { useDialogSave } from './helpers/useDialogSave.js';
 import Field from '@tomic/resource-ui/components/forms/Field';
 import {
   InputStyled,
   InputWrapper,
 } from '@tomic/ui/components/forms/InputStyles';
-import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 import {
   bindFormula,
   columnSlugs,
@@ -32,7 +33,7 @@ interface DerivedColumnDialogProps {
   classProperties: Property[];
   /** The spec being edited. Absent = creating a new column. */
   editing?: DerivedColumnSpec;
-  onSave: (spec: DerivedColumnSpec) => void;
+  onSave: (spec: DerivedColumnSpec) => void | Promise<void>;
 }
 
 /**
@@ -50,6 +51,8 @@ export function DerivedColumnDialog({
   const [formula, setFormula] = useState('');
   const [valueKind, setValueKind] = useState<DerivedValueKind>();
   const [dialogProps, show, hide] = useDialog({ bindShow });
+  const { busy, error, clearError, submit, cancel } = useDialogSave(hide);
+  const [draftId, setDraftId] = useState('');
   const ready = useFormulaReady();
   /** Clicking one fills in the name and the formula; the column names are placeholders to edit. */
   const examples: Array<{
@@ -98,6 +101,8 @@ export function DerivedColumnDialog({
       return;
     }
 
+    setDraftId(editing?.id ?? crypto.randomUUID());
+    clearError();
     setLabel(editing?.label ?? '');
     // A column stored with generated names (`v0`) is shown by its columns' slugs.
     const slugOf = Object.fromEntries(
@@ -141,11 +146,16 @@ export function DerivedColumnDialog({
   }
 
   return (
-    <Dialog {...dialogProps}>
+    <Dialog
+      {...dialogProps}
+      aria-busy={busy}
+      disableLightDismiss={busy}
+      onClose={cancel}
+    >
       <DialogTitle>
         <h1>{editing ? 'Edit computed column' : 'New computed column'}</h1>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent inert={busy}>
         <Field label='Name'>
           <InputWrapper>
             <InputStyled
@@ -191,27 +201,29 @@ export function DerivedColumnDialog({
             </Button>
           ))}
         </Examples>
+        {error && <ErrorChip role='alert'>{error}</ErrorChip>}
       </DialogContent>
       <DialogActions>
-        <Button subtle onClick={() => hide()}>
+        <Button subtle disabled={busy} onClick={cancel}>
           Cancel
         </Button>
         <Button
-          disabled={!valid}
+          disabled={busy || !valid}
           data-testid='derived-save'
-          onClick={() => {
-            onSave({
-              // An edited column keeps its id, so its stored width and position
-              // survive.
-              id: editing?.id ?? stringToSlug(label),
-              label: label.trim(),
-              formula,
-              vars,
-              ...(editing?.width ? { width: editing.width } : {}),
-              ...(shownAs ? { valueKind: shownAs } : {}),
-            });
-            hide();
-          }}
+          onClick={() =>
+            submit(() =>
+              onSave({
+                // An edited column keeps its id, so its stored width and position
+                // survive.
+                id: draftId,
+                label: label.trim(),
+                formula,
+                vars,
+                ...(editing?.width ? { width: editing.width } : {}),
+                ...(shownAs ? { valueKind: shownAs } : {}),
+              }),
+            )
+          }
         >
           {editing ? 'Save' : 'Add column'}
         </Button>

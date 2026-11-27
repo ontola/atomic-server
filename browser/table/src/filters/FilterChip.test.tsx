@@ -69,6 +69,7 @@ describe('existing filter-chip interactions', () => {
     expect(onOperatorChange).toHaveBeenCalledExactlyOnceWith('eq');
     fireEvent.click(screen.getByRole('button', { name: 'Verwijder filter' }));
     expect(onRemove).toHaveBeenCalledExactlyOnceWith();
+    expect(screen.queryByLabelText('Host value')).toBeNull();
   });
 
   it('retains the existing numeric browser-input policy for derived filters', () => {

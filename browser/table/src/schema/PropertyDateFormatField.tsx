@@ -1,4 +1,5 @@
 import {
+  useId,
   type ComponentType,
   type InputHTMLAttributes,
   type PropsWithChildren,
@@ -30,7 +31,7 @@ export function PropertyDateFormatField({
   onChange,
   Radio = RadioInput,
 }: PropertyDateFormatFieldProps) {
-  const name = 'date-format';
+  const name = useId();
 
   return (
     <Wrapper>

@@ -20,6 +20,7 @@ import {
   type DerivedColumnSpec,
 } from './derivedColumns.js';
 import { evaluateFormula, localOffsetMinutes } from './formulaEngine.js';
+import { quantizedNow } from './tableFiltering.js';
 
 /**
  * A statistic a view shows under its rows. Configuration on the View
@@ -146,6 +147,7 @@ export function toAggregation(
   granularity: GroupGranularity,
   /** The view's computed columns, for the statistics that name one. */
   derivedColumns: DerivedColumnSpec[] = [],
+  now = quantizedNow(),
 ): Aggregation | undefined {
   if (aggregates.length === 0) {
     return undefined;
@@ -168,7 +170,7 @@ export function toAggregation(
     },
   );
 
-  if (requests.length === 0) {
+  if (requests.length !== aggregates.length) {
     return undefined;
   }
 
@@ -197,19 +199,12 @@ export function toAggregation(
     // this value is part of the query's identity, so a raw `Date.now()` would
     // re-run the query on every render. A minute is close enough for a total
     // while the cells themselves tick every second.
-    ...(live ? { now_ms: quantizedNow() } : {}),
+    ...(live ? { now_ms: now } : {}),
     // A computed total reads dates in the caller's zone, like the cells.
     ...(requests.some(request => request.expression)
       ? { tz_offset_minutes: localOffsetMinutes() }
       : {}),
   };
-}
-
-/** How coarsely `now` is passed to the store — see `toAggregation`. */
-const NOW_QUANTUM_MS = 60_000;
-
-function quantizedNow(): number {
-  return Math.floor(Date.now() / NOW_QUANTUM_MS) * NOW_QUANTUM_MS;
 }
 
 /** How many totals rows the configuration needs (always at least one). */

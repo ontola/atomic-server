@@ -4,8 +4,10 @@ import {
   unknownSubject,
   useResource,
   useString,
+  useStore,
   useValue,
   type ExpressionFilter,
+  type JSONValue,
   type PropVal,
 } from '@tomic/react';
 import { useMemo } from 'react';
@@ -13,96 +15,97 @@ import {
   parseDerivedColumnSpecs,
   type DerivedColumnSpec,
 } from '../TablePage/derivedColumns.js';
-import {
-  quantizedNow,
-  splitFilters,
-  type TableFilter,
-} from '../TablePage/tableFiltering.js';
+import { quantizedNow, type TableFilter } from '../TablePage/tableFiltering.js';
+import { effectiveViewDerivedColumns } from '../TablePage/Timer/timerProperties.js';
+import { normalizeViewKind } from '../TablePage/tableViewKinds.js';
+import { compileViewPredicates } from '../TablePage/viewQuery.js';
+import { getTableDrive } from '../TablePage/tableDrive.js';
+import { useClassProperties } from './useClassProperties.js';
 
 export interface BlockQuery {
-  /** The `parent = <table>` constraint every block query starts from. */
   property: string;
   value: string;
-  /** Indexed constraints: the class, the view's filters, the block's own. */
   filters: PropVal[];
-  /** Constraints the store has to evaluate per row. */
   expressionFilters: ExpressionFilter[];
-  /** The view's computed columns, for a statistic that names one. */
   derivedColumns: DerivedColumnSpec[];
-  /** True once the source's classtype is known — before that the query would
-   *  ask about `unknownSubject`. */
+  drive?: string;
+  now: number;
   ready: boolean;
+  unavailable: boolean;
 }
 
 function parseFilters(value: unknown): TableFilter[] {
   return Array.isArray(value) ? (value as TableFilter[]) : [];
 }
 
-/**
- * The constraints a block's numbers cover.
- *
- * A block borrows its view's configuration rather than restating it: point a
- * stat block at the "Low stock" view and it counts exactly the rows that view
- * lists, filters and computed columns included. `block-query` then ANDs
- * whatever else the block narrows by on top, so "low stock **in this room**" is
- * config rather than a second view.
- */
+/** Borrow the selected view's filters, ANDed with the block's own filters. */
 export function useBlockQuery(
   sourceSubject: string | undefined,
   viewSubject: string | undefined,
   blockQuery: unknown,
 ): BlockQuery {
+  const store = useStore();
   const source = useResource(sourceSubject ?? unknownSubject);
   const view = useResource(viewSubject ?? unknownSubject);
-
   const [classSubject] = useString(source, core.properties.classtype);
+  const [owner] = useString(view, core.properties.parent);
+  const [viewKind] = useString(view, dataBrowser.properties.viewKind);
+  const [start] = useString(view, dataBrowser.properties.viewGroupBy);
+  const [end] = useString(view, dataBrowser.properties.viewEndProp);
   const [storedFilters] = useValue(view, dataBrowser.properties.viewFilters);
   const [storedDerived] = useValue(
     view,
     dataBrowser.properties.viewDerivedColumns,
   );
+  const timer = normalizeViewKind(viewKind) === 'timer';
+  const columns = useClassProperties(timer ? classSubject : undefined);
 
-  // Serialized deps throughout: parsing JSON hands back a fresh array every
-  // render, and these reach a query's identity.
   const derivedKey = JSON.stringify(storedDerived ?? null);
   const viewFiltersKey = JSON.stringify(storedFilters ?? null);
   const blockFiltersKey = JSON.stringify(blockQuery ?? null);
+  const derivedColumns = useMemo(() => {
+    const stored = JSON.parse(derivedKey) as JSONValue;
 
-  const derivedColumns = useMemo(
-    () => parseDerivedColumnSpecs(JSON.parse(derivedKey)),
-    [derivedKey],
+    return effectiveViewDerivedColumns(
+      timer ? 'timer' : 'table',
+      parseDerivedColumnSpecs(stored),
+      Array.isArray(stored),
+      columns,
+      start,
+      end,
+    );
+  }, [derivedKey, timer, columns, start, end]);
+
+  const now = quantizedNow();
+  const predicates = useMemo(
+    () =>
+      compileViewPredicates(
+        classSubject,
+        [
+          ...parseFilters(JSON.parse(viewFiltersKey)),
+          ...parseFilters(JSON.parse(blockFiltersKey)),
+        ],
+        derivedColumns,
+        now,
+      ),
+    [classSubject, viewFiltersKey, blockFiltersKey, derivedColumns, now],
   );
-
-  const { filters, expressionFilters } = useMemo(() => {
-    const combined = [
-      ...parseFilters(JSON.parse(viewFiltersKey)),
-      ...parseFilters(JSON.parse(blockFiltersKey)),
-    ];
-
-    // Quantized, like the table's: this value is part of the query's identity,
-    // so a raw `Date.now()` would re-run it on every render.
-    const split = splitFilters(combined, derivedColumns, quantizedNow());
-
-    return {
-      filters: split.propVals,
-      expressionFilters: split.expressionFilters,
-    };
-  }, [viewFiltersKey, blockFiltersKey, derivedColumns]);
-
-  const hasClass = !!classSubject && classSubject !== unknownSubject;
-
-  // Rows only: without this a block would count the table's own View resources
-  // alongside its rows.
-  const classFilter: PropVal[] = hasClass
-    ? [{ property: core.properties.isA, value: classSubject }]
-    : [];
+  const viewReady = !viewSubject || (view.isReady() && owner === sourceSubject);
+  const unavailable =
+    !!sourceSubject &&
+    ((!!viewSubject && !view.loading && !viewReady) ||
+      (viewReady && predicates.hasUnresolved));
 
   return {
     property: core.properties.parent,
     value: sourceSubject ?? '',
-    filters: [...classFilter, ...filters],
-    expressionFilters,
+    filters: predicates.filters,
+    expressionFilters: predicates.expressionFilters,
     derivedColumns,
-    ready: !!sourceSubject && hasClass,
+    drive: sourceSubject ? getTableDrive(store, source) : undefined,
+    now,
+    ready:
+      !!sourceSubject && predicates.classReady && viewReady && !unavailable,
+    unavailable,
   };
 }

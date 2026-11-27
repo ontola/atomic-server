@@ -9,6 +9,7 @@ import { InputStyled } from '@tomic/ui/components/forms/InputStyles';
 import { createQuickAddRow, type QuickAddSpec } from './quickAdd.js';
 
 interface Props {
+  viewSubject?: string;
   spec: QuickAddSpec;
   tableSubject: string;
   tableClass: Resource;
@@ -28,6 +29,7 @@ interface Props {
  * stays a single field rather than becoming a second form.
  */
 export function QuickAddBar({
+  viewSubject,
   spec,
   tableSubject,
   tableClass,
@@ -38,6 +40,7 @@ export function QuickAddBar({
 
   return (
     <TableQuickAddBar
+      key={JSON.stringify([tableSubject, tableClass.subject, viewSubject])}
       label={spec.label}
       field={!!spec.field}
       placeholder={spec.placeholder}

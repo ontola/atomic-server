@@ -74,7 +74,9 @@ export function ChartBlock({ block, config }: BlockProps): JSX.Element {
 
   return (
     <BlockShell block={block} label={config.label}>
-      {groups.length === 0 ? (
+      {query.unavailable || (query.ready && !aggregation) ? (
+        <Empty>Measurement unavailable. Check the source view.</Empty>
+      ) : groups.length === 0 ? (
         <Empty>No data yet</Empty>
       ) : (
         <Bars>

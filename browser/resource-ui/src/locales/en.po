@@ -112,46 +112,47 @@ msgstr "AI Agents"
 
 #: ../data-browser/src/chunks/AI/ConfigEditorDialog.tsx
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
-#: ../table-page/src/TablePage/BreakdownDialog.tsx
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
-#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Issues/IssuesView.tsx
-#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: ../table-page/src/TablePage/QuickAddDialog.tsx
-#: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
-#: src/components/AvatarCropper.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
-#: src/components/ConfirmationDialog.tsx
 #: ../data-browser/src/components/ConnectAppForm.tsx
-#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/HostUI/hostUIDialogs.tsx
 #: ../data-browser/src/components/MoveResourceDialog.tsx
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: src/components/forms/EditFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Conversation/NewMessageDialog.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 #: ../data-browser/src/views/OntologyPage/NewClassButton.tsx
 #: ../data-browser/src/views/OntologyPage/NewPropertyButton.tsx
 #: ../data-browser/src/views/PluginView/useResourcePicker.tsx
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../table-page/src/TablePage/BreakdownDialog.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssuesView.tsx
+#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: ../table-page/src/TablePage/QuickAddDialog.tsx
+#: ../table-page/src/TablePage/RowActionDialog.tsx
+#: src/components/AvatarCropper.tsx
+#: src/components/ConfirmationDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -262,18 +263,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Automatically compact the conversation when input tokens exceed this percentage of the selected model context window. Manual /compact still works when disabled."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -554,8 +555,8 @@ msgstr "Not responding"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
-msgstr "Read more "
+msgid "Read more"
+msgstr "Read more"
 
 #: src/components/forms/Field.tsx
 msgid "Required field"
@@ -3095,21 +3096,21 @@ msgid "Hide in this view"
 msgstr "Hide in this view"
 
 #. 0: ' '
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "Remove <0/> from{0} <1/>"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "<0/> Delete property and its children"
 msgstr "<0/> Delete property and its children"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Delete property"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Remove column"
 
@@ -3184,7 +3185,6 @@ msgstr "Search"
 msgid "Disabled"
 msgstr "Disabled"
 
-#: src/components/forms/MinMaxInput.tsx
 #: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "Value should be a round number."
@@ -4760,7 +4760,7 @@ msgid "Stop the running entry when another starts"
 msgstr "Stop the running entry when another starts"
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Timer/useTimerColumns.tsx
+#: ../table-page/src/TablePage/Timer/timerProperties.ts
 msgid "Duration"
 msgstr "Duration"
 
@@ -13407,9 +13407,15 @@ msgstr "For more people, use a Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 
+#~ msgid "Save your work"
+#~ msgstr "Save your work"
+
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Register your email or connect a device to open it elsewhere"
+
+#~ msgid "Save your work here"
+#~ msgstr "Save your work here"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13777,6 +13783,31 @@ msgstr "Filter value"
 #: ../table/src/filters/FilterChip.tsx
 msgid "This column is unavailable."
 msgstr "This column is unavailable."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Wait for the column removal to sync before continuing."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "This property is no longer available for deletion."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A total is unavailable. Check its column."
+msgstr "A total is unavailable. Check its column."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A filter is unavailable. Edit or remove it to see rows."
+msgstr "A filter is unavailable. Edit or remove it to see rows."
+
+#: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
+#: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
+msgid "Measurement unavailable. Check the source view."
+msgstr "Measurement unavailable. Check the source view."
+
+#: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Saved format"
+msgstr "Saved format"
 
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"

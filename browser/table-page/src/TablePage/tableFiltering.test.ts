@@ -150,17 +150,32 @@ describe('splitFilters', () => {
     expect(result.expressionFilters).toEqual([]);
   });
 
-  it('skips a filter whose computed column is gone or incomplete', () => {
+  it('marks a filter as unresolved when its computed column is gone or incomplete', () => {
     const filters: TableFilter[] = [
       { derived: 'duration', operator: 'gte', value: '2' },
     ];
 
-    // Asking anyway would narrow to nothing and read as a broken table.
-    expect(splitFilters(filters, [], NOW).expressionFilters).toEqual([]);
+    expect(splitFilters(filters, [], NOW).hasUnresolved).toBe(true);
     expect(
-      splitFilters(filters, [{ ...duration, formula: ' ' }], NOW)
-        .expressionFilters,
-    ).toEqual([]);
+      splitFilters(filters, [{ ...duration, formula: ' ' }], NOW).hasUnresolved,
+    ).toBe(true);
+  });
+
+  it('marks an invalid comparison as unresolved and accepts an empty draft', () => {
+    expect(
+      splitFilters(
+        [{ derived: 'duration', operator: 'gte', value: '1e' }],
+        [duration],
+        NOW,
+      ).hasUnresolved,
+    ).toBe(true);
+    expect(
+      splitFilters(
+        [{ derived: 'duration', operator: 'gte', value: '' }],
+        [duration],
+        NOW,
+      ).hasUnresolved,
+    ).toBe(false);
   });
 
   it('skips a value that is not a number', () => {

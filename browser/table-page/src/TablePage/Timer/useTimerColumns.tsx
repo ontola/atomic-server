@@ -16,7 +16,7 @@ import { styled } from 'styled-components';
 import { FaPlay, FaStop, FaRotateRight } from 'react-icons/fa6';
 import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import type { TableColumn } from '../useTableColumns.js';
-import { readInstant, type DerivedColumnSpec } from '../derivedColumns.js';
+import { readInstant } from '../derivedColumns.js';
 import { useTimerProps, type TimerPropsStatus } from './useTimerProps.js';
 
 /**
@@ -60,13 +60,6 @@ async function stopAllRunning(
 export interface UseTimerColumnsResult {
   /** Virtual columns to append to the grid; empty until the props resolve. */
   columns: TableColumn[];
-  /**
-   * The Duration column, as a derived-column spec — the timer's fallback for a
-   * View that configures none of its own (one added from the view menu, rather
-   * than built from the Time tracker template). Nothing here is timer-specific:
-   * a duration is `coalesce(end, now()) - start` over the two timestamps the view already knows.
-   */
-  derivedColumns: DerivedColumnSpec[];
   status: TimerPropsStatus;
   startProp: Property | undefined;
   endProp: Property | undefined;
@@ -227,7 +220,7 @@ export function useTimerColumns(
 
   return useMemo(() => {
     if (!startSubject || !endSubject) {
-      return { columns: [], derivedColumns: [], status, startProp, endProp };
+      return { columns: [], status, startProp, endProp };
     }
 
     const ActionCell = ({ subject }: { subject: string }): JSX.Element => (
@@ -247,16 +240,6 @@ export function useTimerColumns(
         {
           key: 'timer-action',
           virtual: { label: 'Timer', width: 70, Cell: ActionCell },
-        },
-      ],
-      derivedColumns: [
-        {
-          id: 'duration',
-          label: 'Duration',
-          formula: 'coalesce(end, now()) - start',
-          vars: { start: startSubject, end: endSubject },
-          valueKind: 'duration' as const,
-          width: 130,
         },
       ],
       status,
