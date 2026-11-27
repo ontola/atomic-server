@@ -183,7 +183,7 @@ function AccountMenuRow({
         }
       : {
           id: 'login',
-          label: 'Login / New User',
+          label: 'Sign in',
           icon: <FaUser />,
           helper: 'Sign in, or create a new Agent / User',
           onClick: goTo(paths.accountSettings),
@@ -210,15 +210,6 @@ function AccountMenuRow({
       icon: <FaPlug />,
       helper: 'Discover apps and integrations',
       onClick: goTo(paths.apps),
-    },
-    {
-      id: 'sync',
-      label: 'Sync',
-      // The status is in the tooltip; hiding the icon's own title keeps the
-      // item's accessible name "Sync".
-      icon: <IconSlot aria-hidden>{getSyncIcon(syncStatus)}</IconSlot>,
-      helper: getSyncLabel(syncStatus),
-      onClick: goToSync,
     },
     ...(showTrash
       ? [
@@ -336,7 +327,7 @@ function AccountTrigger({
         linked,
         email: accountAddress,
       }))
-    : 'Login / New User';
+    : 'Sign in';
 
   return (
     <TriggerButton
@@ -455,10 +446,6 @@ const TriggerButton = styled(SideBarMenuRow)`
   &[aria-expanded='true'] {
     background-color: ${p => p.theme.colors.bg1};
   }
-`;
-
-const IconSlot = styled.span`
-  display: inline-flex;
 `;
 
 const UnreadDot = styled.span`

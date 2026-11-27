@@ -69,6 +69,7 @@ export const test = base.extend<{
         // service availability. verify-peer-mesh.mjs separately exercises real
         // signaling, authenticated WebRTC, persistence and reconciliation.
         await installEmptyDiscoveryRoom(context);
+        await openSidebarPanels(context);
         await installAbsentLocalOllama(context);
         await installStubbedWebSearchMcp(context);
       };
@@ -335,6 +336,30 @@ export async function installStubbedWebSearchMcp(context: BrowserContext) {
           }
         : { tools: [] };
     await route.fulfill({ json: { jsonrpc: '2.0', id: request.id, result } });
+  });
+}
+
+/**
+ * Sidebar panels start collapsed for a new user. The specs drive the rows
+ * inside them, so open the panels that hold content unless a test already
+ * chose (the stored value wins).
+ */
+export async function openSidebarPanels(context: BrowserContext) {
+  await context.addInitScript(() => {
+    for (const key of [
+      'favoritesPanelHeight',
+      'sharedWithMePanelHeight',
+      'messagesPanelHeight',
+      'aiChatsPanelHeight',
+    ]) {
+      try {
+        if (localStorage.getItem(`${key}.open`) === null) {
+          localStorage.setItem(`${key}.open`, 'true');
+        }
+      } catch {
+        // Storage can be unavailable on about:blank.
+      }
+    }
   });
 }
 

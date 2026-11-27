@@ -2,7 +2,7 @@ import { resourceTheme } from '../../../theme.js';
 import { useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { FaPencil } from 'react-icons/fa6';
-import { styled } from 'styled-components';
+import { css, styled } from 'styled-components';
 import {
   useProperty,
   useValue,
@@ -33,6 +33,8 @@ interface ValueFormProps {
   onStateChange?: (editMode: boolean) => void;
   /** The id the input gets while editing, for a `<label htmlFor>` outside. */
   inputId?: string;
+  /** Fit the value on one line while not editing. See `ValueComp`. */
+  oneLine?: boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export function ValueForm({
   defaultEditState = false,
   onStateChange,
   inputId,
+  oneLine,
 }: ValueFormProps) {
   const { changes, oldResources } = useAIChanges();
   const hasAiChanges = changes.includes(resource.subject);
@@ -104,21 +107,50 @@ export function ValueForm({
   }
 
   if (!editMode) {
+    // The whole value is the edit target, like a cell in a spreadsheet. Links,
+    // buttons and selecting text keep working: those clicks are left alone.
+    const handleValueClick = (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      if (
+        target.closest('a, button, input, summary') ||
+        window.getSelection()?.toString()
+      ) {
+        return;
+      }
+
+      handleEditModeChange(true);
+    };
+
     return (
-      <ValueFormWrapper>
-        {valueChangedByAi ? (
-          <ChangeSwitcher
-            showFullValue
-            property={property}
-            oldResource={oldResource}
-            newResource={resource}
-          />
-        ) : (
-          <ValueComp value={value} datatype={datatype || property.datatype} />
-        )}
+      <ValueFormWrapper
+        $editable={shouldShowEditButton}
+        onClick={shouldShowEditButton ? handleValueClick : undefined}
+      >
+        <ValueSlot>
+          {valueChangedByAi ? (
+            <ChangeSwitcher
+              showFullValue
+              property={property}
+              oldResource={oldResource}
+              newResource={resource}
+            />
+          ) : (
+            <ValueComp
+              value={value}
+              datatype={datatype || property.datatype}
+              oneLine={oneLine}
+            />
+          )}
+        </ValueSlot>
         {shouldShowEditButton && (
-          <EditButton title='Edit value'>
-            <FaPencil onClick={() => handleEditModeChange(!editMode)} />
+          <EditButton
+            type='button'
+            title='Edit value'
+            aria-label={`Edit ${property.shortname}`}
+            onClick={() => handleEditModeChange(true)}
+          >
+            <FaPencil aria-hidden />
           </EditButton>
         )}
       </ValueFormWrapper>
@@ -135,12 +167,63 @@ export function ValueForm({
   );
 }
 
-const ValueFormWrapper = styled.div`
-  /* Used for positioning the edit button*/
-  position: relative;
+const EditButton = styled.button`
+  appearance: none;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  line-height: inherit;
+  color: ${p => resourceTheme(p.theme).colors.textLight};
+  cursor: pointer;
+  /* Touch screens have no hover: there the pencil stays visible. */
+  opacity: 0.5;
+
+  @media (hover: hover) and (pointer: fine) {
+    opacity: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    color: ${p => resourceTheme(p.theme).colors.main};
+  }
+`;
+
+const ValueSlot = styled.div`
   flex: 1;
+  min-width: 0;
+`;
+
+/** Lights up on hover when the value can be edited, the way a cell does. */
+const ValueFormWrapper = styled.div<{ $editable: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  flex: 1;
+  width: calc(100% + 0.8rem);
+  min-width: 0;
   word-wrap: break-word;
-  width: 100%;
+  padding: 0.1rem 0.4rem;
+  margin: -0.1rem -0.4rem;
+  border-radius: ${p => resourceTheme(p.theme).radius};
+
+  ${p =>
+    p.$editable &&
+    css`
+      cursor: pointer;
+
+      /* Touch keeps :hover after a tap: light up only with a real hover. */
+      @media (hover: hover) {
+        &:hover {
+          background-color: ${resourceTheme(p.theme).colors.bg1};
+        }
+
+        &:hover ${EditButton} {
+          opacity: 1;
+        }
+      }
+    `}
 `;
 
 const EmptyValue = styled.button`
@@ -161,27 +244,5 @@ const EmptyValue = styled.button`
   &:focus-visible {
     background-color: ${p => resourceTheme(p.theme).colors.bg1};
     color: ${p => resourceTheme(p.theme).colors.text};
-  }
-`;
-
-const EditButton = styled.button`
-  appearance: none;
-  background: none;
-  border: none;
-  position: absolute;
-  top: 0;
-  color: ${p => resourceTheme(p.theme).colors.main};
-  right: 100%;
-  cursor: pointer;
-  opacity: 0;
-
-  /** Only show hover edit button on mouse devices, prevents having to tap twice on some mobile devices */
-  @media (hover: hover) and (pointer: fine) {
-    ${ValueFormWrapper}:hover & {
-      opacity: 0.5;
-      &:hover {
-        opacity: 1;
-      }
-    }
   }
 `;

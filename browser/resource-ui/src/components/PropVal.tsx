@@ -119,11 +119,13 @@ function PropVal({
           resource={resource}
           propertyURL={propertyURL}
           inputId={inputId}
+          oneLine={columns}
         />
       ) : (
         <ValueComp
           datatype={property.datatype}
           value={resource.get(propertyURL)}
+          oneLine={columns}
         />
       )}
     </PropValRow>
@@ -133,24 +135,33 @@ function PropVal({
 export default PropVal;
 
 export const PropValRow = styled.div<PropValRowProps>`
-  word-break: break-word;
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  column-gap: 1rem;
+  row-gap: 0.15rem;
 
   @container ${ALL_PROPS_CONTAINER} (min-width: 500px) {
-    &:has(.${JSON_RENDERER_CLASS}) {
-      grid-template-columns: 1fr;
-      gap: 0.5rem;
-    }
+    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
 
-    grid-template-columns: 23ch auto;
-    grid-template-rows: 1fr;
+    /* An expanded JSON value needs the full width. */
+    &:has(.${JSON_RENDERER_CLASS}) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 `;
 
+/** The property's name: muted, so the values are what you read. */
 export const PropertyLabel = styled.span`
-  font-weight: bold;
+  display: block;
+  color: ${p => resourceTheme(p.theme).colors.textLight};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  a:hover > & {
+    color: ${p => resourceTheme(p.theme).colors.main};
+  }
 `;
 
 const LabelRow = styled.span`

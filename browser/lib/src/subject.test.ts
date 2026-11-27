@@ -11,6 +11,7 @@ import {
   isIdentifierPathForm,
   isIdentifierResolutionPath,
   isValidSubject,
+  sameAgent,
   identifierKind,
   isPropertySubject,
   isResourceSubject,
@@ -272,5 +273,42 @@ describe('isLoopbackHost', () => {
     ]) {
       expect(isLoopbackHost(host)).toBe(false);
     }
+  });
+});
+
+describe('sameAgent', () => {
+  const key = 'QmfpRIBn2JYEatT0MjSkMNoBJzstz19orwnT5oT2rcQ=';
+
+  it('matches a pre-DID agent URL to the DID of the same key', () => {
+    expect(
+      sameAgent(`https://atomicdata.dev/agents/${key}`, `did:ad:agent:${key}`),
+    ).toBe(true);
+    expect(sameAgent(`internal:/agents/${key}`, `atomic:agent:${key}`)).toBe(
+      true,
+    );
+    expect(
+      sameAgent(
+        `did:ad:agent:${key.replace(/=+$/, '')}`,
+        `https://atomicdata.dev/agents/${key}`,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match different keys or the public agent', () => {
+    expect(
+      sameAgent(
+        `https://atomicdata.dev/agents/${key}`,
+        'did:ad:agent:ojCeVtMO+hLxWb61qNP8G5VcUPhqNXB01JssEqeHivo=',
+      ),
+    ).toBe(false);
+    expect(
+      sameAgent(
+        'https://atomicdata.dev/agents/publicAgent',
+        'did:ad:agent:publicAgent',
+      ),
+    ).toBe(false);
+    expect(sameAgent('https://example.com/a', 'https://example.com/b')).toBe(
+      false,
+    );
   });
 });

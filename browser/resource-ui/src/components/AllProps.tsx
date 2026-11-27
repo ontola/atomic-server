@@ -22,6 +22,8 @@ type Props = {
   basic?: boolean;
   /** Label each value with its property's name, not its shortname. See PropVal. */
   labelByName?: boolean;
+  /** Rows to show before the properties, as `PropValRow`s. */
+  children?: React.ReactNode;
 };
 
 /** Lists all PropVals for some resource. Optionally ignores a bunch of subjects */
@@ -32,21 +34,22 @@ function AllProps({
   columns,
   basic,
   labelByName,
+  children,
 }: Props) {
   const props = useSortedProps(resource, except, !!editable);
 
-  if (!props || props.length === 0) {
+  if (!children && (!props || props.length === 0)) {
     return null;
   }
 
   return (
-    <AllPropsWrapper basic={basic}>
+    <AllPropsWrapper $basic={basic}>
+      {children}
       {props.map(
         (prop): JSX.Element => (
-          <StyledPropVal
+          <PropVal
             columns={columns}
             key={prop}
-            basic={basic}
             propertyURL={prop}
             resource={resource}
             editable={!!editable}
@@ -104,29 +107,25 @@ function useSortedProps(
   );
 }
 
-const AllPropsWrapper = styled.div<{ basic: boolean | undefined }>`
+const AllPropsWrapper = styled.div<{ $basic: boolean | undefined }>`
   container: ${ALL_PROPS_CONTAINER} / inline-size;
 
   display: flex;
   flex-direction: column;
   border-radius: ${p => resourceTheme(p.theme).radius};
-  background-color: ${p =>
-    p.basic ? 'transparent' : resourceTheme(p.theme).colors.bg};
-  border: ${p =>
-    p.basic ? 'none' : `1px solid ${resourceTheme(p.theme).colors.bg2}`};
-`;
 
-const StyledPropVal = styled(PropVal)<{ basic: boolean | undefined }>`
   ${p =>
-    !p.basic &&
+    !p.$basic &&
     css`
-      padding: 0.5rem;
-      border-top: solid 1px ${resourceTheme(p.theme).colors.bg1};
+      background-color: ${resourceTheme(p.theme).colors.bg};
+      border: 1px solid ${resourceTheme(p.theme).colors.bg2};
 
-      &:nth-child(1) {
-        border-top-left-radius: ${resourceTheme(p.theme).radius};
-        border-top: none;
-        border-top-right-radius: ${resourceTheme(p.theme).radius};
+      & > * {
+        padding: 0.45rem 0.75rem;
+      }
+
+      & > * + * {
+        border-top: solid 1px ${resourceTheme(p.theme).colors.bg1};
       }
     `}
 `;

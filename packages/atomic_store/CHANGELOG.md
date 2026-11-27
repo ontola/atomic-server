@@ -1,5 +1,9 @@
 ## Unreleased
 
+* `Store.installOntology` stores an app's ontology bundle in the local store
+  as if it had been fetched (no network, no commit, nothing syncs), so its
+  classes and properties resolve offline. `StoreBackend.installOntology` is
+  new: implementers must add it.
 * `Store.registerApp` records an app as a `ExternalApp` in a drive, so the
   web app can list it and offer "Open in <app>" (`Classes.externalApp`).
 * `Resource.moveTo`; `set` stores a `String` as a link for `Props.parent` and

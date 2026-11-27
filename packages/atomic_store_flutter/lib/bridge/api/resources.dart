@@ -10,7 +10,7 @@ import 'node.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `atomic_to_sub_resource`, `atomic_to_value`, `build`, `global`, `list_to_propvals`, `new_default`, `node`, `parse`, `pin_drive`, `propvals_to_list`, `push`, `pusher`, `scalar`, `sub_resource_to_value`, `value_to_atomic`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// [`AtomicStore::get_resource_data`] on the default store.
 Future<ResourceData> getResourceData({required String subject}) =>
@@ -47,6 +47,10 @@ Future<String> createResourceWithValues({required List<PropValue> values}) =>
 /// [`AtomicStore::new_drive`] on the default store.
 Future<String> newDrive({required String name}) =>
     RustLib.instance.api.crateApiResourcesNewDrive(name: name);
+
+/// [`AtomicStore::install_ontology_bundle`] on the default store.
+Future<OntologyInstall> installOntologyBundle({required String bundle}) =>
+    RustLib.instance.api.crateApiResourcesInstallOntologyBundle(bundle: bundle);
 
 /// [`AtomicStore::wait_for_resource_event`] on the default store.
 Future<ResourceEvent> waitForResourceEvent(
@@ -158,6 +162,13 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// chat's subject.
   Future<String> importAiChat(
       {required String name, required String entriesJson});
+
+  /// Store an app's ontology bundle (a JSON-AD array) in this device's store
+  /// under the subjects it names, as if each term had been fetched from its
+  /// address: no network, no commit, nothing synced. Idempotent; refused (and
+  /// nothing written) when a stored term would change meaning. See
+  /// [`atomic_lib::ontology_bundle::install_ontology_bundle`].
+  Future<OntologyInstall> installOntologyBundle({required String bundle});
 
   /// Whether the store file is encrypted at rest. False for a store that
   /// was created before encryption was asked for (it stays plaintext).
@@ -550,6 +561,34 @@ enum Datatype {
   /// document, an unknown datatype); `unsupported_datatype` names it.
   unsupported,
   ;
+}
+
+/// What [`AtomicStore::install_ontology_bundle`] did, by subject.
+class OntologyInstall {
+  final List<String> created;
+  final List<String> updated;
+  final List<String> unchanged;
+
+  const OntologyInstall({
+    required this.created,
+    required this.updated,
+    required this.unchanged,
+  });
+
+  static Future<OntologyInstall> default_() =>
+      RustLib.instance.api.crateApiResourcesOntologyInstallDefault();
+
+  @override
+  int get hashCode => created.hashCode ^ updated.hashCode ^ unchanged.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OntologyInstall &&
+          runtimeType == other.runtimeType &&
+          created == other.created &&
+          updated == other.updated &&
+          unchanged == other.unchanged;
 }
 
 /// One property of a resource.
