@@ -1,5 +1,15 @@
 [
   {
+    "@id": "https://atomicdata.dev/properties/name",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The name of a thing or person.",
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/shortname": "name"
+  },
+  {
     "@id": "https://atomicdata.dev/ontology/server/class/endpoint-response",
     "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
@@ -112,16 +122,6 @@
       "https://atomicdata.dev/classes/Property"
     ],
     "https://atomicdata.dev/properties/shortname": "is-post"
-  },
-  {
-    "@id": "https://atomicdata.dev/properties/name",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
-    "https://atomicdata.dev/properties/description": "The name of a thing or person.",
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Property"
-    ],
-    "https://atomicdata.dev/properties/shortname": "name"
   },
   {
     "@id": "https://atomicdata.dev/properties/search/query",
