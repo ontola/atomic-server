@@ -443,6 +443,8 @@ We believe AI can be useful for improving software while also recognizing that i
    - `cargo update --workspace` — **not** `cargo metadata --no-deps`, which
      skips resolution and leaves the workspace members' own versions stale in
      `Cargo.lock`.
+   - `cargo update -p atomic_lib --manifest-path packages/atomic_store_flutter/rust/Cargo.toml`:
+     the Flutter bridge is outside the workspace and has its own lockfile.
    - `cd browser && pnpm install --lockfile-only`
 1. Confirm nothing lagged behind:
 
