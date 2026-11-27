@@ -13998,3 +13998,61 @@ msgstr "Je kunt alles aanpassen voordat je bewaart. Er is nog niets bewaard."
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "This page was imported before. Saving updates it instead of making a copy."
 msgstr "Deze pagina is eerder geïmporteerd. Bewaren werkt die bij in plaats van een kopie te maken."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Back to the plain link"
+msgstr "Terug naar de gewone link"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI can read this page and file it under a better kind of item. Set up a model first."
+msgstr "AI kan deze pagina lezen en onder een passender soort item opslaan. Stel eerst een model in."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+msgstr "AI staat uit. Zet het aan in de instellingen om deze pagina door AI te laten lezen en onder een passender soort item op te slaan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Set up AI"
+msgstr "AI instellen"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The AI could not read this page."
+msgstr "De AI kon deze pagina niet lezen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Reading the page..."
+msgstr "De pagina lezen..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Extract with AI"
+msgstr "Uitlezen met AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+msgstr "De gewone import vond weinig om mee te werken. AI kan de pagina lezen en een van de soorten items kiezen die je al hebt."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI read the page and filled in this item."
+msgstr "AI heeft de pagina gelezen en dit item ingevuld."
+
+#. 0: ai.dropped.map(d => d.property).join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Left out because they did not fit: {0}"
+msgstr "Weggelaten omdat ze niet pasten: {0}"
+
+#. 0: ai.missing.join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Still to fill in: {0}"
+msgstr "Nog in te vullen: {0}"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) via Atomic naar de AI-aanbieders. Je bekijkt het resultaat voordat er iets wordt opgeslagen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar je Ollama-server. Je bekijkt het resultaat voordat er iets wordt opgeslagen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar OpenRouter. Je bekijkt het resultaat voordat er iets wordt opgeslagen."

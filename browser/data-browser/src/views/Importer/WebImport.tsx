@@ -1,7 +1,9 @@
 import {
   core,
   importLocalId,
+  offersAiExtraction,
   proposeImport,
+  type ImportCapture,
   useResource,
   useStore,
   type ImportProposal,
@@ -22,9 +24,19 @@ import { useSettings } from '../../helpers/AppSettings';
 import { useNewForm } from '@tomic/resource-ui/components/forms/NewForm/useNewForm';
 import { Column } from '@tomic/ui/components/Row';
 import { InlineErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { useAISettings } from '@components/AI/AISettingsContext';
+import { AIProvider } from '@components/AI/aiContstants';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+
+// The AI SDK only loads when someone asks for extraction.
+const loadExtractor = () => import('@chunks/AI/importExtract');
 
 type Analysis = {
   proposal: ImportProposal;
+  /** What was pasted, for the AI step. */
+  capture: ImportCapture;
+  /** The plain proposal that AI extraction replaced, to go back to. */
+  plain?: ImportProposal;
   /** Subject of the resource that already has this source URL, if any. */
   existing?: string;
   /** Remounts the form when the user analyses again. */
@@ -47,9 +59,24 @@ export function WebImport({ parent }: { parent: string }): JSX.Element {
   const [analysis, setAnalysis] = useState<Analysis>();
   const [busy, setBusy] = useState(false);
 
+  // The shared import identity: same drive, same folder, same source URL.
+  const locate = async (proposal: ImportProposal) => {
+    const found = proposal.sourceUrl
+      ? await store.findByLocalId(
+          drive,
+          target,
+          importLocalId(proposal.sourceUrl),
+        )
+      : undefined;
+
+    // An earlier import of another kind is not updated into this one.
+    return found?.hasClasses(proposal.class) ? found.subject : undefined;
+  };
+
   const analyse = async () => {
     setError(undefined);
-    const proposal = proposeImport({ url, text });
+    const capture = { url, text };
+    const proposal = proposeImport(capture);
 
     if (!proposal) {
       setAnalysis(undefined);
@@ -61,18 +88,10 @@ export function WebImport({ parent }: { parent: string }): JSX.Element {
     setBusy(true);
 
     try {
-      // The shared import identity: same drive, same folder, same source URL.
-      const existing = proposal.sourceUrl
-        ? await store.findByLocalId(
-            drive,
-            target,
-            importLocalId(proposal.sourceUrl),
-          )
-        : undefined;
-
       setAnalysis({
         proposal,
-        existing: existing?.subject,
+        capture,
+        existing: await locate(proposal),
         run: (analysis?.run ?? 0) + 1,
       });
     } catch (e) {
@@ -128,6 +147,38 @@ export function WebImport({ parent }: { parent: string }): JSX.Element {
         </Button>
       </div>
       {error && <InlineErrMessage>{error}</InlineErrMessage>}
+      {analysis && offersAiExtraction(analysis.proposal) && (
+        <AIExtract
+          analysis={analysis}
+          onResult={async (proposal, plain) =>
+            setAnalysis({
+              ...analysis,
+              proposal,
+              plain,
+              existing: await locate(proposal),
+              run: analysis.run + 1,
+            })
+          }
+        />
+      )}
+      {analysis?.plain && (
+        <div>
+          <Button
+            subtle
+            onClick={() =>
+              setAnalysis({
+                ...analysis,
+                proposal: analysis.plain!,
+                plain: undefined,
+                existing: undefined,
+                run: analysis.run + 1,
+              })
+            }
+          >
+            Back to the plain link
+          </Button>
+        </div>
+      )}
       {analysis && (
         <Proposal key={target} analysis={analysis} parent={target} />
       )}
@@ -145,7 +196,31 @@ function Lead({ proposal }: { proposal: ImportProposal }): JSX.Element {
     return <>Found no structured data, so this is a plain link.</>;
   if (source === 'text') return <>Found only text.</>;
 
+  if (source === 'ai') return <>AI read the page and filled in this item.</>;
+
   return <>Found only an address.</>;
+}
+
+function AINotes({
+  proposal,
+}: {
+  proposal: ImportProposal;
+}): JSX.Element | null {
+  const ai = proposal.ai;
+
+  if (!ai) return null;
+
+  return (
+    <>
+      {ai.reason && <p data-test='import-ai-reason'>{ai.reason}</p>}
+      {ai.dropped.length > 0 && (
+        <p>{`Left out because they did not fit: ${ai.dropped.map(d => d.property).join(', ')}`}</p>
+      )}
+      {ai.missing.length > 0 && (
+        <p>{`Still to fill in: ${ai.missing.join(', ')}`}</p>
+      )}
+    </>
+  );
 }
 
 function Proposal({
@@ -162,6 +237,7 @@ function Proposal({
       <p data-test='import-summary'>
         <Lead proposal={proposal} />
       </p>
+      <AINotes proposal={proposal} />
       <p>You can edit everything before saving. Nothing is saved yet.</p>
       {existing ? (
         <>
@@ -276,4 +352,105 @@ function UpdateForm({
   if (!ready) return <p>Preparing...</p>;
 
   return <ResourceForm resource={resource} classSubject={proposal.class} />;
+}
+
+/**
+ * Offers AI extraction when the plain import found little. The model sees a
+ * bounded text snapshot and may only choose an existing class; its answer is a
+ * proposal in the form below, never saved by itself.
+ */
+function AIExtract({
+  analysis,
+  onResult,
+}: {
+  analysis: Analysis;
+  onResult: (proposal: ImportProposal, plain: ImportProposal) => Promise<void>;
+}): JSX.Element {
+  const store = useStore();
+  const { drive } = useSettings();
+  const navigate = useNavigateWithTransition();
+  const settings = useAISettings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const {
+    enableAI,
+    hostedAI,
+    enableIncludedAI,
+    defaultChatModel,
+    genFeaturesModel,
+    isProviderAvailable,
+  } = settings;
+  const model = [defaultChatModel, genFeaturesModel].find(m =>
+    isProviderAvailable(m.provider),
+  );
+  const openSettings = () => navigate('/app/settings?q=ai');
+
+  if (!enableAI || !model) {
+    return (
+      <Column gap='0.5rem' data-test='import-ai-setup'>
+        <p>
+          {enableAI
+            ? 'AI can read this page and file it under a better kind of item. Set up a model first.'
+            : 'AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item.'}
+        </p>
+        <div>
+          <Button subtle onClick={openSettings}>
+            Set up AI
+          </Button>
+        </div>
+      </Column>
+    );
+  }
+
+  const run = async () => {
+    setError(undefined);
+    setBusy(true);
+
+    try {
+      if (model.provider === AIProvider.Hosted && !hostedAI?.consent) {
+        await enableIncludedAI();
+      }
+
+      const { runImportExtraction } = await loadExtractor();
+      const proposal = await runImportExtraction({
+        store,
+        drive,
+        capture: analysis.capture,
+        fallback: analysis.proposal,
+        identifier: model,
+        settings,
+        hint: analysis.proposal.detected.schemaType,
+      });
+
+      await onResult(proposal, analysis.proposal);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'The AI could not read this page.',
+      );
+    }
+
+    setBusy(false);
+  };
+
+  return (
+    <Column gap='0.5rem' data-test='import-ai'>
+      <p>
+        The plain import found little to go on. AI can read the page and choose
+        one of the kinds of item you already have.
+      </p>
+      <div>
+        <Button data-test='import-ai-run' onClick={run} disabled={busy}>
+          {busy ? 'Reading the page...' : 'Extract with AI'}
+        </Button>
+      </div>
+      <p>
+        {model.provider === AIProvider.Hosted
+          ? 'Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved.'
+          : model.provider === AIProvider.Ollama
+            ? 'Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved.'
+            : 'Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved.'}
+      </p>
+      {error && <InlineErrMessage>{error}</InlineErrMessage>}
+    </Column>
+  );
 }
