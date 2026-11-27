@@ -438,9 +438,18 @@ So: use `Props.description` (or your own string/markdown property) for small
 text your app owns, and `DocumentV2` when you want a page that the atomic.place
 app opens and edits as rich text.
 
+## Ship your ontology
+
+An app that defines its own classes and properties publishes them as an
+ontology bundle (a JSON-AD array at fixed `https://atomicdata.dev/<domain>/v1/...`
+subjects) and calls `store.installOntology(bundleJson)` at startup. The terms are
+stored locally as if fetched: they resolve offline and at once, nothing is
+committed or synced, and a repeated call writes nothing. A bundle that would
+change what a stored term means throws a `StoreException` and writes nothing.
+
 ## Implementing a backend
 
-Implement `StoreBackend` (nine methods, see `lib/src/backend.dart`) and throw
+Implement `StoreBackend` (ten methods, see `lib/src/backend.dart`) and throw
 `StoreException` only. In the Flutter app that is `BridgeStoreBackend`, over
 the typed functions of `packages/atomic_store_flutter/rust/src/api/resources.rs`.
 

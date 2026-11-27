@@ -212,3 +212,46 @@ Both implementations (`atomic_lib` and `@tomic/lib`) run the same cases from `li
 ```
 
 An invoice with `amount` `-5` is rejected with `Value for amount breaks minimum on class invoice: -5 is below 0`.
+
+## Shipping an ontology with an app
+
+The address of a class or property is a name. It does not have to be a place
+that answers: a node that meets an address it does not know fetches it once and
+keeps it. An app that defines its own terms can carry them instead, so it works
+offline and does not wait for that first fetch.
+
+An app ships an ontology bundle: a JSON-AD array holding one Ontology (class
+`https://atomicdata.dev/class/ontology`) and its Classes and Properties, at
+fixed subjects such as `https://atomicdata.dev/shop/v1`,
+`https://atomicdata.dev/shop/v1/class/order` and
+`https://atomicdata.dev/shop/v1/property/total`.
+
+At startup the app stores the bundle in its local store as if it had fetched
+those resources: `atomic_lib::ontology_bundle::install_ontology_bundle(store, bundle)`
+in Rust, `store.installOntology(bundle)` in `@tomic/lib`. This makes no network
+request and writes no commits: nothing is signed, synced or queued, and the
+terms stay the same in every drive.
+
+- Installing the same bundle again changes nothing.
+- A changed `name` or `description` is updated. Any other difference from what is
+  stored (datatype, shortname, `requires`, `classtype`, ...) is refused with an
+  error and nothing is written: an address keeps its meaning.
+- Only an Ontology, Classes and Properties at absolute `https://` subjects are
+  accepted. The reserved vocabulary namespaces (`/classes/`, `/properties/`,
+  `/datatypes/`, ...) are refused.
+- A node that serves the address itself does not install the bundle: it
+  publishes it, see below.
+
+### Publishing a bundle on the host that owns the address
+
+On a server whose own domain is the bundle's host, import the bundle. The
+subjects localize to that host, and every term is then served at its address,
+which is where other nodes fetch it from:
+
+```sh
+atomic-server import --file bundle.json --parent <drive subject>
+```
+
+Import the Ontology resource before the Classes and Properties (their `parent` is
+the Ontology, and a term needs its parent stored first), or add `--force` to skip
+the checks. The signing agent needs `append` on the parent.
