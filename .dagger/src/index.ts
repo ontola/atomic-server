@@ -1613,6 +1613,11 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/vocabularies.json',
         this.source.file('lib/defaults/vocabularies.json'),
+      )
+      // host-bootstrap-vocabulary.test.ts reads the bundled default store.
+      .withFile(
+        '/lib/defaults/default_store.json',
+        this.source.file('lib/defaults/default_store.json'),
       );
 
     return sourceContainer;
@@ -3291,14 +3296,27 @@ export class AtomicServer {
         'sh',
         '-c',
         `ssh -i /root/.ssh/id_rsa $REMOTE_USER@${remoteHost} '
+          data_dir=$(sed -n "s/^ATOMIC_DATA_DIR=//p" ~/.env 2>/dev/null | tail -1 | tr -d "\\"\\047") &&
+          store_dir=\${data_dir:-\$HOME/.local/share/atomic-data}/store &&
+          ls -1t ~/atomic-store-2*.redb 2>/dev/null | tail -n +2 | xargs -r rm -f &&
+          ls -1t ~/atomic-server-2* 2>/dev/null | tail -n +4 | xargs -r rm -f &&
+          if [ -f "$store_dir/atomic.redb" ]; then store_kb=$(du -k "$store_dir/atomic.redb" | cut -f1); else store_kb=$(du -sk "$store_dir" 2>/dev/null | cut -f1); fi &&
+          need_kb=$(( \${store_kb:-0} + 1048576 )) &&
+          free_kb=$(df -Pk ~ | awk "NR==2 {print \\$4}") &&
+          if [ "$free_kb" -lt "$need_kb" ]; then
+            echo "Not enough disk for the store backup: $free_kb KB free, $need_kb KB needed. Nothing was changed." >&2; false;
+          fi &&
           mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
           systemctl stop atomic &&
-          data_dir=$(sed -n "s/^ATOMIC_DATA_DIR=//p" ~/.env 2>/dev/null | tail -1 | tr -d "\\"\\047") &&
-          store=\${data_dir:-\$HOME/.local/share/atomic-data}/store/atomic.redb &&
-          test -f "$store" &&
-          cp "$store" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
-          ls -1t ~/atomic-store-2*.redb | tail -n +4 | xargs -r rm -f &&
+          if [ -f "$store_dir/atomic.redb" ]; then
+            cp --sparse=always "$store_dir/atomic.redb" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
+            ls -1t ~/atomic-store-2*.redb | tail -n +2 | xargs -r rm -f;
+          elif [ -d "$store_dir" ]; then
+            cp -a "$store_dir" ~/atomic-store-sled-$(date +"%Y-%m-%dT%H:%M:%S");
+          else
+            echo "No store found in $store_dir" >&2; false;
+          fi &&
           systemctl start atomic &&
           systemctl status atomic
         '`,
