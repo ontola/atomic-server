@@ -334,6 +334,36 @@ Rust's combined nextest install/compile/run command and Flutter's post-Dart
 bridge tail execute again; their Cargo target volumes can still reuse compiled
 objects. Browser execution already has its own per-invocation nonce.
 
+The fixed `"supplemental_profile": "pr2621-native-private-v1"` adds the
+required native and private Vault matrix to a three-worker cold run with
+`cold_scratch_gib: 200`. It cannot be combined with selected-check mode. Supply
+a verified `private_input` capsule descriptor from the protected export helper;
+its archive contains filtered source at one exact private commit, never Git
+history, environment files or credentials. The cloud launcher stages it on the
+controller boot disk and waits for a source/hash-bound acknowledgment before
+worker allocation. Neither the capsule nor raw private output belongs on the
+retained artifact disk.
+
+Node two runs actual native peer/Vault recovery and the Iroh/WebRTC acceptance;
+node three runs private workspace/managed-node checks and both full-workspace
+Vault journeys. Each host finishes its ordinary public check queue, then its
+supplemental group, then its browser shard. Completed supplemental test failures
+remain visible while independent checks continue. Missing, skipped, wrong-source
+or failed supplemental evidence prevents overall success and early worker
+removal. `supplemental_jobs` (default 16, range 1–32) bounds container CPU and Cargo
+compile width; it does not raise the campaign deadline or budget.
+
+The native harness supports `NATIVE_RECOVERY_BUILD_ONLY=true` to build matching
+artifacts without claiming test or Clippy success. A caller using it must run
+Clippy independently and invoke `NATIVE_RECOVERY_CASE=peer` and `=vault`
+separately. Unset case selection retains the original combined run. Supplemental
+private logs, profiles, signed URLs and raw browser reports stay on temporary
+protected scratch; retained results contain constructed receipts and only known
+synthetic native PNGs. Image preparation currently runs inside the exclusive
+supplemental phase, avoiding unmeasured competition with the public check queue.
+A one-hour ceiling bounds the attempt; no full cold native/private completion
+time or 24-browser-worker stability has yet been established.
+
 For a focused Flutter refresh, optional `"check_only": "flutter-test"` runs
 only the standalone Flutter check on one worker. The configured fleet size and
 price ceiling remain conservative (the cloud launcher still plans three), but

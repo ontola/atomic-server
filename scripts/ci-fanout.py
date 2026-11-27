@@ -240,6 +240,8 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
+    if type(config.setdefault('sample_resources', False)) is not bool:
+        raise ValueError('sample_resources must be a boolean')
     if type(config.setdefault('host_bundle_backup', False)) is not bool:
         raise ValueError('host_bundle_backup must be a boolean')
     for field in ('test_run_key', 'cache_namespace'):
@@ -626,6 +628,8 @@ class Controller:
                                     cwd=checkout, text=True))['engineVersion'].lstrip('v')
         if not re.fullmatch(r'\d+\.\d+\.\d+', engine):
             raise ValueError('Dagger engine version must be pinned')
+        if self.config['sample_resources']:
+            execute(['git', 'cat-file', '-e', actual + ':scripts/ci-resource-sampler.py'], cwd=checkout)
         accounts = []
         for account in self.config['accounts']:
             info = self.api.identity(account)
@@ -645,7 +649,7 @@ class Controller:
                              'existing_droplets': len(existing), 'limit': info['droplet_limit']})
         total = sum(account['nodes'] for account in self.config['accounts'])
         plan = {'source_commit': actual, 'dagger_version': engine, 'accounts': accounts,
-                'worker_budget': worker_budget(self.config),
+                'worker_budget': worker_budget(self.config), 'sample_resources': self.config['sample_resources'],
                 'nodes': total, 'hourly_usd': total * self.config['expected_hourly_rate'],
                 'maximum_hours': self.config['max_hours'], 'check_jobs': [name for name, _ in CHECKS],
                 'browser_shards': total, 'initial_nodes': min(total, len(CHECKS) + 1),
@@ -952,7 +956,30 @@ dagger version
         info = self.ssh(node_id, "docker info --format '{{json .}}'; dagger version")
         (local / 'machine-info.log').write_text(info)
         self.scp(node_id, [self.runner], '/opt/atomic-ci/runner.py')
+        self.start_resource_sampler(node_id)
         self.node_update(node_id, status='ready')
+
+    def start_resource_sampler(self, node_id):
+        if not self.config['sample_resources']:
+            return
+        self.check_deadline()
+        deadline = self.read()['deadline']
+        remaining = max(1, int((dt.datetime.fromisoformat(deadline) - utcnow()).total_seconds()))
+        output = '/opt/atomic-ci/results/telemetry/resources.jsonl'
+        self.ssh(node_id, 'mkdir -p /opt/atomic-ci/results/telemetry')
+        command = ['systemd-run', '--unit=atomic-ci-resource-sampler',
+                   '--property=RuntimeMaxSec='+str(remaining), '--property=KillMode=control-group',
+                   '/usr/bin/python3', '/opt/atomic-ci/repo/scripts/ci-resource-sampler.py',
+                   '--output', output, '--deadline', deadline, '--interval', '20']
+        self.ssh(node_id, shlex.join(command))
+        self.node_update(node_id, resource_sampler_started_at=stamp(), resource_sampler_output=output)
+
+    def phase_config_fields(self, node_id, name, kind):
+        """Explicit extension data; wrappers may not replace core phase identity."""
+        return {}
+
+    def validate_additional_results(self, nodes):
+        """Optional reviewed profile gate, after ordinary public reconciliation."""
 
     def phase(self, node_id, name, kind, args, preflight=False, module=None):
         with self.lock(node_id):
@@ -972,6 +999,10 @@ dagger version
                       'worker_profile': self.config['worker_profile'],
                       'test_run_key': self.config['test_run_key'],
                       'cache_namespace': self.config['cache_namespace']}
+            additional = self.phase_config_fields(node_id, name, kind)
+            if set(additional) & set(config):
+                raise ValueError('phase extension cannot replace core source/identity fields')
+            config.update(additional)
             path = self.root / node_id / (name + '.json')
             path.write_text(json.dumps(config))
             self.scp(node_id, [path], '/opt/atomic-ci/phase.json')
@@ -1336,6 +1367,7 @@ dagger version
             raise CIValidationFailure('CI completed with failures: ' + '; '.join(
                 item['node_id'] + ': ' + item['phase'] for item in unresolved)
                 + ('; unexecuted browser tests=' + str(len(unrun)) if unrun else ''))
+        self.validate_additional_results(nodes)
         self.update(lambda value: value.update(validation_passed_at=stamp()))
         return state['full_browser_test_count']
 
@@ -1633,7 +1665,10 @@ systemctl reload ssh
     def retrieve(self, node_id):
         node = self.read()['nodes'][node_id]
         local = self.root / node_id
-        self.ssh(node_id, 'tar -C /opt/atomic-ci -czf /tmp/atomic-ci-results.tgz results', timeout=90)
+        command = 'tar -C /opt/atomic-ci -czf /tmp/atomic-ci-results.tgz results'
+        if self.config['sample_resources']:
+            command = 'flock -s /opt/atomic-ci/results/telemetry/resources.jsonl.lock ' + command
+        self.ssh(node_id, command, timeout=90)
         self.scp(node_id, ['/tmp/atomic-ci-results.tgz'], local / 'results.tgz', download=True)
         with tarfile.open(local / 'results.tgz') as archive:
             for member in archive.getmembers():

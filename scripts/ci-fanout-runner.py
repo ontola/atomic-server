@@ -168,7 +168,24 @@ def main(config_path):
                          'node --test ../scripts/table-package-cache.test.mjs']]
         else:
             commands = []
-        if config['kind'] == 'builder':
+        if config['kind'] == 'supplemental':
+            supplemental = config.get('supplemental')
+            if (not isinstance(supplemental, dict) or any(supplemental.get(key) != config[key]
+                    for key in ('batch_key', 'node_id', 'source_commit'))):
+                raise ValueError('supplemental source identity differs')
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('supplemental_driver', repo / 'scripts/ci-supplemental.py')
+            driver = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(driver)
+            driver.validate_phase(supplemental)
+            private_config = Path(supplemental['private_root']).parent / ('phase-' + config['phase'] + '.json')
+            if private_config.exists() or private_config.is_symlink():
+                raise ValueError('supplemental phase configuration already exists')
+            write_json(private_config, supplemental)
+            private_config.chmod(0o600)
+            commands.append([sys.executable, str(repo / 'scripts/ci-supplemental.py'),
+                '--config', str(private_config), '--receipt', str(results / 'supplemental-receipt.json')])
+        elif config['kind'] == 'builder':
             commands.append([sys.executable, str(repo / 'scripts/ci-browser-build.py'),
                 '--source-commit', config['source_commit'],
                 '--cache-root', config.get('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles'),
@@ -190,6 +207,15 @@ def main(config_path):
             item['exit_code'] = run(command, repo, results / (str(index) + '-command.log'))
             item['finished_at'] = stamp()
             check_identity(config, repo)
+            if config['kind'] == 'supplemental' and item['exit_code'] in (0, 1):
+                receipt_path = results / 'supplemental-receipt.json'
+                receipt = json.loads(receipt_path.read_text())
+                if receipt.get('completed') is not True or receipt.get('status') != ('passed' if item['exit_code']==0 else 'failed'):
+                    raise ValueError('supplemental receipt completion differs')
+                import hashlib
+                state['supplemental_receipt_sha256'] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+                if item['exit_code'] == 1:
+                    state['failure_scope'] = 'completed-supplemental'
             if item['exit_code'] != 0:
                 raise RuntimeError('phase command exited ' + str(item['exit_code']))
         if config['kind'] == 'builder':
