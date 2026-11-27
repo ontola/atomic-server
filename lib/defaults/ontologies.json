@@ -70,5 +70,38 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "custom-node-positioning"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/class/endpoint-response",
+    "https://atomicdata.dev/properties/description": "The response of an Endpoint that does not return a resource of its own, such as an action that succeeded or failed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/ontology/server/property/status",
+      "https://atomicdata.dev/ontology/server/property/response-message"
+    ],
+    "https://atomicdata.dev/properties/shortname": "endpoint-response"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/property/status",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The HTTP status code of an Endpoint response, such as 200.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "status"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/property/response-message",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A human readable message that explains an Endpoint response.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "response-message"
   }
 ]
