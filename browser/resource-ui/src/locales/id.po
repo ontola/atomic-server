@@ -786,11 +786,6 @@ msgstr "Tidak ada hasil yang cocok."
 msgid "Click to enlarge"
 msgstr "Klik untuk memperbesar"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Masuk / Pengguna baru"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1273,7 +1268,6 @@ msgstr "Dokumen"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Sinkronisasi"
@@ -1905,6 +1899,8 @@ msgid "Edit value"
 msgstr "Sunting nilai"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -13396,15 +13392,9 @@ msgstr "Untuk lebih banyak orang, gunakan Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Hanya browser ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
 
-#~ msgid "Save your work"
-#~ msgstr "Simpan pekerjaanmu"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Daftarkan emailmu atau hubungkan perangkat untuk membukanya di tempat lain"
-
-#~ msgid "Save your work here"
-#~ msgstr "Simpan pekerjaanmu di sini"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx

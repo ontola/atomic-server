@@ -47,7 +47,7 @@ export function SideBarPanel({
   heightStorageKey,
   initialHeight = 320,
   actions,
-  defaultOpen = true,
+  defaultOpen = false,
   embedded = false,
   panel,
   open: controlledOpen,
