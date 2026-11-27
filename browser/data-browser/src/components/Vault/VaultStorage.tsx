@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { styled } from 'styled-components';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { CARD_SUB_FONT } from '../cardSurface';
 import { formatBytes } from '../../helpers/formatBytes';
 import {
@@ -13,7 +13,7 @@ import {
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '../ConfirmationDialog';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
 import {
   type CompactResult,
   deleteVaultSnapshot,
@@ -312,8 +312,8 @@ export function VaultStorage({
               {!onCompact && usage.reclaimable_bytes > 0 && (
                 <Actions>
                   <span data-testid='vault-storage-reclaimable'>
-                    {formatBytes(usage.reclaimable_bytes)} of old history and
-                    unused files can be removed. Nothing you can see is lost.
+                    {formatBytes(usage.reclaimable_bytes)} of old history can be
+                    removed. Nothing you can see is lost.
                   </span>
                   <ButtonRow>
                     <Button

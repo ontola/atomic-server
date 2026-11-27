@@ -15,14 +15,24 @@
  * frame key, after checking that the connection is delegated to this app. The
  * frame hands its signed request to the host for relay; see `viewClient.js`.
  *
- * Built-in views use a separate, owner-signed read relay. The host derives the
- * connection key in memory and includes it in the request it signs. The
- * sandbox never handles the key or a signing capability for the connection.
+ * Replaces #1657's relay of LocalThought rotating connection codes (flag day,
+ * decision 6 of #54): nothing credential-like is kept in this page's storage
+ * any more, only a PKCE verifier for the ten minutes of a handoff.
+ *
+ * The proxy keeps each connection's provider credential sealed under a key it
+ * does not store (ontola/atomic-plugins#730). This page derives that key from
+ * the user's vault proof and the connection id, which it chooses itself, and
+ * sends it once at redeem. A frame gets a **key grant** with each capability:
+ * the key encrypted to the proxy, naming the app agent, which the frame passes
+ * on in `x-connection-key` without being able to read it. See
+ * `connectionKeys.ts`.
+ *
+ * Built-in views use an owner-signed read relay. The host derives the same
+ * connection key, signs the request with it, and keeps it out of the sandbox.
  */
 
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { AuthenticatedPrincipalDescription } from 'syncables/browser';
 import {
   AGENT_VAULT_PROOF_MESSAGE,
   SIGNATURE_VERSION_HEADER,
@@ -34,12 +44,18 @@ import {
   signRequest,
   type Agent,
 } from '@tomic/react';
+import {
+  CONNECTION_KEY_HEADER,
+  deriveConnectionKey,
+  newConnectionId,
+  rawConnectionKey,
+  sealGrant,
+} from './connectionKeys';
 import { agentVaultProof } from './managed/vault';
 
 const PENDING = 'atomic-proxy-connect-v2:';
 const KEYED_CONNECTION = 'atomic-proxy-keyed-v1:';
 const KEYED_SELECTION = 'atomic-proxy-keyed-selection-v1:';
-const CONNECTION_KEY_HEADER = 'x-connection-key';
 const PROXY_READ_HEADERS = ['link', 'retry-after', 'etag', 'content-type'];
 const MAX_BODY = 10 * 1024 * 1024;
 const TIMEOUT = 30_000;
@@ -84,9 +100,7 @@ export interface ConnectionPrincipal {
 
 /** Non-secret proof saved after a host-verified identity response. */
 export interface KeyedPrincipalProvenance {
-  principal?: ConnectionPrincipal;
-  /** Historical marker format stored an already-verified numeric subject. */
-  legacyNumericSubject?: number;
+  principal: ConnectionPrincipal;
 }
 
 interface PrincipalReconnect {
@@ -101,39 +115,10 @@ interface KeyedConnectionMarker {
   platform: string;
   principal?: ConnectionPrincipal;
   operationId?: string;
-  /** Compatibility only: old markers stored a decimal numeric provider ID. */
-  legacyPrincipalId?: string;
+  /** Old preview connections used a provider-scoped derivation. */
+  keyDerivation?: 'shared-v1';
   activeId?: string;
   replacement?: true;
-}
-
-function legacyPrincipalOperation(
-  marker: KeyedConnectionMarker | undefined,
-  value: ConnectionPrincipal,
-  descriptions: AuthenticatedPrincipalDescription[],
-): string | undefined {
-  const principal = connectionPrincipal(value);
-  if (
-    !marker?.legacyPrincipalId ||
-    marker.principal ||
-    !principal ||
-    principal.clientContext !== undefined ||
-    typeof principal.subject !== 'number' ||
-    !Number.isSafeInteger(principal.subject) ||
-    principal.subject <= 0 ||
-    String(principal.subject) !== marker.legacyPrincipalId
-  )
-    return;
-  const declared = descriptions.filter(
-    description =>
-      description.identifier.scope === 'provider' &&
-      description.identifier.stable === true &&
-      description.identifier.reassigned === false,
-  );
-
-  return declared.length === 1 && declared[0].namespace === principal.namespace
-    ? declared[0].operationId || undefined
-    : undefined;
 }
 
 function validConnectionId(value: unknown): value is string {
@@ -216,6 +201,11 @@ export interface ProxyConnection {
 /** What the frame gets: the capability, and where to use it. */
 export interface MintedCapability {
   capability: string;
+  /**
+   * The `x-connection-key` value the frame sends with the capability: a key
+   * grant (`s1.…`) naming the app agent, valid as long as the capability.
+   */
+  connectionKey: string;
   /** The proxy origin, the capability's `aud`. */
   aud: string;
   /** Unix seconds. */
@@ -315,13 +305,12 @@ export async function readLimitedResponseText(
   }
 }
 
-async function deriveConnectionKey(
-  agent: Agent,
+function derivePreviewConnectionKey(
+  proof: Uint8Array,
   origin: string,
   platform: string,
   connectionId: string,
-): Promise<string> {
-  const proof = await agentVaultProof(agent, AGENT_VAULT_PROOF_MESSAGE);
+): Uint8Array {
   const info = new TextEncoder().encode(
     JSON.stringify([
       'atomic-integration-proxy-key-v1',
@@ -331,7 +320,7 @@ async function deriveConnectionKey(
     ]),
   );
 
-  return 'k1.' + base64url(hkdf(sha256, proof, undefined, info, 32));
+  return hkdf(sha256, proof, undefined, info, 32);
 }
 
 function parseBody(text: string): unknown {
@@ -379,6 +368,9 @@ export function capabilityClaims(claims: {
 }
 
 export class ProxyConnections {
+  /** The proxy's grant public key, fetched once per page. */
+  private grantKey?: Promise<string>;
+
   constructor(
     private storage: Storage,
     /** The proxy origin. */
@@ -398,6 +390,62 @@ export class ProxyConnections {
       agent,
       subject: agent.getPublicKey().then(key => agentSubject(key)),
     };
+  }
+
+  /**
+   * The key of `connectionId` at this proxy, derived from the user's vault
+   * proof. Every device holding the agent derives the same one.
+   */
+  private async connectionKey(
+    connectionId: string,
+    agent: Agent,
+    previewPlatform?: string,
+  ): Promise<Uint8Array> {
+    const proof = await agentVaultProof(agent, AGENT_VAULT_PROOF_MESSAGE);
+
+    return previewPlatform === undefined
+      ? deriveConnectionKey(proof, this.origin, connectionId)
+      : derivePreviewConnectionKey(
+          proof,
+          this.origin,
+          previewPlatform,
+          connectionId,
+        );
+  }
+
+  /** `GET /connection-key-grants/key`, unsigned: the key grants go to. */
+  private proxyGrantKey(): Promise<string> {
+    this.grantKey ??= (async () => {
+      const response = await this.http(
+        new URL('/connection-key-grants/key', this.origin).href,
+        {
+          credentials: 'omit',
+          redirect: 'error',
+          signal: AbortSignal.timeout(TIMEOUT),
+        },
+      );
+      const body = parseBody(await readLimitedResponseText(response)) as {
+        public_key?: unknown;
+        info?: unknown;
+      } | null;
+
+      if (
+        !response.ok ||
+        typeof body?.public_key !== 'string' ||
+        !/^[A-Za-z0-9_-]{43}$/.test(body.public_key) ||
+        body.info !== 'integration-proxy-connection-key-grant-v1'
+      )
+        throw new Error(
+          'The integration proxy publishes no connection-key grant key. It may run an older version.',
+        );
+
+      return body.public_key;
+    })();
+    this.grantKey.catch(() => {
+      this.grantKey = undefined;
+    });
+
+    return this.grantKey;
   }
 
   /** One call to the proxy, signed v2 with the user key. */
@@ -520,7 +568,7 @@ export class ProxyConnections {
 
     return this.startHandoff(scope, platform, returnTo, label, pageOrigin, {
       owner,
-      connectionId: base64url(crypto.getRandomValues(new Uint8Array(32))),
+      connectionId: newConnectionId(),
       reconnect,
     });
   }
@@ -648,57 +696,52 @@ export class ProxyConnections {
     }
 
     const signer = this.user();
+    const owner = await signer.subject;
     const keyed = c.keyed;
-    let keyFields:
-      | { connection_id: string; connection_key: string }
-      | undefined;
+    const requestedId = keyed?.connectionId ?? newConnectionId();
+    if (keyed && keyed.owner !== owner)
+      throw new Error(
+        'Sign in with the Atomic account that started this connection.',
+      );
+    const key = rawConnectionKey(
+      await this.connectionKey(requestedId, signer.agent),
+    );
+    if ((await this.user().subject) !== owner)
+      throw new Error(
+        'The Atomic account changed before the integration request',
+      );
 
     if (keyed) {
-      const { owner, connectionId, reconnect } = keyed;
-      if (owner !== (await signer.subject))
-        throw new Error(
-          'Sign in with the Atomic account that started this connection.',
-        );
-      const key = await deriveConnectionKey(
-        signer.agent,
-        this.origin,
-        c.platform,
-        connectionId,
-      );
       // Persist only the derivation marker. Record it before redeem so a lost
       // response cannot make an otherwise successful connection undiscoverable.
-      this.saveKeyedMarker(owner, connectionId, {
+      this.saveKeyedMarker(owner, requestedId, {
         platform: c.platform,
-        ...(reconnect ? { replacement: true } : {}),
+        keyDerivation: 'shared-v1',
+        ...(keyed.reconnect ? { replacement: true } : {}),
       });
-      keyFields = { connection_id: connectionId, connection_key: key };
     }
 
     const result = (await this.call(
       'POST',
       '/connect/redeem',
-      { code, code_verifier: c.codeVerifier, ...keyFields },
+      {
+        code,
+        code_verifier: c.codeVerifier,
+        connection_id: requestedId,
+        connection_key: key,
+      },
       signer,
     )) as { connection_id?: unknown; platform?: unknown } | null;
 
     if (result?.platform !== c.platform)
       throw new Error('The proxy connected a different platform than asked.');
 
-    if (
-      typeof result.connection_id !== 'string' ||
-      !result.connection_id ||
-      result.connection_id.length > 512
-    )
-      throw new Error('The proxy returned an invalid connection id.');
+    if (result.connection_id !== requestedId)
+      throw new Error('The proxy returned a different connection id.');
 
     let connectionId = result.connection_id;
 
     if (keyed) {
-      if (result.connection_id !== keyed.connectionId)
-        throw new Error(
-          'The proxy returned a different connection than requested.',
-        );
-
       if (keyed.reconnect) {
         try {
           await this.completePrincipalReconnect(
@@ -725,7 +768,11 @@ export class ProxyConnections {
         connectionId = keyed.reconnect.slotId;
       }
     } else {
-      await this.delegate(result.connection_id, c.appAgent, c.label);
+      if ((await this.user().subject) !== owner)
+        throw new Error(
+          'The Atomic account changed before the integration request',
+        );
+      await this.delegate(connectionId, c.appAgent, c.label);
     }
 
     if (keyed && !keyed.reconnect)
@@ -862,10 +909,8 @@ export class ProxyConnections {
             typeof marker.operationId === 'string' && marker.operationId
               ? marker.operationId
               : undefined,
-          legacyPrincipalId:
-            typeof (marker as Record<string, unknown>).githubUserId === 'string'
-              ? ((marker as Record<string, unknown>).githubUserId as string)
-              : marker.legacyPrincipalId,
+          keyDerivation:
+            marker.keyDerivation === 'shared-v1' ? 'shared-v1' : undefined,
           activeId: validConnectionId(marker.activeId)
             ? marker.activeId
             : undefined,
@@ -897,33 +942,14 @@ export class ProxyConnections {
     if (marker?.platform === platform && !marker.replacement) return marker;
   }
 
-  /** Native compatibility lookup only; never reads a provider or derives a key. */
+  /** Native saved identity lookup; never reads a provider or derives a key. */
   async keyedPrincipalProvenance(
     platform: string,
     slotId: string,
   ): Promise<KeyedPrincipalProvenance | undefined> {
     const owner = await this.user().subject;
     const marker = this.keyedSlot(owner, platform, slotId);
-    if (!marker) return;
-    const raw = marker.legacyPrincipalId;
-    const numeric =
-      typeof raw === 'string' &&
-      /^[1-9][0-9]*$/.test(raw) &&
-      Number.isSafeInteger(Number(raw))
-        ? Number(raw)
-        : undefined;
-    if (
-      marker.principal &&
-      numeric !== undefined &&
-      marker.principal.subject !== numeric
-    )
-      throw new Error('The saved connection identity proofs conflict');
-    if (!marker.principal && numeric === undefined) return;
-
-    return {
-      ...(marker.principal ? { principal: { ...marker.principal } } : {}),
-      ...(numeric === undefined ? {} : { legacyNumericSubject: numeric }),
-    };
+    if (marker?.principal) return { principal: { ...marker.principal } };
   }
 
   async canReconnectKeyed(platform: string, slotId: string): Promise<boolean> {
@@ -931,50 +957,6 @@ export class ProxyConnections {
     const marker = this.keyedSlot(owner, platform, slotId);
 
     return Boolean(marker?.principal && marker.operationId);
-  }
-
-  /** Read-only eligibility: the native host supplies a validated saved alias and trusted catalog. */
-  async canReconnectLegacyKeyed(
-    platform: string,
-    slotId: string,
-    principal: ConnectionPrincipal,
-    descriptions: AuthenticatedPrincipalDescription[],
-  ): Promise<boolean> {
-    const owner = await this.user().subject;
-
-    return !!legacyPrincipalOperation(
-      this.keyedSlot(owner, platform, slotId),
-      principal,
-      descriptions,
-    );
-  }
-
-  /** Explicit Reconnect only. Cached proof prepares the fresh identity check at OAuth return. */
-  async prepareLegacyKeyedReconnect(
-    platform: string,
-    slotId: string,
-    principal: ConnectionPrincipal,
-    descriptions: AuthenticatedPrincipalDescription[],
-    assertCurrent: () => void,
-  ): Promise<void> {
-    const owner = await this.user().subject;
-    assertCurrent();
-    const marker = this.keyedSlot(owner, platform, slotId);
-    const operationId = legacyPrincipalOperation(
-      marker,
-      principal,
-      descriptions,
-    );
-    if (!marker || !operationId)
-      throw new Error(
-        'This legacy connection has no unambiguous saved identity proof.',
-      );
-    this.saveKeyedMarker(owner, slotId, {
-      ...marker,
-      principal: { ...principal },
-      operationId,
-      legacyPrincipalId: undefined,
-    });
   }
 
   /** Host-only: called after a fresh catalog-declared identity read is verified. */
@@ -989,12 +971,7 @@ export class ProxyConnections {
     const marker = this.keyedSlot(owner, platform, slotId);
     if (!principal || !marker || !operationId)
       throw new Error('Cannot remember the authenticated account identity.');
-    if (
-      (marker.principal && !samePrincipal(marker.principal, principal)) ||
-      (marker.legacyPrincipalId !== undefined &&
-        (typeof principal.subject !== 'number' ||
-          String(principal.subject) !== marker.legacyPrincipalId))
-    )
+    if (marker.principal && !samePrincipal(marker.principal, principal))
       throw new Error(
         'This connection belongs to a different authenticated principal.',
       );
@@ -1002,7 +979,6 @@ export class ProxyConnections {
       ...marker,
       principal,
       operationId,
-      legacyPrincipalId: undefined,
     });
   }
 
@@ -1109,7 +1085,7 @@ export class ProxyConnections {
       if (marker?.platform !== platform || marker.replacement) continue;
       const row = remote.get(marker.activeId ?? slotId);
       if (row) slots.push({ ...row, connection_id: slotId });
-      else if (marker.principal || marker.legacyPrincipalId)
+      else if (marker.principal)
         slots.push({ connection_id: slotId, platform, owner, delegations: [] });
     }
 
@@ -1154,14 +1130,16 @@ export class ProxyConnections {
     const [, connectionId, platform] = source;
     const { agent, subject } = this.user();
     const owner = await subject;
-    if (this.loadKeyedMarker(owner, connectionId)?.platform !== platform)
+    const marker = this.loadKeyedMarker(owner, connectionId);
+    if (marker?.platform !== platform)
       throw new Error('Reconnect this account to use it here.');
 
-    const key = await deriveConnectionKey(
-      agent,
-      this.origin,
-      platform,
-      connectionId,
+    const key = rawConnectionKey(
+      await this.connectionKey(
+        connectionId,
+        agent,
+        marker.keyDerivation === 'shared-v1' ? undefined : platform,
+      ),
     );
     const time = this.now();
     const message = requestSignatureMessageV2(
@@ -1269,7 +1247,8 @@ export class ProxyConnections {
       throw new Error('publicKey is required');
     const cnf = canonicalAgent(agentSubject(request.publicKey));
     const app = canonicalAgent(request.appAgent);
-    const { agent } = this.user();
+    const { agent, subject } = this.user();
+    const owner = await subject;
 
     const row = (await this.list(platform)).find(
       r => r.connection_id === connectionId,
@@ -1290,9 +1269,30 @@ export class ProxyConnections {
       exp,
     });
     const sig = await agent.signBytes(message);
+    // The grant names the app, not the frame key: the capability (signed by
+    // `cnf`) is what binds a request to this frame, and it expires with it.
+    const marker = this.loadKeyedMarker(owner, connectionId);
+    const connectionKey = await sealGrant({
+      proxyPublicKey: await this.proxyGrantKey(),
+      connectionId,
+      sub: app,
+      key: await this.connectionKey(
+        connectionId,
+        agent,
+        marker?.platform === platform && marker.keyDerivation === undefined
+          ? platform
+          : undefined,
+      ),
+      exp,
+    });
+    if ((await this.user().subject) !== owner)
+      throw new Error(
+        'The Atomic account changed before the integration request',
+      );
 
     return {
       capability: `${base64url(new TextEncoder().encode(json))}.${sig}`,
+      connectionKey,
       aud: this.origin,
       exp,
       connectionId,

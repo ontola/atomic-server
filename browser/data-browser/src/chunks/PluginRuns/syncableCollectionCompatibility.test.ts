@@ -8,10 +8,10 @@ import {
   server,
   type Resource,
 } from '@tomic/lib';
+import { retainHiddenViews } from '@tomic/table-page/TablePage/TableExtension';
 import {
   syncableCollectionTabs,
   syncableEntityViewKind,
-  retainHiddenSyncableViews,
 } from './syncableCollectionCompatibility';
 
 function view(
@@ -217,7 +217,7 @@ it('selects Table for hidden saved rules while retaining hidden definitions on r
   expect(result.activeView).toBe('atomic:table');
   expect(result.views).toEqual(['atomic:table', 'atomic:sync']);
   expect(
-    retainHiddenSyncableViews(
+    retainHiddenViews(
       ['atomic:sync', 'atomic:table'],
       resources.map(resource => resource.subject),
       result.hidden,

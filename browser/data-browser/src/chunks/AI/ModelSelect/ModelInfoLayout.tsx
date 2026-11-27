@@ -1,4 +1,4 @@
-import { Row } from '@components/Row';
+import { Row } from '@tomic/ui/components/Row';
 import { styled } from 'styled-components';
 
 interface ModelInfoLayoutProps {

@@ -186,6 +186,18 @@ export class NodeClientDb {
     if (outbox) await this.outboxWrite(outbox, true);
   }
 
+  /** Mirror of {@link ClientDbWorker.putLoroSnapshot}. */
+  async putLoroSnapshot(
+    subject: string,
+    snapshot: Uint8Array,
+    lastCommit?: string,
+    outbox?: ClientDbOutboxWrite,
+  ): Promise<void> {
+    await this.requireDb().putLoroSnapshot(subject, snapshot, lastCommit);
+
+    if (outbox) await this.outboxWrite(outbox, true);
+  }
+
   /** Mirror of {@link ClientDbWorker.outboxEntries}. */
   async outboxEntries(agent: string): Promise<string[]> {
     return this.requireDb().outboxEntries(agent) as string[];

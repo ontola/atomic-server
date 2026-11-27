@@ -1,10 +1,16 @@
 import { Resource } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
-import Field from '@components/forms/Field';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { useDebounce } from '@helpers/useDebounce';
-import { useFieldOptions, type FieldOptionsBag } from './useFieldOptions';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { useDebounce } from '@tomic/resource-ui/helpers/useDebounce';
+import {
+  useFieldOptions,
+  type FieldOptionsBag,
+} from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import { FieldPair } from './FieldPair';
 import { Divider } from './Divider';
 

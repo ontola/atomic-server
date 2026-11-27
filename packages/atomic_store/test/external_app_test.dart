@@ -10,15 +10,14 @@ class ReadOnlyBackend extends InMemoryBackend {
   ReadOnlyBackend(super.resources);
 
   @override
-  Future<String> createResource(Map<String, Value> props) =>
-      Future.error(const StoreException(
-          StoreErrorKind.unauthorized, 'No write rights'));
+  Future<String> createResource(Map<String, Value> props) => Future.error(
+      const StoreException(StoreErrorKind.unauthorized, 'No write rights'));
 
   @override
   Future<void> saveChanges(
           String subject, Map<String, Value> changes, List<String> removed) =>
-      Future.error(const StoreException(
-          StoreErrorKind.unauthorized, 'No write rights'));
+      Future.error(
+          const StoreException(StoreErrorKind.unauthorized, 'No write rights'));
 }
 
 Map<String, Map<String, Value>> seed() => {
@@ -66,7 +65,8 @@ void main() {
     expect(backend.calls.where((c) => c.startsWith('createResource')), isEmpty);
   });
 
-  test('updates the existing registration when the app info changed, '
+  test(
+      'updates the existing registration when the app info changed, '
       'matching the homepage without a trailing slash', () async {
     final store = Store(backend: InMemoryBackend(seed()));
     final first = await register(store);
@@ -74,7 +74,10 @@ void main() {
       drive: drive,
       name: 'OpenMeeting 2',
       homepage: 'https://openmeeting.nl/',
-      handlesClasses: [gremium, 'https://openmeeting.nl/ns/classes/Vergadering'],
+      handlesClasses: [
+        gremium,
+        'https://openmeeting.nl/ns/classes/Vergadering'
+      ],
     );
 
     expect(second.subject, first.subject);

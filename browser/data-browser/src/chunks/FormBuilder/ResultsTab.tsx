@@ -1,7 +1,7 @@
 import { Resource, unknownSubject } from '@tomic/react';
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
-import { TableResource } from '@chunks/TablePage/TableResource';
+import { TableResource } from '@tomic/table-page/TablePage/TableResource';
 
 interface ResultsTabProps {
   tableResource: Resource;

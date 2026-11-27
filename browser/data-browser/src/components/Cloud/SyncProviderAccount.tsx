@@ -7,7 +7,7 @@ import { openExternal } from '../../helpers/openExternal';
 import { isRunningInTauri } from '../../helpers/tauri';
 import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
 import { LinkProviderPanel } from '../Vault/LinkProviderPanel';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 
 export interface SyncProviderAccountProps {
   portalUrl: string;

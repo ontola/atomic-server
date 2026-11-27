@@ -1,7 +1,7 @@
 // @wc-ignore-file
 import { dataBrowser, type Store } from '@tomic/lib';
 import { isHttpsOrLoopback } from '@helpers/runtimeSetting';
-import { resizeImageFile } from '@helpers/resizeImage';
+import { resizeImageFile } from '@tomic/resource-ui/helpers/resizeImage';
 
 /** Install an image as an ordinary Atomic File; reopening uses stored bytes. */
 export async function installIntegrationIcon(

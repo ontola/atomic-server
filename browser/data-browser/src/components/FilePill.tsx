@@ -1,6 +1,6 @@
 import { useResource, useTitle } from '@tomic/react';
 
-import { AtomicLink } from './AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { styled } from 'styled-components';
 
 import type { JSX } from 'react';

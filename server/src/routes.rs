@@ -349,6 +349,11 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::client_reports::relay),
     )
     .service(
+        web::resource("/push/fcm/{token}")
+            .guard(guard::Method(Method::POST))
+            .to(crate::push_gateway::handle),
+    )
+    .service(
         web::resource("/commit")
             .guard(guard::Method(Method::POST))
             .to(handlers::commit::post_commit),

@@ -2,15 +2,11 @@ import { createRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
-import { useSettings } from '../helpers/AppSettings';
 import { Shell } from '../views/getting-started/chrome';
-import { Button } from '../components/Button';
-import { Column } from '../components/Row';
-import {
-  cameFromPortal,
-  portalReturnUrl,
-  signOutEverywhere,
-} from '../helpers/managed/signOut';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import { cameFromPortal, portalReturnUrl } from '../helpers/managed/signOut';
+import { useSignOut } from '../hooks/useSignOut';
 
 /**
  * Signing out on the account portal passes through here, so the identity's
@@ -28,7 +24,7 @@ export const SignOutRoute = createRoute({
 });
 
 function SignOutPage(): JSX.Element {
-  const { agent, setAgent, setDrive } = useSettings();
+  const signOutAndReset = useSignOut();
   const navigate = useNavigate();
   const { return: returnTo } = SignOutRoute.useSearch();
   const [busy, setBusy] = useState(false);
@@ -38,9 +34,7 @@ function SignOutPage(): JSX.Element {
     if (started.current) return;
     started.current = true;
     setBusy(true);
-    await signOutEverywhere({ agentSubject: agent?.subject });
-    setAgent(undefined);
-    setDrive('');
+    await signOutAndReset();
     const back = portalReturnUrl(returnTo);
 
     if (back) window.location.replace(back);

@@ -3,7 +3,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { editIntegrationAssistant } from './editIntegrationAssistant';
 import { FaWandMagicSparkles } from 'react-icons/fa6';
 import { NewAutomation } from './NewAutomation';
-import { AtomicLink } from '@components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { pluginWorkspace } from '@tomic/react';
 import { Tabs } from '@components/Tabs';
 import { IntegrationDefaultView } from './IntegrationDataView';
@@ -29,13 +29,13 @@ import {
   useStore,
   type Resource,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { ContainerFull } from '@components/Containers';
-import { EditableTitle } from '@components/EditableTitle';
-import { HighlightedCodeBlock } from '@components/HighlightedCodeBlock';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { ContainerFull } from '@tomic/ui/components/Containers';
+import { EditableTitle } from '@tomic/resource-ui/components/EditableTitle';
+import { HighlightedCodeBlock } from '@tomic/resource-ui/components/HighlightedCodeBlock';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
-import { editURL } from '@helpers/navigation';
+import { editURL } from '../../helpers/navigation';
 import { PluginSecrets } from './PluginSecrets';
 import { PluginRunHistory } from './PluginRunHistory';
 import { PluginSchedule } from './PluginSchedule';
@@ -289,7 +289,7 @@ export function PluginPage({
                 {source === undefined ? (
                   <Muted>Loading…</Muted>
                 ) : source === '' ? (
-                  <Muted>This plugin has no source yet.</Muted>
+                  <Muted>This app has no source yet.</Muted>
                 ) : (
                   <HighlightedCodeBlock code={source} language='typescript' />
                 )}

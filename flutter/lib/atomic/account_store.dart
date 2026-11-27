@@ -2,10 +2,12 @@ import 'package:atomic_flutter/atomic_flutter.dart' as shared;
 import 'package:atomic_store_flutter/atomic_store_flutter.dart'
     show SecureAccountSessionStore;
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:http/http.dart' as http;
 
 import 'atomic_auth.dart';
 import 'atomic_client.dart';
 import 'session.dart' show createSecureStorage;
+import 'sign_in_link.dart';
 
 /// What the person's managed account says about one workspace: the address it
 /// belongs to, and whether Cloud Vault (encrypted backup) and Cloud Server
@@ -39,14 +41,29 @@ class AccountStore {
   static set store(shared.AtomicAccountSessionStore store) => _store = store;
 
   static shared.AtomicAccountSessionStore get sessionStore => _store;
-  static Future<void> save(String session) => _store.save(session);
-  static Future<void> clear() => _store.clear();
+  static int _sessionRevision = 0;
+
+  static Future<void> save(String session) {
+    _sessionRevision++;
+    return _store.save(session);
+  }
+
+  static Future<void> clear() {
+    _sessionRevision++;
+    return _store.clear();
+  }
+
   static Future<String?> read() => _store.read();
 
   /// The portal agents sign in to when no portal is linked yet.
   static const defaultPortal = 'https://atomic.place';
 
+  /// The agent the portal last refused to sign in, and when: not asked again
+  /// for [_refusalLasts], so every chat opening is not a round trip, yet an
+  /// account made since (in a browser, or by a link opened later) is found.
   static String? _attemptedAgent;
+  static DateTime? _attemptedAt;
+  static const _refusalLasts = Duration(minutes: 2);
 
   /// Asks the portal to mail [email] a link that creates the account with the
   /// active agent as its identity (no new identity, nothing is switched).
@@ -63,8 +80,48 @@ class AccountStore {
       // Sign-in may have been refused before the account existed; let the
       // next look-up try it again.
       _attemptedAgent = null;
+      _attemptedAt = null;
     } finally {
       client.close();
+    }
+  }
+
+  /// Asks the person to confirm the identity reported by the temporary session
+  /// before replacing the linked account.
+  /// Returns false when [link] is not a sign-in link for [portal] (nothing is
+  /// sent); throws a [StateError] with a sentence fit to show when the portal
+  /// refuses it (expired, already used) or cannot be reached.
+  static Future<bool> redeemSignInLink(String link,
+      {required Future<bool> Function(String address) confirmAccount,
+      String portal = defaultPortal,
+      http.Client? client}) async {
+    final revision = _sessionRevision;
+    final parsed = SignInLink.parse(link,
+        portal: shared.AtomicAccountClient.providerOrigin(portal));
+    if (parsed == null) return false;
+    final previous = await read();
+    final account = shared.AtomicAccountClient(portal, client: client);
+    try {
+      await account.loginWithLinkToken(parsed.token);
+      final me = await account.account();
+      final address = me['address'] ?? me['email'];
+      if (address is! String || address.trim().isEmpty) {
+        throw StateError(
+            'The portal could not identify the account for this link');
+      }
+      if (revision != _sessionRevision || !await confirmAccount(address)) {
+        return false;
+      }
+      if (await read() != previous || revision != _sessionRevision) {
+        return false;
+      }
+      await save(account.exportSession());
+      // Whoever was refused before the account existed may sign in now.
+      _attemptedAgent = null;
+      _attemptedAt = null;
+      return true;
+    } finally {
+      account.close();
     }
   }
 
@@ -77,14 +134,21 @@ class AccountStore {
     try {
       if (await read() != null) return true;
       final info = await AtomicClient.getActiveAgent();
-      if (info == null || _attemptedAgent == info.subject) return false;
+      if (info == null) return false;
+      final at = _attemptedAt;
+      if (_attemptedAgent == info.subject &&
+          at != null &&
+          DateTime.now().difference(at) < _refusalLasts) {
+        return false;
+      }
       final agent = AtomicAgent.fromSecret(info.secret);
       final client = shared.AtomicAccountClient(portal);
       try {
         final signedIn = await client.signInWithAgent(agent.subject,
             (message) async => signMessage(message, agent.privateKeyB64));
-        // A refusal is final for this run; an unreachable portal throws below.
+        // A refusal holds for a while; an unreachable portal throws below.
         _attemptedAgent = info.subject;
+        _attemptedAt = DateTime.now();
         if (!signedIn) return false;
         await save(client.exportSession());
         return true;
@@ -95,6 +159,41 @@ class AccountStore {
       return false;
     }
   }
+
+  /// The saved session, if the portal no longer takes it (it expired or was
+  /// signed out elsewhere: 401), is dropped and the agent signs in again,
+  /// as on a fresh start. True when a new session is saved. A session that
+  /// still works, or a portal that cannot be reached, leaves things as
+  /// they are.
+  static Future<bool> renewExpired() async {
+    final saved = await read();
+    if (saved == null) return false;
+    final Uri origin;
+    try {
+      origin = shared.AtomicAccountClient.sessionOrigin(saved);
+    } catch (_) {
+      return false;
+    }
+    final client = shared.AtomicAccountClient(origin.toString())
+      ..restoreSession(saved);
+    try {
+      await client.account();
+      return false;
+    } on StateError catch (e) {
+      if (e.message != expiredMessage) return false;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
+    }
+    await clear();
+    _attemptedAgent = null;
+    return signInWithAgent(portal: origin.toString());
+  }
+
+  /// What the account client says for a 401.
+  @visibleForTesting
+  static const expiredMessage = shared.AtomicAccountClient.sessionExpired;
 
   /// The `session_token` cookie that signs a web view in to [portal] as the
   /// active agent, or null when it cannot (no agent, not an account identity,
@@ -196,14 +295,25 @@ class AccountStore {
   /// The linked account's state for [drive]; null when no account is linked.
   /// Throws when it is linked but the portal cannot be read, so a failed read
   /// is not shown as "not linked".
-  static Future<AccountSummary?> summary(String? drive) async {
+  ///
+  /// An expired session is renewed with this device's agent once; when that
+  /// fails the session is gone and the account shows as not linked.
+  static Future<AccountSummary?> summary(String? drive,
+      {bool renewed = false}) async {
     final saved = await read();
     if (saved == null) return null;
     final origin = shared.AtomicAccountClient.sessionOrigin(saved);
     final client = shared.AtomicAccountClient(origin.toString())
       ..restoreSession(saved);
     try {
-      final me = await client.account();
+      final Map<String, dynamic> me;
+      try {
+        me = await client.account();
+      } on StateError catch (e) {
+        if (renewed || e.message != expiredMessage) rethrow;
+        await renewExpired();
+        return summary(drive, renewed: true);
+      }
       Future<Map<String, dynamic>?> forDrive(
           Future<List<Map<String, dynamic>>> list) async {
         try {

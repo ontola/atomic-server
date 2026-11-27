@@ -1,6 +1,6 @@
 import { useResource, type Core, useResources } from '@tomic/react';
 import { useMemo } from 'react';
-import { BasicSelect } from '../../components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 
 interface PropSelectorProps {
   classSubject: string;

@@ -10,7 +10,6 @@ import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
 import { ResourceGlyph } from '../../../components/ResourceGlyph';
-import { BookmarkGridItem } from './BookmarkGridItem';
 import { BasicGridItem } from './BasicGridItem';
 import { GridCard, GridItemTitle, GridItemWrapper } from './components';
 import { DefaultGridItem } from './DefaultGridItem';
@@ -21,9 +20,9 @@ import { DocumentGridItem } from './DocumentGridItem';
 import { DocumentV2GridItem } from './DocumentV2GridItem';
 import { ErrorBoundary } from '../../ErrorPage';
 import { useNavigateWithTransition } from '../../../hooks/useNavigateWithTransition';
-import { LoaderBlock } from '../../../components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { ArticleGridItem } from './ArticleGridItem';
-import { FilePreviewThumbnail } from '../../File/FilePreviewThumbnail';
+import { FilePreviewThumbnail } from '@tomic/resource-ui/views/File/FilePreviewThumbnail';
 import { CommentCountBadge } from '../../../components/CommentCountBadge';
 
 export interface ResourceGridItemProps {
@@ -31,7 +30,6 @@ export interface ResourceGridItemProps {
 }
 
 const gridItemMap = new Map<string, React.FC<GridItemViewProps>>([
-  [dataBrowser.classes.bookmark, BookmarkGridItem],
   [core.classes.class, BasicGridItem],
   [core.classes.property, BasicGridItem],
   [dataBrowser.classes.chatroom, ChatRoomGridItem],

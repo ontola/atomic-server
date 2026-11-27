@@ -8,7 +8,8 @@ import { OnboardingFeedback } from './OnboardingFeedback';
 import { SideBar } from './SideBar';
 import { OverlayContainer } from './OverlayContainer';
 import { ShareDialogHost } from './Share/ShareDialogHost';
-import { CalculatedPageHeight } from '../globalCssVars';
+import { SaveWorkDialogHost } from './SaveWork/SaveWorkDialog';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
@@ -16,10 +17,11 @@ import { useKeepMainRoom } from './RightPanel/useKeepMainRoom';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
 import { FollowSessionPanelContainer } from './Presence/FollowSessionPanelContainer';
 import { MeetingMessageToaster } from './Presence/MeetingMessageToaster';
+import { DesktopUpdateNotice } from './Notifications/DesktopUpdateNotice';
 import { MessageNotifier } from './Notifications/MessageNotifier';
 import { ResourceContextMenuHost } from './ResourceContextMenu';
-import { HideInPrint } from './HideInPrint';
-import { MAIN_CONTAINER } from '@helpers/containers';
+import { HideInPrint } from '@tomic/ui/components/HideInPrint';
+import { MAIN_CONTAINER } from '@tomic/ui/helpers/containers';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { useResource } from '@tomic/react';
 import NavBarContent from './NavBar';
@@ -29,7 +31,11 @@ import { ChromeTheme } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
-import { isRunningInTauri } from '../helpers/tauri';
+import {
+  hasOverlayTitleBar,
+  isRunningInTauri,
+  useWindowControlsInset,
+} from '../helpers/tauri';
 import { isEmbedded } from '../helpers/embedMode';
 import { MeetingChatOverlay } from '../embed/MeetingChatOverlay';
 
@@ -100,6 +106,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {!hideGlobalChrome && <MeetingMessageToaster />}
             {/* New chat messages, comments and replies: toast or OS notification. */}
             <MessageNotifier />
+            {/* The desktop app has a newer version: offer the restart. */}
+            <DesktopUpdateNotice />
             {!hideGlobalChrome && (
               <TopBar subject={contextualSubject} top={navbarTop} />
             )}
@@ -130,6 +138,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             {hideGlobalChrome && !embedded && <OnboardingFeedback />}
             <OverlayContainer />
             <ShareDialogHost />
+            <SaveWorkDialogHost />
           </AppSetupProvider>
         </AppVerifierProvider>
       </AISidebarContextProvider>
@@ -169,17 +178,23 @@ const TopBar = React.memo(function TopBar({
   top: boolean;
 }): JSX.Element {
   const resource = useResource(subject);
+  const controlsInset = useWindowControlsInset();
 
   return (
     <ChromeTheme>
-      <NavBarStyled aria-label='navigation' top={top}>
+      <NavBarStyled
+        aria-label='navigation'
+        top={top}
+        $inset={controlsInset}
+        data-tauri-drag-region={hasOverlayTitleBar() ? 'deep' : undefined}
+      >
         <NavBarContent resource={resource} />
       </NavBarStyled>
     </ChromeTheme>
   );
 });
 
-const NavBarStyled = styled.div<{ top: boolean }>`
+const NavBarStyled = styled.div<{ top: boolean; $inset: boolean }>`
   position: fixed;
   ${p => (p.top ? 'top: 0;' : 'bottom: 0;')}
   left: 0;
@@ -191,6 +206,8 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   border-${p => (p.top ? 'bottom' : 'top')}: solid 1px ${props => props.theme.colors.bg2};
   container-name: nav-bar;
   container-type: inline-size;
+  /* Room for the macOS window controls that sit over this bar. */
+  ${p => (p.top && p.$inset ? 'padding-left: 4.75rem;' : '')}
 
   @media print {
     display: none;

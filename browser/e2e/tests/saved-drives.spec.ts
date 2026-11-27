@@ -56,9 +56,7 @@ test.describe('saved drives', () => {
     // Scoped to the list itself, not the page: the drive's own name is in the
     // breadcrumb and the switcher too, and an unscoped match would pass on
     // chrome that says nothing about whether the list was ever written.
-    await expect(
-      page.getByRole('heading', { name: 'My drives' }),
-    ).toBeVisible();
+    await expect(page.getByText('My drives', { exact: true })).toBeVisible();
     await expect(
       page.getByTestId('my-drives').getByText(driveTitle),
     ).toBeVisible();

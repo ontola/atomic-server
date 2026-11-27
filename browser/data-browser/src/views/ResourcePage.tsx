@@ -3,8 +3,6 @@ import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
   useStore,
-  Resource,
-  type OptionalClass,
   dataBrowser,
   collections,
   server,
@@ -37,7 +35,6 @@ import { InboxPage } from './InboxPage';
 import { NotificationPage } from './NotificationPage';
 import { MessagePage } from './MessagePage';
 import { ChatLogPage } from './ChatLogPage';
-import { BookmarkPage } from './BookmarkPage/BookmarkPage';
 import { ImporterPage } from './ImporterPage.jsx';
 import { FolderPage } from './FolderPage';
 import { ArticlePage } from './Article';
@@ -58,11 +55,15 @@ import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
 import { useAppClass } from '@chunks/PluginRuns/useDriveClass';
 
 const TablePage = lazy(() =>
-  import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
+  import('@tomic/table-page/TablePage/index').then(m => ({
+    default: m.TablePage,
+  })),
 );
 
 const DashboardPage = lazy(() =>
-  import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
+  import('@tomic/table-page/DashboardPage/index').then(m => ({
+    default: m.DashboardPage,
+  })),
 );
 
 const WebsiteExportPage = lazy(() =>
@@ -95,9 +96,8 @@ const FormBuilderPage = lazy(() =>
 );
 
 /** These properties are passed to every View at Page level */
-export type ResourcePageProps<Subject extends OptionalClass = never> = {
-  resource: Resource<Subject>;
-};
+export type { ResourcePageProps } from '@tomic/resource-ui/ResourceUIHost';
+import type { ResourcePageProps } from '@tomic/resource-ui/ResourceUIHost';
 
 type Props = {
   subject: string;
@@ -354,8 +354,6 @@ function selectComponent(klass: string | undefined) {
       return MessagePage;
     case dataBrowser.classes.chatLog:
       return ChatLogPage;
-    case dataBrowser.classes.bookmark:
-      return BookmarkPage;
     case dataBrowser.classes.importer:
       return ImporterPage;
     case dataBrowser.classes.folder:

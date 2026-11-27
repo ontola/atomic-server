@@ -1,26 +1,37 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@tomic/react', () => ({ core: {}, urls: { instances: {} } }));
+vi.mock('@tomic/react', () => ({
+  contacts: { properties: {} },
+  core: {},
+  urls: { instances: {} },
+}));
 vi.mock('@components/AI/AISettingsContext', () => ({}));
 vi.mock('@components/SideBar/AIPanel', () => ({}));
 vi.mock('./usePrivateDrive', () => ({}));
-vi.mock('./useSavedDrives', () => ({}));
+vi.mock('./useUserSetting', () => ({}));
+vi.mock('./useVisibleDriveChildren', () => ({}));
+vi.mock('@chunks/AppPage/useDriveApps', () => ({}));
+vi.mock('@helpers/conversations/useConversations', () => ({}));
 vi.mock('@helpers/managed/binding', () => ({}));
 vi.mock('@helpers/managed/deviceLink', () => ({}));
 
-const { deriveOnboardingSteps, isDefaultDriveName, projectDrives } =
-  await import('./useOnboardingProgress');
+import type { OnboardingInput } from './useOnboardingProgress';
 
-const base = {
+const {
+  deriveAdvancedSteps,
+  deriveOnboardingSteps,
+  hasInviteForDrives,
+  isDefaultDriveName,
+} = await import('./useOnboardingProgress');
+
+const base: OnboardingInput = {
   driveName: 'Welcome to Atomic',
-  savedDrives: ['atomic:home', 'atomic:welcome'],
-  privateDrive: 'atomic:home',
-  welcomeDrive: 'atomic:welcome',
+  childCount: 4,
+  templateChildCount: 4,
   hasAIChat: false,
   aiAvailable: true,
-  otherAgentsOnProjects: false,
-  invited: false,
+  otherAgentsOnDrives: false,
   accountLinked: false,
 };
 const done = (input = base) =>
@@ -30,13 +41,7 @@ describe('deriveOnboardingSteps', () => {
   it('lists the steps in order, none done for a new person', () => {
     const steps = deriveOnboardingSteps(base);
 
-    expect(steps.map(s => s.id)).toEqual([
-      'name',
-      'project',
-      'ai',
-      'invite',
-      'save',
-    ]);
+    expect(steps.map(s => s.id)).toEqual(['name', 'create', 'invite', 'save']);
     expect(steps.some(s => s.done)).toBe(false);
   });
 
@@ -47,46 +52,117 @@ describe('deriveOnboardingSteps', () => {
     expect(done({ ...base, driveName: 'Acme' }).name).toBe(true);
   });
 
-  it('counts a project as a drive besides home and Welcome, even renamed', () => {
-    expect(done().project).toBe(false);
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(done(withProject).project).toBe(true);
-    expect(projectDrives(withProject)).toEqual(['did:ad:p']);
-  });
-
-  it('is done for the AI once a chat exists, and names the missing source', () => {
-    expect(done({ ...base, hasAIChat: true }).ai).toBe(true);
-    expect(
-      deriveOnboardingSteps({ ...base, aiAvailable: false })[2].needs,
-    ).toBe('ai-source');
-    expect(deriveOnboardingSteps(base)[2].needs).toBeUndefined();
-  });
-
-  it('blocks Invite until there is a project, then accepts a link or another agent', () => {
-    const blocked = deriveOnboardingSteps({ ...base, invited: true })[3];
-
-    expect(blocked.needs).toBe('project');
-
-    const withProject = {
-      ...base,
-      savedDrives: [...base.savedDrives, 'did:ad:p'],
-    };
-
-    expect(deriveOnboardingSteps(withProject)[3]).toMatchObject({
-      done: false,
-      needs: undefined,
-    });
-    expect(done({ ...withProject, invited: true }).invite).toBe(true);
-    expect(done({ ...withProject, otherAgentsOnProjects: true }).invite).toBe(
+  it('counts Make something once the drive has more than its template gave', () => {
+    expect(done().create).toBe(false);
+    expect(done({ ...base, childCount: 5 }).create).toBe(true);
+    expect(done({ ...base, childCount: 0, templateChildCount: 0 }).create).toBe(
+      false,
+    );
+    expect(done({ ...base, childCount: 1, templateChildCount: 0 }).create).toBe(
       true,
     );
   });
 
+  it('is done for the AI once a chat exists, and names the missing source', () => {
+    const ai = (input: typeof base) =>
+      deriveAdvancedSteps(input).find(s => s.id === 'ai');
+
+    expect(ai({ ...base, hasAIChat: true })?.done).toBe(true);
+    expect(ai({ ...base, aiAvailable: false })?.needs).toBe('ai-source');
+    expect(ai(base)?.needs).toBeUndefined();
+  });
+
+  it('leaves the AI steps out when AI is not offered', () => {
+    const ids = deriveAdvancedSteps({ ...base, aiEnabled: false }).map(
+      s => s.id,
+    );
+
+    expect(ids).not.toContain('ai');
+    expect(ids).not.toContain('app');
+  });
+
+  it('is done for Invite once another agent has rights on a drive', () => {
+    expect(done().invite).toBe(false);
+    expect(done({ ...base, otherAgentsOnDrives: true }).invite).toBe(true);
+    expect(done({ ...base, inviteSent: true }).invite).toBe(true);
+    expect(done(base).invite).toBe(false);
+  });
+
   it('is done for Save once an account is linked', () => {
     expect(done({ ...base, accountLinked: true }).save).toBe(true);
+  });
+});
+
+describe('hasInviteForDrives', () => {
+  it('matches an invite target against the drives', () => {
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a'])).toBe(true);
+    expect(hasInviteForDrives(['did:ad:b', undefined], ['did:ad:a'])).toBe(
+      false,
+    );
+    expect(hasInviteForDrives([], ['did:ad:a'])).toBe(false);
+  });
+
+  it('counts a copied invite link record, which has no address', () => {
+    // Same target the record holds (see pendingInvites.test.ts).
+    expect(hasInviteForDrives(['did:ad:a'], ['did:ad:a', 'did:ad:b'])).toBe(
+      true,
+    );
+  });
+});
+
+describe('deriveAdvancedSteps', () => {
+  const adv = (input: Partial<OnboardingInput> = {}) =>
+    Object.fromEntries(
+      deriveAdvancedSteps({ ...base, ...input }).map(s => [s.id, s.done]),
+    );
+
+  it('lists table, form, ai, app, message, desktop, none done for a new drive', () => {
+    expect(deriveAdvancedSteps(base).map(s => s.id)).toEqual([
+      'table',
+      'form',
+      'ai',
+      'app',
+      'message',
+      'desktop',
+    ]);
+    expect(adv()).toEqual({
+      table: false,
+      form: false,
+      ai: false,
+      app: false,
+      message: false,
+      desktop: false,
+    });
+  });
+
+  it("does not count the Welcome template's Tasks table", () => {
+    expect(adv({ tableCount: 1, templateTableCount: 1 }).table).toBe(false);
+    expect(adv({ tableCount: 2, templateTableCount: 1 }).table).toBe(true);
+    expect(adv({ tableCount: 1, templateTableCount: 0 }).table).toBe(true);
+  });
+
+  it('counts a form once the drive has one', () => {
+    expect(adv({ hasForm: true }).form).toBe(true);
+  });
+
+  it('counts the app once the drive has one, and names a missing AI source', () => {
+    expect(adv({ hasApp: true }).app).toBe(true);
+    const app = (input: OnboardingInput) =>
+      deriveAdvancedSteps(input).find(s => s.id === 'app');
+
+    expect(app(base)?.needs).toBeUndefined();
+    expect(app({ ...base, aiAvailable: false })?.needs).toBe('ai-source');
+  });
+
+  it('counts a conversation for the message step', () => {
+    expect(adv({ hasConversation: true }).message).toBe(true);
+  });
+
+  it('counts the desktop step once clicked, and leaves it out in the desktop app', () => {
+    expect(adv({ desktopDownloadOpened: true }).desktop).toBe(true);
+    expect(adv({ inDesktopApp: true })).not.toHaveProperty('desktop');
+    expect(
+      deriveAdvancedSteps({ ...base, inDesktopApp: true }).map(s => s.id),
+    ).toEqual(['table', 'form', 'ai', 'app', 'message']);
   });
 });

@@ -9,28 +9,37 @@
     // dist/*.d.ts while tsup watch rebuilds @tomic/lib and @tomic/react.
 
     "paths": {
+      "@tomic/table": ["../table/src/index.ts"],
+      "@tomic/table-page": ["../table-page/src/index.ts"],
+      "@tomic/table-page/*": ["../table-page/src/*"],
+      "@tomic/resource-ui": ["../resource-ui/src/index.ts"],
+      "@tomic/resource-ui/locale-runtime": [
+        "../resource-ui/src/locales/main.loader.js"
+      ],
+      "@tomic/resource-ui/locale-message": ["../resource-ui/src/locales/message.js"],
+      "@tomic/resource-ui/*": ["../resource-ui/src/*"],
+      "@tomic/ui": ["../ui/src/index.ts"],
+      "@tomic/ui/*": ["../ui/src/*"],
       "@tomic/react": ["../react/src/index.ts"],
       "@tomic/lib": ["../lib/src/index.ts"],
-      "@tomic/lib/calendar-recurrence.js": ["../lib/src/calendar-recurrence.ts"],
+      "@tomic/lib/calendar-recurrence.js": [
+        "../lib/src/calendar-recurrence.ts"
+      ],
       "@integration-host/import-records": ["../lib/src/import-records.ts"],
       "@integration-host/plugin-connection": [
         "../lib/src/plugin-connection.ts"
       ],
-      "@integration-host/plugin-reconcile": [
-        "../lib/src/plugin-reconcile.ts"
-      ],
+      "@integration-host/plugin-reconcile": ["../lib/src/plugin-reconcile.ts"],
       "@integration-host/navigation": ["./src/helpers/navigation.tsx"],
-      "@integration-host/runScript": [
-        "./src/chunks/PluginRuns/runScript.ts"
-      ],
+      "@integration-host/runScript": ["./src/chunks/PluginRuns/runScript.ts"],
       "@integration-host/RunPluginDialog": [
         "./src/chunks/PluginRuns/RunPluginDialog.tsx"
       ],
       "@integration-host/table/createTableFromSpec": [
-        "./src/chunks/TablePage/createTableFromSpec.ts"
+        "../table-page/src/TablePage/createTableFromSpec.ts"
       ],
       "@integration-host/table/tableTemplates": [
-        "./src/chunks/TablePage/tableTemplates.ts"
+        "../table-page/src/TablePage/tableTemplates.ts"
       ],
       "@components/*": ["./src/components/*"],
       "@views/*": ["./src/views/*"],

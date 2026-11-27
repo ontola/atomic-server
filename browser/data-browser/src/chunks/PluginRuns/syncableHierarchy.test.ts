@@ -2,18 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { Datatype } from '@tomic/lib';
 import { syncableHierarchySchema } from './syncableHierarchy';
 
-describe('stored GitHub discovery vocabulary', () => {
-  it('stores typed display metadata without adding custom-view columns to raw owner/repository tables', () => {
+describe('stored integration discovery vocabulary', () => {
+  it('leaves record fields to the catalog schema and keeps view metadata separate', () => {
     const schema = syncableHierarchySchema();
-    for (const name of ['syncable-owner', 'syncable-repository'])
-      expect(
-        schema.classes.find(row => row.shortname === name)?.recommends,
-      ).toEqual(['name']);
+    expect(
+      schema.classes.find(row => row.shortname === 'syncable-record')
+        ?.recommends,
+    ).toEqual(['name']);
     for (const [name, datatype] of [
-      ['syncable-repository-count', Datatype.INTEGER],
-      ['syncable-repository-private', Datatype.BOOLEAN],
-      ['syncable-repository-has-issues', Datatype.BOOLEAN],
-      ['syncable-repository-open-issues', Datatype.INTEGER],
       ['syncable-collection-view', Datatype.JSON],
       ['syncable-open-target', Datatype.ATOMIC_URL],
     ])

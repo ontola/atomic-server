@@ -5,7 +5,7 @@ import { IconType } from 'react-icons';
 import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { paths } from '../../routes/paths';
-import { Button } from '../Button';
+import { Button } from '@tomic/ui/components/Button';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
 export interface InstanceButtonBaseProps {
@@ -36,7 +36,7 @@ export function Base({
   const handleClick = useCallback(() => {
     if (!agent) {
       toast.error('You need to be logged in to create new things');
-      navigate(paths.agentSettings);
+      navigate(paths.accountSettings);
 
       return;
     }

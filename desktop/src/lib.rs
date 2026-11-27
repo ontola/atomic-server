@@ -1,5 +1,6 @@
 mod menu;
 mod system_tray;
+mod updates;
 // The NFS virtual drive is unix-only: `nfsserve` does not build for windows
 // (see the dependency note in Cargo.toml).
 #[cfg(unix)]
@@ -516,6 +517,9 @@ pub fn run() {
       .build(),
   );
 
+  #[cfg(feature = "updater")]
+  let builder = builder.plugin(updates::init());
+
   let node = std::sync::Arc::new(EmbeddedNode::default());
   let node_for_server = node.clone();
 
@@ -536,7 +540,9 @@ pub fn run() {
       virtual_drive_start,
       virtual_drive_stop,
       virtual_drive_status,
-      virtual_drive_open
+      virtual_drive_open,
+      updates::pending_update,
+      updates::install_update
     ]);
   #[cfg(not(unix))]
   let builder = builder.invoke_handler(tauri::generate_handler![
@@ -545,7 +551,9 @@ pub fn run() {
     fetch_workspace,
     vault_export,
     vault_commit_segment,
-    vault_import
+    vault_import,
+    updates::pending_update,
+    updates::install_update
   ]);
 
   builder
@@ -630,8 +638,14 @@ pub fn run() {
         }
       });
 
+      #[cfg(feature = "updater")]
+      updates::watch(app.handle().clone());
+
       let menu = crate::menu::build(app.handle())?;
       app.handle().set_menu(menu)?;
+      app
+        .handle()
+        .on_menu_event(|app, event| crate::menu::on_event(app, event.id().as_ref()));
       system_tray::setup(app, &config)?;
 
       Ok(())

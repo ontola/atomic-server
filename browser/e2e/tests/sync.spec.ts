@@ -5,6 +5,7 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getDevDriveSecret,
+  goOffline,
   waitForClientDbFlush,
   waitForClientDbReady,
   waitForSearchIndex,
@@ -199,6 +200,7 @@ test.describe('sync', () => {
     page,
     context,
     browser,
+    browserDiagnostics,
   }) => {
     test.slow();
 
@@ -261,7 +263,7 @@ test.describe('sync', () => {
     // down the open one, so the store's `serverConnected` flag won't flip
     // until something forces a close. Closing here also halts auto-retry
     // (close() sets `_closed=true`) so the backoff doesn't pile up.
-    await context.setOffline(true);
+    await goOffline(context, browserDiagnostics);
     await page.evaluate(() => {
       window.store.getDefaultWebSocket()?.close();
     });
@@ -378,9 +380,9 @@ test.describe('sync', () => {
     // 5. Open a fresh browser context (simulates another device)
     const context2 = await browser.newContext();
     const page2 = await context2.newPage();
-    await page2.goto(`${FRONTEND_URL}/app/agent`);
+    await page2.goto(`${FRONTEND_URL}/app/settings?section=account`);
 
-    // /app/agent redirects signed-out users to the canonical sign-in form.
+    // The account section redirects signed-out users to the canonical sign-in form.
     // The flow signs in as soon as the secret parses.
     const secretField = page2.getByLabel('Agent secret');
     // This is the first thing asked of a brand new context, so it is really

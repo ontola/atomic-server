@@ -3,7 +3,133 @@ use std::collections::HashMap;
 use crate::{client::search::SearchOpts, urls, Db, Resource, Storelike, Value};
 use ntest::timeout;
 
-use super::{index_resource, query, unindex_subject};
+use super::{body_text, index_resource, query, unindex_subject};
+
+#[test]
+fn body_text_reuses_live_state_and_preserves_snapshot_fallback() {
+    let doc = crate::loro::AtomicLoroDoc::new();
+    doc.doc()
+        .get_text("documentContent")
+        .insert(0, "original body")
+        .unwrap();
+    doc.doc().commit();
+    let snapshot = doc.export_snapshot();
+
+    // A shallow resource only carries bytes; indexing must still read its body.
+    let mut shallow = Resource::new("atomic:search-shallow".into());
+    shallow.insert_propval_raw(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot.clone()));
+    assert_eq!(body_text(&shallow), "original body");
+
+    // Sync imports hold both a loaded doc and the snapshot it came from.
+    let mut live = Resource::new("atomic:search-live".into());
+    live.apply_state_doc_with_snapshot(doc, snapshot.clone())
+        .unwrap();
+    assert_eq!(body_text(&live), "original body");
+    let vv = live.loaded_state_doc().unwrap().oplog_vv();
+    assert_eq!(body_text(&live), "original body");
+    assert_eq!(live.loaded_state_doc().unwrap().oplog_vv(), vv);
+    live.live_doc()
+        .unwrap()
+        .doc()
+        .get_text("documentContent")
+        .insert(0, "updated ")
+        .unwrap();
+    assert_eq!(body_text(&live), "updated original body");
+
+    // Legacy setters can create a properties-only live doc beside body bytes.
+    let mut legacy = Resource::new("atomic:search-legacy".into());
+    legacy
+        .set_unsafe(urls::NAME.into(), Value::String("Title".into()))
+        .unwrap();
+    legacy.insert_propval_raw(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+    assert_eq!(body_text(&legacy), "original body");
+    legacy.insert_propval_raw(urls::LORO_UPDATE.into(), Value::LoroDoc(vec![0]));
+    assert_eq!(body_text(&legacy), "");
+    assert_eq!(body_text(&Resource::new("atomic:search-empty".into())), "");
+}
+
+#[test]
+fn body_text_preserves_prosemirror_precedence_in_loaded_state() {
+    let doc = crate::loro::AtomicLoroDoc::new();
+    doc.doc()
+        .get_text("documentContent")
+        .insert(0, "legacy body")
+        .unwrap();
+    let pm = doc.doc().get_map("doc");
+    pm.insert("nodeName", "doc").unwrap();
+    let children = pm
+        .insert_container("children", loro::LoroList::new())
+        .unwrap();
+    let paragraph = children.insert_container(0, loro::LoroMap::new()).unwrap();
+    paragraph.insert("nodeName", "paragraph").unwrap();
+    paragraph
+        .insert_container("children", loro::LoroList::new())
+        .unwrap()
+        .insert(0, "rich text body")
+        .unwrap();
+    doc.commit();
+    let mut resource = Resource::new("atomic:search-prosemirror".into());
+    resource.apply_state_doc(doc).unwrap();
+    assert_eq!(body_text(&resource), "rich text body");
+}
+
+// Diagnostic only: no timing assertion, signing, storage or network work.
+// Run with `cargo test -p atomic_lib --features db-redb --lib
+// search::tests::measure_body_text_state_reuse -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn measure_body_text_state_reuse() {
+    type Extractor = fn(&Resource) -> String;
+    fn previous_body_text(resource: &Resource) -> String {
+        if let Some(snapshot) = resource.materialized_state() {
+            if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                let text = doc.extract_document_plain_text();
+                if !text.is_empty() {
+                    return text;
+                }
+            }
+        }
+        if let Ok(Value::LoroDoc(snapshot)) = resource.get(urls::LORO_UPDATE) {
+            if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(snapshot) {
+                return doc.extract_document_plain_text();
+            }
+        }
+        String::new()
+    }
+
+    for has_body in [false, true] {
+        let doc = crate::loro::AtomicLoroDoc::new();
+        doc.set_property(urls::NAME, &Value::String("Fixture title".into()))
+            .unwrap();
+        if has_body {
+            doc.doc()
+                .get_text("documentContent")
+                .insert(0, &"searchable document text ".repeat(100))
+                .unwrap();
+        }
+        doc.commit();
+        let mut resource = Resource::new("atomic:search-measure".into());
+        resource.apply_state_doc(doc).unwrap();
+        assert_eq!(previous_body_text(&resource), body_text(&resource));
+        for round in 0..4 {
+            let paths: [(&str, Extractor); 2] = if round % 2 == 0 {
+                [("previous", previous_body_text), ("reuse", body_text)]
+            } else {
+                [("reuse", body_text), ("previous", previous_body_text)]
+            };
+            for (name, extract) in paths {
+                let start = std::time::Instant::now();
+                for _ in 0..2_000 {
+                    std::hint::black_box(extract(std::hint::black_box(&resource)));
+                }
+                eprintln!(
+                    "body={has_body} round={round} {name}: {:?} / 2000 extractions",
+                    start.elapsed()
+                );
+            }
+        }
+    }
+}
 
 async fn setup_store(label: &str) -> (Db, String) {
     let store = Db::init_temp(&format!("fts_{label}_{}", crate::utils::random_string(6)))

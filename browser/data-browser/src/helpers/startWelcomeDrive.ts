@@ -1,6 +1,8 @@
 import { type Store } from '@tomic/react';
+import { preferencesSchema } from '@tomic/lib';
 import { TEMPLATE_CATALOG } from '../chunks/Templates/catalog';
 import { planTemplate } from '../chunks/Templates/model';
+import { welcomeTemplate } from '../chunks/Templates/welcome';
 import { onboardingKeys } from '../hooks/useOnboardingProgress';
 
 /**
@@ -17,8 +19,8 @@ export async function startWelcomeDrive(
 ): Promise<{ drive: string; landing: string }> {
   const { instantiateTemplate } =
     await import('../chunks/Templates/instantiate');
-  const template = TEMPLATE_CATALOG.find(t => t.id === 'welcome')!;
-  const plan = planTemplate(template, TEMPLATE_CATALOG, true);
+  // Built now, so the title, names and text are in the current language.
+  const plan = planTemplate(welcomeTemplate(), TEMPLATE_CATALOG, true);
   const drive = await store.createDrive(plan.title, {
     personal: false,
     localOnly: store.isLocalOnlyDrive(personalDrive),
@@ -29,9 +31,23 @@ export async function startWelcomeDrive(
   });
 
   await store.notifyResourceManuallyCreated(drive);
+  // The notification also tells a mounting title to open its editor with the
+  // placeholder selected, which is right after "New drive" but too eager for
+  // someone just arriving. Other listeners (collections, backup) already ran.
+  store.consumeRecentlyCreated(drive.subject);
 
   // Remembered so the Getting started card can tell it from a project drive
-  // after it is renamed.
+  // after it is renamed: on the personal drive, so every device knows, and
+  // locally as the fallback if that write fails.
+  try {
+    const home = await store.getResource(personalDrive);
+
+    await home.set(preferencesSchema.properties.welcomeDrive, drive.subject);
+    await home.save();
+  } catch {
+    /* The local copy below is then moved onto the drive by the next load. */
+  }
+
   try {
     localStorage.setItem(
       onboardingKeys.welcomeDrive(store.getAgent()?.subject),

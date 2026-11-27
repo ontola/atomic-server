@@ -1,6 +1,6 @@
 import { FaPlus } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { GridCard } from '../views/FolderPage/GridItem/components';
+import { GridCard } from '@tomic/resource-ui/views/FolderPage/GridItem/components';
 
 export interface NewCardProps {
   onClick: (e: React.MouseEvent) => void;

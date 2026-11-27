@@ -11,7 +11,7 @@ import {
 } from '@tomic/react';
 import { ruleSourceKey } from './builtinSyncIdentity.js';
 import { ShowRoute } from '../../routes/ShowRoute';
-import { getTableDrive } from '../TablePage/tableDrive';
+import { getTableDrive } from '@tomic/table-page/TablePage/tableDrive';
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   parseSyncableSourceConfig,

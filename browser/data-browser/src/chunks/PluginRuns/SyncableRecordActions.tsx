@@ -10,7 +10,7 @@ import { Button } from '@components/Button';
 import { ErrorLook } from '@components/ErrorLook';
 import { Row } from '@components/Row';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { getTableDrive } from '../TablePage/tableDrive';
+import { getTableDrive } from '@tomic/table-page/TablePage/tableDrive';
 import {
   resolveFlatSyncableRecordActions,
   type FlatSyncableRowAction,

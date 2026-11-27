@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "atomic_lib"
-version = "0.41.0-beta.8"
+version = "0.41.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -291,6 +291,7 @@ dependencies = [
  "ed25519-dalek",
  "evalexpr",
  "futures",
+ "getrandom 0.3.4",
  "getrandom 0.4.2",
  "hex",
  "hostname",

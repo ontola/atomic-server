@@ -167,10 +167,9 @@ export function createSyncApp(store, context) {
     return changed.length > 0 || removed.length > 0;
   }
 
-  const legacyMatches = new Map();
+  const adoptionMatches = new Map();
 
-  async function legacyNode(key, config, existingSubject) {
-    const desired = JSON.parse(key);
+  async function adoptableNode(key, existingSubject) {
     const matches = [];
 
     for (const alias of context.flatIdentityAliases ?? []) {
@@ -193,80 +192,24 @@ export function createSyncApp(store, context) {
           'The older entity source changed; no duplicate was created',
         );
       matches.push(row);
-      legacyMatches.set(row.subject, alias);
-    }
-
-    for (const alias of context.legacySources ?? []) {
-      if (alias.subject === existingSubject) continue;
-      if (
-        alias.kind !== desired.kind ||
-        !same(alias.collection, desired.collection) ||
-        !same(alias.remoteId, desired.remoteId)
-      )
-        continue;
-      if (
-        alias.principal
-          ? !same(principalIdentity(alias.principal), desired.principal)
-          : !alias.connectionId || alias.connectionId !== config?.connectionId
-      )
-        continue;
-
-      if (desired.parentSourceKeyHash) {
-        const parent = alias.parentSourceSubject
-          ? await store.getResource(alias.parentSourceSubject)
-          : undefined;
-        if (parent?.error)
-          throw new Error('The legacy source parent could not be validated');
-        const parentKey = parent
-          ? parent.get(property('syncable-source-key'))
-          : alias.parentSourceKey;
-        if (!parentKey)
-          throw new Error(
-            'The legacy source parent needs adoption before syncing',
-          );
-        if (sourceConfigFingerprint(parentKey) !== desired.parentSourceKeyHash)
-          continue;
-      }
-
-      const row = await store.getResource(alias.subject);
-      if (
-        row.error ||
-        (alias.sourceKey !== undefined &&
-          row.get(property('syncable-source-key')) !== alias.sourceKey) ||
-        (alias.localId !== undefined &&
-          row.get(core.localId) !== alias.localId) ||
-        (alias.sourceConfigFingerprint !== undefined &&
-          sourceConfigFingerprint(
-            row.get(property('syncable-source-config')),
-          ) !== alias.sourceConfigFingerprint) ||
-        (alias.remoteIdProperty !== undefined &&
-          row.get(alias.remoteIdProperty) !== alias.remoteId)
-      )
-        throw new Error(
-          'The legacy source changed or could not be validated; no duplicate was created',
-        );
-      matches.push(row);
-      legacyMatches.set(row.subject, alias);
+      adoptionMatches.set(row.subject, alias);
     }
 
     if (new Set(matches.map(row => row.subject)).size > 1)
-      throw new Error('The legacy source identity is ambiguous');
+      throw new Error('The saved source identity is ambiguous');
 
     return matches[0];
   }
 
-  async function findNode(key, expectedClass, kind, config = context) {
-    const aliases = context.identityAliases?.[key] ?? [];
+  async function findNode(key, expectedClass, kind) {
+    const matches = await resources({
+      property: property('syncable-source-key'),
+      value: key,
+    });
+    if (matches.length > 1) throw new Error('The source identity is ambiguous');
+    const row = matches[0];
 
-    for (const candidate of [key, ...aliases]) {
-      const matches = await resources({
-        property: property('syncable-source-key'),
-        value: candidate,
-      });
-      if (matches.length > 1)
-        throw new Error('The source identity is ambiguous');
-      if (!matches.length) continue;
-      const row = matches[0];
+    if (row) {
       const savedConfig = row.get(property('syncable-source-config'));
       let referenceIdentityProven = false;
 
@@ -306,36 +249,33 @@ export function createSyncApp(store, context) {
         entitySourceKey(savedConfig) === key;
       if (
         (!row.hasClasses(expectedClass) && !partialReference) ||
-        (!aliases.includes(candidate) &&
-          row.get(property('syncable-node-kind')) !== kind)
+        row.get(property('syncable-node-kind')) !== kind
       )
         throw new Error('The source identity does not match its resource');
 
-      if (candidate === key) {
-        const desired = JSON.parse(key);
+      const desired = JSON.parse(key);
 
-        if (
-          desired.version === 3 &&
-          ['collection', 'record'].includes(desired.kind)
-        ) {
-          const saved = row.get(property('syncable-source-config'));
-          const expected =
-            saved?.kind === 'record' && saved.entityIdentity
-              ? entitySourceKey({
-                  ...saved,
-                  entityIdentity: saved.entityIdentity,
-                })
-              : saved?.kind === 'collection'
-                ? entityTableKey(saved)
-                : undefined;
-          if (expected !== key)
-            throw new Error(
-              'The full canonical entity identity does not match its saved key',
-            );
-        }
+      if (
+        desired.version === 3 &&
+        ['collection', 'record'].includes(desired.kind)
+      ) {
+        const saved = row.get(property('syncable-source-config'));
+        const expected =
+          saved?.kind === 'record' && saved.entityIdentity
+            ? entitySourceKey({
+                ...saved,
+                entityIdentity: saved.entityIdentity,
+              })
+            : saved?.kind === 'collection'
+              ? entityTableKey(saved)
+              : undefined;
+        if (expected !== key)
+          throw new Error(
+            'The full canonical entity identity does not match its saved key',
+          );
       }
 
-      if (await legacyNode(key, config, row.subject))
+      if (await adoptableNode(key, row.subject))
         throw new Error(
           'This account or collection has conflicting saved sources. Review its migration before syncing; all saved data was retained.',
         );
@@ -343,7 +283,7 @@ export function createSyncApp(store, context) {
       return row;
     }
 
-    return legacyNode(key, config);
+    return adoptableNode(key);
   }
 
   async function updateNode(
@@ -352,7 +292,7 @@ export function createSyncApp(store, context) {
     remove = [],
   ) {
     const migrated = row.get(property('syncable-source-key')) !== key;
-    const alias = legacyMatches.get(row.subject);
+    const alias = adoptionMatches.get(row.subject);
     const relocate =
       migrated &&
       alias?.reparentToLogicalParent &&
@@ -427,12 +367,7 @@ export function createSyncApp(store, context) {
   }
 
   async function ensureNode({ key, kind, parent, name, isA, values = {} }) {
-    let row = await findNode(
-      key,
-      isA[0],
-      kind,
-      values[property('syncable-source-config')],
-    );
+    let row = await findNode(key, isA[0], kind);
 
     if (row) {
       await updateNode(row, { key, kind, isA, values, parent });
@@ -453,32 +388,6 @@ export function createSyncApp(store, context) {
         same(item.principal, desired.principal),
     );
     if (block) throw new Error(block.message);
-    if (context.legacyMigrationBlocked)
-      throw new Error(
-        'Review the historical source warnings before creating another sync destination',
-      );
-
-    if (
-      kind === 'principal' &&
-      JSON.parse(key).principal.kind === 'authenticated'
-    ) {
-      for (const alias of context.legacySources ?? []) {
-        if (alias.kind !== 'principal' || alias.principal) continue;
-        const previous = await store.getResource(alias.subject);
-        const config = previous.get(property('syncable-source-config'));
-        const adopted =
-          !previous.error &&
-          config?.version === 2 &&
-          config.principal?.kind === 'authenticated' &&
-          previous.hasClasses(klass('syncable-principal')) &&
-          previous.get(property('syncable-source-key')) ===
-            identity({ kind: 'principal', principal: config.principal });
-        if (!adopted)
-          throw new Error(
-            'Reconnect the saved account before creating another account. Its existing data has been retained.',
-          );
-      }
-    }
 
     if (kind === 'collection' && desired.version === 3) {
       const previousTables = await resources({
@@ -645,10 +554,7 @@ export function createSyncApp(store, context) {
     );
 
     if (adoptionRules.length) {
-      const previous = await findNode(key, tableClass, 'collection', {
-        principal,
-        connectionId,
-      });
+      const previous = await findNode(key, tableClass, 'collection');
 
       if (previous) {
         for (const rule of adoptionRules) {
@@ -774,7 +680,6 @@ export function createSyncApp(store, context) {
         alias.entityTableSourceKey,
         tableClass,
         'collection',
-        config,
       );
       if (!table)
         throw new Error('Adopt the entity collection before its saved rows');
@@ -782,7 +687,6 @@ export function createSyncApp(store, context) {
         alias.canonicalSourceKey,
         rowClass(entityType(config.resource)),
         'record',
-        config,
       );
       if (!row)
         throw new Error(
@@ -1609,16 +1513,6 @@ export function createSyncApp(store, context) {
       saved.push(row);
     }
 
-    for (const alias of context.legacySources ?? []) {
-      if (
-        alias.kind !== 'principal' ||
-        saved.some(row => row.subject === alias.subject)
-      )
-        continue;
-      const row = await store.getResource(alias.subject);
-      if (!row.error) saved.push(row);
-    }
-
     return saved;
   }
 
@@ -1646,7 +1540,6 @@ export function createSyncApp(store, context) {
           identity({ kind: 'principal', principal: config.principal }),
           tableClass,
           'principal',
-          config,
         );
         if (await withinRoot(row.subject))
           await discoverCollections(row, config.principal, config.connectionId);
@@ -1913,7 +1806,7 @@ export async function view({ root, store }) {
 
   const controls = el('div', undefined, 'controls');
   const warnings = () =>
-    (context.legacyWarnings ?? [])
+    (context.adoptionWarnings ?? [])
       .filter(message => typeof message === 'string')
       .slice(0, 20)
       .map(message => {

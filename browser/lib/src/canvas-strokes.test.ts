@@ -84,4 +84,72 @@ describe('canvas-strokes', () => {
     // Still shaped like a stroke, so older readers do not choke.
     expect(strokeToJson(text).path).toEqual([[5, 6]]);
   });
+
+  it('round-trips shapes and arrows, keeping ids and bindings', ({
+    expect,
+  }) => {
+    const shape = {
+      color: 0xff000000,
+      width: 3,
+      path: [[10, 20]] as [number, number][],
+      kind: 'shape' as const,
+      id: 'abc123',
+      shape: 'ellipse' as const,
+      w: 160,
+      h: 90,
+      text: 'Hello',
+      size: 20,
+    };
+    const empty = { ...shape, id: 'def456', shape: 'rect' as const };
+    delete (empty as { text?: string }).text;
+    delete (empty as { size?: number }).size;
+    const arrow = {
+      color: 0xff000000,
+      width: 3,
+      path: [
+        [0, 0],
+        [50, 50],
+      ] as [number, number][],
+      kind: 'arrow' as const,
+      id: 'ar0001',
+      from: 'abc123',
+      to: 'def456',
+      bend: [4, -12] as [number, number],
+    };
+    const free = {
+      ...arrow,
+      id: 'ar0002',
+      from: undefined,
+      to: undefined,
+      bend: undefined,
+    };
+    const json = [shape, empty, arrow, free].map(strokeToJson);
+
+    expect(json[3]).not.toHaveProperty('from');
+    expect(json[3]).not.toHaveProperty('bend');
+    expect(parseCanvasStrokes(JSON.parse(JSON.stringify(json)))).toEqual([
+      shape,
+      empty,
+      arrow,
+      {
+        color: 0xff000000,
+        width: 3,
+        path: arrow.path,
+        kind: 'arrow',
+        id: 'ar0002',
+      },
+    ]);
+    // Older readers still find color, width and path.
+    expect(json[0].path).toEqual([[10, 20]]);
+  });
+
+  it('parses an arrow with fewer than two points as a plain stroke', ({
+    expect,
+  }) => {
+    const [s] = parseCanvasStrokes([
+      { color: 1, width: 1, path: [[1, 1]], kind: 'arrow' },
+    ]);
+
+    expect(s.kind).toBeUndefined();
+  });
 });

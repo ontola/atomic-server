@@ -7,7 +7,10 @@ import {
   useResource,
   useStore,
 } from '@tomic/react';
-import { VIEW_KINDS, type ViewKind } from '@chunks/TablePage/tableViewKinds';
+import {
+  VIEW_KINDS,
+  type ViewKind,
+} from '@tomic/table-page/TablePage/tableViewKinds';
 import {
   parseSyncableCollectionView,
   resolveSyncableCollectionView,

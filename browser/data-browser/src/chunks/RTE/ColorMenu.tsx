@@ -1,9 +1,9 @@
-import { Column, Row } from '@components/Row';
-import { useTipTapEditor } from './TiptapContext';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { useTipTapEditor } from '@tomic/resource-ui/chunks/RTE/TiptapContext';
 import { MdFormatColorFill, MdFormatColorText } from 'react-icons/md';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import styled from 'styled-components';
-import { transition } from '@helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 import { useState, useRef, useEffect } from 'react';
 import { useEditorState } from '@tiptap/react';
 import { FaPencil } from 'react-icons/fa6';

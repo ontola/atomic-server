@@ -1,7 +1,7 @@
-import Markdown from '@components/datatypes/Markdown';
+import Markdown from '@tomic/resource-ui/components/datatypes/Markdown';
 import styled from 'styled-components';
 import { FaBrain } from 'react-icons/fa6';
-import { Details } from '@components/Details';
+import { Details } from '@tomic/ui/components/Details';
 import { Shimmer } from '@components/Shimmer';
 import { PartSummary } from './PartSummary';
 

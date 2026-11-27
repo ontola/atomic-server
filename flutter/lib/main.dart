@@ -18,7 +18,9 @@ import 'package:atomic_chat/atomic_chat.dart'
         defaultAttachmentPicker;
 import 'assistant/atomic_assistant_api.dart';
 import 'assistant/file_attachment_picker.dart';
+import 'atomic/account_store.dart';
 import 'atomic/bridge_peer_link_backend.dart';
+import 'atomic/sign_in_link.dart';
 import 'bootstrap.dart';
 import 'perf_seed.dart';
 import 'screens/login_screen.dart';
@@ -257,6 +259,12 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(String uri) {
+    if (SignInLink.parse(uri,
+            portal: Uri.parse(AccountStore.defaultPortal)) !=
+        null) {
+      _pendingSignIn = _pendingSignIn.then((_) => _redeemSignInLink(uri));
+      return;
+    }
     final peer = PairScreen.parsePeerInfo(uri);
     if (peer == null) return;
     final nodeId = peer.nodeId;
@@ -267,6 +275,44 @@ class _AtomicAppState extends State<AtomicApp> with WidgetsBindingObserver {
         PairScreen.show(ctx, nodeId: nodeId);
       }
     });
+  }
+
+  Future<void> _pendingSignIn = Future<void>.value();
+
+  Future<bool> _confirmLinkedAccount(String address) async {
+    await WidgetsBinding.instance.endOfFrame;
+    final context = _navKey.currentContext;
+    if (!mounted || context == null || !context.mounted) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Link this account?'),
+            content: Text('Use $address as the linked account on this device?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Link account')),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _redeemSignInLink(String link) async {
+    try {
+      if (await AccountStore.redeemSignInLink(link,
+          confirmAccount: _confirmLinkedAccount)) {
+        _toasts.show('sign-in-link:ok', 'Signed in', icon: Icons.check);
+      }
+    } on StateError catch (e) {
+      _toasts.show('sign-in-link:error', e.message, icon: Icons.error_outline);
+    } catch (_) {
+      _toasts.show('sign-in-link:error', 'Could not sign in with the link',
+          icon: Icons.error_outline);
+    }
   }
 
   void _onLoggedIn() {

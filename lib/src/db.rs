@@ -34,6 +34,8 @@ mod query_index;
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod recovery;
 pub mod redb_store;
+#[cfg(feature = "db")]
+pub mod snapshot_backend;
 pub mod website;
 pub mod write_log;
 /// The set of drives [`Db::migrate_messages_step`] may write chat log pages
@@ -54,6 +56,7 @@ mod v1_types;
 #[cfg(feature = "db-sled")]
 mod v2_types;
 mod val_prop_sub_index;
+pub mod version_vectors;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -823,6 +826,71 @@ impl Db {
         self.persist_replicated(resource, Some(snapshot)).await
     }
 
+    /// The `datatypes` tag a stored Property's datatype implies, for a value
+    /// the doc left untagged (a server doc, or a property the signing tab had
+    /// not loaded). `None` when the Property is not stored here, or its
+    /// datatype has no tag (numbers and booleans are not ambiguous).
+    fn property_tag(&self, property: &str) -> Option<&'static str> {
+        let (_, propvals) = self.get_propvals_canonical(property).ok()?;
+        let datatype = propvals.get(urls::DATATYPE_PROP)?.to_string();
+        Some(match crate::datatype::match_datatype(&datatype) {
+            crate::datatype::DataType::String => "string",
+            crate::datatype::DataType::Markdown => "markdown",
+            crate::datatype::DataType::Slug => "slug",
+            crate::datatype::DataType::Uri => "uri",
+            crate::datatype::DataType::Date => "date",
+            crate::datatype::DataType::Timestamp => "timestamp",
+            crate::datatype::DataType::AtomicUrl => "atomicUrl",
+            crate::datatype::DataType::ResourceArray => "resourceArray",
+            crate::datatype::DataType::Json => "json",
+            _ => return None,
+        })
+    }
+
+    /// Store a resource from its Loro snapshot alone: the row, the index
+    /// entries and the stored snapshot are all derived from the doc in one
+    /// transaction (see [`Resource::from_loro_snapshot`]). `last_commit` is the
+    /// one derived value the doc cannot hold. Errors when `snapshot` does not
+    /// import.
+    pub async fn persist_replicated_loro_snapshot(
+        &self,
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<&str>,
+    ) -> AtomicResult<()> {
+        let resource = Resource::from_loro_snapshot(
+            subject,
+            snapshot.clone(),
+            last_commit,
+            Some(&self.lenses()),
+            Some(&|prop: &str| self.property_tag(prop)),
+        )?;
+        self.persist_replicated_resource_with_snapshot(&resource, snapshot)
+            .await
+    }
+
+    /// [`Self::persist_replicated_loro_snapshot`] for many resources in one
+    /// write, as [`Self::persist_replicated_resources`]. Every snapshot is
+    /// checked before anything is written.
+    pub async fn persist_replicated_loro_snapshots(
+        &self,
+        puts: Vec<(String, Vec<u8>, Option<String>)>,
+    ) -> AtomicResult<()> {
+        let lenses = self.lenses();
+        let mut entries = Vec::with_capacity(puts.len());
+        for (subject, snapshot, last_commit) in puts {
+            let resource = Resource::from_loro_snapshot(
+                &subject,
+                snapshot.clone(),
+                last_commit.as_deref(),
+                Some(&lenses),
+                Some(&|prop: &str| self.property_tag(prop)),
+            )?;
+            entries.push((resource, Some(snapshot)));
+        }
+        self.persist_replicated_resources(entries).await
+    }
+
     /// [`Self::persist_replicated_resource_with_snapshot`] for many resources in
     /// one write. Each resource costs the same index entries as on its own, but
     /// they share one commit, so a page the batch touches repeatedly (a
@@ -1312,6 +1380,26 @@ impl Db {
         policy: &compaction::CompactionPolicy,
         cache_bytes: Option<usize>,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_key(path, base_domain, uploads_path, policy, cache_bytes, None)
+            .await
+    }
+
+    /// `init_redb_file_with_cache`, with the file encrypted at rest under
+    /// `key` when given (XChaCha20-Poly1305, see
+    /// [`db::encrypted_backend::EncryptedBackend`]). A new store is created
+    /// encrypted; an existing one must already be encrypted and match `key`.
+    /// A plaintext file is refused, not migrated: ask
+    /// [`db::recovery::file_encryption`] first. Startup compaction does not
+    /// run on an encrypted file.
+    #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_key(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
+        key: Option<&[u8; 32]>,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -1354,6 +1442,13 @@ impl Db {
                 }
             }
 
+            if sled_path.exists() && key.is_some() {
+                return Err(
+                    "A sled store cannot be migrated into an encrypted redb store; \
+                            migrate it without a key first"
+                        .into(),
+                );
+            }
             if sled_path.exists() {
                 Self::migrate_from_sled(
                     &sled_path,
@@ -1371,7 +1466,7 @@ impl Db {
         let _ = uploads_path;
 
         let (redb_store, compaction) =
-            redb_store::RedbStore::new_file_with_options(&redb_path, policy, cache_bytes)?;
+            redb_store::RedbStore::new_file_with_key(&redb_path, policy, cache_bytes, key)?;
 
         let store = Db::from_kv(path.to_path_buf(), Arc::new(redb_store), base_domain);
 
@@ -1566,6 +1661,24 @@ impl Db {
         Db::from_kv(std::path::PathBuf::new(), Arc::new(redb_store), base_domain)
             .open()
             .await
+    }
+
+    /// Main-thread variant of [`Db::init_redb_opfs`]: the database lives in
+    /// memory, seeded from `bytes` (see [`snapshot_backend::snapshot_load`]).
+    /// Returns the Db and a handle to save it with
+    /// [`snapshot_backend::flush_snapshot`], which callers should invoke on
+    /// `visibilitychange` (hidden) and `pagehide`.
+    #[cfg(feature = "db")]
+    pub async fn init_redb_snapshot(
+        base_domain: Option<String>,
+        bytes: Option<Vec<u8>>,
+        encryption_key: Option<&[u8; 32]>,
+    ) -> AtomicResult<(Db, snapshot_backend::SnapshotBackend)> {
+        let (store, handle) = redb_store::RedbStore::new_snapshot(bytes, encryption_key)?;
+        let db = Db::from_kv(std::path::PathBuf::new(), Arc::new(store), base_domain)
+            .open()
+            .await?;
+        Ok((db, handle))
     }
 
     /// Creates a clone of the store with a different base_domain.
@@ -2376,12 +2489,44 @@ impl Db {
         Some(Subject::new_local(&format!("/agents/{pubkey}"), None))
     }
 
+    /// Whether `url` is served from this store's own authority (scheme
+    /// ignored), i.e. a miss must not be answered by fetching it.
+    fn is_own_authority(&self, url: &str) -> bool {
+        let strip = |s: &str| {
+            s.trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string()
+        };
+        self.get_base_domain()
+            .as_deref()
+            .map(|base| {
+                let base_authority = strip(base);
+                let resolved = strip(url);
+                resolved == base_authority || resolved.starts_with(&format!("{}/", base_authority))
+            })
+            .unwrap_or(false)
+    }
+
+    /// Resolves a subject for a client request (HTTP handlers). Never makes the
+    /// server fetch another host on a caller's behalf: an external subject is
+    /// answered from the local store or refused.
     pub async fn fetch_resource_with_did_fallback(
         &self,
         subject: &Subject,
         origin: &str,
         for_agent: &ForAgent,
     ) -> AtomicResult<ResourceResponse> {
+        if !subject.is_local()
+            && !self.is_own_authority(subject.as_str())
+            && !self.has_stored_resource(subject)
+        {
+            return Err(AtomicError::not_found(format!(
+                "{} is not hosted here. This server does not fetch external resources for requests.",
+                subject.as_str()
+            )));
+        }
+
         if subject.is_blob_did() {
             if let Some(hash) = subject.blob_hash_hex() {
                 let target = format!("{}/download/files/{}", origin.trim_end_matches('/'), hash);
@@ -5000,11 +5145,11 @@ impl Storelike for Db {
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
-                    return Err(format!(
+                    return Err(crate::AtomicError::from(format!(
                         "Destroy commit for {} was already applied here; refusing replay",
                         commit.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::DESTROY_SETTLED));
                 }
             }
         }
@@ -5594,21 +5739,7 @@ impl Storelike for Db {
             // as `https://` must not self-fetch when served over `http://`.
             let base_domain = self.get_base_domain();
             let resolved_subject_obj = Subject::from_raw(&resolved_url, base_domain.as_deref());
-            let is_own_authority = base_domain
-                .as_deref()
-                .map(|base| {
-                    let strip = |s: &str| {
-                        s.trim_start_matches("https://")
-                            .trim_start_matches("http://")
-                            .trim_end_matches('/')
-                            .to_string()
-                    };
-                    let base_authority = strip(base);
-                    let resolved = strip(&resolved_url);
-                    resolved == base_authority
-                        || resolved.starts_with(&format!("{}/", base_authority))
-                })
-                .unwrap_or(false);
+            let is_own_authority = self.is_own_authority(&resolved_url);
 
             if resolved_subject_obj.is_local() || is_own_authority {
                 return self

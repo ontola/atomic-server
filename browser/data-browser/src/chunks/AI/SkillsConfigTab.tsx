@@ -1,16 +1,16 @@
 import { useId, useState } from 'react';
 import { styled } from 'styled-components';
-import { Row, Column } from '@components/Row';
+import { Row, Column } from '@tomic/ui/components/Row';
 import { FaPlus, FaPen, FaTrash } from 'react-icons/fa6';
-import { Button } from '@components/Button';
-import { IconButton } from '@components/IconButton/IconButton';
-import { SkeletonButton } from '@components/SkeletonButton';
-import { MarkdownInput } from '@components/forms/MarkdownInput';
-import { Checkbox } from '@components/forms/Checkbox';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { SkeletonButton } from '@tomic/ui/components/SkeletonButton';
+import { MarkdownInput } from '@tomic/resource-ui/components/forms/MarkdownInput';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 import { AgentSkill, useSkillsConfig } from './skills/skill';
-import Field from '@components/forms/Field';
-import { Input } from '@components/forms/InputStyles';
-import { stringToSlug } from '@helpers/stringToSlug';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Input } from '@tomic/ui/components/forms/InputStyles';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 import { ConfigEditorDialog } from './ConfigEditorDialog';
 
 // Helper function to generate a unique ID

@@ -301,3 +301,76 @@ async fn a_current_state_checkpoint_is_smaller_and_restores() {
         .await
         .expect("a shallow checkpoint restores");
 }
+
+/// The person's profile travels with their drive.
+///
+/// An agent resource has no parent, so a drive walk never reaches it; the
+/// export adds the agents the drive grants `read`/`write` to. This runs it the
+/// way the browser does: rows written with `putResource` in the new `atomic:`
+/// spelling, exported through the wasm boundary, imported into an empty store.
+/// The sidebar's name row reads that profile on a restored device.
+#[wasm_bindgen_test]
+async fn the_drive_owners_profile_is_restored_with_the_drive() {
+    use wasm_bindgen::JsCast;
+
+    let agent = "atomic:agent:0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a";
+    let drive = "did:ad:vaultprofiletest";
+    let db = ClientDb::new_in_memory(None).await.expect("in-memory db");
+
+    db.put_resource(&format!(
+        r#"{{"@id":"{agent}","https://atomicdata.dev/properties/isA":["https://atomicdata.dev/classes/Agent"],"https://atomicdata.dev/properties/publicKey":"0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a","https://atomicdata.dev/properties/name":"Alice Returning"}}"#
+    ))
+    .await
+    .expect("seed the profile");
+    db.put_resource(&format!(
+        r#"{{"@id":"{drive}","https://atomicdata.dev/properties/name":"Mine","https://atomicdata.dev/properties/read":["{agent}"],"https://atomicdata.dev/properties/write":["{agent}"]}}"#
+    ))
+    .await
+    .expect("seed the drive");
+
+    let key = vault_generate_key();
+    let out = db
+        .vault_export(
+            drive,
+            &key,
+            1,
+            PSEUDONYM,
+            DEVICE,
+            1,
+            1,
+            false,
+            JsValue::UNDEFINED,
+            None,
+        )
+        .await
+        .expect("export");
+    let sealed = js_sys::Reflect::get(&out, &JsValue::from_str("sealed"))
+        .expect("sealed bytes")
+        .unchecked_into::<js_sys::Uint8Array>();
+    let object_key = js_sys::Reflect::get(&out, &JsValue::from_str("objectKey"))
+        .expect("object key")
+        .as_string()
+        .expect("object key is a string");
+
+    let fresh = ClientDb::new_in_memory(None).await.expect("in-memory db");
+    let object = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &object,
+        &JsValue::from_str("objectKey"),
+        &JsValue::from_str(&object_key),
+    )
+    .unwrap();
+    js_sys::Reflect::set(&object, &JsValue::from_str("sealed"), &sealed).unwrap();
+    let objects = js_sys::Array::of1(&object).into();
+    fresh
+        .vault_import(&key, 1, PSEUDONYM, DEVICE, objects)
+        .await
+        .expect("restore");
+
+    let restored = fresh.get_resource(agent).await.expect("lookup");
+    let json = restored.as_string().unwrap_or_default();
+    assert!(
+        json.contains("Alice Returning"),
+        "the restored store must hold the owner's profile, got: {json}"
+    );
+}

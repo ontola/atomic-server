@@ -4,12 +4,12 @@ import {
   DialogTitle,
   DialogContent,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { useStore } from '@tomic/react';
-import { Button, ButtonSubtle } from '@components/Button';
-import Field from '@components/forms/Field';
+import { Button, ButtonSubtle } from '@tomic/ui/components/Button';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import type { WebsiteArtifact } from './renderWebsite';
 import {
   hostingRequest,

@@ -489,6 +489,35 @@ mod tests {
         assert_eq!(a.len(), 64, "blake3 hex");
     }
 
+    /// App creation and endpoint caching must not need the public vocabulary
+    /// host. A missing Property otherwise turns validation into a network read.
+    #[tokio::test]
+    async fn app_bootstrap_vocabulary_is_stored_locally() {
+        use crate::datatype::DataType;
+
+        let store = Db::init_temp("bundled_app_bootstrap_vocabulary")
+            .await
+            .unwrap();
+        for (subject, datatype) in [
+            (urls::RESPONSE_MESSAGE, DataType::String),
+            (urls::STATUS, DataType::Integer),
+            (
+                "https://atomicdata.dev/ontology/data-browser/property/resources",
+                DataType::ResourceArray,
+            ),
+        ] {
+            assert!(
+                store.has_stored_resource(&subject.into()),
+                "{subject} must exist before get_property can fetch anything"
+            );
+            assert_eq!(
+                store.get_property(subject).await.unwrap().data_type,
+                datatype
+            );
+        }
+        assert!(store.has_stored_resource(&urls::ENDPOINT_RESPONSE.into()));
+    }
+
     /// A store seeded by an older build (different fingerprint) picks up a
     /// default it lacks on the next open — no `--repopulate-defaults` needed.
     #[tokio::test]

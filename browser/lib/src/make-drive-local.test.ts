@@ -1,6 +1,7 @@
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import type { ClientDbWorker } from './client-db.js';
 import { Resource } from './resource.js';
+import type { WSClient } from './websockets.js';
 import { testStore } from './test-store.js';
 
 const DRIVE = 'https://example.com/drive/abc';
@@ -69,6 +70,27 @@ describe('makeDriveLocal preconditions', () => {
     await expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(
       /Connect to a server/,
     );
+  });
+
+  it('waits for a running sync before reading the server inventory', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    store.setClientDb(dbStub(true));
+    const inventory = vi.fn().mockRejectedValue(new Error('inventory reached'));
+    vi.spyOn(store, 'getDefaultWebSocket').mockReturnValue({
+      readyState: WebSocket.OPEN,
+      driveInventory: inventory,
+    } as unknown as WSClient);
+    store.startDriveSync();
+    const completion = expect(store.makeDriveLocal(DRIVE)).rejects.toThrow(
+      'inventory reached',
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(inventory).not.toHaveBeenCalled();
+    expect(store.isLocalOnlyDrive(DRIVE)).toBe(false);
+    store.finishDriveSync(DRIVE, 1, Date.now());
+    await completion;
   });
 
   it('waits for a database that attaches after the click', async ({

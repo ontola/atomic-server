@@ -167,6 +167,26 @@ impl RedbStore {
         Self,
         Result<super::compaction::CompactionRecord, super::compaction::Skip>,
     )> {
+        Self::new_file_with_key(path, policy, cache_bytes, None)
+    }
+
+    /// [`Self::new_file_with_options`], encrypted at rest when `key` is set
+    /// (see [`super::encrypted_backend::EncryptedBackend`]). A missing or
+    /// empty file is created encrypted; an existing one must be encrypted
+    /// and match `key`, so a plaintext file is never silently overwritten or
+    /// read as ciphertext. Startup compaction is skipped for an encrypted
+    /// file: its physical layout is not redb's, so the measurements and the
+    /// size thresholds do not apply.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_key(
+        path: &std::path::Path,
+        policy: &super::compaction::CompactionPolicy,
+        cache_bytes: Option<usize>,
+        key: Option<&[u8; 32]>,
+    ) -> AtomicResult<(
+        Self,
+        Result<super::compaction::CompactionRecord, super::compaction::Skip>,
+    )> {
         // `Database::create` with defaults uses a 1 GiB cache and the
         // slow full-scan repair path on any unclean shutdown. On a
         // multi-GB store that's 40+ seconds added to every boot
@@ -178,7 +198,10 @@ impl RedbStore {
         let open_guard = super::recovery::OpenFileGuard::acquire(path)?;
         let t = std::time::Instant::now();
         // A damaged file makes redb panic; this says so in an error instead.
-        let mut db = super::recovery::create_database_with_cache(path, cache_bytes)?;
+        let mut db = match key {
+            None => super::recovery::create_database_with_cache(path, cache_bytes)?,
+            Some(key) => super::recovery::create_encrypted_database(path, cache_bytes, key)?,
+        };
         let open_duration = t.elapsed();
         tracing::info!(
             "RedbStore::new_file: Database::create in {:?}",
@@ -187,8 +210,11 @@ impl RedbStore {
 
         // On the handle we already hold: the file lock is taken once, and
         // a bloated store is not opened a second time just to measure it.
-        let compaction =
-            super::compaction::run_startup_policy(&mut db, path, open_duration, policy);
+        let compaction = if key.is_some() {
+            Err(super::compaction::Skip::Disabled)
+        } else {
+            super::compaction::run_startup_policy(&mut db, path, open_duration, policy)
+        };
 
         // Create all tables upfront
         let t = std::time::Instant::now();
@@ -250,6 +276,51 @@ impl RedbStore {
             #[cfg(not(target_arch = "wasm32"))]
             _open_guard: None,
         })
+    }
+
+    /// Create a RedbStore held in memory, seeded from `bytes` (a previous
+    /// [`super::snapshot_backend::SnapshotBackend`] export), for hosts that
+    /// cannot use OPFS sync access handles (the main thread). Persist through
+    /// the returned handle. With `encryption_key` the exported bytes are
+    /// ciphertext, as in [`Self::new_opfs`].
+    pub fn new_snapshot(
+        bytes: Option<Vec<u8>>,
+        encryption_key: Option<&[u8; 32]>,
+    ) -> AtomicResult<(Self, super::snapshot_backend::SnapshotBackend)> {
+        let handle = super::snapshot_backend::SnapshotBackend::new(bytes.as_deref())
+            .map_err(|e| format!("Failed to load snapshot: {e}"))?;
+        let builder = Database::builder();
+        let db = match encryption_key {
+            Some(key) => {
+                let enc = super::encrypted_backend::EncryptedBackend::new(handle.clone(), key)
+                    .map_err(|e| format!("Failed to open encrypted snapshot: {e}"))?;
+                builder.create_with_backend(enc)
+            }
+            None => builder.create_with_backend(handle.clone()),
+        }
+        .map_err(|e| format!("Failed to create redb from snapshot: {e}"))?;
+
+        {
+            let mut tx = db
+                .begin_write()
+                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+            tx.set_quick_repair(true);
+            create_all_tables(&tx);
+            tx.commit()
+                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
+        }
+
+        Ok((
+            RedbStore {
+                db: Arc::new(db),
+                batch_buffer: std::sync::Mutex::new(None),
+                dirty: AtomicBool::new(false),
+                flush_lock: std::sync::Mutex::new(()),
+                #[cfg(not(target_arch = "wasm32"))]
+                _open_guard: None,
+            },
+            handle,
+        ))
     }
 
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.

@@ -134,7 +134,7 @@ const keysWithPrefix = (entries: Record<string, unknown>, prefix: string) =>
 
 /**
  * Sign out through the UI, exactly as a user does — `handleSignOut` in
- * `SettingsAgent.tsx` does the key cleanup as a side effect, so calling any
+ * `AccountSettings.tsx` does the key cleanup as a side effect, so calling any
  * lower-level helper would skip the code under test.
  */
 async function signOut(page: Page) {

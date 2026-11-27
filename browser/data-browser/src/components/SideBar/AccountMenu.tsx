@@ -40,11 +40,17 @@ import { shortcuts } from '../../actions/shortcuts';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { useInbox } from '../../hooks/useInbox';
 import { useHasManagedAccount } from '../../hooks/useHasManagedAccount';
-import { DropdownMenu, type DropdownItem } from '../Dropdown';
-import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
-import { IconButton } from '../IconButton/IconButton';
+import { useIsLinkedToAccount } from '../../hooks/useIsLinkedToAccount';
+import { fallbackAccountName } from './accountRowName';
+import { useAccountAddress } from './useAccountAddress';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import type { DropdownTriggerProps } from '@tomic/ui/components/Dropdown/DropdownTrigger';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import { ResourceGlyph } from '../ResourceGlyph';
-import { useCombineRefs } from '../../hooks/useCombineRefs';
+import { useCombineRefs } from '@tomic/ui/hooks/useCombineRefs';
 import { useFeedbackDialog } from './FeedbackButton';
 import { OPEN_FEEDBACK_EVENT } from '../../actions/appMenuItems';
 import {
@@ -158,7 +164,7 @@ function AccountMenuRow({
   // A warning icon leads to the banner that explains it.
   const goToSync = () => {
     if (hasSyncWarning(syncStatus)) {
-      void navigate({ to: paths.sync, hash: 'sync-problem' });
+      void navigate({ to: `${paths.sync}#sync-problem` });
       onItemClick();
     } else {
       goTo(paths.sync)();
@@ -173,14 +179,14 @@ function AccountMenuRow({
           icon: <FaUser />,
           helper: 'See and edit the current Agent / User',
           shortcut: shortcuts.userSettings,
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.profileSettings),
         }
       : {
           id: 'login',
           label: 'Login / New User',
           icon: <FaUser />,
           helper: 'Sign in, or create a new Agent / User',
-          onClick: goTo(paths.agentSettings),
+          onClick: goTo(paths.accountSettings),
         },
     ...(agent
       ? [
@@ -320,13 +326,16 @@ function AccountTrigger({
   // A local key without a profile name is a guest unless an account session
   // exists. Only say so once the account check settled with "none".
   const hasAccount = useHasManagedAccount();
+  const linked = useIsLinkedToAccount();
+  const accountAddress = useAccountAddress();
   const name = agent
     ? (agentName ??
-      (agentResource.loading
-        ? ''
-        : hasAccount === false
-          ? 'Guest'
-          : 'Signed in'))
+      fallbackAccountName({
+        loading: agentResource.loading,
+        hasAccount,
+        linked,
+        email: accountAddress,
+      }))
     : 'Login / New User';
 
   return (
@@ -355,7 +364,9 @@ function AccountTrigger({
           <FaUser aria-hidden />
         )}
       </SideBarMenuRowIcon>
-      <SideBarMenuRowLabel>{name}</SideBarMenuRowLabel>
+      <SideBarMenuRowLabel title={name || undefined}>
+        {name}
+      </SideBarMenuRowLabel>
       {unread > 0 && <UnreadDot aria-hidden />}
       <LuChevronsUpDown aria-hidden />
     </TriggerButton>

@@ -222,6 +222,23 @@ fn logged_ops(operations: &[Operation]) -> Vec<String> {
         .collect()
 }
 
+/// What a write of `snapshot` (or a delete, `None`) does to the version
+/// vector row under the same key. A snapshot with no readable header leaves
+/// no row.
+fn version_vector_op(key: &[u8], snapshot: Option<&[u8]>) -> Operation {
+    let row = snapshot.and_then(super::version_vectors::encode_for_snapshot);
+    Operation {
+        tree: Tree::VersionVectors,
+        method: if row.is_some() {
+            Method::Insert
+        } else {
+            Method::Delete
+        },
+        key: key.to_vec(),
+        val: row,
+    }
+}
+
 pub struct CompressedKv {
     inner: Arc<dyn KvStore>,
     log: Arc<WriteLog>,
@@ -345,7 +362,18 @@ impl KvStore for CompressedKv {
     }
 
     fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
-        if is_compressed_tree(tree) {
+        if tree == Tree::LoroSnapshots {
+            // The snapshot and its version vector row land together.
+            self.inner.apply_batch(&[
+                Operation {
+                    tree,
+                    method: Method::Insert,
+                    key: key.to_vec(),
+                    val: Some(self.encoded(tree, key, val, &[])),
+                },
+                version_vector_op(key, Some(val)),
+            ])?;
+        } else if is_compressed_tree(tree) {
             self.inner
                 .insert(tree, key, &self.encoded(tree, key, val, &[]))?;
         } else {
@@ -356,7 +384,19 @@ impl KvStore for CompressedKv {
     }
 
     fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
-        self.inner.remove(tree, key)?;
+        if tree == Tree::LoroSnapshots {
+            self.inner.apply_batch(&[
+                Operation {
+                    tree,
+                    method: Method::Delete,
+                    key: key.to_vec(),
+                    val: None,
+                },
+                version_vector_op(key, None),
+            ])?;
+        } else {
+            self.inner.remove(tree, key)?;
+        }
         self.wrote(logged_subject(tree, key).into_iter().collect());
         Ok(())
     }
@@ -427,6 +467,9 @@ impl KvStore for CompressedKv {
 
     fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
         self.inner.clear_tree(tree)?;
+        if tree == Tree::LoroSnapshots {
+            self.inner.clear_tree(Tree::VersionVectors)?;
+        }
         if matches!(tree, Tree::Resources | Tree::LoroSnapshots) {
             self.log.invalidate_all();
         }
@@ -434,29 +477,29 @@ impl KvStore for CompressedKv {
     }
 
     fn apply_batch(&self, operations: &[Operation]) -> AtomicResult<()> {
-        if !operations
-            .iter()
-            .any(|op| is_compressed_tree(op.tree) && op.val.is_some())
-        {
+        if !operations.iter().any(|op| {
+            op.tree == Tree::LoroSnapshots || (is_compressed_tree(op.tree) && op.val.is_some())
+        }) {
             self.inner.apply_batch(operations)?;
             self.wrote(logged_ops(operations));
             return Ok(());
         }
-        let encoded: Vec<Operation> = operations
-            .iter()
-            .map(|op| Operation {
+        let mut encoded = Vec::with_capacity(operations.len());
+        for op in operations {
+            let val = match (&op.val, is_compressed_tree(op.tree)) {
+                (Some(val), true) => Some(self.encoded(op.tree, &op.key, val, operations)),
+                (val, _) => val.clone(),
+            };
+            encoded.push(Operation {
                 tree: op.tree,
-                method: match op.method {
-                    Method::Insert => Method::Insert,
-                    Method::Delete => Method::Delete,
-                },
+                method: op.method.clone(),
                 key: op.key.clone(),
-                val: match (&op.val, is_compressed_tree(op.tree)) {
-                    (Some(val), true) => Some(self.encoded(op.tree, &op.key, val, operations)),
-                    (val, _) => val.clone(),
-                },
-            })
-            .collect();
+                val,
+            });
+            if op.tree == Tree::LoroSnapshots {
+                encoded.push(version_vector_op(&op.key, op.val.as_deref()));
+            }
+        }
         self.inner.apply_batch(&encoded)?;
         self.wrote(logged_ops(operations));
         Ok(())

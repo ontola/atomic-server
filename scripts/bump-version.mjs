@@ -15,6 +15,7 @@
  * Does NOT touch:
  * - Lockfiles (Cargo.lock, pnpm-lock.yaml) — regenerate separately:
  *     cargo update --workspace
+ *     cargo update -p atomic_lib --manifest-path packages/atomic_store_flutter/rust/Cargo.toml
  *     cd browser && pnpm install --lockfile-only
  *   NOT `cargo metadata --no-deps`, which CONTRIBUTING.md used to recommend:
  *   it skips dependency resolution and so leaves the workspace members' own
@@ -58,6 +59,9 @@ const JS_PACKAGE_FILES = [
   'browser/cli/package.json',
   'browser/create-template/package.json',
   'browser/data-browser/package.json',
+  'browser/ui/package.json',
+  'browser/utils/package.json',
+  'browser/table/package.json',
   'browser/edit-mode/package.json',
   'browser/e2e/package.json',
 ];
@@ -193,6 +197,7 @@ function escapeRegExp(str) {
 
 console.log(`\n${changedFiles} file(s) updated.`);
 console.log('\nNext steps:');
-console.log('  cargo metadata --format-version 1 --no-deps');
+console.log('  cargo update --workspace');
+console.log('  cargo update -p atomic_lib --manifest-path packages/atomic_store_flutter/rust/Cargo.toml');
 console.log('  cd browser && pnpm install --lockfile-only');
 console.log('  Update CHANGELOG.md and browser/CHANGELOG.md by hand.');

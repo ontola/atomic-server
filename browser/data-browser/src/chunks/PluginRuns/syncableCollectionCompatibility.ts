@@ -7,7 +7,10 @@ import {
   subjectsReferToSameResource,
   type Resource,
 } from '@tomic/lib';
-import type { ViewKind } from '@chunks/TablePage/tableViewKinds';
+import {
+  isDefaultSyncableCollectionName,
+  type ViewKind,
+} from '@tomic/table-page/TablePage/tableViewKinds';
 
 /** Existing collection links keep their View's settings and saved rule scope. */
 export function syncableEntityViewKind(
@@ -15,17 +18,6 @@ export function syncableEntityViewKind(
   entity: boolean,
 ): ViewKind {
   return entity && kind === 'syncable-collection' ? 'table' : kind;
-}
-
-const defaultNames = new Set([
-  'Collection',
-  'Browse',
-  'Syncable Collection',
-  'Syncable Collections',
-]);
-
-export function isDefaultSyncableCollectionName(name: unknown): boolean {
-  return typeof name === 'string' && defaultNames.has(name);
 }
 
 const baseProperties = new Set<string>([
@@ -120,13 +112,4 @@ export function syncableCollectionTabs({
           : collection
         : activeView,
   };
-}
-
-/** Reordering the visible tabs does not detach hidden scopes or old links. */
-export function retainHiddenSyncableViews(
-  next: string[],
-  previous: string[],
-  hidden: ReadonlySet<string>,
-): string[] {
-  return [...next, ...previous.filter(subject => hidden.has(subject))];
 }

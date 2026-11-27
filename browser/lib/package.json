@@ -1,6 +1,6 @@
 {
   "name": "@tomic/lib",
-  "version": "0.41.0-beta.8",
+  "version": "0.41.0",
   "author": "Joep Meindertsma",
   "homepage": "https://docs.atomicdata.dev/js",
   "repository": {
@@ -27,7 +27,8 @@
     "tslib": "^2.8.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "@tomic/utils": "workspace:*"
   },
   "peerDependencies": {
     "loro-crdt": "^1.12.1"

@@ -8,10 +8,7 @@ import {
   prepareDocument,
   resolveEntityIdentity,
 } from 'syncables/browser';
-import {
-  collectSyncableFlatAdoption,
-  unsupportedLegacyFlatBlocks,
-} from './syncableFlatAdoption';
+import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
 import {
   collectionIdentity,
   entitySourceKey,
@@ -430,68 +427,18 @@ it('accepts identity-only linked summaries only with their declared typed source
   ).toContainEqual(expect.objectContaining({ resource: 'person' }));
 });
 
-it('blocks only validated v1 collection scopes with exact typed principals and item types', () => {
-  const legacyKey = JSON.stringify([
-    base.proxyOrigin,
-    base.platform,
-    'public-mirror',
-    'project',
-    'issues',
-  ]);
-  const alias = {
-    subject: 'atomic:old-cache',
-    sourceKey: legacyKey,
-    kind: 'collection' as const,
-    principal: { kind: 'public' as const },
-    collection: { name: 'projectIssues', resource: 'issue' },
-  };
-  const before = JSON.stringify(alias);
-  const blocked = unsupportedLegacyFlatBlocks(
-    [
-      alias,
-      alias,
-      { ...alias, subject: 'atomic:numeric', principal: base.principal },
-      {
-        ...alias,
-        subject: 'atomic:string',
-        principal: { ...base.principal, subject: '7' },
-      },
-      {
-        ...alias,
-        subject: 'atomic:other-platform',
-        sourceKey: JSON.stringify([
-          base.proxyOrigin,
-          'other-service',
-          'public-mirror',
-          'project',
-          'issues',
-        ]),
-      },
-    ],
-    base,
+it('retains unsupported older formats and only blocks the matching integration', async () => {
+  const { add, store, options } = fixture();
+  const oldKey = (platform: string) =>
+    JSON.stringify([base.proxyOrigin, platform, 'collection', 'opaque', '']);
+  add('atomic:other-service', 'atomic:app', oldKey('other-service'), {});
+  await expect(
+    collectSyncableFlatAdoption(store, options),
+  ).resolves.toBeDefined();
+  add('atomic:old-source', 'atomic:app', oldKey(base.platform), {});
+  await expect(collectSyncableFlatAdoption(store, options)).rejects.toThrow(
+    'Their data was retained',
   );
-  expect(blocked.map(item => item.principal)).toEqual([
-    { kind: 'public' },
-    base.principal,
-    { ...base.principal, subject: '7' },
-  ]);
-  expect(blocked.every(item => item.resource === 'issue')).toBe(true);
-  expect(JSON.stringify(alias)).toBe(before);
-  expect(
-    unsupportedLegacyFlatBlocks(
-      [
-        {
-          ...alias,
-          sourceKey: sourceKey({
-            ...base,
-            kind: 'collection',
-            collection: { name: 'events', resource: 'event' },
-          }),
-        },
-      ],
-      base,
-    ),
-  ).toEqual([]);
 });
 
 it('blocks competing tables and typed duplicate entities without choosing a primary or allocating another copy', async () => {

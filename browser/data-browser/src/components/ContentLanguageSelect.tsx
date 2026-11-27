@@ -1,7 +1,7 @@
 import { styled } from 'styled-components';
 import type { JSX } from 'react';
 import { useSettings } from '../helpers/AppSettings';
-import { useDeclaredLanguages } from '../hooks/useDeclaredLanguages';
+import { useDeclaredLanguages } from '@tomic/resource-ui/hooks/useDeclaredLanguages';
 
 /**
  * Global switcher for the *content* language (LocalizedText values and

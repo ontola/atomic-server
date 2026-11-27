@@ -2,10 +2,10 @@ import { core, useArray, useResource, useString } from '@tomic/react';
 import { FaHashtag } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import Markdown from '../../../components/datatypes/Markdown';
-import { Column, Row } from '../../../components/Row';
-import { InlineFormattedResourceList } from '../../../components/InlineFormattedResourceList';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { InlineDatatype } from '../InlineDatatype';
-import { AtomicLink } from '../../../components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 
 import type { JSX } from 'react';
 import { TargetableCard } from '../TargetableCard';

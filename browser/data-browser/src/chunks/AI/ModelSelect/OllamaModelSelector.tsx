@@ -1,13 +1,13 @@
 import styled from 'styled-components';
 import { ComboBox } from '@components/ComboBox';
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useEffect, useState } from 'react';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { ModelInfoLayout } from './ModelInfoLayout';
-import { ErrorLook } from '@components/ErrorLook';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
 import { TAB_PANEL_HAS_ERROR_CLASS } from '@components/Tabs';
-import { LoaderBlock } from '@components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { effectFetch } from '@helpers/effectFetch';
 import { useAISettings } from '@components/AI/AISettingsContext';
 

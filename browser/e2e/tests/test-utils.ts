@@ -1,7 +1,9 @@
+import { Agent, enableLoro, Store } from '@tomic/lib';
 import {
   Page,
   expect,
   Browser,
+  type BrowserContext,
   ConsoleMessage,
   Request,
   Locator,
@@ -80,6 +82,27 @@ export const clickPageEdit = (page: Page) =>
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
+
+/** Take this test offline while allowing one interrupted server metadata refresh. */
+export function goOffline(
+  context: BrowserContext,
+  browserDiagnostics: Pick<DiagnosticCollector, 'expect'>,
+): Promise<void> {
+  const metadataUrl = new URL('/server', SERVER_URL).href.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&',
+  );
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: net::ERR_INTERNET_DISCONNECTED$/,
+    'Disconnecting the browser can interrupt the server metadata refresh.',
+    1,
+    new RegExp(`^${metadataUrl}$`),
+    { optional: true },
+  );
+
+  return context.setOffline(true);
+}
 
 /**
  * Rewrite a server-origin URL onto the SPA origin Playwright drives.
@@ -168,8 +191,8 @@ export const editableTitle = (page: Page) => page.getByTestId('editable-title');
 export const currentDriveTitle = (page: Page) =>
   page.getByTestId('current-drive-title');
 /**
- * Opens the current drive's page. The sidebar header is the drive switcher,
- * not a link, so this goes to the drive the store has selected. Picking it
+ * Opens the current drive's page. The sidebar header's chevron is the drive
+ * switcher, so this goes to the drive the store has selected. Picking it
  * from the switcher menu raced its list: right after `newDrive` the menu did
  * not hold the new drive yet, the fallback picked "Private drive", and the
  * share test invited to the dev drive instead.
@@ -580,8 +603,8 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  * button that the passkey-first onboarding rework removed, which timed out and
  * took down every spec that signs in — most of the suite.
  *
- * Note this is deliberately the FOSS path. The neighbouring "Restore account"
- * button is the managed/recovery route (passkey or recovery code); sending
+ * Note this is deliberately the FOSS path. The unlock form
+ * also takes a recovery code or passkey (the managed route); sending
  * self-hosted tests through it would exercise the wrong flow entirely.
  *
  * Idempotence is important because `before()` already signs in with a
@@ -756,15 +779,8 @@ export async function newDrive(page: Page) {
   const newDriveButton = page.getByTestId('menu-item-new-drive');
   await expect(newDriveButton).toBeVisible({ timeout: 10000 });
   await newDriveButton.click();
-  await waitForCurrentDialog(page);
-
-  const dialog = currentDialog(page);
-  await dialog.getByLabel('Drive name').fill(driveTitle);
-
-  const createButton = dialog.locator('button', { hasText: 'Create' });
-  await createButton.waitFor({ state: 'attached' });
-  await expect(createButton).toBeEnabled();
-  await createButton.click();
+  // Creating a drive is immediate: no dialog, and it is named 'My drive'.
+  // Rename it afterwards, as a user would.
 
   // Wait for the URL to change to did:ad: (newly created drive)
   await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
@@ -778,9 +794,27 @@ export async function newDrive(page: Page) {
   // blown. Being marginal rather than short is why it presents as a flake,
   // `saved-drives.spec.ts:81` red 4 of 10, reporting the title of the previous
   // drive rather than a missing one. 30s, matching the `waitForURL` above it.
+  await expect(currentDriveTitle(page)).toHaveText('My drive', {
+    timeout: 30_000,
+  });
+  const titleEl = editableTitle(page);
+  await titleEl.click();
+  await expect(titleEl).toHaveRole('textbox', { timeout: 10_000 });
+  await titleEl.fill('');
+  await titleEl.type(driveTitle, { delay: 20 });
+  await page.keyboard.press('Escape');
   await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
     timeout: 30_000,
   });
+  await page.waitForFunction(
+    () => {
+      const status = window.store?.getSyncStatus();
+
+      return status.serverConnected && status.pendingDirtyCount === 0;
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
 
@@ -1139,7 +1173,7 @@ export async function waitForClassInstanceSearchable(
 }
 
 export async function openAgentPage(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=profile`);
 }
 
 /** Opens the users' profile, sets a username, saves, reloads and verifies the change persisted. */
@@ -1372,7 +1406,7 @@ export async function newResource(klass: string, page: Page) {
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
-    // dialog opens (bookmark/table), or the in-place NewFormFullPage shows
+    // dialog opens (table), or the in-place NewFormFullPage shows
     // up (custom user classes — `/app/new?classSubject=...` keeps the path
     // but renders the resource form).
     await Promise.any([
@@ -1538,6 +1572,47 @@ export async function waitForClientDbFlush(
   }, opts.required === true);
 }
 
+/** Wait for a chat log to round-trip before a reload discards the optimistic UI. */
+export async function waitForStoredChatMessages(
+  page: Page,
+  entry: Locator,
+  texts: string[],
+) {
+  const id = await entry.getAttribute('about');
+  if (!id?.includes('#')) throw new Error('Chat entry has no log page');
+  const [subject] = id.split('#');
+  const agent = await Agent.fromSecret(await getDevDriveSecret(page));
+  const serverUrl = await page.evaluate(() => window.store.getServerUrl());
+  await enableLoro();
+  // The browser's own socket merges GET replies into its optimistic resource.
+  // A separate reader has no copy of the log and cannot prime the browser.
+  const reader = new Store({ serverUrl, agent });
+  const socket = reader.getDefaultWebSocket();
+  if (!socket) throw new Error('Missing WebSocket for the chat log reader');
+
+  try {
+    expect(await reader.waitForServerConnected(15_000)).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          try {
+            const log = await socket.fetch(subject);
+
+            return log.listChatLogEntries().map(message => message.entry.t);
+          } catch (err) {
+            return String(err);
+          }
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual(texts);
+  } finally {
+    socket.close();
+  }
+
+  await waitForSynced(page);
+}
+
 /**
  * Wait until nothing local is still waiting to reach the server, and what
  * reached it is also on disk here.
@@ -1655,7 +1730,8 @@ export async function waitForDriveSettled(page: Page, timeoutMs = 30_000) {
         !s.syncInProgress &&
         s.pendingDirtyCount === 0 &&
         dbOk &&
-        !!s.lastDriveSync
+        !!s.drive &&
+        s.lastDriveSync?.drive === s.drive
       );
     },
     undefined,
@@ -2000,12 +2076,9 @@ export async function openNewSubjectWindow(
 }
 
 export async function openConfigureDrive(page: Page) {
-  // Drive management lives on the User Settings page (/app/server redirects
-  // there too, but go direct).
-  await page.goto(`${FRONTEND_URL}/app/agent`);
-  await expect(
-    page.getByRole('heading', { name: 'User', exact: true }),
-  ).toBeVisible({
+  // Drive management lives in the Drive section of the settings page.
+  await page.goto(`${FRONTEND_URL}/app/settings?section=drive`);
+  await expect(page.getByTestId('my-drives')).toBeVisible({
     timeout: 10000,
   });
 }
@@ -2031,7 +2104,7 @@ export async function changeDrive(
       }
     }
 
-    // The open-by-URL input starts empty on the User Settings page; the Open
+    // The open-by-URL input starts empty in the Drive settings; the Open
     // button is disabled when the target equals the current drive.
     const currentDriveInput = page.getByTestId('drive-url-input');
     await currentDriveInput.fill(subject);
@@ -2447,4 +2520,42 @@ export async function acceptInvite(
     },
     40000,
   );
+}
+
+/**
+ * Make the page believe it is the desktop/mobile app.
+ *
+ * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, but once
+ * that is set the app also hardcodes its embedded server as
+ * `http://localhost:9883` (`getLocalServerOrigin`). Locally that is the real
+ * server; in dagger CI the server is `atomic.localhost` / `atomic`. Without a
+ * proxy, `useOwnNodeDid` never gets a node id and the paste form stays hidden
+ * behind `pairNodeId && …`.
+ */
+export async function pretendToBeTheApp(page: Page) {
+  const embeddedOrigin = 'http://localhost:9883';
+  // Fetch from Node via the service-binding host — not SERVER_URL's
+  // `atomic.localhost`, which only Chromium can resolve in dagger.
+  const realOrigin = nodeReachableServerUrl(SERVER_URL);
+
+  if (realOrigin !== embeddedOrigin) {
+    await page.route(`${embeddedOrigin}/**`, async route => {
+      const rewritten = route
+        .request()
+        .url()
+        .replace(embeddedOrigin, realOrigin);
+      const response = await route.fetch({ url: rewritten });
+      await route.fulfill({ response });
+    });
+  }
+
+  await page.addInitScript(() => {
+    (
+      window as unknown as { __TAURI_INTERNALS__: unknown }
+    ).__TAURI_INTERNALS__ = {
+      // Commands such as `adopt_agent` talk to the real shell. Nothing here
+      // needs their answer, so they resolve to nothing instead of failing.
+      invoke: () => Promise.resolve(null),
+    };
+  });
 }

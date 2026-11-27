@@ -1,12 +1,12 @@
-import { constructOpenURL } from '@helpers/navigation';
-import { ResourceInline } from '@views/ResourceInline/ResourceInline';
-import { AtomicLink } from '@components/AtomicLink';
+import { constructOpenURL } from '../../../helpers/navigation';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { forms, Resource, useResource, useString } from '@tomic/react';
 import type { JSX } from 'react';
 import { LinkableTagList } from './LinkableTagList';
 import { BoundField } from './BoundField';
 import { FieldPair } from './FieldPair';
-import { useFieldOptions } from './useFieldOptions';
+import { useFieldOptions } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 import { Divider } from './Divider';
 import { useColumnOptions, useFieldConstraint } from '../formDataClass';
 

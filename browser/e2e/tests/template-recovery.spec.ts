@@ -2,24 +2,30 @@ import {
   managedDriveTest,
   expect as managedExpect,
 } from './deployment-fixtures';
-import { FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
+import {
+  FRONTEND_URL,
+  waitForClientDbReady,
+  waitForClientDbFlush,
+  waitForDriveSettled,
+} from './test-utils';
+import { mockManagedNode } from './managed-test-utils';
 
 managedDriveTest(
   'an unenrolled home can create a local drive',
   async ({ page }) => {
-    await page.route('**/server', async route => {
-      const response = await route.fetch({
-        url: nodeReachableServerUrl(route.request().url()),
-      });
-      const body = await response.json();
-      await route.fulfill({
-        json: {
-          ...body,
-          'https://atomicdata.dev/properties/server/managed': true,
-          'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
-        },
-      });
+    // The dev fixture creates a server-backed workspace. Give this device
+    // a complete copy of its private home before simulating an unenrollment.
+    await waitForClientDbReady(page);
+    await waitForDriveSettled(page);
+    await page.evaluate(async () => {
+      const store = window.store;
+      const home = await store.getAgent()!.privateDriveSubject();
+      store.setDrive(home);
+      await store.getDefaultWebSocket()!.resyncDrive(home);
     });
+    await waitForDriveSettled(page);
+    await waitForClientDbFlush(page, { required: true });
+    await mockManagedNode(page);
     await page.route('**/api/me', route =>
       route.fulfill({ json: { email: 'template@example.com' } }),
     );
@@ -28,8 +34,6 @@ managedDriveTest(
     );
 
     await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await managedExpect(page.getByLabel('Drive name')).toBeVisible();
-    await page.getByRole('button', { name: 'Create drive' }).click();
     await managedExpect(page).not.toHaveURL(/new-drive/, { timeout: 60000 });
     const result = await page.evaluate(async () => {
       const store = window.store;
@@ -42,7 +46,7 @@ managedDriveTest(
     });
     managedExpect(result).toEqual({ homeLocal: true, createdLocal: true });
     await managedExpect(
-      page.getByRole('button', { name: 'Report this error' }),
+      page.getByRole('button', { name: /^Report( this error)?$/ }),
     ).toHaveCount(0);
   },
 );
@@ -50,19 +54,7 @@ managedDriveTest(
 managedDriveTest(
   'new drive errors can be reported with context',
   async ({ page }) => {
-    await page.route('**/server', async route => {
-      const response = await route.fetch({
-        url: nodeReachableServerUrl(route.request().url()),
-      });
-      const body = await response.json();
-      await route.fulfill({
-        json: {
-          ...body,
-          'https://atomicdata.dev/properties/server/managed': true,
-          'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
-        },
-      });
-    });
+    await mockManagedNode(page);
     await page.route('**/api/me', route =>
       route.fulfill({ json: { email: 'template@example.com' } }),
     );
@@ -71,7 +63,6 @@ managedDriveTest(
     );
 
     await page.goto(`${FRONTEND_URL}/app/new-drive`);
-    await page.getByRole('button', { name: 'Create drive' }).click();
     await page.getByRole('button', { name: 'Report this error' }).click();
     const dialog = page.getByRole('dialog');
     await managedExpect(

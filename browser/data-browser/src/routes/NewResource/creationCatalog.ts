@@ -1,5 +1,5 @@
 import { ai, canvas, core, dataBrowser, forms } from '@tomic/lib';
-import { TABLE_TEMPLATES } from '../../chunks/TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 import { templates } from '../../components/Template/template';
 
 export const BASIC_CREATIONS = [
@@ -32,11 +32,6 @@ export const BASIC_CREATIONS = [
     subject: dataBrowser.classes.chatroom,
     title: 'Chat room',
     description: 'Start a conversation with your team.',
-  },
-  {
-    subject: dataBrowser.classes.bookmark,
-    title: 'Bookmark',
-    description: 'Save a link for later.',
   },
   {
     subject: canvas.classes.canvas,

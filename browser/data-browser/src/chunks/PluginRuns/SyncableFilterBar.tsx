@@ -1,6 +1,6 @@
 import { saveFlatSyncableSelection } from './syncableFlatNavigation';
 import { parseSyncableCollectionView } from './syncableCollection';
-import { getTableDrive } from '../TablePage/tableDrive';
+import { getTableDrive } from '@tomic/table-page/TablePage/tableDrive';
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { useAppExecutions } from '../AppPage/AppExecutionRuntime';
 import { appProfile, syncableExecutionKey } from './BuiltinSyncablesApp';

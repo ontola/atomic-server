@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { asSubject, formatPlainValue } from '../helpers/formatPlainValue';
+import {
+  asSubject,
+  formatPlainValue,
+} from '@tomic/resource-ui/helpers/formatPlainValue';
 
 describe('formatPlainValue', () => {
   it('writes an object value out as text instead of passing it to React', () => {

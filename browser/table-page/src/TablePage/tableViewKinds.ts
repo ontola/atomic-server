@@ -1,0 +1,96 @@
+import type { IconType } from 'react-icons';
+import {
+  FaTable,
+  FaTableColumns,
+  FaCalendarDays,
+  FaStopwatch,
+  FaChartPie,
+  FaRegCircleDot,
+  FaPlug,
+  FaLayerGroup,
+} from 'react-icons/fa6';
+
+/**
+ * The `view-kind` string stored on a View resource decides which renderer
+ * displays the table's rows. Stored as a plain string in the ontology so new
+ * kinds can be added without a schema migration; this union is the frontend's
+ * source of truth for the ones we actually render.
+ */
+/**
+ * `dashboard` is the one kind that renders no rows: it shows the Dashboard
+ * resource the view names in `view-dashboard`, so a dashboard is reachable as
+ * a tab of the table it describes while staying a resource of its own
+ * (`planning/dashboards.md`, Remaining work 1).
+ */
+export const VIEW_KINDS = [
+  'table',
+  'kanban',
+  'calendar',
+  'timer',
+  'dashboard',
+  'issues',
+  'syncables',
+  'syncable-collection',
+] as const;
+
+export type ViewKind = (typeof VIEW_KINDS)[number];
+
+export const DEFAULT_VIEW_KIND: ViewKind = 'table';
+
+/** Narrows an arbitrary stored string to a known ViewKind, falling back to table. */
+export function normalizeViewKind(kind: string | undefined): ViewKind {
+  return (VIEW_KINDS as readonly string[]).includes(kind ?? '')
+    ? (kind as ViewKind)
+    : DEFAULT_VIEW_KIND;
+}
+
+const defaultCollectionNames = new Set([
+  'Collection',
+  'Browse',
+  'Syncable Collection',
+  'Syncable Collections',
+]);
+
+export function isDefaultSyncableCollectionName(name: unknown): boolean {
+  return typeof name === 'string' && defaultCollectionNames.has(name);
+}
+
+/**
+ * The app rendering this view, when the stored kind names one.
+ *
+ * A view kind is either one of the built-ins above or the subject of an app,
+ * told apart by shape — the same tell `/plugin-ui` uses. Kept out of
+ * `ViewKind` deliberately: the built-ins are a closed set with labels and
+ * icons compiled in, and apps are open-ended data. Folding them together
+ * would mean every exhaustive match over kinds had a case that cannot be
+ * written.
+ *
+ * A table always keeps its own Table tab, and an app is never made the
+ * default view. Adding an app is adding a way to look at the rows, never
+ * taking one away.
+ */
+export function appViewOf(kind: string | undefined): string | undefined {
+  return kind?.includes(':') ? kind : undefined;
+}
+
+export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
+  table: 'Table',
+  kanban: 'Kanban',
+  calendar: 'Calendar',
+  timer: 'Timer',
+  dashboard: 'Dashboard',
+  issues: 'Issues',
+  syncables: 'Sync',
+  'syncable-collection': 'Syncable Collections',
+};
+
+export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
+  table: FaTable,
+  kanban: FaTableColumns,
+  calendar: FaCalendarDays,
+  timer: FaStopwatch,
+  dashboard: FaChartPie,
+  issues: FaRegCircleDot,
+  syncables: FaPlug,
+  'syncable-collection': FaLayerGroup,
+};

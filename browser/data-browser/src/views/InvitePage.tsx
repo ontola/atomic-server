@@ -26,7 +26,7 @@ import { constructOpenURL } from '../helpers/navigation';
 import { useSettings } from '../helpers/AppSettings';
 import { ResourcePageProps } from './ResourcePage';
 import { paths } from '../routes/paths';
-import { Column } from '../components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import { useWelcomeLayoutEffect } from '../hooks/useWelcomeLayoutEffect';
 import { Shell, Card, CardTitle, CtaButton } from './getting-started/chrome';
 import { Logo } from '../components/Logo';
@@ -35,7 +35,7 @@ import { useEffect, useEffectEvent, useRef, useState, type JSX } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { fetchPrivateDriveSubject } from '@helpers/privateDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
-import { Dialog, useDialog } from '@components/Dialog';
+import { Dialog, useDialog } from '@tomic/resource-ui/components/Dialog/index';
 import { styled } from 'styled-components';
 
 /** A View that opens an invite */
@@ -507,7 +507,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
                     disabled={signupTarget === undefined}
                     onClick={() => {
                       if (signupTarget) window.location.assign(signupTarget);
-                      else navigate(paths.agentSettings);
+                      else navigate(paths.accountSettings);
                     }}
                     subtle
                   >

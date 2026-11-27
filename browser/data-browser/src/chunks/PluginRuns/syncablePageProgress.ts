@@ -63,7 +63,17 @@ export function syncablePageTotal(
       if (bodyTotal) return bodyTotal;
     }
 
-    const last = parseLinkHeader(response.headers.link, 'last');
+    const linkHeader = Object.entries(fields?.headers ?? {}).find(
+      ([, field]) => field.role === 'nextLink',
+    )?.[0];
+    const pageField = Object.entries(
+      scheme?.request?.queryParameters ?? {},
+    ).find(([, field]) => field.role === 'page');
+    if (!linkHeader || !pageField) return;
+    const last = parseLinkHeader(
+      response.headers[linkHeader.toLowerCase()],
+      'last',
+    );
     if (!last) return;
     const lastUrl = new URL(last, request.url);
     if (
@@ -71,13 +81,8 @@ export function syncablePageTotal(
       lastUrl.pathname !== request.url.pathname
     )
       return;
-    const pageField = Object.entries(
-      scheme?.request?.queryParameters ?? {},
-    ).find(([, field]) => field.role === 'page');
-    const page = positiveInteger(
-      lastUrl.searchParams.get(pageField?.[0] ?? 'page'),
-    );
-    if (page !== undefined) return page + (pageField?.[1].start === 0 ? 1 : 0);
+    const page = positiveInteger(lastUrl.searchParams.get(pageField[0]));
+    if (page !== undefined) return page + (pageField[1].start === 0 ? 1 : 0);
   } catch {
     // Optional provider metadata never affects a read or its permissions.
   }

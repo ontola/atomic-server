@@ -1,4 +1,4 @@
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { ResourceCardTitle } from './ResourceCardTitle';
 import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import { dataBrowser, useNumber } from '@tomic/react';

@@ -34,8 +34,9 @@ class SignIn {
 
   final String agentSubject;
 
-  /// The drive the store now works in (the agent's private drive unless the
-  /// secret named another).
+  /// The drive the store now works in: the drive the person was working in
+  /// when it came along ([broughtAlong]), else the agent's private drive
+  /// (unless the secret named another).
   final String? drive;
 
   /// That drive is not on this device yet: connect to a server that hosts it
@@ -53,6 +54,19 @@ class SignIn {
   /// keep it**: archive it where the app keeps secrets, so that agent can still
   /// be signed in as. `null` when there was no different previous agent.
   final String? previousSecret;
+}
+
+/// The drive to work in after a sign-in. [before] is the drive the store worked
+/// in just before, [signedInDrive] the one the new agent's secret names (its
+/// private drive), [broughtAlong] the drives that came along. When [before]
+/// came along, the new agent can write it and the person keeps working in it,
+/// so their work does not seem to vanish; otherwise the account's own drive.
+String? driveAfterSignIn(
+    {required String? before,
+    required String? signedInDrive,
+    required List<String> broughtAlong}) {
+  if (before != null && broughtAlong.contains(before)) return before;
+  return signedInDrive;
 }
 
 /// Who signs: an agent, which is an Ed25519 key pair and nothing else. There
@@ -152,9 +166,20 @@ class BridgeIdentity implements Identity {
 
   @override
   Future<SignIn> signIn(String secret) async {
+    final before = _store.drive;
     final loaded = await _guard(() => _handle.signIn(secret: secret));
     _secret = secret;
-    final drive = _handle.drive();
+    var drive = _handle.drive();
+    final stay = driveAfterSignIn(
+        before: before,
+        signedInDrive: drive,
+        broughtAlong: loaded.broughtAlong);
+    if (stay != null && stay != drive) {
+      // The drive the person was working in came along and the new agent can
+      // write it: stay there, instead of jumping to an empty private drive.
+      await _guard(() async => _handle.switchDrive(drive: stay));
+      drive = stay;
+    }
     _store.drive = drive;
     _store.clearCache();
     await _onChange(secret, drive, loaded.needsSync, loaded.previousSecret);

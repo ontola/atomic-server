@@ -5,10 +5,13 @@
 
 import { useEffect, useState, type ComponentProps } from 'react';
 import { useStore } from '@tomic/react';
-import { checkOnboardingStorage } from '../../helpers/onboardingStorage';
+import {
+  checkOnboardingStorage,
+  ownStorageErrors,
+} from '../../helpers/onboardingStorage';
 import { getLocalServerOrigin, isRunningInTauri } from '../../helpers/tauri';
 import { styled, css } from 'styled-components';
-import { Button } from '../../components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import { isEmbedded } from '../../helpers/embedMode';
 import '@tomic/service-ui/background.css';
 
@@ -18,6 +21,8 @@ export function Shell({ children, ...props }: ComponentProps<'div'>) {
   const [state, setState] = useState<'checking' | 'ready' | 'failed'>(
     'checking',
   );
+  // This card explains a storage failure, so no toast should repeat it.
+  useEffect(ownStorageErrors, []);
   useEffect(() => {
     let active = true;
     void checkOnboardingStorage(

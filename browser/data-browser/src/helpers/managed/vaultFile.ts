@@ -376,14 +376,10 @@ export async function pickVaultFileTarget(
     let handle: SaveHandle;
 
     try {
+      // Keep the existing filename, but omit a type filter: File System Access
+      // forbids hyphens in filter extensions, even though filenames allow them.
       handle = await picker.call(window, {
         suggestedName: fileName,
-        types: [
-          {
-            description: 'Atomic vault backup',
-            accept: { 'application/octet-stream': [VAULT_FILE_EXTENSION] },
-          },
-        ],
       });
     } catch (e) {
       if ((e as Error).name === /* @wc-ignore */ 'AbortError') return null;
@@ -426,7 +422,11 @@ export async function fetchVaultBackupFile(
   drivePseudonym: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<VaultFileBuild | null> {
-  const objects = await listVaultObjects(drivePseudonym);
+  // The file holds sealed history only. File bytes are shared and unsealed,
+  // and are fetched from the cloud vault on a restore from the account.
+  const objects = (await listVaultObjects(drivePseudonym)).filter(
+    o => o.kind !== 'blob',
+  );
 
   if (objects.length === 0) return null;
 

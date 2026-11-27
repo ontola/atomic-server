@@ -295,9 +295,6 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
   ).toBeVisible();
   await expect(page.getByLabel('Ollama API Url')).toBeVisible();
   await expect(
-    page.getByText('Default chat model', { exact: true }),
-  ).toHaveCount(0);
-  await expect(
     page.getByRole('checkbox', {
       name: 'Generate AI Chat titles',
       exact: true,
@@ -341,17 +338,17 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
   ];
   const boxes = await Promise.all(
     labels.map(label =>
-      page.getByRole('main').getByText(label, { exact: true }).boundingBox(),
+      page
+        .getByRole('main')
+        .getByRole('heading', { name: label, exact: true })
+        .boundingBox(),
     ),
   );
 
+  // Subsections are open subheadings, aligned in one column and in order.
   for (let i = 1; i < boxes.length; i++) {
     expect(boxes[i]!.x).toBeCloseTo(boxes[0]!.x, 0);
-    if (i > 1)
-      expect(boxes[i]!.y - boxes[i - 1]!.y).toBeCloseTo(
-        boxes[1]!.y - boxes[0]!.y,
-        0,
-      );
+    expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y);
   }
 
   await page

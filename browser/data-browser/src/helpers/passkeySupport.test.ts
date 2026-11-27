@@ -25,6 +25,25 @@ describe('passkey API availability', () => {
     });
     expect(hasPasskeyApi()).toBe(false);
   });
+
+  it('rejects Android WebViews, which freeze the app on use', () => {
+    vi.stubGlobal('window', {
+      isSecureContext: true,
+      PublicKeyCredential: class {},
+    });
+    const credentials = { create() {}, get() {} };
+    const chrome = 'Mozilla/5.0 (Linux; Android 14; Pixel 8';
+    vi.stubGlobal('navigator', {
+      credentials,
+      userAgent: `${chrome}; wv) AppleWebKit/537.36 Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36`,
+    });
+    expect(hasPasskeyApi()).toBe(false);
+    vi.stubGlobal('navigator', {
+      credentials,
+      userAgent: `${chrome}) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36`,
+    });
+    expect(hasPasskeyApi()).toBe(true);
+  });
 });
 
 describe('a device that can use passkeys', () => {

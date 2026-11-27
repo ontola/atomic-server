@@ -139,6 +139,13 @@ pnpm test-server         # serves the configured port from <repo>/.e2e-store
 pnpm test-server-fresh   # same, but wipes that store first
 ```
 
+For manual provider integration testing, pass `--mock-proxy` to
+`./scripts/e2e-server.sh`. It runs the mock in a sibling
+[`atomic-plugins` checkout](https://github.com/ontola/atomic-plugins). Set
+`ATOMIC_PLUGINS_CHECKOUT` if your checkout is elsewhere. For a Vite-served app,
+set `MOCK_FRONTEND_ORIGIN` to the Vite origin so OAuth can return to it.
+Provider integration specs run in Atomic Plugins.
+
 ### Keep the binary in step with the branch
 
 `build.rs` embeds the data-browser bundle into the server, and the **invite and

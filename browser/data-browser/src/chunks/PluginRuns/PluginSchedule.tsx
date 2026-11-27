@@ -4,10 +4,10 @@ import toast from 'react-hot-toast';
 import { FaClock } from 'react-icons/fa6';
 import { errorMessageFromResponse, signRequest, useStore } from '@tomic/react';
 import { setPluginSchedule } from './runScript';
-import { Button } from '@components/Button';
-import { Column, Row } from '@components/Row';
-import { BasicSelect } from '@components/forms/BasicSelect';
-import { Checkbox } from '@components/forms/Checkbox';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
+import { Checkbox } from '@tomic/ui/components/forms/Checkbox';
 
 /**
  * Running a plugin when nobody is watching.
@@ -199,7 +199,7 @@ export function PluginSchedule({
             <Muted>
               {schedule.autoApply
                 ? `Allowed by ${schedule.autoApply.agent}. Every write is still checked against what that account may change.`
-                : 'Available once you have run this plugin and applied its changes at least once.'}
+                : 'Available once you have run this app and applied its changes at least once.'}
             </Muted>
           </Column>
         </Checkbox.Label>

@@ -83,6 +83,7 @@ export {
   lockfileFromEnsured,
   lockfileFromInput,
   parseLockfile,
+  schemaFingerprint,
   serializeLockfile,
   type Lockfile,
 } from './schema-lockfile.js';
@@ -146,12 +147,13 @@ export type {
 } from './client-db.js';
 export {
   LocalOutbox,
-  isTerminalCommitErrorMessage,
-  isUnrecoverableCommitErrorMessage,
+  legacyRefusalCode,
+  refusalCode,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   isBenignTerminalCommitError,
-  isNotEnrolledMessage,
+  isNotEnrolledRefusal,
+  isNotEnrolledError,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';
@@ -374,11 +376,12 @@ export {
   contactSchema,
   pipelineSchema,
   moneySchema,
+  preferencesSchema,
+  websiteSchema,
   sharedVocabularyOntologies,
   sharedVocabularyProperties,
+  sharedVocabularyClasses,
 } from './shared-vocabularies.js';
-
-export { timeTrackingSchema } from './time-tracking-schema.js';
 
 export { executeServerPlugin } from './plugin-server.js';
 export {

@@ -1,8 +1,8 @@
 import { FaDownload } from 'react-icons/fa6';
 import { styled } from 'styled-components';
-import { Button } from '../../components/Button';
-import { IconButton } from '../../components/IconButton/IconButton';
-import { Row } from '../../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Row } from '@tomic/ui/components/Row';
 import { displayFileSize } from './displayFileSize';
 
 import type { JSX } from 'react';

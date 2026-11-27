@@ -77,6 +77,7 @@ export function ServiceGroup({
 
 export {
   AccountSignIn,
+  PasskeyMark,
   ACCOUNT_SIGN_IN_COPY,
   type AccountSignInCopy,
 } from './AccountSignIn';

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from './fixtures';
-import { devDrive, FRONTEND_URL, nodeReachableServerUrl } from './test-utils';
+import { devDrive, FRONTEND_URL } from './test-utils';
+import { mockManagedNode } from './managed-test-utils';
 
 /**
  * A guest (started with Get started) makes a workspace, then signs in with an email that already
@@ -40,19 +41,7 @@ async function mockPortal(page: Page, accountAgent: string): Promise<Portal> {
 
     return route.fulfill({ json: [] });
   });
-  await page.route('**/server', async route => {
-    const response = await route.fetch({
-      url: nodeReachableServerUrl(route.request().url()),
-    });
-    const body = await response.json();
-    await route.fulfill({
-      json: {
-        ...body,
-        'https://atomicdata.dev/properties/server/managed': true,
-        'https://atomicdata.dev/properties/server/portalUrl': FRONTEND_URL,
-      },
-    });
-  });
+  await mockManagedNode(page);
 
   return portal;
 }
@@ -198,7 +187,7 @@ test('the conflict dialog brings the workspace along after a failed try', async 
   // Client-side navigation, so the patched store stays.
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.evaluate(() => {
-    window.history.pushState({}, '', '/app/agent');
+    window.history.pushState({}, '', '/app/settings');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
   const dialog = page.getByTestId('identity-conflict');

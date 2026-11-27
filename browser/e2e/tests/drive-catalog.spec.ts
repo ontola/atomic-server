@@ -41,7 +41,7 @@ test('account drives appear without local pointers and removals reconcile after 
       window as unknown as { __ATOMIC_MANAGED__: { portalUrl: string } }
     ).__ATOMIC_MANAGED__ = { portalUrl: 'http://localhost:3037' };
   });
-  await page.goto(`${FRONTEND_URL}/app/agent`);
+  await page.goto(`${FRONTEND_URL}/app/settings?section=drive`);
   const list = page.getByTestId('my-drives');
   await expect(
     list.getByRole('radio', { name: 'Account-only project' }),

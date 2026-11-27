@@ -1,0 +1,304 @@
+import { Datatype, type FilterOperator } from '@tomic/react';
+import { useCallback, useState } from 'react';
+import type { ExpressionFilter, PropVal } from '@tomic/react';
+import { localOffsetMinutes } from './formulaEngine.js';
+import {
+  dependsOnNow,
+  toExpression,
+  type DerivedColumnSpec,
+  type DerivedValueKind,
+} from './derivedColumns.js';
+
+export type { FilterOperator };
+
+/**
+ * A single table filter: an extra `(property, operator, value)` constraint
+ * ANDed onto the table's `parent = <table>` query. One filter per property
+ * (keyed by `property` subject). `value === ''` means "not set yet" — such
+ * filters are kept in the UI (so the chip stays visible while editing) but
+ * skipped by the query.
+ */
+import type { TableFilter } from '@tomic/table';
+
+export {
+  filterKey,
+  derivedFilterKey,
+  parseFilterKey,
+  type TableFilter,
+} from '@tomic/table';
+
+/**
+ * The operators a computed column offers. Its value is always a number, so the
+ * comparisons are the numeric ones — no prefix or substring matching.
+ */
+export const DERIVED_FILTER_OPERATORS: FilterOperator[] = [
+  'gte',
+  'lte',
+  'gt',
+  'lt',
+  'eq',
+];
+
+export interface UseTableFiltersResult {
+  filters: TableFilter[];
+  /** Add an empty filter for a property (no-op if one already exists). */
+  addFilter: (property: string) => void;
+  setFilterValue: (property: string, value: string) => void;
+  setFilterOperator: (property: string, operator: FilterOperator) => void;
+  removeFilter: (property: string) => void;
+  clearFilters: () => void;
+}
+
+export function useTableFilters(): UseTableFiltersResult {
+  const [filters, setFilters] = useState<TableFilter[]>([]);
+
+  const addFilter = useCallback((property: string) => {
+    setFilters(prev =>
+      prev.some(f => f.property === property)
+        ? prev
+        : [...prev, { property, operator: 'eq', value: '' }],
+    );
+  }, []);
+
+  const setFilterValue = useCallback((property: string, value: string) => {
+    setFilters(prev =>
+      prev.map(f => (f.property === property ? { ...f, value } : f)),
+    );
+  }, []);
+
+  const setFilterOperator = useCallback(
+    (property: string, operator: FilterOperator) => {
+      setFilters(prev =>
+        prev.map(f => (f.property === property ? { ...f, operator } : f)),
+      );
+    },
+    [],
+  );
+
+  const removeFilter = useCallback((property: string) => {
+    setFilters(prev => prev.filter(f => f.property !== property));
+  }, []);
+
+  const clearFilters = useCallback(() => setFilters([]), []);
+
+  return {
+    filters,
+    addFilter,
+    setFilterValue,
+    setFilterOperator,
+    removeFilter,
+    clearFilters,
+  };
+}
+
+const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  eq: 'is',
+  gt: 'greater than',
+  gte: 'at least',
+  lt: 'less than',
+  lte: 'at most',
+  starts_with: 'starts with',
+  contains: 'contains',
+};
+
+export function operatorLabel(operator: FilterOperator): string {
+  return OPERATOR_LABELS[operator] ?? 'is';
+}
+
+/**
+ * The operators offered for a property, by datatype. Only operators the query
+ * index can currently honor are exposed (equality/membership, value
+ * comparisons, prefix/substring). See `planning/table-view-filters.md`.
+ */
+export function operatorsForDatatype(datatype: Datatype): FilterOperator[] {
+  switch (datatype) {
+    case Datatype.INTEGER:
+    case Datatype.FLOAT:
+    case Datatype.DATE:
+    case Datatype.TIMESTAMP:
+      return ['eq', 'gt', 'gte', 'lt', 'lte'];
+    case Datatype.STRING:
+    case Datatype.MARKDOWN:
+    case Datatype.SLUG:
+      return ['eq', 'starts_with', 'contains'];
+    case Datatype.RESOURCEARRAY:
+      // Membership reads as "contains" but is the `eq` operator on the server.
+      return ['eq'];
+    default:
+      // References, booleans, etc.: equality only.
+      return ['eq'];
+  }
+}
+
+/** For resource-array columns, `eq` reads as "contains" (membership). */
+export function operatorLabelForColumn(
+  operator: FilterOperator,
+  datatype: Datatype,
+): string {
+  if (operator === 'eq' && datatype === Datatype.RESOURCEARRAY) {
+    return 'contains';
+  }
+
+  return operatorLabel(operator);
+}
+
+/**
+ * What a computed column's filter value means to a person, and how that becomes
+ * the number the store compares against.
+ *
+ * A duration is milliseconds internally, and nobody filters durations in
+ * milliseconds: the input asks for hours. A days-since is already days. A
+ * next-due date is an instant, and the useful comparison is against *now* ("due"),
+ * not against a date typed once and stale tomorrow — so `now` is a value the
+ * filter can hold, resolved when the query is built.
+ */
+export interface DerivedFilterUnit {
+  /** Shown after the input: "hours", "days", nothing for a plain number. */
+  suffix: string;
+  /** True when the value may be the literal `now` (a date-valued column). */
+  allowsNow: boolean;
+  /** The stored string → the number the store compares, or undefined if unusable. */
+  toNumber: (value: string, now: number) => number | undefined;
+}
+
+const HOUR_MS = 3_600_000;
+
+const plainNumber: DerivedFilterUnit = {
+  suffix: '',
+  allowsNow: false,
+  toNumber: value => {
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : undefined;
+  },
+};
+
+const UNITS: Record<DerivedValueKind, DerivedFilterUnit> = {
+  duration: {
+    suffix: 'hours',
+    allowsNow: false,
+    toNumber: value => {
+      const hours = Number(value);
+
+      return Number.isFinite(hours) ? hours * HOUR_MS : undefined;
+    },
+  },
+  days: { ...plainNumber, suffix: 'days' },
+  number: plainNumber,
+  // A true/false column compares as 1/0: "equals 1" keeps the rows where it holds.
+  boolean: plainNumber,
+  date: {
+    suffix: '',
+    allowsNow: true,
+    toNumber: (value, now) => {
+      if (value === NOW_VALUE) {
+        return now;
+      }
+
+      const parsed = Date.parse(value);
+
+      return Number.isNaN(parsed) ? undefined : parsed;
+    },
+  },
+};
+
+/** The value that means "the moment the query runs". */
+export const NOW_VALUE = 'now';
+
+export function derivedFilterUnit(spec: DerivedColumnSpec): DerivedFilterUnit {
+  return UNITS[spec.valueKind ?? 'number'];
+}
+
+/**
+ * Splits the view's filters into the two things a query takes: `(property,
+ * value)` constraints the index can answer, and constraints on computed values
+ * the store has to evaluate per row.
+ *
+ * An empty draft has no predicate yet. A valued filter that cannot be
+ * compiled is different: callers must wait for its metadata or ask for repair.
+ */
+export function splitFilters(
+  filters: TableFilter[],
+  derivedColumns: DerivedColumnSpec[],
+  now: number,
+): {
+  propVals: PropVal[];
+  expressionFilters: ExpressionFilter[];
+  hasUnresolved: boolean;
+} {
+  const specById = new Map(derivedColumns.map(spec => [spec.id, spec]));
+  const propVals: PropVal[] = [];
+  const expressionFilters: ExpressionFilter[] = [];
+  let hasUnresolved = false;
+
+  for (const filter of filters) {
+    if (!filter || typeof filter.value !== 'string') {
+      hasUnresolved = true;
+      continue;
+    }
+
+    if (filter.value === '') {
+      continue;
+    }
+
+    if (filter.derived === undefined) {
+      const operator = filter.operator ?? 'eq';
+      const supported =
+        DERIVED_FILTER_OPERATORS.includes(operator) ||
+        operator === 'contains' ||
+        operator === 'starts_with';
+
+      if (filter.property && supported) {
+        propVals.push({
+          property: filter.property,
+          value: filter.value,
+          operator: filter.operator,
+        });
+      } else {
+        hasUnresolved = true;
+      }
+
+      continue;
+    }
+
+    const spec = specById.get(filter.derived);
+    const expression = spec && toExpression(spec);
+
+    if (
+      !spec ||
+      !expression ||
+      !DERIVED_FILTER_OPERATORS.includes(filter.operator)
+    ) {
+      hasUnresolved = true;
+      continue;
+    }
+
+    const value = derivedFilterUnit(spec).toNumber(filter.value, now);
+
+    if (value === undefined) {
+      hasUnresolved = true;
+      continue;
+    }
+
+    expressionFilters.push({
+      expression,
+      operator: filter.operator as ExpressionFilter['operator'],
+      value,
+      // The same instant for every constraint in the query, and quantized: this
+      // is part of the query's identity, so a raw `Date.now()` would re-run it
+      // on every render.
+      ...(dependsOnNow(spec) || value === now ? { now_ms: now } : {}),
+      // Dates and "today" are the caller's, as in the cells.
+      tz_offset_minutes: localOffsetMinutes(),
+    });
+  }
+
+  return { propVals, expressionFilters, hasUnresolved };
+}
+
+/** How coarsely `now` is passed to the store, so a query has a stable identity. */
+export const NOW_QUANTUM_MS = 60_000;
+
+export function quantizedNow(): number {
+  return Math.floor(Date.now() / NOW_QUANTUM_MS) * NOW_QUANTUM_MS;
+}

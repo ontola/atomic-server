@@ -1,4 +1,7 @@
-import { deleteForm, deleteTableForms } from './deleteForm';
+import {
+  deleteForm,
+  deleteTableForms,
+} from '@tomic/resource-ui/chunks/FormBuilder/deleteForm';
 import { core, forms, useStore, useString, useBoolean } from '@tomic/react';
 import { CollectionBuilder } from '@tomic/lib';
 import { useState, type JSX } from 'react';
@@ -6,9 +9,9 @@ import toast from 'react-hot-toast';
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import type { DeleteDialogProps } from '@components/ResourceContextMenu/deleteDialogRegistry';
+} from '@tomic/resource-ui/components/ConfirmationDialog';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import type { DeleteDialogProps } from '@tomic/resource-ui/components/ResourceContextMenu/deleteDialogRegistry';
 
 /**
  * `Resource.destroy()` never cascades (`browser/lib/src/resource.ts`), so

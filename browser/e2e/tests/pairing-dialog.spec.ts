@@ -1,11 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  before,
-  FRONTEND_URL,
-  nodeReachableServerUrl,
-  SERVER_URL,
-  smoke,
-} from './test-utils';
+import { before, FRONTEND_URL, pretendToBeTheApp, smoke } from './test-utils';
 
 /**
  * Taking someone else's pairing code — the paste path, and what the dialog
@@ -16,7 +10,7 @@ import {
  * and had no coverage at all. Faking the Tauri global is enough to reach it:
  * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`. The page
  * then also resolves its embedded server as `localhost:9883`, so
- * `pretendToBeTheApp` proxies that origin to `SERVER_URL` when they differ
+ * `pretendToBeTheApp` (test-utils) proxies that origin to `SERVER_URL` when they differ
  * (dagger CI). Nothing here calls `invoke`, so an empty stand-in object is
  * sufficient.
  *
@@ -30,40 +24,6 @@ import {
 
 const NODE = `did:ad:node:${'a'.repeat(64)}`;
 const VALID_CODE = `atomic://pair?v=1&node=${NODE}&drives=*`;
-
-/**
- * Make the page believe it is the desktop/mobile app.
- *
- * `isRunningInTauri()` only checks for `window.__TAURI_INTERNALS__`, but once
- * that is set the app also hardcodes its embedded server as
- * `http://localhost:9883` (`getLocalServerOrigin`). Locally that is the real
- * server; in dagger CI the server is `atomic.localhost` / `atomic`. Without a
- * proxy, `useOwnNodeDid` never gets a node id and the paste form stays hidden
- * behind `pairNodeId && …`.
- */
-async function pretendToBeTheApp(page: Page) {
-  const embeddedOrigin = 'http://localhost:9883';
-  // Fetch from Node via the service-binding host — not SERVER_URL's
-  // `atomic.localhost`, which only Chromium can resolve in dagger.
-  const realOrigin = nodeReachableServerUrl(SERVER_URL);
-
-  if (realOrigin !== embeddedOrigin) {
-    await page.route(`${embeddedOrigin}/**`, async route => {
-      const rewritten = route
-        .request()
-        .url()
-        .replace(embeddedOrigin, realOrigin);
-      const response = await route.fetch({ url: rewritten });
-      await route.fulfill({ response });
-    });
-  }
-
-  await page.addInitScript(() => {
-    (
-      window as unknown as { __TAURI_INTERNALS__: unknown }
-    ).__TAURI_INTERNALS__ = {};
-  });
-}
 
 /**
  * Stub the pairing request. Returns a counter so a test can assert the request
@@ -86,10 +46,8 @@ async function stubIrohSync(page: Page, body: unknown) {
 }
 
 async function gotoSync(page: Page) {
-  await page.goto(`${FRONTEND_URL}/app/sync`);
-  await expect(
-    page.getByRole('heading', { name: 'Sync', exact: true }),
-  ).toBeVisible();
+  await page.goto(`${FRONTEND_URL}/app/settings?section=sync`);
+  await expect(page.getByText('Sync & devices', { exact: true })).toBeVisible();
 }
 
 // Connect a device takes a pairing code or a server address in one box.

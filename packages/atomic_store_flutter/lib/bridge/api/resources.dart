@@ -109,7 +109,8 @@ abstract class AtomicStore implements RustOpaqueInterface {
       {required String target,
       required bool write,
       PlatformInt64? expiresAt,
-      PlatformInt64? maxUsages});
+      PlatformInt64? maxUsages,
+      String? serverOrigin});
 
   /// Create a resource of `class_url` named `name` ("Untitled" when empty)
   /// under `drive`, signed by this device's agent, and push it like every other
@@ -157,6 +158,10 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// chat's subject.
   Future<String> importAiChat(
       {required String name, required String entriesJson});
+
+  /// Whether the store file is encrypted at rest. False for a store that
+  /// was created before encryption was asked for (it stays plaintext).
+  bool isEncryptedAtRest();
 
   /// Whether the session is open now.
   bool isSyncing();
@@ -255,10 +260,24 @@ abstract class AtomicStore implements RustOpaqueInterface {
   /// Open the store in the directory `path` (created when missing) for
   /// `agent_secret` (none: no agent yet, see [`AtomicStore::setup`]),
   /// working in `drive` (none: the store's active drive).
+  ///
+  /// With `store_key` (32 bytes) the file is encrypted at rest: a new
+  /// store is created encrypted, an encrypted one opens only with its key
+  /// (a wrong key is an error that says so, the file stays as it is), and a
+  /// store that already exists in plaintext stays plaintext (see
+  /// [`AtomicStore::is_encrypted_at_rest`]). An encrypted store opened
+  /// without a key is an error. Where the key lives is up to the caller
+  /// (`AtomicFlutter.open` keeps it in the keychain / keystore).
   static Future<AtomicStore> open(
-          {required String path, String? agentSecret, String? drive}) =>
+          {required String path,
+          String? agentSecret,
+          String? drive,
+          Uint8List? storeKey}) =>
       RustLib.instance.api.crateApiResourcesAtomicStoreOpen(
-          path: path, agentSecret: agentSecret, drive: drive);
+          path: path,
+          agentSecret: agentSecret,
+          drive: drive,
+          storeKey: storeKey);
 
   /// Open this handle's own WebSocket session to the server at
   /// `server_origin`: sign in as this handle's agent, subscribe to its

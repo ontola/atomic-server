@@ -204,7 +204,9 @@ pub fn check_rights_cached<'a, S: Storelike>(
             None => {}
         }
 
-        let result = check_rights_impl(store, resource, for_agent_enum, right, cache).await;
+        let result = check_rights_impl(store, resource, for_agent_enum, right, cache)
+            .await
+            .map_err(|e| code_write_denial(e, right));
 
         if let Some(cache) = cache {
             if let Ok(mut guard) = cache.lock() {
@@ -224,6 +226,28 @@ pub fn check_rights_cached<'a, S: Storelike>(
 /// Returns string with explanation if allowed.
 #[tracing::instrument(skip_all)]
 pub async fn check_append(
+    store: &impl Storelike,
+    resource: &Resource,
+    for_agent: &ForAgent,
+) -> AtomicResult<String> {
+    check_append_inner(store, resource, for_agent)
+        .await
+        .map_err(|e| code_write_denial(e, Right::Append))
+}
+
+/// A refusal to write or append is `UNAUTHORIZED_WRITE`: the signer may not
+/// do this here, and only a rights change helps. Reads carry no commit code.
+fn code_write_denial(e: crate::errors::AtomicError, right: Right) -> crate::errors::AtomicError {
+    if !matches!(right, Right::Read)
+        && e.code == 0
+        && e.error_type == crate::errors::AtomicErrorType::UnauthorizedError
+    {
+        return e.with_code(crate::sync::protocol::error_code::UNAUTHORIZED_WRITE);
+    }
+    e
+}
+
+async fn check_append_inner(
     store: &impl Storelike,
     resource: &Resource,
     for_agent: &ForAgent,
@@ -449,7 +473,11 @@ pub fn check_rights<'a>(
     for_agent_enum: &'a ForAgent,
     right: Right,
 ) -> AsyncResult<'a, AtomicResult<String>> {
-    check_rights_impl(store, resource, for_agent_enum, right, None)
+    Box::pin(async move {
+        check_rights_impl(store, resource, for_agent_enum, right, None)
+            .await
+            .map_err(|e| code_write_denial(e, right))
+    })
 }
 
 fn check_rights_impl<'a, S: Storelike>(
@@ -509,7 +537,10 @@ fn check_rights_impl<'a, S: Storelike>(
                             .await?;
                     check_rights_cached(store, &target, for_agent_enum, right, cache).await
                 }
-                Right::Write => Err("Commits cannot be edited.".into()),
+                Right::Write => Err(
+                    crate::errors::AtomicError::from("Commits cannot be edited.")
+                        .with_code(crate::sync::protocol::error_code::IMMUTABLE_COMMIT),
+                ),
                 Right::Append => {
                     Err("Commits cannot have children, you cannot Append to them.".into())
                 }
@@ -1173,5 +1204,126 @@ mod test {
             !can_read(draft.clone()).await,
             "unpublishing by re-parenting out of the public folder must revoke public read"
         );
+    }
+
+    /// Creation needs `append` on the parent. Moving an existing resource must
+    /// need it on the new parent too, otherwise "create in your own drive,
+    /// then move" lands content in a drive the signer has no rights on.
+    #[tokio::test]
+    async fn moving_a_resource_needs_append_on_the_new_parent() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        let a = store.create_agent(Some("agent-a")).await.unwrap();
+        let b = store.create_agent(Some("agent-b")).await.unwrap();
+
+        let opts_for = |agent: &crate::agents::Agent| crate::commit::CommitOpts {
+            validate_schema: false,
+            validate_constraints: false,
+            validate_signature: false,
+            validate_timestamp: true,
+            validate_rights: true,
+            validate_loro_causality: false,
+            update_index: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            source_id: None,
+        };
+
+        // A drive owned by the default agent, writable by `extra_writers` too.
+        let make_drive = |owner: crate::agents::Agent, extra_writers: Vec<crate::Subject>| {
+            let store = &store;
+            async move {
+                store.set_default_agent(owner.clone());
+                let mut drive = crate::Resource::new("did:ad:placeholder".into());
+                drive
+                    .set(
+                        crate::urls::IS_A.into(),
+                        Value::ResourceArray(vec![crate::urls::DRIVE.into()]),
+                        store,
+                    )
+                    .await
+                    .unwrap();
+                let mut writers: Vec<crate::Subject> = vec![owner.subject.clone()];
+                writers.extend(extra_writers);
+                drive
+                    .set(
+                        crate::urls::WRITE.into(),
+                        Value::ResourceArray(writers.into_iter().map(Into::into).collect()),
+                        store,
+                    )
+                    .await
+                    .unwrap();
+                drive
+                    .save_as_genesis(store)
+                    .await
+                    .unwrap()
+                    .resource_new
+                    .unwrap()
+                    .get_subject()
+                    .clone()
+            }
+        };
+        let make_child = |owner: crate::agents::Agent, parent: crate::Subject| {
+            let store = &store;
+            async move {
+                store.set_default_agent(owner);
+                let mut res = crate::Resource::new("did:ad:placeholder".into());
+                res.set(crate::urls::PARENT.into(), Value::AtomicUrl(parent), store)
+                    .await
+                    .unwrap();
+                res.save_as_genesis(store)
+                    .await
+                    .unwrap()
+                    .resource_new
+                    .unwrap()
+                    .get_subject()
+                    .clone()
+            }
+        };
+
+        let drive_a = make_drive(a.clone(), vec![]).await;
+        let drive_b = make_drive(b.clone(), vec![]).await;
+        let drive_shared = make_drive(b.clone(), vec![a.subject.clone()]).await;
+        let x = make_child(a.clone(), drive_a.clone()).await;
+        let folder_a2 = make_child(a.clone(), drive_a.clone()).await;
+        let folder_b = make_child(b.clone(), drive_b.clone()).await;
+        let folder_shared = make_child(b.clone(), drive_shared.clone()).await;
+
+        let move_to = |parent: crate::Subject| {
+            let store = &store;
+            let a = &a;
+            let x = &x;
+            let opts = opts_for(a);
+            async move {
+                let current = store.get_resource(x).await.unwrap();
+                let mut mv = crate::commit::CommitBuilder::new(x.clone());
+                mv.set(crate::urls::PARENT.into(), Value::AtomicUrl(parent));
+                let commit = mv.sign(a, store, &current).await.unwrap();
+                store.apply_commit(commit, &opts).await
+            }
+        };
+
+        let refused = move_to(folder_b.clone()).await;
+        assert!(
+            refused.is_err(),
+            "agent A has no append on B's folder; moving a resource there must be refused"
+        );
+        assert_eq!(
+            refused.unwrap_err().code,
+            crate::sync::protocol::error_code::UNAUTHORIZED_WRITE,
+            "a refused move is an unauthorized write, whatever the wording"
+        );
+        let still = store.get_resource(&x).await.unwrap();
+        assert_eq!(
+            still.get(crate::urls::PARENT).unwrap().to_string(),
+            drive_a.to_string(),
+            "a refused move must leave the parent alone"
+        );
+
+        move_to(folder_a2.clone())
+            .await
+            .expect("moving inside a drive the signer owns is allowed");
+        move_to(folder_shared.clone())
+            .await
+            .expect("moving to a folder the signer may append to is allowed");
     }
 }

@@ -11,20 +11,20 @@ import {
   type CatalogApp,
   type InstalledCatalogApp,
 } from '@tomic/react';
-import { Card } from '@components/Card';
-import { Column, Row } from '@components/Row';
-import { Button } from '@components/Button';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Button } from '@tomic/ui/components/Button';
 import { ShareLink } from '@components/ShareLink';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   useDialog,
-} from '@components/Dialog';
+} from '@tomic/resource-ui/components/Dialog/index';
 import { FaShareNodes } from 'react-icons/fa6';
-import { getPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
+import { defaultPluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 import { paths } from '../../routes/paths';
-import { constructOpenURL } from '@helpers/navigation';
+import { constructOpenURL } from '../../helpers/navigation';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { handOverAppKey } from '@chunks/AppPage/appAgent';
 import type { CatalogEntry } from './pluginCatalog';
@@ -263,7 +263,7 @@ export function CatalogApps({
                   window.location.origin,
                   sharing.app.id,
                   sharing.catalogUrl,
-                  getPluginCatalogUrl(),
+                  defaultPluginCatalogUrl,
                 )}
                 qrAlt={`QR code for the ${sharing.app.name} link`}
               />

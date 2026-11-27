@@ -20,6 +20,11 @@ import { bundleBuiltinSyncables } from './scripts/build-builtin-syncables.mjs';
 // doesn't happen), no PWA service worker (tauri:// isn't HTTP), separate
 // outDir so the server build keeps its own nonce'd dist.
 const isTauri = process.env.TAURI === '1';
+
+// The packaged and dev desktop app is the atomic.place product, so it is a
+// hosted distribution unless a build says otherwise. A plain web build from
+// source stays the neutral, self-hostable AtomicServer.
+if (isTauri) process.env.VITE_ATOMIC_HOSTED_DISTRIBUTION ??= 'true';
 const isVitest = process.env.VITEST === 'true';
 
 // Source maps are 28MB of the 48MB dist -- and that dist is compiled into the
@@ -99,6 +104,32 @@ const wasmVersionHash = wasmVersion();
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+
+  // The desktop app's account service is atomic.place unless a local .env
+  // names another (a dev control plane). Without this a portal remembered from
+  // some server it once asked (staging) wins over the product's own.
+  if (
+    isTauri &&
+    !process.env.VITE_MANAGED_PORTAL_URL &&
+    !env.VITE_MANAGED_PORTAL_URL
+  ) {
+    process.env.VITE_MANAGED_PORTAL_URL = 'https://atomic.place';
+  }
+
+  // Feedback needs a Sentry DSN, and the desktop app is not served by a node
+  // that could inject one, so "Send feedback" would be greyed out. The DSN is
+  // public (it only allows sending). A dev app reports as its own environment,
+  // apart from released builds.
+  if (isTauri && !process.env.VITE_SENTRY_DSN && !env.VITE_SENTRY_DSN) {
+    process.env.VITE_SENTRY_DSN =
+      'https://b08842f7f4ac1d5bea3415049eb226c0@o1378995.ingest.us.sentry.io/4512015907291136';
+
+    if (!process.env.VITE_SENTRY_ENVIRONMENT && !env.VITE_SENTRY_ENVIRONMENT) {
+      process.env.VITE_SENTRY_ENVIRONMENT =
+        mode === 'development' ? 'desktop-dev' : 'production';
+    }
+  }
+
   const atomicServerUrl =
     process.env.VITE_ATOMIC_SERVER_URL ??
     env.VITE_ATOMIC_SERVER_URL ??
@@ -134,8 +165,45 @@ export default defineConfig(({ mode }) => {
       // properties of undefined (reading 'localsInner')") on the next view
       // update (e.g. opening the slash menu next to a collaborator cursor).
       // Deduping forces a single shared instance so the `instanceof` holds.
-      dedupe: ['prosemirror-view', 'prosemirror-state', 'prosemirror-model'],
+      // Shared sources receive localization imports from the host compiler.
+      // Resolve that injected runtime through the host's dependency.
+      dedupe: [
+        'prosemirror-view',
+        'prosemirror-state',
+        'prosemirror-model',
+        '@wuchale/jsx',
+      ],
       alias: [
+        {
+          find: '@tomic/resource-ui/locale-runtime',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/main.loader.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui/locale-message',
+          replacement: path.resolve(
+            __dirname,
+            '../resource-ui/src/locales/message.js',
+          ),
+        },
+        {
+          find: '@tomic/resource-ui',
+          replacement: path.resolve(__dirname, '../resource-ui/src'),
+        },
+        {
+          find: '@tomic/table-page',
+          replacement: path.resolve(__dirname, '../table-page/src'),
+        },
+        {
+          find: '@tomic/table',
+          replacement: path.resolve(__dirname, '../table/src/index.ts'),
+        },
+        {
+          find: '@tomic/ui',
+          replacement: path.resolve(__dirname, '../ui/src'),
+        },
         // Force EVERY `loro-crdt` import (our `enableLoro`, plus
         // `loro-prosemirror` used by the editor) onto the `web` build.
         // The default entry resolves via the `module` field to the
@@ -186,14 +254,14 @@ export default defineConfig(({ mode }) => {
           find: '@integration-host/table/createTableFromSpec',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/createTableFromSpec.ts',
+            '../table-page/src/TablePage/createTableFromSpec.ts',
           ),
         },
         {
           find: '@integration-host/table/tableTemplates',
           replacement: path.resolve(
             __dirname,
-            'src/chunks/TablePage/tableTemplates.ts',
+            '../table-page/src/TablePage/tableTemplates.ts',
           ),
         },
         { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
@@ -350,7 +418,13 @@ export default defineConfig(({ mode }) => {
             .replaceAll('__APP_DESCRIPTION__', appDescription),
       },
       !isVitest && webfontDownload(),
-      !isVitest && wuchale(),
+      !isVitest &&
+        wuchale({
+          configPath: path.resolve(
+            __dirname,
+            '../resource-ui/wuchale.config.js',
+          ),
+        }),
       // Native React Compiler (oxc-transform-react). Must run before JSX
       // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
       // pass. Replace with `react({ compiler: true })` once plugin-react 6.1.0
@@ -656,7 +730,12 @@ export default defineConfig(({ mode }) => {
       // dynamic import ("Outdated Optimize Dep" → "Failed to fetch dynamically
       // imported module: CollaborativeEditor.tsx"). Crawling the chunk roots at
       // boot pre-optimizes everything, so first-open is warm and e2e is stable.
-      entries: ['./index.html', './src/chunks/**/*.{ts,tsx}'],
+      entries: [
+        './index.html',
+        './src/chunks/**/*.{ts,tsx}',
+        '../resource-ui/src/chunks/**/*.{ts,tsx}',
+        '../table-page/src/**/*.{ts,tsx}',
+      ],
     },
     test: {
       setupFiles: ['./src/test-setup.ts'],

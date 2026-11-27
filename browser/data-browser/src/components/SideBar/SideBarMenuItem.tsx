@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
-import { AtomicLink } from '../AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { SideBarItem } from './SideBarItem';
 
 /** Full-width row; matches resource links in the tree (clean AtomicLink is inline by default). */
@@ -29,7 +29,7 @@ export const SideBarMenuRowLabel = styled.span`
 `;
 
 /** Icon column for sidebar menu rows (account, Shared with me) (matches tree LeadingSlot). */
-const IconSlot = styled.span`
+export const IconSlot = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;

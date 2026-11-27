@@ -24,7 +24,8 @@ import 'value.dart';
 /// order.
 class InMemoryBackend implements StoreBackend {
   InMemoryBackend([Map<String, Map<String, Value>> resources = const {}]) {
-    resources.forEach((subject, props) => this.resources[subject] = Map.of(props));
+    resources
+        .forEach((subject, props) => this.resources[subject] = Map.of(props));
   }
 
   /// The resources by subject. Writing here directly changes the data but

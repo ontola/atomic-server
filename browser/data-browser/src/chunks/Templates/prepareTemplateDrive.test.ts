@@ -4,6 +4,7 @@ import { prepareTemplateDrive } from './prepareTemplateDrive';
 import { fetchManagedInfo } from '../../helpers/managedServer';
 import { getManagedEnrollments } from '../../helpers/managed/enrollmentApi';
 import { getManagedAccount } from '../../helpers/managed/session';
+import { readManagedAccountBinding } from '../../helpers/managed/binding';
 
 vi.mock('../../helpers/managedServer', () => ({
   fetchManagedInfo: vi.fn(),
@@ -13,6 +14,10 @@ vi.mock('../../helpers/managed/enrollmentApi', () => ({
 }));
 vi.mock('../../helpers/managed/session', () => ({
   getManagedAccount: vi.fn(),
+}));
+
+vi.mock('../../helpers/managed/binding', () => ({
+  readManagedAccountBinding: vi.fn(),
 }));
 
 const home = 'did:ad:home';
@@ -45,6 +50,12 @@ beforeEach(() => {
   vi.mocked(getManagedEnrollments).mockResolvedValue([]);
   vi.mocked(getManagedAccount).mockReset();
   vi.mocked(getManagedAccount).mockResolvedValue({ email: 'a@example.com' });
+  // This device was linked to an account, unless a test says otherwise.
+  vi.mocked(readManagedAccountBinding).mockReset();
+  vi.mocked(readManagedAccountBinding).mockReturnValue({
+    owner_email: 'a@example.com',
+    expected_agent_subject: 'did:ad:agent:owner',
+  });
 });
 
 describe('template drive preparation', () => {
@@ -112,6 +123,15 @@ describe('template drive preparation', () => {
     expect(getManagedEnrollments).not.toHaveBeenCalled();
     // Nothing to verify on the server: a guest's home was never there.
     expect(store.makeDriveLocal).not.toHaveBeenCalled();
+    expect(store.registerLocalOnlyDrive).toHaveBeenCalledExactlyOnceWith(home);
+  });
+
+  it('lets a guest with a Get started home create a drive, never linked to an account', async () => {
+    const store = fixture();
+    vi.mocked(getManagedAccount).mockResolvedValue(null);
+    vi.mocked(readManagedAccountBinding).mockReturnValue(null);
+    await prepareTemplateDrive(store);
+    expect(getManagedEnrollments).not.toHaveBeenCalled();
     expect(store.registerLocalOnlyDrive).toHaveBeenCalledExactlyOnceWith(home);
   });
 

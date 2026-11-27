@@ -58,6 +58,7 @@ function fakeDb(
       return subjects.map(s => rows[s] ?? { jsonAd: null, snapshot: null });
     },
     putResourceWithSnapshot: async () => undefined,
+    putLoroSnapshot: async () => undefined,
     putResource: async () => undefined,
     removeResource: async () => undefined,
     flush: async () => undefined,
@@ -154,6 +155,24 @@ describe('store read policy', () => {
 
     expect((resource.error as AtomicError).type).toBe(ErrorType.Transport);
     expect(socket.fetch).not.toHaveBeenCalled();
+  });
+
+  it('drops queued writes of a drive that became local-only', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const { store } = await testStore();
+    const subject = 'atomic:late-note';
+    store.outbox.markDirty(subject);
+    vi.spyOn(store, 'isLocalOnlySubject').mockReturnValue(true);
+    const post = vi.spyOn(globalThis, 'fetch');
+
+    await (
+      store as unknown as { drainOutboxSubject: (s: string) => Promise<void> }
+    ).drainOutboxSubject(subject);
+
+    expect(store.outbox.getEntry(subject)).toBeUndefined();
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('never requests a mangled legacy subject', async ({ expect }) => {

@@ -7,7 +7,7 @@ import { css as cssLanguage } from '@codemirror/lang-css';
 import { linter, lintGutter } from '@codemirror/lint';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from 'styled-components';
-import { CodeEditorWrapper } from './CodeEditorWrapper';
+import { CodeEditorWrapper } from '@tomic/resource-ui/chunks/CodeEditor/CodeEditorWrapper';
 import { cssLinter } from './cssLint';
 
 export interface CSSEditorProps {

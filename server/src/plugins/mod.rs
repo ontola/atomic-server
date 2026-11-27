@@ -39,7 +39,6 @@ pub mod app_schema;
 #[cfg(feature = "wasm-plugins")]
 pub mod apply;
 pub mod bind_drive;
-pub mod bookmark;
 pub mod chatroom;
 #[cfg(feature = "wasm-plugins")]
 pub mod connection_state;
@@ -67,6 +66,8 @@ pub mod js_runtime;
 pub mod lease;
 #[cfg(feature = "wasm-plugins")]
 pub mod manifest;
+#[cfg(feature = "wasm-plugins")]
+mod package_archive;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]
 pub mod plan;

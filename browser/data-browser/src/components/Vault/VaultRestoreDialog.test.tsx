@@ -179,3 +179,32 @@ it('keeps the plain restore when the control plane lists no snapshots', async ()
   fireEvent.click(screen.getByTestId('vault-restore'));
   await waitFor(() => expect(v.restore).toHaveBeenCalledWith(undefined));
 });
+
+it('after a snapshot restore, says which files could not be brought back', async () => {
+  usageMock.mockResolvedValue({ snapshots: FOUR });
+  const v = vault();
+  v.restore = vi.fn(async () => ({
+    packsRead: 1,
+    resourcesRestored: 2,
+    tombstonesApplied: 0,
+    objectsSkipped: 0,
+    objectsUnreadable: 0,
+    reverted: 2,
+    blobs: { restored: 1, present: 0, missing: 1, unreadable: 0 },
+  }));
+  show(v);
+
+  fireEvent.click(screen.getByTestId('vault-restore'));
+  const radios = await openRadios();
+  fireEvent.click(radios[1]);
+  fireEvent.click(dialog().getByText('Restore'));
+
+  // The snapshot path reports files like every other restore: a restore that
+  // left a file behind must not read as a clean one.
+  await waitFor(() => expect(v.restore).toHaveBeenCalledWith('s3'));
+  await waitFor(() =>
+    expect(screen.getByTestId('vault-notice').textContent).toContain(
+      '1 file is not in the backup',
+    ),
+  );
+});

@@ -3,9 +3,7 @@ import {
   CollectionBuilder,
   core,
   dataBrowser,
-  findSchema,
   isAtomicIdentifier,
-  pluginSchema,
   subjectsReferToSameResource,
 } from '@tomic/lib';
 import {
@@ -24,7 +22,7 @@ import {
   getIntegrationProxy,
   useIntegrationProxy,
 } from '@helpers/integrationProxy';
-import { AtomicLink } from '@components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import {
   findSyncablePlatform,
   isSyncableResourceInDrive,
@@ -40,11 +38,7 @@ import {
   parseSyncableSourceKey,
   sourceConfigMatchesKey,
 } from './syncableSource';
-import { collectSyncableLegacySources } from './syncableLegacy';
-import {
-  collectSyncableFlatAdoption,
-  unsupportedLegacyFlatBlocks,
-} from './syncableFlatAdoption';
+import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
 import { ProxyConnections } from '@helpers/proxyConnections';
 import { AppFrame, type AppFrameProfile } from '@chunks/AppPage/AppFrame';
 import {
@@ -73,6 +67,7 @@ import { resolveSyncablePickerSources } from './syncablePickerSources';
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
+  captureSyncAppWriteScope,
   subscribeSyncAppContext,
   syncAppOriginEntityKeys,
   canonicalSyncAppContext,
@@ -231,16 +226,7 @@ export async function prepareSyncablePrincipalAppOpen(
         item.identifier.reassigned === false,
     );
     const matches = proof?.principal && same(proof.principal, config.principal);
-    const legacy =
-      !matches &&
-      (await proxy.canReconnectLegacyKeyed(
-        context.platform,
-        connectionId,
-        config.principal,
-        definitions,
-      ));
-    assertCurrent();
-    if (definitions.length !== 1 || (!matches && !legacy))
+    if (definitions.length !== 1 || !matches)
       throw new Error(
         'The saved principal has no matching host identity proof; reconnect it',
       );
@@ -466,6 +452,7 @@ export async function appProfile(
       resource.get(p['syncable-proxy-origin']),
     ]);
   const stamp = sourceStamp();
+  let assertWriteScope: (() => void) | undefined;
 
   const assertAuthority = () => {
     queuedAuthority?.();
@@ -478,6 +465,7 @@ export async function appProfile(
       sourceStamp() !== stamp
     )
       throw new Error('The integration source, account or server changed');
+    assertWriteScope?.();
 
     if (worker && context.rule?.run) {
       const state = readSyncableRuleStatus(
@@ -499,6 +487,20 @@ export async function appProfile(
   };
 
   assertCurrent();
+
+  if (context.kind === 'legacy') {
+    const installationApp = await findSyncablePlatform(store, {
+      drive,
+      platform: context.platform,
+      proxyOrigin: context.proxyOrigin,
+    });
+    assertCurrent();
+    const error = new Error(
+      'This saved source uses an older format. Its data was retained. Connect your account again from Apps to set up Sync.',
+    );
+    Object.assign(error, { installationApp });
+    throw error;
+  }
 
   const status = () => {
     const raw = statusResource.get(p['syncable-mirror-status']);
@@ -524,7 +526,6 @@ export async function appProfile(
     document,
     querySelection: metadata.querySelection as QuerySelection | undefined,
   };
-  const principalDescriptions = describeAuthenticatedPrincipals(document);
   const verifiedPrincipals = new Map<string, VerifiedSyncablePrincipal>();
   const principalApps =
     context.kind === 'platform'
@@ -567,86 +568,6 @@ export async function appProfile(
         assertCurrent,
       });
   assertCurrent();
-  const appSchema = canonicalControls
-    ? undefined
-    : await findSchema(store, drive, pluginSchema());
-  assertCurrent();
-  const legacy = canonicalControls
-    ? { sources: [], warnings: [] }
-    : await collectSyncableLegacySources(store, {
-        drive,
-        app: installationApp,
-        appDataProperty: appSchema?.properties?.['app-data'],
-        platform: context.platform,
-        proxyOrigin: context.proxyOrigin,
-        properties: p,
-        collections: describeCollections(document),
-        currentSourceIsLegacy: context.kind === 'legacy',
-        principalDescriptions,
-        principalProvenance: async slot => {
-          assertCurrent();
-          const proof = await proxy.keyedPrincipalProvenance(
-            context.platform,
-            slot,
-          );
-          assertCurrent();
-
-          return proof;
-        },
-      });
-  assertCurrent();
-
-  const legacyReconnectPrincipal = async (slot: string) => {
-    const candidates = legacy.sources.filter(
-      alias =>
-        alias.kind === 'principal' &&
-        alias.connectionId === slot &&
-        alias.principal?.kind === 'authenticated',
-    );
-    if (candidates.length !== 1) return;
-    const alias = candidates[0];
-    if (!alias.sourceKey || !alias.localId || !alias.sourceConfigFingerprint)
-      return;
-    const row = await store.getResource(alias.subject);
-
-    const assertAliasCurrent = () => {
-      assertCurrent();
-      assertSyncAppDrive(store, drive, alias.subject);
-      if (
-        row.get(p['syncable-source-key']) !== alias.sourceKey ||
-        row.get(core.properties.localId) !== alias.localId ||
-        sourceConfigFingerprint(row.get(p['syncable-source-config'])) !==
-          alias.sourceConfigFingerprint
-      )
-        throw new Error(
-          'The saved account source changed; reopen the integration App',
-        );
-    };
-
-    assertAliasCurrent();
-    const principal = alias.principal;
-    if (principal?.kind !== 'authenticated') return;
-    const eligible = await proxy.canReconnectLegacyKeyed(
-      context.platform,
-      slot,
-      principal,
-      principalDescriptions,
-    );
-    assertAliasCurrent();
-
-    return eligible
-      ? { principal, assertCurrent: assertAliasCurrent }
-      : undefined;
-  };
-
-  if (context.kind === 'legacy') {
-    const error = new Error(
-      'This saved source needs migration from its integration App. Moved resources are retained and no replacement will be created from this view.',
-    );
-    Object.assign(error, { installationApp });
-    throw error;
-  }
-
   const apiSchema = await syncableApiSchema(
     store,
     drive,
@@ -663,17 +584,34 @@ export async function appProfile(
     assertCurrent();
   }
 
-  if (worker && context.resource) {
-    if (!context.rule) throw new Error('Select a saved filter to sync');
+  if (worker) {
+    if (context.resource && !context.rule)
+      throw new Error('Select a saved filter to sync');
+
+    const authorize = async () => {
+      const [canWrite] = await resource.canWrite(actorSubject);
+      assertCurrent();
+      if (!canWrite) throw new Error('Write access to this table is required');
+
+      if (context.rule) {
+        const [canWriteRule] = await statusResource.canWrite(actorSubject);
+        assertCurrent();
+        if (!canWriteRule)
+          throw new Error('Write access to this filter is required');
+      }
+    };
+
+    await authorize();
+    assertWriteScope = captureSyncAppWriteScope(
+      store,
+      context.rule ? [table, context.rule.subject] : [table],
+    );
+    await authorize();
+  }
+
+  if (worker && context.resource && context.rule) {
     if (status().paused === true || status().enabled === false)
       throw new Error('Resume this filter before syncing');
-    const [canWriteTable] = await resource.canWrite(actorSubject);
-    assertCurrent();
-    if (!canWriteTable)
-      throw new Error('Write access to this table is required');
-    const [canWrite] = await statusResource.canWrite(actorSubject);
-    assertCurrent();
-    if (!canWrite) throw new Error('Write access to this filter is required');
     const run = await nextRuleRun(
       store,
       drive,
@@ -845,14 +783,9 @@ export async function appProfile(
       document,
       querySelection: trusted.querySelection,
       apiSchema,
-      legacySources: legacy.sources,
-      legacyWarnings: [...legacy.warnings, ...flatAdoption.warnings],
-      legacyMigrationBlocked: legacy.warnings.length > 0,
+      adoptionWarnings: flatAdoption.warnings,
       flatIdentityAliases: flatAdoption.aliases,
-      flatMigrationBlocks: [
-        ...flatAdoption.blocks,
-        ...unsupportedLegacyFlatBlocks(legacy.sources, context),
-      ],
+      flatMigrationBlocks: flatAdoption.blocks,
       flatAdoptionRules: flatAdoption.rules,
       worker,
     },
@@ -866,7 +799,6 @@ export async function appProfile(
         if (status().paused === true || status().enabled === false)
           throw new Error('Resume this collection before syncing');
       },
-      async slot => !!(await legacyReconnectPrincipal(slot)),
       proof => {
         assertCurrent();
         verifiedPrincipals.set(proof.connectionId, proof);
@@ -1027,23 +959,10 @@ export async function appProfile(
               );
               assertCurrent();
 
-              if (!canReconnect) {
-                const legacyReconnect =
-                  await legacyReconnectPrincipal(connectionId);
-                if (legacyReconnect) {
-                  await proxy.prepareLegacyKeyedReconnect(
-                    context.platform,
-                    connectionId,
-                    legacyReconnect.principal,
-                    principalDescriptions,
-                    legacyReconnect.assertCurrent,
-                  );
-                  assertCurrent();
-                } else
-                  throw new Error(
-                    'Open the integration App to reconnect this account',
-                  );
-              }
+              if (!canReconnect)
+                throw new Error(
+                  'Open the integration App to reconnect this account',
+                );
 
               assertCurrent();
 

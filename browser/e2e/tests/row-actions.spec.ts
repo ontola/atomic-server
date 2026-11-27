@@ -166,7 +166,7 @@ test.describe('row actions', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     const milk = row(page, 'Milk');
-    await milk.getByTestId('row-action-two-more').click();
+    await milk.getByRole('button', { name: 'Two more', exact: true }).click();
     await expect(milk).toContainText('2', { timeout: 15_000 });
 
     // Configuration lives on the View, so it comes back. Column headers
@@ -178,7 +178,9 @@ test.describe('row actions', () => {
     await expect
       .poll(() => headings(page), { timeout: 15_000 })
       .toContain('Two more');
-    await row(page, 'Milk').getByTestId('row-action-two-more').click();
+    await row(page, 'Milk')
+      .getByRole('button', { name: 'Two more', exact: true })
+      .click();
     await expect(row(page, 'Milk')).toContainText('4', { timeout: 15_000 });
   });
 

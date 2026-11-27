@@ -8,6 +8,7 @@ import 'device_stats.dart';
 import 'error_snack.dart';
 import 'server_settings_section.dart';
 import 'settings_backend.dart';
+import 'strings.dart';
 import 'sync_widgets.dart';
 import 'this_device_card.dart';
 import 'theme.dart';
@@ -32,23 +33,24 @@ class AtomicUserInfo {
   final String? peerId;
   final String? activeDrive;
 
-  /// Workspace names read so far; empty for one not received yet.
+  /// Drive names read so far; empty for one not received yet.
   final Map<String, String> driveNames;
 
   /// How often the panel has loaded: a section reloads what it read when this
-  /// changes (a workspace was switched, a server changed).
+  /// changes (a drive was switched, a server changed).
   final int loads;
 
   /// Asks for a new device name.
   final VoidCallback rename;
 
-  String driveLabel(String drive) => (driveNames[drive]?.isNotEmpty ?? false)
-      ? driveNames[drive]!
-      : 'Workspace';
+  String driveLabel(String drive, [AtomicStrings strings = AtomicStrings.en]) =>
+      (driveNames[drive]?.isNotEmpty ?? false)
+          ? strings.driveLabel(driveNames[drive]!)
+          : strings.drive;
 }
 
 /// Who you are and everything that syncs, after the web app's Sync page: your
-/// identity, the workspace, this device and the devices and servers it syncs
+/// identity, the drive, this device and the devices and servers it syncs
 /// with. The app shows it as a page, other apps as a dialog
 /// ([showAtomicUserDialog]).
 ///
@@ -77,7 +79,7 @@ class AtomicUserPanel extends StatefulWidget {
   final Future<void> Function(BuildContext context, AtomicIdentity agent)?
       openProfile;
 
-  /// The account that hosts the data, between the workspace and this device.
+  /// The account that hosts the data, between the drive and this device.
   final Widget Function(BuildContext context, AtomicUserInfo info)?
       accountBuilder;
 
@@ -101,6 +103,7 @@ class AtomicUserPanel extends StatefulWidget {
 
 class _AtomicUserPanelState extends State<AtomicUserPanel> {
   AtomicSettingsBackend get _backend => widget.backend;
+  AtomicStrings get _s => AtomicStrings.of(context);
 
   final _secretField = TextEditingController();
   bool _loading = true;
@@ -123,6 +126,14 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The notes the backend writes (after a sign-in, an invite) use the
+    // language of the panel.
+    _backend.strings = AtomicStrings.of(context);
   }
 
   @override
@@ -196,9 +207,9 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
   void _copy(String text, String what) {
     Clipboard.setData(ClipboardData(text: text));
     final onCopied = widget.onCopied;
-    if (onCopied != null) return onCopied(context, '$what copied');
+    if (onCopied != null) return onCopied(context, _s.copied(what));
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('$what copied')));
+        .showSnackBar(SnackBar(content: Text(_s.copied(what))));
   }
 
   void _fail(String what, Object e) => showErrorSnack(context, '$what: $e');
@@ -217,10 +228,10 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx), child: Text(_s.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Save')),
+              child: Text(_s.save)),
         ],
       ),
     );
@@ -228,13 +239,13 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
 
   Future<void> _rename() async {
     final name =
-        await _ask('Device name', 'Only on this device', initial: _deviceName);
+        await _ask(_s.deviceNameTitle, _s.onlyThisDevice, initial: _deviceName);
     if (name == null || name.isEmpty) return;
     try {
       await _backend.setDeviceName(name);
       if (mounted) setState(() => _deviceName = name);
     } catch (e) {
-      if (mounted) _fail('Could not rename the device', e);
+      if (mounted) _fail(_s.couldNotRename, e);
     }
   }
 
@@ -248,27 +259,27 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     if (open != null) {
       await open(context, agent);
     } else {
-      final name = await _ask('Your name', 'Name, seen on all your devices',
-          initial: agent.name ?? '');
+      final name =
+          await _ask(_s.yourName, _s.nameHint, initial: agent.name ?? '');
       if (name == null || name.isEmpty) return;
       try {
         await _backend.saveProfile!(
             name: name, description: agent.description ?? '');
       } catch (e) {
-        if (mounted) _fail('Could not save the name', e);
+        if (mounted) _fail(_s.couldNotSaveName, e);
       }
     }
     if (mounted) await _load();
   }
 
   Future<void> _newWorkspace() async {
-    final name = await _ask('New workspace', 'Name');
+    final name = await _ask(_s.newDrive, _s.name);
     if (name == null || name.isEmpty) return;
     try {
       await _backend.createDrive(name);
       await _load();
     } catch (e) {
-      if (mounted) _fail('Could not create the workspace', e);
+      if (mounted) _fail(_s.couldNotCreateDrive, e);
     }
   }
 
@@ -277,15 +288,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       await _backend.switchDrive(drive);
       await _load();
     } catch (e) {
-      if (mounted) _fail('Could not switch workspace', e);
+      if (mounted) _fail(_s.couldNotSwitchDrive, e);
     }
   }
 
   Future<void> _copySecret() async {
     try {
-      _copy(await _backend.exportSecret(), 'Secret key');
+      _copy(await _backend.exportSecret(), _s.secretKey);
     } catch (e) {
-      if (mounted) _fail('Could not copy the secret key', e);
+      if (mounted) _fail(_s.couldNotCopySecret, e);
     }
   }
 
@@ -295,7 +306,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       final secret = await _backend.exportSecret();
       if (mounted) setState(() => _revealed = secret);
     } catch (e) {
-      if (mounted) _fail('Could not show the secret key', e);
+      if (mounted) _fail(_s.couldNotShowSecret, e);
     }
   }
 
@@ -345,16 +356,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text(
-            "Your data stays on this device, but you'll need your secret key to sign back in."),
+        title: Text(_s.signOutTitle),
+        content: Text(_s.signOutBody),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(_s.cancel)),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sign out')),
+              child: Text(_s.signOut)),
         ],
       ),
     );
@@ -366,12 +376,12 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       _revealed = null;
       if (mounted) await _load();
     } catch (e) {
-      if (mounted) _fail('Could not sign out', e);
+      if (mounted) _fail(_s.couldNotSignOut, e);
     }
   }
 
   Future<void> _openInvite() async {
-    final link = await _ask('Open an invite', 'Paste the invite link');
+    final link = await _ask(_s.openInvite, _s.pasteInvite);
     if (link == null || link.isEmpty) return;
     try {
       final line = await _backend.openInvite!(link);
@@ -379,12 +389,13 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(line)));
       await _load();
     } catch (e) {
-      if (mounted) _fail('Could not open the invite', e);
+      if (mounted) _fail(_s.couldNotOpenInvite, e);
     }
   }
 
   Future<void> _invite() async {
     final link = _backend.inviteLink!;
+    final s = _s;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -393,15 +404,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         String? failed;
         return StatefulBuilder(
           builder: (ctx, setInner) => AlertDialog(
-            title: const Text('Invite to this workspace'),
+            title: Text(s.inviteTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: false, label: Text('Can read')),
-                    ButtonSegment(value: true, label: Text('Can edit')),
+                  segments: [
+                    ButtonSegment(value: false, label: Text(s.canRead)),
+                    ButtonSegment(value: true, label: Text(s.canEdit)),
                   ],
                   selected: {canEdit},
                   onSelectionChanged: (s) => setInner(() {
@@ -415,21 +426,19 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                   const SizedBox(height: SyncGap.s),
                   Text(copied!.startsWith('atomic:')
                       // No server: the invite is redeemed by this device.
-                      ? 'Link copied. Whoever has it can open this workspace '
-                          'in their Atomic app, while this device is online.'
-                      : 'Link copied. Anyone with it can open this workspace.'),
+                      ? s.inviteCopiedPeer
+                      : s.inviteCopiedAnyone),
                 ],
                 // Inline: this dialog sits above the panel's own messenger.
                 if (failed != null) ...[
                   const SizedBox(height: SyncGap.m),
-                  ErrorText('Could not make the link: $failed'),
+                  ErrorText(s.couldNotMakeLink(failed!)),
                 ],
               ],
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close')),
+                  onPressed: () => Navigator.pop(ctx), child: Text(s.close)),
               TextButton(
                 onPressed: () async {
                   try {
@@ -444,7 +453,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                     if (ctx.mounted) setInner(() => failed = '$e');
                   }
                 },
-                child: const Text('Copy invite link'),
+                child: Text(s.copyInviteLink),
               ),
             ],
           ),
@@ -453,8 +462,9 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     );
   }
 
-  String _driveLabel(String drive) =>
-      (_drives[drive]?.isNotEmpty ?? false) ? _drives[drive]! : 'Workspace';
+  String _driveLabel(String drive) => (_drives[drive]?.isNotEmpty ?? false)
+      ? _s.driveLabel(_drives[drive]!)
+      : _s.drive;
 
   AtomicUserInfo get _info => AtomicUserInfo(
       agent: _agent,
@@ -467,7 +477,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: AtomicSpinner());
     final c = syncColors(context);
     final info = _info;
     return ListView(
@@ -506,7 +516,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     final custom = widget.avatarBuilder;
     if (custom != null) return custom(agent, radius);
     final bytes = agent?.imageBytes;
-    final name = agent?.name ?? '';
+    final name = _s.agentLabel(agent?.name ?? '');
     return CircleAvatar(
       radius: radius,
       backgroundImage: bytes == null ? null : MemoryImage(bytes),
@@ -535,18 +545,20 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    (agent?.name?.isNotEmpty ?? false) ? agent!.name! : 'You',
+                    (agent?.name?.isNotEmpty ?? false)
+                        ? _s.agentLabel(agent!.name!)
+                        : _s.you,
                     style: SyncText.title(c),
                   ),
                   if (agent != null)
                     // The ID with a copy mark: a bare line of grey text gave
                     // no hint that a tap copies it.
                     Tooltip(
-                      message: 'Copy ID',
+                      message: _s.copyId,
                       child: InkWell(
                         mouseCursor: WidgetStateMouseCursor.clickable,
                         key: const Key('copy-agent-id'),
-                        onTap: () => _copy(agent.subject, 'Agent ID'),
+                        onTap: () => _copy(agent.subject, _s.agentId),
                         borderRadius: BorderRadius.circular(6),
                         child: Padding(
                           padding:
@@ -575,27 +587,26 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
           if (canEdit)
             SyncActionButton(
               icon: Icons.edit_outlined,
-              label: widget.openProfile != null
-                  ? 'Edit profile'
-                  : 'Edit your name',
+              label:
+                  widget.openProfile != null ? _s.editProfile : _s.editYourName,
               onPressed: _openProfile,
             ),
           if (agent != null)
             SyncActionButton(
               icon: Icons.key,
-              label: 'Copy secret key',
+              label: _s.copySecretKey,
               onPressed: _copySecret,
             ),
           if (_backend.signOut != null && widget.signInAsOther != null)
             SyncActionButton(
               icon: Icons.swap_horiz,
-              label: 'Sign in to another account',
+              label: _s.signInToAnother,
               onPressed: _signInAsOther,
             ),
           if (_backend.signOut != null && agent != null)
             SyncActionButton(
               icon: Icons.logout,
-              label: 'Sign out',
+              label: _s.signOut,
               onPressed: _signOut,
             ),
         ]),
@@ -612,8 +623,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
             if (_agent != null)
               SyncRow(
                 icon: Icons.visibility_outlined,
-                title:
-                    _revealed == null ? 'Show secret key' : 'Hide secret key',
+                title: _revealed == null ? _s.showSecretKey : _s.hideSecretKey,
                 onTap: _toggleSecret,
               ),
             if (_revealed != null)
@@ -626,15 +636,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 key: const ValueKey('user-signin-account'),
                 icon: Icons.cloud_outlined,
                 title: _linked == null
-                    ? 'Sign in with ${_backend.accountProviderName}'
-                    : 'Linked to ${_backend.accountProviderName}',
+                    ? _s.signInWith(_backend.accountProviderName!)
+                    : _s.linkedTo(_backend.accountProviderName!),
                 subtitle: _linked,
                 onTap: _signInWithAccount,
               ),
             if (_backend.signInWithSecret != null)
               SyncRow(
                 icon: Icons.login,
-                title: 'Sign in with a secret key',
+                title: _s.signInWithSecret,
                 trailing: Icon(
                     _signInOpen ? Icons.expand_less : Icons.expand_more,
                     size: 24,
@@ -649,15 +659,13 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                     key: const ValueKey('user-signin-secret'),
                     controller: _secretField,
                     obscureText: true,
-                    decoration: const InputDecoration(
-                        labelText: 'Secret key',
-                        helperText:
-                            'What you made on this device is added to it.'),
+                    decoration: InputDecoration(
+                        labelText: _s.secretKey, helperText: _s.signInHelper),
                   ),
                   const SizedBox(height: SyncGap.m),
                   SyncActionButton(
                     kind: SyncButtonKind.primary,
-                    label: 'Sign in',
+                    label: _s.signIn,
                     onPressed: _signInWithSecret,
                   ),
                 ]),
@@ -672,8 +680,8 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         ]),
       );
 
-  /// One row: the current workspace. It opens a sheet to switch, so the page
-  /// is not a list of every workspace.
+  /// One row: the current drive. It opens a sheet to switch, so the page
+  /// is not a list of every drive.
   Widget _workspaceSwitcher(AppColors c) {
     final active = _activeDrive;
     return Padding(
@@ -681,28 +689,28 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       child: SyncCard(divided: true, children: [
         SyncRow(
           icon: Icons.folder_outlined,
-          title: active == null ? 'No workspace' : _driveLabel(active),
-          subtitle: 'Workspace',
+          title: active == null ? _s.noDrive : _driveLabel(active),
+          subtitle: _s.drive,
           trailing: Icon(Icons.expand_more, size: 24, color: c.textSecondary),
           onTap: _pickWorkspace,
         ),
         if (_backend.inviteLink != null && active != null)
           SyncRow(
             icon: Icons.person_add_alt_outlined,
-            title: 'Invite someone',
+            title: _s.inviteSomeone,
             onTap: _invite,
           ),
         if (_backend.openInvite != null)
           SyncRow(
             icon: Icons.link,
-            title: 'Open an invite',
+            title: _s.openInvite,
             onTap: _openInvite,
           ),
       ]),
     );
   }
 
-  /// The workspaces that are on this device, each once. Listed drives that
+  /// The drives that are on this device, each once. Listed drives that
   /// have not been received (no name yet) are one line, not forty.
   Future<void> _pickWorkspace() async {
     String key(String drive) =>
@@ -720,6 +728,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       }
     }
     final c = syncColors(context);
+    final s = _s;
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -742,12 +751,11 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
               SyncRow(
                 icon: Icons.cloud_download_outlined,
                 iconColor: c.textSecondary,
-                title:
-                    '$elsewhere more workspace${elsewhere == 1 ? '' : 's'} not on this device yet',
+                title: s.driveNotHereYet(elsewhere),
               ),
             SyncRow(
               icon: Icons.add,
-              title: 'New workspace',
+              title: s.newDrive,
               onTap: () => Navigator.pop(ctx, ''),
             ),
           ],
@@ -778,7 +786,7 @@ Future<void> showAtomicUserDialog(
         child: Scaffold(
           backgroundColor: syncColors(ctx).bgBody,
           appBar: AppBar(
-            title: const Text('User'),
+            title: Text(AtomicStrings.of(ctx).userTitle),
             backgroundColor: syncColors(ctx).bgBody,
           ),
           body: AtomicUserPanel(

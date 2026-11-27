@@ -13,12 +13,12 @@ import {
   type Store,
 } from '@tomic/react';
 import { styled } from 'styled-components';
-import { AtomicLink } from '@components/AtomicLink';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { Button } from '@components/Button';
 import { TableList } from '@components/TableList';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import { normalizeViewKind } from '@chunks/TablePage/tableViewKinds';
+import { normalizeViewKind } from '@tomic/table-page/TablePage/tableViewKinds';
 import { syncableHierarchySchema } from './syncableHierarchy';
 import {
   isSyncableCollectionRow,

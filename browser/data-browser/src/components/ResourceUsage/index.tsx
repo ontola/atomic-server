@@ -1,1 +1,1 @@
-export { ResourceUsage } from './ResourceUsage';
+export * from '@tomic/resource-ui/components/ResourceUsage/index';

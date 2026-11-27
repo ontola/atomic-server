@@ -19,7 +19,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
 import { createOllama } from 'ollama-ai-provider-v2';
-import { addFieldsIf } from '@helpers/addIf';
+import { addFieldsIf } from '@tomic/resource-ui/helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@tomic/react';
@@ -102,6 +102,8 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     );
 
     const agent = this.options.selectedAgent;
+    const maxSteps =
+      this.options.model.provider === AIProvider.Hosted ? 8 : 1000;
 
     const result = streamText({
       messages: await modelMessagesWithToolRecovery(transformedMessages),
@@ -109,9 +111,11 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
-      stopWhen: stepCountIs(
-        this.options.model.provider === AIProvider.Hosted ? 8 : 1000,
-      ),
+      stopWhen: stepCountIs(maxSteps),
+      // Included AI stops after a few steps. A run that spent them all on tool
+      // calls ended with no words at all, so the last step may only write.
+      prepareStep: ({ stepNumber }) =>
+        stepNumber >= maxSteps - 1 ? { toolChoice: 'none' } : undefined,
       maxRetries: this.options.model.provider === AIProvider.Hosted ? 0 : 2,
       ...this.getParameters(agent, this.options.model),
     });

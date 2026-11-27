@@ -1,0 +1,25 @@
+{
+  "name": "@tomic/utils",
+  "version": "0.41.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Dependency-free helpers shared by Atomic SDK and UI builds",
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint -c ../.oxlintrc.json ./src && oxfmt -c ../.oxfmtrc.json --check ./src",
+    "test": "vitest run --maxWorkers=2",
+    "start": "tsc --watch"
+  }
+}

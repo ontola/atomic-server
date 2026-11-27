@@ -4,7 +4,9 @@ import {
   buildVaultFile,
   checkpointNumberFromKey,
   parseVaultFile,
+  pickVaultFileTarget,
   restoreDriveFromFile,
+  suggestedFileName,
   vaultFileBlob,
   VaultFileError,
   VAULT_FILE_VERSION,
@@ -57,7 +59,92 @@ const build = () =>
 
 const asBytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe('vault file download', () => {
+  it('opens the picker with a compatible filename and streams a restorable file', async () => {
+    const chunks: BlobPart[] = [];
+    const close = vi.fn(async () => {});
+    const picker = vi.fn(
+      async (options: {
+        suggestedName: string;
+        types?: { accept: Record<string, string[]> }[];
+      }) => {
+        // File System Access validates filters separately from filenames:
+        // https://wicg.github.io/file-system-access/#validate-a-suffix
+        for (const type of options.types ?? []) {
+          for (const suffix of Object.values(type.accept).flat()) {
+            if (
+              !/^\.[a-zA-Z0-9+.]+$/.test(suffix) ||
+              suffix.endsWith('.') ||
+              suffix.length > 16
+            ) {
+              throw new TypeError(`Invalid file picker extension: ${suffix}`);
+            }
+          }
+        }
+
+        return {
+          createWritable: async () => ({
+            write: async (chunk: BlobPart) => {
+              chunks.push(chunk);
+            },
+            close,
+          }),
+        };
+      },
+    );
+    vi.stubGlobal('window', { showSaveFilePicker: picker });
+
+    const target = await pickVaultFileTarget(
+      suggestedFileName('pseudonym-123', new Date('2026-11-16T12:00:00Z')),
+    );
+
+    expect(picker).toHaveBeenCalledOnce();
+    expect(picker.mock.calls[0][0].suggestedName).toBe(
+      'atomic-vault-pseudony-2026-11-16.atomic-vault',
+    );
+    expect(target).not.toBeNull();
+    await target!.save(await build());
+
+    expect(close).toHaveBeenCalledOnce();
+    const parsed = await parseVaultFile(new Blob(chunks));
+    expect(parsed.header.drivePseudonym).toBe(P);
+    expect(parsed.header.objects.map(o => o.objectKey)).toEqual(
+      objects.map(o => o.object_key),
+    );
+
+    for (let i = 0; i < payloads.length; i++) {
+      expect(await parsed.read(i)).toEqual(payloads[i]);
+    }
+  });
+
+  it('returns no target when the save dialog is cancelled', async () => {
+    vi.stubGlobal('window', {
+      showSaveFilePicker: vi
+        .fn()
+        .mockRejectedValue(new DOMException('Cancelled', 'AbortError')),
+    });
+
+    await expect(
+      pickVaultFileTarget('backup.atomic-vault'),
+    ).resolves.toBeNull();
+  });
+
+  it('propagates a picker failure instead of reporting a saved backup', async () => {
+    const error = new DOMException('Permission denied', 'SecurityError');
+    vi.stubGlobal('window', {
+      showSaveFilePicker: vi.fn().mockRejectedValue(error),
+    });
+
+    await expect(pickVaultFileTarget('backup.atomic-vault')).rejects.toBe(
+      error,
+    );
+  });
+});
 
 describe('vault file format', () => {
   it('round-trips header and sealed bytes in order', async () => {

@@ -13,11 +13,11 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
-import Field from '@components/forms/Field';
-import { Input, ErrMessage } from '@components/forms/InputStyles';
-import { AtomicLink } from '@components/AtomicLink';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Input, ErrMessage } from '@tomic/ui/components/forms/InputStyles';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { pluginClassesFor } from './runScript';
 import { RunPluginDialog } from './RunPluginDialog';
 
@@ -170,7 +170,7 @@ export function FileImport({
             />
           </Field>
           <p>
-            The file is read by this plugin on your AtomicServer, up to{' '}
+            The file is read by this app on your AtomicServer, up to{' '}
             {formatBytes(maxBytes(accepts))}. Review the proposed changes before
             anything is saved.
           </p>

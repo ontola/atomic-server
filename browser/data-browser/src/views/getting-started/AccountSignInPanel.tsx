@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { styled, useTheme } from 'styled-components';
 import { AccountSignIn } from '@tomic/service-ui';
 import '@tomic/service-ui/styles.css';
+import { ServiceTheme } from '../../components/ServiceTheme';
 import {
   getAccountProviders,
   providerSignInUrl,
@@ -9,6 +10,9 @@ import {
   type AccountProviders,
   type SignInProvider,
 } from '../../helpers/managed/accountProviders';
+import { engageAccountService } from '../../helpers/managed/api';
+import { signInAccountWithAgent } from '../../helpers/managed/agentSession';
+import { Agent } from '@tomic/lib';
 import { signInWithAccountPasskey } from '../../helpers/managed/accountPasskey';
 import {
   getManagedAccount,
@@ -68,18 +72,30 @@ const NO_PROVIDERS: AccountProviders = {
  * portal's sign-in page: Google, Apple, GitHub, passkey, email link. `onSignedIn` runs once
  * this browser holds an account session, however it got one.
  */
+type SignInPanelProps = {
+  portalUrl: string;
+  disabled?: boolean;
+  onSignedIn: () => void;
+  /** The address a cached backup names, so the email link is one tap. */
+  initialEmail?: string;
+  /** This screen already offers the backup's own passkey; a second passkey
+   * button for the account would look like the same thing twice. */
+  hidePasskey?: boolean;
+  /** Leave out "How safe is each option?", for a sign-in screen. */
+  hideInfo?: boolean;
+};
+
 export function AccountSignInPanel({
   portalUrl,
   disabled,
   onSignedIn,
-}: {
-  portalUrl: string;
-  disabled?: boolean;
-  onSignedIn: () => void;
-}) {
+  initialEmail,
+  hidePasskey,
+  hideInfo,
+}: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -93,12 +109,14 @@ export function AccountSignInPanel({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     return () => {
       live = false;
     };
-  }, []);
+  }, [portalUrl]);
 
   // The email link opens on the portal, in another tab or on the phone that
   // got the mail. The shared cookie is how this page hears about it.
@@ -131,6 +149,34 @@ export function AccountSignInPanel({
 
     if (outcome instanceof Error) setError(outcome.message);
     else if (outcome) onSignedIn();
+  }
+
+  async function handleSecret(secret: string) {
+    setBusy(true);
+    setError(null);
+
+    let ok = false;
+
+    try {
+      const agent = await Agent.fromSecret(secret.trim());
+
+      ok = await signInAccountWithAgent(agent, { proven: true, retry: true });
+    } catch {
+      setBusy(false);
+      setError(
+        'That is not an Atomic secret. Copy the whole secret and try again.',
+      );
+
+      return;
+    }
+
+    setBusy(false);
+
+    if (ok) onSignedIn();
+    else
+      setError(
+        'This secret is not linked to an atomic.place account, or could not be checked. Try another way to sign in.',
+      );
   }
 
   async function handleEmail(event: FormEvent<HTMLFormElement>) {
@@ -169,13 +215,14 @@ export function AccountSignInPanel({
       : null;
 
   return (
-    <Themed>
+    <ServiceTheme>
       <AccountSignIn
         googleHref={href('google')}
         appleHref={href('apple')}
         githubHref={href('github')}
         onPasskey={() => void handlePasskey()}
-        passkeySupported={passkeys === true}
+        onSecret={secret => void handleSecret(secret)}
+        passkeySupported={passkeys === true && !hidePasskey}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => void handleEmail(e)}
@@ -183,6 +230,7 @@ export function AccountSignInPanel({
         sending={sending}
         theme={theme.darkMode ? 'dark' : 'light'}
         assistedRecovery={providers.assisted_recovery}
+        showInfo={!hideInfo}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>
@@ -194,20 +242,9 @@ export function AccountSignInPanel({
           ) : null
         }
       />
-    </Themed>
+    </ServiceTheme>
   );
 }
-
-const Themed = styled.div`
-  --service-accent: ${p => p.theme.colors.main};
-  --service-surface: ${p => p.theme.colors.bg};
-  --service-on-accent: ${p => p.theme.colors.bg};
-  --service-muted: ${p => p.theme.colors.textLight};
-  --service-text: ${p => p.theme.colors.text};
-  --service-border: ${p => p.theme.colors.bg2};
-  --service-input-bg: ${p => p.theme.colors.bg};
-  --service-radius: ${p => p.theme.radius};
-`;
 
 const Sent = styled.p`
   margin: 0;
@@ -227,14 +264,13 @@ export function AccountSignInViaBrowser({
   portalUrl,
   disabled,
   onSignedIn,
-}: {
-  portalUrl: string;
-  disabled?: boolean;
-  onSignedIn: () => void;
-}) {
+  initialEmail,
+  hidePasskey,
+  hideInfo,
+}: SignInPanelProps) {
   const theme = useTheme();
   const [providers, setProviders] = useState<AccountProviders>(NO_PROVIDERS);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +288,8 @@ export function AccountSignInViaBrowser({
 
   useEffect(() => {
     let live = true;
+    // Opening a sign-in is what first contacts the account service.
+    engageAccountService(portalUrl);
     void getAccountProviders().then(p => live && setProviders(p));
 
     // Signed in in the browser, which sent the handoff back through
@@ -355,7 +393,7 @@ export function AccountSignInViaBrowser({
   }
 
   return (
-    <Themed>
+    <ServiceTheme>
       <AccountSignIn
         googleHref={null}
         onGoogle={providers.google ? () => void open('google') : undefined}
@@ -364,6 +402,7 @@ export function AccountSignInViaBrowser({
         githubHref={null}
         onGitHub={providers.github ? () => void open('github') : undefined}
         onPasskey={() => void open('passkey')}
+        passkeySupported={!hidePasskey}
         email={email}
         onEmailChange={setEmail}
         onSubmitEmail={e => {
@@ -373,6 +412,7 @@ export function AccountSignInViaBrowser({
         busy={busy || disabled}
         theme={theme.darkMode ? 'dark' : 'light'}
         assistedRecovery={providers.assisted_recovery}
+        showInfo={!hideInfo}
         notice={
           error ? (
             <CardError role='alert'>{error}</CardError>
@@ -385,6 +425,6 @@ export function AccountSignInViaBrowser({
           ) : null
         }
       />
-    </Themed>
+    </ServiceTheme>
   );
 }

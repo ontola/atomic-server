@@ -2,13 +2,16 @@ import {
   canPurchaseHostedAICredits,
   HOSTED_AI_USAGE_EVENT,
 } from '@helpers/managed/ai';
-import { getManagedApiBase } from '@helpers/managed/api';
+import { getManagedApiBase, getManagedDeviceToken } from '@helpers/managed/api';
+import { isRunningInTauri } from '@helpers/tauri';
+import { getAccountServiceUrl } from '@helpers/managed/cloudSync';
+import { openSaveWorkDialog } from '@components/SaveWork/saveWorkDialogState';
 import { isHostedDistribution } from '@helpers/managedServer';
 import { HostedAICredits } from './HostedAICredits';
 import { compactionTokens } from './usageMetadata';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
 import { skillTools, getSkillsSystemPromptPart } from './skills/skill';
 import { AIChatMessage } from './AIChatMessage';
@@ -23,9 +26,9 @@ import {
 } from './chatRunRegistry';
 import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Button } from '@components/Button';
-import { ButtonLink } from '@components/ButtonLink';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Button } from '@tomic/ui/components/Button';
+import { ButtonLink } from '@tomic/resource-ui/components/ButtonLink';
 import { FaXmark, FaPaperclip, FaFile, FaSliders } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
@@ -40,7 +43,7 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { MicrophoneSelect } from '@components/AI/MicrophoneSelect';
 import { MessageContextItem } from './MessageContextItem';
 
@@ -69,19 +72,21 @@ import {
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
+import { withCodeMode } from './codeMode';
 import { useConversationSummary } from './useConversationSummary';
-import { Popover } from '@components/Popover';
+import { Popover } from '@tomic/ui/components/Popover';
 import { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
-import { useOnValueChange } from '@helpers/useOnValueChange';
-import { transition } from '@helpers/transition';
-import { useAIChanges } from '@components/AIChangesContext';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
+import { transition } from '@tomic/ui/helpers/transition';
+import { useAIChanges } from '@tomic/resource-ui/components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
 import { LiveConversation } from './LiveConversation';
+import { reportUserFacingFailure } from '../../helpers/sentry';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -357,6 +362,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [requestError, setRequestError] = useState<string | undefined>(
     undefined,
   );
+  // What the failed reply held, in words for a bug report: how many steps ran
+  // and which tools, since "nothing" alone gives nobody a place to start.
+  const [requestDetail, setRequestDetail] = useState<string | undefined>(
+    undefined,
+  );
 
   /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
   const providerLabel =
@@ -372,17 +382,38 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // would be wrong while the account status is merely still loading or failed.
   const hostedBuild = isHostedDistribution();
 
+  // Without an account there is no included AI; say where to get it when the
+  // build offers an account service.
+  const accountServiceHost = (() => {
+    // A hosted web build signs people in before it gets here; the desktop
+    // app is hosted too but starts without an account.
+    if (
+      hostedAI ||
+      (hostedBuild && !isRunningInTauri()) ||
+      getManagedDeviceToken()
+    )
+      return undefined;
+
+    try {
+      return new URL(getAccountServiceUrl() ?? '').host;
+    } catch {
+      return undefined;
+    }
+  })();
+
   const providerNotice = canUseInput
     ? null
     : activeModel.provider === AIProvider.Hosted
       ? 'Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges.'
       : activeModel.provider === AIProvider.Ollama
         ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-        : activeModel.provider === AIProvider.OpenRouter && hostedBuild
-          ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
-          : activeModel.provider === AIProvider.OpenRouter
-            ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-            : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+        : activeModel.provider === AIProvider.OpenRouter && accountServiceHost
+          ? `Sign in to ${accountServiceHost} to use included AI, or add an OpenRouter API key or a local Ollama model — you can keep typing in the meantime.`
+          : activeModel.provider === AIProvider.OpenRouter && hostedBuild
+            ? "Included AI isn't reachable right now. Check your connection and sign-in, then reload to try again."
+            : activeModel.provider === AIProvider.OpenRouter
+              ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+              : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const creditPurchaseUrl =
     canPurchaseHostedAICredits(hostedAI) &&
@@ -424,12 +455,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     additionalSystemPrompt: selectedAgent.skillsEnabled
       ? getSkillsSystemPromptPart()
       : undefined,
-    tools: {
+    tools: withCodeMode({
       ...(selectedAgent.canReadAtomicData ? atomicTools.read : {}),
       ...(selectedAgent.canWriteAtomicData ? atomicTools.write : {}),
       ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
-    },
+    }),
     resolveOutputModalities: getOutputModalities,
     resolveParameterSupport: checkORModelSupport,
     addContextToMessages,
@@ -454,9 +485,52 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         ...(message.metadata || {}),
         error: lastRequestErrorRef.current ?? 'The response was interrupted.',
       };
+    } else if (
+      message.role === 'assistant' &&
+      !message.parts.some(
+        part => part.type === 'text' && part.text.trim().length > 0,
+      )
+    ) {
+      // The model stopped after thinking or calling tools without writing a
+      // reply. Without this the chat just ends, which reads as "nothing
+      // happened".
+      const reason = 'The model finished without writing an answer.';
+      const tools = message.parts
+        .filter(
+          part => part.type.startsWith('tool-') || part.type === 'dynamic-tool',
+        )
+        .map(part =>
+          part.type === 'dynamic-tool'
+            ? part.toolName
+            : part.type.replace(/^tool-/, ''),
+        );
+      const steps = message.parts.filter(
+        part => part.type === 'step-start',
+      ).length;
+      const detail = [
+        /* @wc-ignore */ `Model: ${activeModel.provider} ${String(activeModel.id ?? '')}`.trim(),
+        /* @wc-ignore */ `Steps: ${steps}`,
+        /* @wc-ignore */ `Tool calls: ${tools.length ? tools.join(', ') : 'none'}`,
+        /* @wc-ignore */ `Last part: ${message.parts.at(-1)?.type ?? 'none'}`,
+        /* @wc-ignore */ `Stopped because: ${message.metadata?.finishReason ?? 'unknown'}`,
+        /* @wc-ignore */ `Output tokens: ${message.metadata?.outputTokensUsed ?? 'unknown'}`,
+      ].join('\n');
+
+      lastRequestErrorRef.current = reason;
+      message.metadata = { ...message.metadata, error: reason };
+      setRequestError(reason);
+      setRequestDetail(detail);
+      reportUserFacingFailure(
+        /* @wc-ignore */ 'AI finished without an answer',
+        {
+          detail,
+          provider: activeModel.provider,
+        },
+      );
     } else {
       message.metadata = { ...message.metadata, error: undefined };
       setRequestError(undefined);
+      setRequestDetail(undefined);
     }
 
     setMessages(previous =>
@@ -927,7 +1001,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         ))}
       </ChatMessagesContainer>
       <Column gap='0.5rem' style={{ minWidth: 0 }}>
-        {status === 'streaming' && (
+        {(status === 'streaming' || (status === 'submitted' && !isRagging)) && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Generating' />
             <IconButton title='Stop generating' onClick={stop}>
@@ -967,6 +1041,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     Buy AI credits
                   </ButtonLink>
                 )}
+                {accountServiceHost &&
+                  activeModel.provider === AIProvider.OpenRouter && (
+                    <Button onClick={openSaveWorkDialog}>Sign in</Button>
+                  )}
                 <Button onClick={openAISettings}>
                   {hostedAI?.enabled
                     ? 'Advanced AI settings'
@@ -979,6 +1057,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <span>
                   {`No answer from ${providerLabel}: ${requestError}`}
                 </span>
+                {requestDetail && (
+                  <details>
+                    <summary>Details</summary>
+                    <pre>{requestDetail}</pre>
+                  </details>
+                )}
                 {creditPurchaseUrl &&
                   /not enough ai credits/i.test(requestError) && (
                     <ButtonLink

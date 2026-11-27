@@ -27,6 +27,31 @@ type PeopleTable = {
   birthdayProp: string;
 };
 
+type ViewLinkTestWindow = Window & {
+  pendingTableViewLink?: { waiting: boolean; release: () => void };
+};
+
+/** Hold only this table's first view-link ACK while the person edits again. */
+async function holdInitialViewLink(page: Page, table: string): Promise<void> {
+  await page.evaluate(tableSubject => {
+    const store = window.store;
+    const post = store.postCommit.bind(store);
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const gate = { waiting: false, release: resolve };
+    (window as ViewLinkTestWindow).pendingTableViewLink = gate;
+
+    store.postCommit = async (commit, endpoint) => {
+      if (!gate.waiting && commit.subject === tableSubject) {
+        gate.waiting = true;
+        await promise;
+        store.postCommit = post;
+      }
+
+      return post(commit, endpoint);
+    };
+  }, table);
+}
+
 /**
  * Creates (via the store) a `Person` class with name(string) + age(integer) +
  * birthday(date), a Table of that class, and three rows. Navigates to the
@@ -206,6 +231,71 @@ test.describe('table filtering + views', () => {
   test.beforeEach(before);
   test.slow();
 
+  test('persists the latest filter while the initial view link is waiting', async ({
+    page,
+  }) => {
+    const { table, ageProp } = await createPeopleTable(page);
+    await holdInitialViewLink(page, table);
+    await addFilter(page, 'Age', 'gt', '10');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as ViewLinkTestWindow).pendingTableViewLink?.waiting ===
+            true,
+        ),
+      )
+      .toBe(true);
+
+    await filterChip(page, 'Age').click();
+    await page.getByRole('textbox', { name: 'Filter value' }).fill('30');
+    await closeFilterEditor(page, 'Age', 'gt');
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await page.evaluate(() =>
+      (window as ViewLinkTestWindow).pendingTableViewLink?.release(),
+    );
+    await page.waitForFunction(
+      ({ tableSubject, property }) => {
+        const store = window.store;
+        const viewSubject = store.resources
+          .get(tableSubject)
+          ?.get('https://atomicdata.dev/properties/table-default-view') as
+          | string
+          | undefined;
+        const filters = viewSubject
+          ? store.resources
+              .get(viewSubject)
+              ?.get('https://atomicdata.dev/properties/view-filters')
+          : undefined;
+
+        return (
+          Array.isArray(filters) &&
+          filters.some(
+            filter =>
+              typeof filter === 'object' &&
+              filter !== null &&
+              !Array.isArray(filter) &&
+              filter.property === property &&
+              filter.operator === 'gt' &&
+              filter.value === '30',
+          ) &&
+          store.getSyncStatus().pendingDirtyCount === 0
+        );
+      },
+      { tableSubject: table, property: ageProp },
+    );
+    await page.evaluate(() => window.store.getClientDb()?.flush());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
+  });
+
   test('string operators: starts_with and contains', async ({ page }) => {
     await createPeopleTable(page);
 
@@ -261,6 +351,190 @@ test.describe('table filtering + views', () => {
     await expect(
       page.getByRole('gridcell', { name: 'Charlie' }),
     ).not.toBeVisible();
+  });
+
+  test('repairs a raw numeric draft and persists the repaired filter', async ({
+    page,
+  }, testInfo) => {
+    const { table, ageProp } = await createPeopleTable(page);
+    await addFilter(page, 'Age', 'gt', '0');
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).toBeVisible();
+
+    await filterChip(page, 'Age').click();
+    const value = page.getByRole('textbox', { name: 'Filter value' });
+    await value.fill('1e');
+    await expect(value).toHaveValue('1e');
+    // A native number input erases this draft. Blur must also preserve it so
+    // users can return to the same editor and finish the number.
+    await page.keyboard.press('Escape');
+    await expect(filterChip(page, 'Age')).toContainText('1e');
+    await filterChip(page, 'Age').click();
+    await expect(value).toHaveValue('1e');
+    await page.screenshot({
+      path: testInfo.outputPath('numeric-filter-draft-desktop.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('opacity', '0');
+    await filterChip(page, 'Age').click();
+    await expect(value).toBeVisible();
+    await expect(value).toHaveValue('1e');
+    await page.screenshot({
+      path: testInfo.outputPath('numeric-filter-draft-mobile.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await page.setViewportSize({ width: 1200, height: 800 });
+
+    await value.fill('30');
+    await closeFilterEditor(page, 'Age', 'gt');
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
+
+    await page.waitForFunction(
+      ({ tableSubject, property }) => {
+        const store = window.store;
+        const tableResource = store.resources.get(tableSubject);
+        const defaultView = tableResource?.get(
+          'https://atomicdata.dev/properties/table-default-view',
+        ) as string | undefined;
+        const filters = defaultView
+          ? store.resources
+              .get(defaultView)
+              ?.get('https://atomicdata.dev/properties/view-filters')
+          : undefined;
+
+        return (
+          Array.isArray(filters) &&
+          filters.some(
+            filter =>
+              typeof filter === 'object' &&
+              filter !== null &&
+              !Array.isArray(filter) &&
+              filter.property === property &&
+              filter.operator === 'gt' &&
+              filter.value === '30',
+          ) &&
+          store.getSyncStatus().pendingDirtyCount === 0
+        );
+      },
+      { tableSubject: table, property: ageProp },
+      { timeout: 30000 },
+    );
+    await page.evaluate(() => window.store.getClientDb()?.flush());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.getByRole('gridcell', { name: 'Alice' }),
+    ).not.toBeVisible();
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
+    await filterChip(page, 'Age').click();
+    await expect(value).toHaveValue('30');
+  });
+
+  test('renames an inactive view without changing the active view', async ({
+    page,
+  }, testInfo) => {
+    const { table } = await createPeopleTable(page);
+    await addFilter(page, 'Name', 'starts_with', 'A');
+    // Filter edits render before their debounce materializes the default view.
+    // The second tab needs that saved first tab, as in the reload case below.
+    await page.waitForFunction(
+      tableSubject => {
+        const store = window.store;
+        const resource = store.resources.get(tableSubject);
+        const defaultView = resource?.get(
+          'https://atomicdata.dev/properties/table-default-view',
+        );
+
+        return (
+          typeof defaultView === 'string' &&
+          resource
+            ?.getArray('https://atomicdata.dev/properties/table-views')
+            .includes(defaultView) &&
+          Array.isArray(
+            store.resources
+              .get(defaultView)
+              ?.get('https://atomicdata.dev/properties/view-filters'),
+          ) &&
+          store.getSyncStatus().pendingDirtyCount === 0
+        );
+      },
+      table,
+      { timeout: 30000 },
+    );
+    await page.getByTitle('Add view').click();
+    await page.getByRole('menuitem', { name: 'Table', exact: true }).click();
+    const tabs = page.getByRole('tab');
+    await expect(tabs).toHaveCount(2);
+    const activeName = await tabs.last().innerText();
+    await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+
+    await tabs.first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    const name = page.getByRole('tablist').locator('input');
+    await name.fill('Filtered people');
+    await name.press('Enter');
+    await expect(
+      page.getByRole('tab', { name: 'Filtered people', exact: true }),
+    ).toHaveAttribute('aria-selected', 'false');
+    await expect(
+      page.getByRole('tab', { name: activeName, exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('gridcell', { name: 'Bob' })).toBeVisible();
+
+    await page.waitForFunction(async tableSubject => {
+      const store = window.store;
+      const tableResource = await store.getResource(tableSubject);
+      const views = tableResource.getArray(
+        'https://atomicdata.dev/properties/table-views',
+      );
+      const resources = await Promise.all(
+        views
+          .filter((subject): subject is string => typeof subject === 'string')
+          .map(subject => store.getResource(subject)),
+      );
+
+      return (
+        resources.some(
+          view =>
+            view.get('https://atomicdata.dev/properties/name') ===
+            'Filtered people',
+        ) && store.getSyncStatus().pendingDirtyCount === 0
+      );
+    }, table);
+    await page.evaluate(() => window.store.getClientDb()?.flush());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(
+      page.getByRole('tab', { name: 'Filtered people', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('tab', { name: activeName, exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await page.screenshot({
+      path: testInfo.outputPath('inactive-view-rename-desktop.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('opacity', '0');
+    await expect(
+      page.getByRole('tab', { name: 'Filtered people', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('inactive-view-rename-mobile.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
   });
 
   test('views persist filters across reload and isolate them', async ({

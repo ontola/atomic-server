@@ -46,7 +46,7 @@ If you skip step 1, the tools answer with the command to run instead, so the
 assistant can hand it to you.
 
 To see or revoke what you connected, open your account settings in the app
-(`/app/agent`), under **Connected apps**. Revoking takes the connection off
+(`/app/settings?section=account`), under **Connected apps**. Revoking takes the connection off
 every drive it could reach.
 
 The token is stored in `~/.config/atomic-mcp/<server>.json` (or under

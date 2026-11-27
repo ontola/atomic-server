@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_CATALOG } from './catalog';
+import { WELCOME_PART_COUNT, welcomeTemplate } from './welcome';
 import { planTemplate, type TemplateDefinition } from './model';
-import { TABLE_TEMPLATES } from '../TablePage/tableTemplates';
+import { TABLE_TEMPLATES } from '@tomic/table-page/TablePage/tableTemplates';
 describe('shared template planning', () => {
   it('composes the exact table catalog into a workspace without copying schemas', () => {
     const workspace = TEMPLATE_CATALOG.find(t => t.id === 'student')!;
@@ -73,15 +74,14 @@ describe('shared template planning', () => {
 });
 
 describe('welcome template', () => {
-  const welcome = TEMPLATE_CATALOG.find(t => t.id === 'welcome')!;
+  const welcome = welcomeTemplate();
 
-  it('plans two documents, the tasks table and a canvas, in order', () => {
+  it('plans the Start here document, the tasks table and a canvas, in order', () => {
     const plan = planTemplate(welcome, TEMPLATE_CATALOG, true);
 
     expect(plan.title).toBe('Welcome to Atomic');
     expect(plan.parts.map(p => [p.kind, p.name])).toEqual([
       ['document', 'Start here'],
-      ['document', 'Notes'],
       ['table', 'Tasks'],
       ['canvas', 'Sketch'],
     ]);
@@ -96,7 +96,9 @@ describe('welcome template', () => {
     );
     const links = [...doc.text.matchAll(/\{\{([\w/-]+)\}\}/g)].map(m => m[1]);
 
-    expect(lines.length).toBeLessThanOrEqual(10);
+    expect(lines.length).toBeLessThanOrEqual(6);
+    expect(doc.text).not.toContain('- [ ]');
+    expect(welcome.parts).toHaveLength(WELCOME_PART_COUNT);
     expect(links.length).toBeGreaterThan(0);
     expect(links.every(k => keys.includes(k))).toBe(true);
   });

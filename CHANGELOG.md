@@ -7,6 +7,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0] - 2026-11-26
+
+0.41.0 is the first stable release of 0.41, after the beta series (beta.0 to beta.9).
+
+- `atomic-cli schema diff <file> [--against <old file>]` lists how a schema differs from the ontology on the server (or an older file) as compatible, tightening or breaking changes, and fails on breaking ones. `schema push` refuses breaking changes unless you pass `--allow-breaking`. The schema lockfile gets an optional `fingerprint` (`atomic_lib::schema::compat`) that `schema check` compares; older lockfiles keep working.
+- `schema push` no longer needs `--accept-changes` to add a property that the lockfile does not list yet (`atomic-cli` and `@tomic/cli`; `schema check` still fails on it). Pushing a property whose datatype changed no longer fails with "Import identity already exists": the new property is made, and the old one stays under a `schema:property:<shortname>:superseded:<subject>` localId.
+
+## [v0.41.0-beta.9] - 2026-11-18
+
 - WebSocket protocol cleanup (wire: additive). The server no longer advertises eight capabilities no client reads (`auth-max-age`, `pull-from`, `signed-destroy`, `unsub`, `auth-nonce`, `client-hello`, `rebind-on-auth`, `ephemeral`; the behaviour is unchanged and the names stay reserved), tag `0x36` is only a reserved note in `docs/src/websockets.md` (the unused `QUERY_UPDATE_RESERVED` constant is gone), and stale text-verb comments are fixed. New `ERROR` code `DEPRECATED_CLIENT (14)`: a client whose `HELLO` lacks `canonical-scheme` (everything before v0.41.0-beta.8) gets one notice with `request_id` 0 and the server logs a warning; the connection keeps working. A client that authenticates without any `HELLO` (before beta.5) is only logged. Old clients see an unknown error code with request id 0. `WsClient` logs the notice instead of failing a pending request.
 - `atomic_lib`: commits are parsed from JSON-AD in one place, `Commit::from_json_ad`, instead of through a `Resource` round trip (`parse_json_ad_commit_resource` is gone), and the full, slim and paced `COMMIT_OK` frames come from one `CommitAck` that the sync engine and the WebSocket handler share. Internal: no wire change.
 - Removed the Tauri iOS and Android builds: the `android` and `ios` jobs of the Tauri release workflow (now desktop only), `desktop/gen/android` and `desktop/gen/apple`, the mobile capability and the `tauri-plugin-barcode-scanner`, Android-only code in `desktop`, and the Android option in `scripts/dev-all.sh`. The mobile app is the Flutter app; Tauri stays for macOS, Windows and Linux.
@@ -22,6 +31,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Class constraints: `class_constraints::violations` (Rust) and `constraintViolations` (`@tomic/lib`) list every value of a resource that breaks its classes' constraints, so apps can check data that arrived by sync, which stays unchecked. `devtools.inspect` shows them.
 - Loro documents: strings that start with `[`, `{`, `atomic:`, `did:ad:` or `http(s)://` are tagged as `string` in the `datatypes` map so they are no longer read back as nested resources or URLs, and JSON `null` is kept inside nested maps and lists.
 - `RedbStore::flush` no longer returns before a concurrent flush's durable commit finishes, and keeps retrying after an early error #2378
+- A `SYNC_PUSH` imports an unstamped child (`parent` set, no `drive`) in the same frame as its parent regardless of entry order. The child is still skipped, with no snapshot left behind, when that parent is missing, rejected, or belongs to another drive. [#2063](https://github.com/ontola/atomic-server/issues/2063)
 
 ## [v0.41.0-beta.8] - 2026-10-10
 

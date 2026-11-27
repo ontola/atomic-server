@@ -59,6 +59,8 @@ function fakeStore(parents: Record<string, string | undefined> = {}) {
   return {
     getAgent: () => ({ subject: 'did:ad:agent:me' }),
     getServerUrl: () => 'https://node.test',
+    isLocalOnlyDrive: () => false,
+    isLocalOnlySubject: () => false,
     getResource: async (subject: string) => ({
       subject,
       error: undefined,
@@ -95,6 +97,36 @@ describe('writing as the app', () => {
         propVals: { p: 'v' },
       },
     ]);
+  });
+
+  it('saves on this device, with no request, when the drive is device-only', async () => {
+    const set = vi.fn();
+    const save = vi.fn();
+    const store = {
+      ...fakeStore({ 'did:ad:mine': APP }),
+      isLocalOnlyDrive: () => true,
+      isLocalOnlySubject: () => true,
+      getResource: async (subject: string) => ({
+        subject,
+        error: undefined,
+        get: (property: string) =>
+          property === core.properties.parent ? APP : undefined,
+        getPropVals: () => ({}),
+        set,
+        save,
+      }),
+    } as unknown as Store;
+
+    await handleRequest(
+      store,
+      APP,
+      DRIVE,
+      req('save', { subject: 'did:ad:mine', propVals: { p: 'v' } }),
+    );
+
+    expect(sent).toEqual([]);
+    expect(set).toHaveBeenCalledWith('p', 'v');
+    expect(save).toHaveBeenCalled();
   });
 
   it('sends removed properties as their own write, since save only sets', async () => {
@@ -311,6 +343,7 @@ describe('isHostRequest', () => {
 describe('integration-proxy capabilities', () => {
   const minted = {
     capability: 'payload.sig',
+    connectionKey: 's1.grant',
     aud: 'https://proxy.example',
     exp: 1,
     connectionId: 'c1',
@@ -428,7 +461,11 @@ describe('proxyFetch', () => {
       req('proxyFetch', {
         url: 'https://proxy.example/proxy/c1/pets/pets',
         method: 'GET',
-        headers: { Authorization: 'Capability x', 'x-atomic-agent': 'a' },
+        headers: {
+          Authorization: 'Capability x',
+          'x-atomic-agent': 'a',
+          'x-connection-key': 's1.grant',
+        },
         ...extra,
       }),
       undefined,
@@ -459,6 +496,9 @@ describe('proxyFetch', () => {
     )[1];
     expect(init.credentials).toBe('omit');
     expect(init.redirect).toBe('error');
+    // The key grant reaches the proxy; it is the only way to open the
+    // connection's credential.
+    expect(new Headers(init.headers).get('x-connection-key')).toBe('s1.grant');
   });
 
   it('refuses another origin, a non-proxy path and bad methods', async () => {

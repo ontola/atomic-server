@@ -4,7 +4,7 @@ import { styled } from 'styled-components';
 
 import { ElementShow } from './Element';
 import { ResourcePageProps } from './ResourcePage';
-import { Column, Row } from '../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { Spinner } from '../components/Spinner';
 import { upgradeDocument } from './Document/upgradeDocument';
 import {

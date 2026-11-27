@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAISettings } from './AISettingsContext';
-import { SettingsSection } from '@components/Settings';
-import { Column } from '@components/Row';
-import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
-import { BasicSelect } from '@components/forms/BasicSelect';
+import { SettingCheckbox, SettingsSection } from '@components/Settings';
+import { Column } from '@tomic/ui/components/Row';
+import { BasicSelect } from '@tomic/ui/components/forms/BasicSelect';
 import { MicrophoneSelect } from './MicrophoneSelect';
 
 type Model = { id: string; name: string };
@@ -54,10 +53,9 @@ export default function SpeechSettings() {
       childSearchKeywords='voice microphone stt transcription'
     >
       <Column gap='0.5rem'>
-        <CheckboxLabel>
-          <Checkbox checked={voiceEnabled} onChange={setVoiceEnabled} />
-          <span>Enable voice input</span>
-        </CheckboxLabel>
+        <SettingCheckbox checked={voiceEnabled} onChange={setVoiceEnabled}>
+          Enable voice input
+        </SettingCheckbox>
         {/* Two conditionals, not one fragment: wuchale then reads the
             transcription fragment below as a message it never extracts, and
             it renders nothing. */}

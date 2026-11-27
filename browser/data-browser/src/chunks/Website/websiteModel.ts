@@ -2,13 +2,10 @@
 import { z } from 'zod';
 import {
   core,
-  Datatype,
-  ensureSchema,
   server,
+  websiteSchema,
   type Resource,
   type Store,
-  type EnsuredSchema,
-  type SchemaSpec,
 } from '@tomic/lib';
 
 const resourceSubject = z.string().min(1).max(2048);
@@ -133,45 +130,131 @@ export const websiteConfigSchema = z
   });
 export type WebsiteConfig = z.infer<typeof websiteConfigSchema>;
 
-export const WEBSITE_SPEC: SchemaSpec = {
-  properties: [
-    {
-      shortname: 'website-design',
-      name: 'Website design',
-      description:
-        'Draft routes, appearance and explicitly selected content. JSON text.',
-      datatype: Datatype.STRING,
-    },
-    {
-      shortname: 'website-release',
-      name: 'Website release',
-      description:
-        'A private frozen static export. This does not make the website public.',
-      datatype: Datatype.ATOMIC_URL,
-    },
-    {
-      shortname: 'website-artifact',
-      name: 'Website artifact',
-      description: 'Versioned static release manifest as JSON text.',
-      datatype: Datatype.STRING,
-    },
-  ],
-  classes: [
-    {
-      shortname: 'website-project',
-      name: 'Website',
-      description:
-        'A website authored in Atomic Assistant, using existing documents and tables.',
-      requires: ['website-design'],
-    },
-    {
-      shortname: 'website-export',
-      name: 'Website export',
-      description: 'A frozen website ready for static hosting.',
-      requires: ['website-artifact'],
-    },
-  ],
-};
+/**
+ * Legacy per-drive website terms, created before `website/v1`: the shortnames
+ * of the classes and properties an old drive's own ontology holds. Used only to
+ * recognise and migrate old websites; remove with `findLegacyWebsiteTerms` once
+ * they are migrated.
+ */
+const LEGACY_SHORTNAMES = {
+  classes: { project: 'website-project', export: 'website-export' },
+  properties: {
+    design: 'website-design',
+    release: 'website-release',
+    artifact: 'website-artifact',
+  },
+} as const;
+
+export type WebsiteTermKey = keyof typeof LEGACY_SHORTNAMES.properties;
+export type WebsiteKind = keyof typeof LEGACY_SHORTNAMES.classes;
+
+/** The class and property subjects to use for one website or export resource. */
+export interface WebsiteTerms {
+  /** `legacy` terms are per-drive and are replaced by `fixed` on the next write. */
+  source: 'fixed' | 'legacy';
+  class: string;
+  properties: Record<WebsiteTermKey, string | undefined>;
+}
+
+/**
+ * Legacy per-drive website terms, created before website/v1; remove once old
+ * websites are migrated. Resolves only this feature's own identities in the
+ * drive's ontology, by shortname.
+ */
+async function findLegacyWebsiteTerms(
+  store: Store,
+  drive: string,
+  kind: WebsiteKind,
+): Promise<WebsiteTerms | undefined> {
+  const root = await store.getResource(drive);
+  const parent = root.get(server.properties.defaultOntology);
+  if (typeof parent !== 'string') return undefined;
+  const find = async (type: 'class' | 'property', shortname: string) =>
+    (await store.findByLocalId(drive, parent, `schema:${type}:${shortname}`))
+      ?.subject;
+  const classSubject = await find('class', LEGACY_SHORTNAMES.classes[kind]);
+  if (!classSubject) return undefined;
+  const [design, release, artifact] = await Promise.all(
+    (['design', 'release', 'artifact'] as const).map(key =>
+      find('property', LEGACY_SHORTNAMES.properties[key]),
+    ),
+  );
+
+  return {
+    source: 'legacy',
+    class: classSubject,
+    properties: { design, release, artifact },
+  };
+}
+
+/**
+ * The one place that decides which terms a website (or export) resource uses:
+ * the fixed `website/v1` ones if it has the fixed class, else the legacy
+ * per-drive ones, else `undefined` (not a website). Every reader goes through
+ * this.
+ */
+export async function websiteTerms(
+  store: Store,
+  drive: string,
+  resource: Resource,
+  kind: WebsiteKind = 'project',
+): Promise<WebsiteTerms | undefined> {
+  const fixed = websiteSchema.classes[kind];
+
+  if (resource.hasClasses(fixed)) {
+    return {
+      source: 'fixed',
+      class: fixed,
+      properties: websiteSchema.properties,
+    };
+  }
+
+  const legacy = await findLegacyWebsiteTerms(store, drive, kind);
+
+  return legacy && resource.hasClasses(legacy.class) ? legacy : undefined;
+}
+
+/** A term's value, from the fixed property if the resource has it, else the one in `terms`. */
+export function websiteTermValue(
+  resource: Resource,
+  terms: WebsiteTerms,
+  key: WebsiteTermKey,
+): unknown {
+  return (
+    resource.get(websiteSchema.properties[key]) ??
+    (terms.properties[key] ? resource.get(terms.properties[key]) : undefined)
+  );
+}
+
+/**
+ * Moves a legacy resource onto the fixed terms, in the resource only (the
+ * caller saves): swaps the class, copies each value to its fixed property and
+ * removes the per-drive keys. Does nothing for a resource already on fixed
+ * terms. Call on write, never on read.
+ */
+export async function migrateWebsiteTerms(
+  resource: Resource,
+  terms: WebsiteTerms,
+  kind: WebsiteKind = 'project',
+): Promise<void> {
+  if (terms.source === 'fixed') return;
+
+  for (const key of ['design', 'release', 'artifact'] as const) {
+    const legacy = terms.properties[key];
+    const value = websiteTermValue(resource, terms, key);
+
+    if (value !== undefined)
+      await resource.set(websiteSchema.properties[key], value as string);
+    if (legacy && legacy !== websiteSchema.properties[key])
+      resource.remove(legacy);
+  }
+
+  await resource.set(core.properties.isA, [
+    websiteSchema.classes[kind],
+    ...resource.getClasses().filter(c => c !== terms.class),
+  ]);
+}
+
 export function starterWebsite(
   title = 'My website',
   document?: string,
@@ -202,13 +285,12 @@ export async function createWebsite(
 ) {
   const parsed = websiteConfigSchema.parse(config);
   await assertPrivateWebsiteParent(store, drive);
-  const schema = await ensureSchema(store, drive, WEBSITE_SPEC);
   const resource = await store.newResource({
     parent: drive,
-    isA: [schema.classes['website-project']],
+    isA: [websiteSchema.classes.project],
     propVals: {
       [core.properties.name]: parsed.title,
-      [schema.properties['website-design']]: JSON.stringify(parsed),
+      [websiteSchema.properties.design]: JSON.stringify(parsed),
     },
   });
   await saveWebsiteResource(resource);
@@ -220,19 +302,14 @@ export async function readWebsite(
   drive: string,
   resource: Resource,
 ) {
-  const schema = await findWebsiteSchema(store, drive);
-  if (
-    !schema.classes?.['website-project'] ||
-    !resource.hasClasses(schema.classes['website-project'])
-  )
-    throw new Error('This resource is not a website.');
-  const property = schema.properties?.['website-design'];
-  if (!property) throw new Error('Website schema is missing.');
-  const config = websiteConfigSchema.parse(
-    JSON.parse(String(resource.get(property))),
-  );
+  const terms = await websiteTerms(store, drive, resource);
+  if (!terms) throw new Error('This resource is not a website.');
+  const property = websiteSchema.properties.design;
+  const design = websiteTermValue(resource, terms, 'design');
+  if (design === undefined) throw new Error('Website schema is missing.');
+  const config = websiteConfigSchema.parse(JSON.parse(String(design)));
 
-  return { config, schema, property };
+  return { config, terms, property };
 }
 export async function updateWebsite(
   store: Store,
@@ -242,7 +319,9 @@ export async function updateWebsite(
 ) {
   const parsed = websiteConfigSchema.parse(config);
   await assertPrivateWebsiteParent(store, resource.subject);
-  const { property } = await readWebsite(store, drive, resource);
+  const { terms, property } = await readWebsite(store, drive, resource);
+  // A write is the moment an old website moves to the fixed terms.
+  await migrateWebsiteTerms(resource, terms);
   await resource.set(property, JSON.stringify(parsed));
   await resource.set(core.properties.name, parsed.title);
   await saveWebsiteResource(resource);
@@ -280,45 +359,10 @@ export async function assertPrivateWebsiteParent(
   }
 }
 
-/** Resolve only this feature's native identities, not every unrelated ontology term. */
-export async function findWebsiteSchema(
-  store: Store,
-  drive: string,
-): Promise<Partial<EnsuredSchema>> {
-  const root = await store.getResource(drive);
-  const parent = root.get(server.properties.defaultOntology);
-  if (typeof parent !== 'string') return {};
-  const resolve = async (
-    kind: 'class' | 'property',
-    specs: { shortname: string }[],
-  ) =>
-    Object.fromEntries(
-      (
-        await Promise.all(
-          specs.map(async spec => {
-            const resource = await store.findByLocalId(
-              drive,
-              parent,
-              `schema:${kind}:${spec.shortname}`,
-            );
-
-            return resource ? [spec.shortname, resource.subject] : undefined;
-          }),
-        )
-      ).filter((entry): entry is string[] => entry !== undefined),
-    );
-  const [classes, properties] = await Promise.all([
-    resolve('class', WEBSITE_SPEC.classes),
-    resolve('property', WEBSITE_SPEC.properties),
-  ]);
-
-  return { classes, properties };
-}
-
 /** Local/outbox writes are not confirmation that a release is durable. */
 export async function saveWebsiteResource(resource: Resource) {
   const result = await resource.save();
-  if (result === 'offline')
+  if (result === 'offline' || result === 'queued')
     throw new Error(
       `Changes remain pending locally for ${resource.subject}. Reconnect and save this resource before creating another release.`,
     );

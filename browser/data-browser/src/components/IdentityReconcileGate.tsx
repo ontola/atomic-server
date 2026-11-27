@@ -4,15 +4,15 @@ import { useStore, type Store } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import * as Sentry from '@sentry/react';
 import { useSettings } from '../helpers/AppSettings';
+import { endAccountSession } from '../helpers/managed/signOut';
 import { archiveStoredAgent } from '../helpers/agentStorage';
 import {
-  clearManagedAccountBinding,
   evaluateIdentityReconciliation,
   evaluateServerReconciliation,
   linkAgentToAccount,
   localAgentWorkspace,
-  logoutManagedSession,
   PRODUCT_NAME,
+  readManagedAccountBinding,
   sameAgent,
   syncDeviceDirectory,
   writeManagedAccountBinding,
@@ -20,9 +20,10 @@ import {
 import { applyPendingDriveHandover } from '../helpers/managed/driveHandover';
 import { importDriveCarryOver } from '../helpers/managed/driveCarryOver';
 import { handOverFrom } from '../helpers/bringAlong';
+import { onManagedSessionChanged } from '../helpers/managed/session';
 import { paths } from '../routes/paths';
-import { Button } from './Button';
-import { Column } from './Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import {
   CardError,
   CardSubtitle,
@@ -233,7 +234,7 @@ export function IdentityReconcileGate({
           to: paths.welcome,
           search: {
             step: 'signin',
-            return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+            return_to: pathname === paths.appSettings ? 'agent' : undefined,
           },
           replace: true,
         });
@@ -256,6 +257,15 @@ export function IdentityReconcileGate({
           result.issue.managedAccountEmail,
           result.issue.localAgentSubject,
         );
+      }
+
+      // Signed in, nothing disagrees, but no binding was written yet (the
+      // account already knew this identity): record it, so "linked to an
+      // account" reads the same everywhere.
+      if (result.ok && result.managedAccount && localAgent) {
+        if (!readManagedAccountBinding()) {
+          writeManagedAccountBinding(result.managedAccount.email, localAgent);
+        }
       }
 
       // Keep `serverUrl` pointed at the node actually hosting the active
@@ -298,6 +308,13 @@ export function IdentityReconcileGate({
     return () => controller.abort();
   }, [converge, reconcileAttempt]);
 
+  // A sign-in that lands without a reload (passkey, email link, device link,
+  // the Save your work dialog) is adopted at once, not at the next page load.
+  useEffect(
+    () => onManagedSessionChanged(() => setReconcileAttempt(n => n + 1)),
+    [],
+  );
+
   /** Switch this browser to the account's identity: the recover flow does it. */
   function switchToAccount() {
     setConflict(null);
@@ -306,7 +323,7 @@ export function IdentityReconcileGate({
       to: paths.welcome,
       search: {
         step: 'signin',
-        return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+        return_to: pathname === paths.appSettings ? 'agent' : undefined,
       },
       replace: true,
     });
@@ -353,8 +370,7 @@ export function IdentityReconcileGate({
     setResolving(true);
 
     try {
-      clearManagedAccountBinding();
-      await logoutManagedSession();
+      await endAccountSession();
     } finally {
       setResolving(false);
       setConflict(null);

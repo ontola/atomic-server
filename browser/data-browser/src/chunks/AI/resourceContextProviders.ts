@@ -22,7 +22,7 @@ import {
 } from '@tomic/react';
 import { shortenSubject } from '@tomic/react';
 import { getDocumentContentForAgent } from './getDocumentContentForAgent';
-import { hasDocumentContent } from '@chunks/RTE/readDocumentV2TiptapJson';
+import { hasDocumentContent } from '@tomic/resource-ui/chunks/RTE/readDocumentV2TiptapJson';
 import { buildClassContext, describeClassCompact } from '@tomic/react';
 import { getTableContextForAgent } from './tableContextProvider';
 

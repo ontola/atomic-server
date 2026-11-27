@@ -42,7 +42,12 @@ describe('oxc-transform-react', () => {
   });
 
   it('does not evaluate TipTap command getters while rendering the node menu', () => {
-    const filename = join(srcDir, 'chunks/RTE/NodeSelectMenu.tsx');
+    const filename = fileURLToPath(
+      new URL(
+        '../../resource-ui/src/chunks/RTE/NodeSelectMenu.tsx',
+        import.meta.url,
+      ),
+    );
     const result = compile(filename, readFileSync(filename, 'utf8'));
     expect(result.fatal).toBe(false);
     const component = result.code.slice(

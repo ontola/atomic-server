@@ -9,16 +9,16 @@ import { styled } from 'styled-components';
 import { FaMagnifyingGlass } from 'react-icons/fa6';
 import { useQueryScopeHandler } from '../../hooks/useQueryScope';
 import { useSettings } from '../../helpers/AppSettings';
-import { Column, Row } from '../../components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import { Main } from '../../components/Main';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { createRoute, useSearch } from '@tanstack/react-router';
 import { pathNames } from '../paths';
 import { appRoute } from '../RootRoutes';
 import { base64StringToFilter } from './searchUtils';
-import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
 import { ErrorBoundary } from '../../views/ErrorPage';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 
 type SearchRouteQueryParams = {
   query?: string;

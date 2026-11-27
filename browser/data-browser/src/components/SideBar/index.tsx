@@ -13,19 +13,21 @@ import {
   responsiveWidth,
   useResizable,
 } from '../../hooks/useResizable';
-import { useCombineRefs } from '../../hooks/useCombineRefs';
+import { useCombineRefs } from '@tomic/ui/hooks/useCombineRefs';
 import { AccountMenu } from './AccountMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useSidebarSwipe } from '../../hooks/useSidebarSwipe';
-import { Column } from '../Row';
+import { Column } from '@tomic/ui/components/Row';
+import { AppsPanel } from './AppsPanel';
 import { OntologiesPanel } from './OntologySideBar/OntologiesPanel';
 import { SideBarPanel } from './SideBarPanel';
 import { Panel, panelTitle, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
-import { CalculatedPageHeight } from '../../globalCssVars';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { AIChatsPanel } from './AIPanel';
+import { GettingStartedPanel } from './GettingStartedPanel';
 import { ChromeTheme } from '../../styling';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
@@ -148,10 +150,13 @@ export function SideBar(): JSX.Element {
                 scroll position survive the drag. */}
             <SidebarDropZones draggingResource={draggingResource} />
             <MenuWrapper $hidden={!!draggingResource}>
+              {/* Siblings need distinct keys: with the same key, a drive
+                  switch left the old Getting started panel mounted too. */}
               <Column gap='0.125rem' align='stretch'>
+                <GettingStartedPanel key={`getting-started:${drive}`} />
                 <SideBarHomePanels onItemClick={closeSideBar} />
                 {enabledPanels.has(Panel.AIChats) && (
-                  <AIChatsPanel key={drive} />
+                  <AIChatsPanel key={`ai-chats:${drive}`} />
                 )}
                 {enabledPanels.has(Panel.Ontologies) && (
                   <SideBarPanel
@@ -159,10 +164,13 @@ export function SideBar(): JSX.Element {
                     panel={Panel.Ontologies}
                     heightStorageKey='ontologiesPanelHeight'
                     initialHeight={160}
-                    key={drive}
+                    key={`ontologies:${drive}`}
                   >
                     <OntologiesPanel />
                   </SideBarPanel>
+                )}
+                {enabledPanels.has(Panel.Apps) && (
+                  <AppsPanel onItemClick={closeSideBar} key={drive} />
                 )}
                 <AccountMenu onItemClick={closeSideBar} />
               </Column>

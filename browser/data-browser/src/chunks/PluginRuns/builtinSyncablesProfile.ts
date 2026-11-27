@@ -25,6 +25,7 @@ import {
   canonicalValue,
   collectionIdentity,
   principalIdentity,
+  sourceConfigFingerprint,
   type SyncablePrincipal,
 } from './builtinSyncIdentity.js';
 import {
@@ -36,6 +37,7 @@ import {
 } from './syncableSource';
 import {
   core,
+  canonicalizeScheme,
   dataBrowser,
   CollectionBuilder,
   isAtomicIdentifier,
@@ -177,6 +179,51 @@ export function assertSyncAppDrive(
   }
 
   throw new Error('The Sync table is no longer in the selected drive');
+}
+
+/** Capture the ACL ancestry already loaded by canWrite so a delayed native
+ * projection cannot outlive its original write authorization. */
+export function captureSyncAppWriteScope(
+  store: Pick<Store, 'resources' | 'normalizeSubject'>,
+  subjects: readonly string[],
+): () => void {
+  const fields = (subject: string) => {
+    const row = store.resources.get(subject);
+    if (!row || row.error) return;
+    const parent = row.get(core.properties.parent);
+    const write = row.get(core.properties.write);
+    const grants =
+      Array.isArray(write) && write.every(grant => typeof grant === 'string')
+        ? [...new Set(write.map(canonicalizeScheme))].sort()
+        : write;
+
+    return {
+      parent:
+        typeof parent === 'string' ? store.normalizeSubject(parent) : parent,
+      proof: sourceConfigFingerprint([parent, grants]),
+    };
+  };
+
+  const expected = new Map<string, string>();
+
+  for (const start of subjects) {
+    let subject: string | undefined = store.normalizeSubject(start);
+
+    while (subject && !expected.has(subject)) {
+      const values = fields(subject);
+      if (!values) break;
+      if (expected.size >= 128)
+        throw new Error('The Sync write ancestry exceeds its limit');
+      expected.set(subject, values.proof);
+      subject = typeof values.parent === 'string' ? values.parent : undefined;
+    }
+  }
+
+  return () => {
+    for (const [subject, proof] of expected)
+      if (fields(subject)?.proof !== proof)
+        throw new Error('Write access to this Sync source changed');
+  };
 }
 
 /** Load full ancestry once, including stamped rows, for the synchronous guard. */
@@ -737,7 +784,6 @@ export function syncProxyTransport(
   assertSessionCurrent: () => void,
   trusted: TrustedSyncableCatalog,
   assertProviderReadAllowed: () => void = () => undefined,
-  canReconnectLegacy: (slot: string) => Promise<boolean> = async () => false,
   onPrincipalVerified?: (
     proof: VerifiedSyncablePrincipal,
   ) => void | Promise<void>,
@@ -1002,9 +1048,10 @@ export function syncProxyTransport(
                     .slice(0, 120),
                 }
               : {}),
-            canReconnect:
-              (await proxy.canReconnectKeyed(platform, row.connection_id)) ||
-              (await canReconnectLegacy(row.connection_id)),
+            canReconnect: await proxy.canReconnectKeyed(
+              platform,
+              row.connection_id,
+            ),
           })),
       );
       assertCurrent();

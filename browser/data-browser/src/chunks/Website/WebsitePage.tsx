@@ -7,17 +7,22 @@ import {
   useStore,
   type Resource,
 } from '@tomic/react';
-import { Button } from '@components/Button';
-import { Row, Column } from '@components/Row';
-import { ResourceRow } from '@views/ResourceRow';
-import Field from '@components/forms/Field';
+import { Button } from '@tomic/ui/components/Button';
+import { Row, Column } from '@tomic/ui/components/Row';
+import { ResourceRow } from '@tomic/resource-ui/views/ResourceRow';
+import Field from '@tomic/resource-ui/components/forms/Field';
 import { FaPencil, FaPlus } from 'react-icons/fa6';
-import { AIIcon } from '@components/AI/AIIcon';
-import { CalculatedPageHeight } from '../../globalCssVars';
-import { ResourceSelector } from '@components/forms/ResourceSelector';
+import { AIIcon } from '@tomic/resource-ui/components/AI/AIIcon';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
+import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
-import { readWebsite, updateWebsite, type WebsiteConfig } from './websiteModel';
+import {
+  readWebsite,
+  updateWebsite,
+  websiteTermValue,
+  type WebsiteConfig,
+} from './websiteModel';
 import {
   buildWebsiteArtifact,
   downloadWebsite,
@@ -97,14 +102,16 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
     const watch = async () => {
       try {
-        const { property } = await readWebsite(store, drive, resource);
+        const { terms } = await readWebsite(store, drive, resource);
 
         if (!active) return;
 
         attempts = 0;
-        previous = String(resource.get(property));
+        // Through the term helper, so a legacy website that migrates on its
+        // next save keeps being watched under its new property.
+        previous = String(websiteTermValue(resource, terms, 'design'));
         unsubscribe = store.subscribe(resource.subject, () => {
-          const next = String(resource.get(property));
+          const next = String(websiteTermValue(resource, terms, 'design'));
 
           if (next !== previous) {
             previous = next;

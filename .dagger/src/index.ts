@@ -13,6 +13,23 @@ import {
   CacheVolume,
 } from '@dagger.io/dagger';
 import { overrideE2eBudget } from './e2e-budget';
+import {
+  BROWSER_BUNDLE_PLATFORM,
+  BROWSER_SOURCE_FINGERPRINT_VERSION,
+  BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+  validateBundleCommit,
+  validateBundleHash,
+  validateBrowserManifest,
+  validateBrowserShard,
+  type BrowserBundleManifest,
+} from './browser-bundle';
+import {
+  BROWSER_RETRY_LIST_CHECK_SCRIPT,
+  BROWSER_RETRY_LIST_SCRIPT,
+  BROWSER_RETRY_RUN_SCRIPT,
+  BROWSER_RUN_RECEIPT_SCRIPT,
+  validateBrowserRetryInput,
+} from './browser-retry';
 
 /**
  * Bumps the mtime of every mounted workspace source before cargo runs.
@@ -110,6 +127,13 @@ const PLAYWRIGHT_PACKAGE_VERSION = '1.63.0';
 const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
+// GitHub-hosted builders cannot reliably reach the primary Ubuntu HTTP mirrors.
+// Keep Ubuntu's existing archive signatures and TLS verification on its Azure mirror.
+const APT_UPDATE =
+  "find /etc/apt -type f \\( -name '*.list' -o -name '*.sources' \\) " +
+  "-exec sed -i -E 's@https?://(archive|security)\\.ubuntu\\.com/ubuntu@https://azure.archive.ubuntu.com/ubuntu@g' {} + " +
+  '&& apt-get update -qq -o APT::Update::Error-Mode=any';
+
 // See https://github.com/rust-cross/rust-musl-cross?tab=readme-ov-file#prebuilt-images
 const TARGET_IMAGE_MAP = {
   'x86_64-unknown-linux-musl': 'ghcr.io/rust-cross/rust-musl-cross:x86_64-musl',
@@ -361,13 +385,24 @@ export class AtomicServer {
   private e2eCloneSessions = false;
   /** Suffix for the Rust `target/` cache volumes, one per CI runner. */
   private targetCacheSuffix = '';
+  private maxBuildJobs = 0;
+  private buildJobs = 0;
+  private testRunKey = '';
+  /** Only populated while preparing a portable bundle: one shared WASM graph. */
+  private bundleWasm: Directory | undefined;
 
   constructor(
     @argument({
       defaultPath: '.',
       ignore: [
         '**/node_modules',
+        // Local package downloads are setup outputs, not workspace sources.
+        '**/.pnpm-store',
+        '**/.pnpm-store/**',
         '**/.git',
+        '**/.dagger/sdk',
+        '**/__pycache__',
+        '**/*.pyc',
         '**/.github',
         '**/.husky',
         '**/.vscode',
@@ -410,13 +445,55 @@ export class AtomicServer {
      * warm caches survive.
      */
     @argument() cacheNamespace: string = '',
+    /** Maximum Cargo compile jobs per container; 0 keeps the host profile. */
+    @argument() maxBuildJobs: number = 0,
+    /** Explicit Cargo compile width; 0 keeps the selected host profile. */
+    @argument() buildJobs: number = 0,
+    /** Optional cache-busting identity applied only when executing tests. */
+    @argument() testRunKey: string = '',
   ) {
+    if (!Number.isSafeInteger(maxBuildJobs) || maxBuildJobs < 0) {
+      throw new Error('max-build-jobs must be an integer >= 0');
+    }
+    if (!Number.isSafeInteger(buildJobs) || buildJobs < 0 || buildJobs > 128) {
+      throw new Error('build-jobs must be an integer between 0 and 128');
+    }
+    if (
+      typeof testRunKey !== 'string' ||
+      (testRunKey !== '' &&
+        !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/.test(testRunKey))
+    ) {
+      throw new Error('test-run-key must be empty or a safe identifier');
+    }
+    this.testRunKey = testRunKey;
+    this.buildJobs = buildJobs;
+    this.maxBuildJobs = maxBuildJobs;
     this.source = source;
     const namespace = cacheNamespace.trim();
     this.targetCacheSuffix =
       namespace === '' || namespace === 'Mancave'
         ? ''
         : `-${namespace.replace(/[^A-Za-z0-9_.-]/g, '-')}`;
+  }
+
+  /** An explicit width may raise the profile; the local memory cap still wins. */
+  private cappedBuildJobs(configured: string): string {
+    const requested = this.buildJobs || Number(configured);
+
+    return String(
+      this.maxBuildJobs === 0
+        ? requested
+        : Math.min(requested, this.maxBuildJobs),
+    );
+  }
+
+  /** Keep installation/build inputs reusable while explicitly rerunning test bodies. */
+  private testExec(container: Container, args: string[]): Container {
+    const fresh = this.testRunKey
+      ? container.withEnvVariable('ATOMIC_CI_TEST_RUN_KEY', this.testRunKey)
+      : container;
+
+    return fresh.withExec(args);
   }
 
   /** A Rust `target/` cache volume, private to this CI runner. */
@@ -474,7 +551,10 @@ export class AtomicServer {
           'registry/.package-cache-mutate',
           `${cargoHome}/.package-cache-mutate`,
         ])
-        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
+        .withEnvVariable(
+          'CARGO_BUILD_JOBS',
+          this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
+        )
     );
   }
 
@@ -568,9 +648,9 @@ export class AtomicServer {
     @argument() netlifyAuthToken: Secret,
     /**
      * Publish docs to the live sites instead of preview URLs. Pass
-     * `--publish-docs` only from a stable `v*` tag (the same ref production
-     * deploys). Left off, every build gets a Netlify preview and the published
-     * docs stay whatever the last stable tag put there.
+     * `--publish-docs` only from `develop` (the branch production follows).
+     * Left off, every build gets a Netlify preview and the published docs stay
+     * whatever the last develop run put there.
      */
     @argument() publishDocs = false,
     /**
@@ -604,6 +684,8 @@ export class AtomicServer {
      * hand back. The workflow passes `<run id>-<attempt>`; empty keeps none.
      */
     @argument() resultsKey: string = '',
+    /** Run heavy lanes one at a time, starting with Rust tests, on small hosts. */
+    @argument() sequential: boolean = false,
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -614,34 +696,71 @@ export class AtomicServer {
       playwrightRetries,
     );
 
-    // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
-    // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
+    // Cheap static checks (a store.ts oxfmt miss used to burn ~20+ minutes of
+    // rust/e2e compile before jsLint surfaced it). Where memory is tight
+    // (hosted, sequential) they run first as a barrier so a failure costs
+    // nothing else. On mancave they start together with the heavy lanes
+    // instead: the e2e base build no longer waits for lint and typecheck,
+    // and a rejection in the final Promise.all below still fails the call
+    // fast and makes Dagger cancel the other lanes. The tradeoff is some
+    // wasted compile work when a check is red, for a shorter green run.
+    const staticChecks = () => [
+      this.jsLint(),
+      this.jsTypecheck(),
+      this.rustFmt(),
+    ];
+    const overlapStaticChecks = !sequential && this.hostProfile === 'mancave';
+    if (!overlapStaticChecks) {
+      await Promise.all(staticChecks());
+    }
 
-    // Rust clippy/test still share the `rust-target` cache mount — keep
-    // them serialized (parallel cargo contended the target lock for
-    // ~16 minutes and exited 101). Everything else is independent.
-    await Promise.all([
-      this.docsPublish(netlifyAuthToken, publishDocs),
-      this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(
-        netlifyAuthToken,
-        playwrightMode,
-        playwrightWorkers,
-        playwrightShards,
-        playwrightRetries,
-        '',
-        playwrightCloneSessions,
-        resultsKey,
-      ),
-      this.jsTest(),
-      this.jsTestIntegration(),
-      this.flutterTest(),
-      (async () => {
-        await this.rustClippy();
-        await this.rustTest();
-      })(),
-    ]);
+    // Defer each lane until scheduled so sequential mode never starts the
+    // next build while another lane still holds memory.
+    const jobs = {
+      docsPublish: () => this.docsPublish(netlifyAuthToken, publishDocs),
+      typedocPublish: () => this.typedocPublish(netlifyAuthToken, publishDocs),
+      endToEnd: () =>
+        this.endToEnd(
+          netlifyAuthToken,
+          playwrightMode,
+          playwrightWorkers,
+          playwrightShards,
+          playwrightRetries,
+          '',
+          playwrightCloneSessions,
+          resultsKey,
+        ),
+      jsTest: () => this.jsTest(),
+      jsTestIntegration: () => this.jsTestIntegration(),
+      flutterTest: () => this.flutterTest(),
+    };
+
+    if (sequential) {
+      // Give the largest Rust compilation first use of a constrained host.
+      for (const job of [
+        () => this.rustTest(),
+        () => this.rustClippy(),
+        jobs.jsTest,
+        jobs.jsTestIntegration,
+        jobs.endToEnd,
+        jobs.flutterTest,
+        jobs.docsPublish,
+        jobs.typedocPublish,
+      ]) {
+        await job();
+      }
+    } else {
+      // Clippy and tests share a target cache and must remain serialized;
+      // every other lane retains its existing parallel scheduling.
+      await Promise.all([
+        ...(overlapStaticChecks ? staticChecks() : []),
+        ...Object.values(jobs).map(job => job()),
+        (async () => {
+          await this.rustClippy();
+          await this.rustTest();
+        })(),
+      ]);
+    }
 
     return 'CI pipeline completed successfully';
   }
@@ -676,31 +795,24 @@ export class AtomicServer {
       //    leaves the OS libraries alone.
       .withDirectory('/lib/defaults', this.source.directory('lib/defaults'));
 
-    return (
+    return this.jsTypecheckPrepared(
       depsContainer
         .withWorkdir('/app')
         // 2. Packages reached through node_modules need a `dist`. Building
         //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
         //    `@tomic/edit-mode/react` unresolvable, and `@tomic/form-app`
-        //    needs `@tomic/form-renderer`. All six build from TypeScript
+        //    needs `@tomic/form-renderer`. Build the complete dependency graph,
+        //    including the shared UI/table/pure-helper packages, from TypeScript
         //    alone, so this stays in the cheap static tier beside lint and
         //    `cargo fmt`: no WASM, no Rust.
-        .withExec([
-          'pnpm',
-          '--filter',
-          '@tomic/form-renderer',
-          '--filter',
-          '@tomic/lib',
-          '--filter',
-          '@tomic/react',
-          '--filter',
-          '@tomic/plugin',
-          '--filter',
-          '@tomic/service-ui',
-          '--filter',
-          '@tomic/edit-mode',
-          'build',
-        ])
+        .withExec(['pnpm', '--filter', '@tomic/data-browser^...', 'build']),
+    );
+  }
+
+  /** The dependency dist files are already present in a prepared workspace. */
+  private jsTypecheckPrepared(prepared: Container): Promise<string> {
+    return (
+      prepared
         .withExec([
           'pnpm',
           '--filter=!@tomic/data-browser',
@@ -709,18 +821,11 @@ export class AtomicServer {
           '--parallel',
           'typecheck',
         ])
-        // 3. data-browser is the one package that reaches repo-root
-        //    `integrations`, and those files import
-        //    `../../browser/lib/src/index.js`, which here is /browser: the
-        //    symlink `jsSource()` makes so integration tsconfigs can find
-        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
-        //    prefix it is handed, so compiling data-browser as /app while its
-        //    own imports arrive as /browser produces two unrelated
-        //    declarations of every type in `lib`, which is the wall of
-        //    "Store is not assignable to Store" the first attempt hit.
-        //    Naming the project by its /browser path puts both ends on one
-        //    prefix. A workdir cannot do this: the kernel resolves the
-        //    symlink, so `process.cwd()` would be /app again.
+        // 3. Pass the /browser project path explicitly so TypeScript uses
+        //    that prefix. A working directory resolves the symlink to /app.
+        // The complete app graph exceeds Node's default 2 GiB heap on some
+        // hosts. Keep the larger heap limited to this final serial check.
+        .withEnvVariable('NODE_OPTIONS', '--max-old-space-size=4096')
         .withExec([
           'pnpm',
           '--filter',
@@ -737,28 +842,21 @@ export class AtomicServer {
 
   @func()
   async jsTest(): Promise<string> {
-    const depsContainer = this.jsBuild();
+    return this.jsTestPrepared(this.jsBuild());
+  }
 
-    return (
-      depsContainer
-        .withWorkdir('/app')
-        .withExec(['pnpm', 'run', 'test'])
-        // jsBuild mounts external integration tests at /integrations and
-        // exposes the installed browser workspace at /browser.
-        .withExec([
-          '/app/node_modules/.bin/vitest',
-          'run',
-          '--config',
-          '/integrations/localthought/vitest.config.ts',
-        ])
-        .withWorkdir('/app')
-        .withExec([
-          'node',
-          '--test',
-          'data-browser/scripts/integration-mcp.test.mjs',
-        ])
-        .stdout()
-    );
+  private jsTestPrepared(prepared: Container): Promise<string> {
+    const unitTests = this.testExec(prepared.withWorkdir('/app'), [
+      'pnpm',
+      'run',
+      'test',
+    ]);
+
+    return this.testExec(unitTests, [
+      'node',
+      '--test',
+      'data-browser/scripts/integration-mcp.test.mjs',
+    ]).stdout();
   }
 
   /**
@@ -781,94 +879,102 @@ export class AtomicServer {
     const flutterRustup = dag.cacheVolume('flutter-rustup');
     const pathPrefix = 'export PATH="$HOME/.cargo/bin:$PATH"';
 
-    return (
-      dag
-        .container()
-        .from(FLUTTER_IMAGE)
-        .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
-        .withEnvVariable('CI', 'true')
-        // Same pin as withCargoHomeCache — flutter's cargokit build would
-        // otherwise see all host CPUs.
-        .withEnvVariable('CARGO_BUILD_JOBS', this.hostKnobs.cargoBuildJobs)
-        // Persist hosted Dart packages across CI runs.
-        .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
-        .withMountedCache('/root/.pub-cache', flutterPubCache)
-        // Persist the rustup toolchain so a layer-cache miss doesn't
-        // re-download rustc. Idempotent install below.
-        .withMountedCache('/root/.rustup', flutterRustup)
-        // One layer: a cached `apt-get update` layer can come back without
-        // its package lists, and the install then finds no packages.
-        .withExec([
-          'sh',
-          '-c',
-          'apt-get update -qq && apt-get install -y --no-install-recommends ' +
-            'ca-certificates curl git build-essential cmake ninja-build ' +
-            'pkg-config libssl-dev clang',
-        ])
-        .withExec([
-          'sh',
-          '-c',
-          'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
-        ])
-        .withExec([
-          'sh', '-c',
-          `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
-        ])
-        .withDirectory('/workspace/lib', this.source.directory('lib'))
-        .withDirectory('/workspace/flutter', this.source.directory('flutter'))
-        // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
-        .withDirectory(
-          '/workspace/packages',
-          this.source.directory('packages'),
-        )
-        .withMountedCache('/workspace/packages/atomic_store_flutter/rust/target', flutterRustTarget, {
+    const prepared = dag
+      .container()
+      .from(FLUTTER_IMAGE)
+      .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
+      .withEnvVariable('CI', 'true')
+      // Same pin as withCargoHomeCache — flutter's cargokit build would
+      // otherwise see all host CPUs.
+      .withEnvVariable(
+        'CARGO_BUILD_JOBS',
+        this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs),
+      )
+      // Persist hosted Dart packages across CI runs.
+      .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
+      .withMountedCache('/root/.pub-cache', flutterPubCache)
+      // Persist the rustup toolchain so a layer-cache miss doesn't
+      // re-download rustc. Idempotent install below.
+      .withMountedCache('/root/.rustup', flutterRustup)
+      // One layer: a cached `apt-get update` layer can come back without
+      // its package lists, and the install then finds no packages.
+      .withExec([
+        'sh',
+        '-c',
+        APT_UPDATE +
+          ' && apt-get install -y --no-install-recommends ' +
+          'ca-certificates curl git build-essential cmake ninja-build ' +
+          'pkg-config libssl-dev clang',
+      ])
+      .withExec([
+        'sh',
+        '-c',
+        'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
+      ])
+      .withExec([
+        'sh',
+        '-c',
+        `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
+      ])
+      .withDirectory('/workspace/lib', this.source.directory('lib'))
+      .withDirectory('/workspace/flutter', this.source.directory('flutter'))
+      // `flutter/pubspec.yaml` points at ../packages/atomic_flutter.
+      .withDirectory('/workspace/packages', this.source.directory('packages'))
+      .withMountedCache(
+        '/workspace/packages/atomic_store_flutter/rust/target',
+        flutterRustTarget,
+        {
           sharing: CacheSharingMode.Locked,
-        })
-        .withWorkdir('/workspace/flutter')
-        .withExec([
-          'bash',
-          '-lc',
-          `${pathPrefix} && flutter --version && flutter pub get`,
-        ])
-        // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
-        // Dart package — analyzing the whole repo without its own pub get fails.
-        .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`])
-        .withExec(['bash', '-lc', `${pathPrefix} && flutter test --no-pub`])
-        // Mount cargo registry only for the Rust step so Dart work above
-        // never contends for a cache volume.
-        .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
-          sharing: CacheSharingMode.Shared,
-        })
-        // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
-        // in CARGO_HOME, outside the shared volume, so two runs on one engine
-        // unpacked the same crate at once and failed with
-        // "failed to unpack package ... .cargo-ok: File exists".
-        .withExec([
-          'ln',
-          '-sf',
-          'registry/.package-cache',
-          '/root/.cargo/.package-cache',
-        ])
-        .withExec([
-          'ln',
-          '-sf',
-          'registry/.package-cache-mutate',
-          '/root/.cargo/.package-cache-mutate',
-        ])
-        // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
-        // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
-        // `flutter test` only runs Dart. Without this step the entire bridge —
-        // including the canvas editing-session cache, where a stale session
-        // duplicates or reverts a peer's stroke — ships untested.
-        .withExec([
-          'bash',
-          '-lc',
-          `${pathPrefix} && ` +
-            'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
-            'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
-        ])
-        .stdout()
-    );
+        },
+      )
+      .withWorkdir('/workspace/flutter')
+      .withExec([
+        'bash',
+        '-lc',
+        `${pathPrefix} && flutter --version && flutter pub get`,
+      ])
+      // Scope like `Makefile analyze`: cargokit `build_tool` is a nested
+      // Dart package — analyzing the whole repo without its own pub get fails.
+      .withExec(['bash', '-lc', `${pathPrefix} && flutter analyze lib test`]);
+    const dartTests = this.testExec(prepared, [
+      'bash',
+      '-lc',
+      `${pathPrefix} && flutter test --no-pub`,
+    ]);
+    const bridgePrepared = dartTests
+      // Mount cargo registry only for the Rust step so Dart work above
+      // never contends for a cache volume.
+      .withMountedCache('/root/.cargo/registry', flutterCargoCache, {
+        sharing: CacheSharingMode.Shared,
+      })
+      // Same reason as withCargoHomeCache: Cargo's package-cache locks sit
+      // in CARGO_HOME, outside the shared volume, so two runs on one engine
+      // unpacked the same crate at once and failed with
+      // "failed to unpack package ... .cargo-ok: File exists".
+      .withExec([
+        'ln',
+        '-sf',
+        'registry/.package-cache',
+        '/root/.cargo/.package-cache',
+      ])
+      .withExec([
+        'ln',
+        '-sf',
+        'registry/.package-cache-mutate',
+        '/root/.cargo/.package-cache-mutate',
+      ]);
+    // The flutter_rust_bridge crate is workspace-excluded (root Cargo.toml
+    // `exclude`), so `rustTest`'s `--workspace` run never compiles it and
+    // `flutter test` only runs Dart. Without this step the entire bridge —
+    // including the canvas editing-session cache, where a stale session
+    // duplicates or reverts a peer's stroke — ships untested.
+    return this.testExec(bridgePrepared, [
+      'bash',
+      '-lc',
+      `${pathPrefix} && ` +
+        'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi && ' +
+        'cargo test --manifest-path ../packages/atomic_store_flutter/rust/Cargo.toml',
+    ]).stdout();
   }
 
   /** Builds the WASM bundle (wasm-pack) used by `NodeClientDb` in the
@@ -876,6 +982,7 @@ export class AtomicServer {
    *  emitted `pkg/` artifacts. */
   @func()
   wasmBuild(): Directory {
+    if (this.bundleWasm) return this.bundleWasm;
     return (
       this.withCargoHomeCache(
         dag.container().from(RUST_IMAGE),
@@ -953,7 +1060,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y protobuf-compiler',
           ]),
         CARGO_HOME_BOOKWORM,
       )
@@ -1052,8 +1159,15 @@ export class AtomicServer {
    *  need `@tomic/lib`'s source + node_modules. */
   @func()
   async jsTestIntegration(): Promise<string> {
+    return this.jsTestIntegrationWithWasm();
+  }
+
+  private async jsTestIntegrationWithWasm(
+    preparedWasm?: Directory,
+    freshPreparedCheck = false,
+  ): Promise<string> {
     const binary = this.rustBuildSlim();
-    const wasmPkg = this.wasmBuild();
+    const wasmPkg = preparedWasm ?? this.wasmBuild();
 
     const browser = this.source.directory('browser');
     const pnpmContainer = dag
@@ -1092,6 +1206,26 @@ export class AtomicServer {
       .withFile(
         '/repo/browser/data-browser/package.json',
         browser.file('data-browser/package.json'),
+      )
+      .withFile(
+        '/repo/browser/ui/package.json',
+        browser.file('ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/utils/package.json',
+        browser.file('utils/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table/package.json',
+        browser.file('table/package.json'),
+      )
+      .withFile(
+        '/repo/browser/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/repo/browser/table-page/package.json',
+        browser.file('table-page/package.json'),
       )
       .withFile(
         '/repo/browser/lib/package.json',
@@ -1153,17 +1287,27 @@ export class AtomicServer {
     // integration tests, except @tomic/mcp: hosted-mcp.integration.test.ts
     // imports its bridge from `../../mcp/src`.
     const withSource = installed
+      .withDirectory('/repo/browser/utils', browser.directory('utils'))
       .withDirectory('/repo/browser/lib', browser.directory('lib'))
       .withDirectory('/repo/browser/mcp', browser.directory('mcp'));
 
-    return withSource
+    const prepared = withSource
       .withFile('/repo/target/debug/atomic-server', binary, {
         permissions: 0o755,
       })
       .withDirectory('/repo/wasm/pkg', wasmPkg)
-      .withWorkdir('/repo/browser/lib')
-      .withExec(['pnpm', 'run', 'test:integration'])
-      .stdout();
+      .withWorkdir('/repo/browser/utils')
+      .withExec(['pnpm', 'run', 'build'])
+      .withWorkdir('/repo/browser/lib');
+    return this.testExec(
+      freshPreparedCheck
+        ? prepared.withEnvVariable(
+            'ATOMIC_BUNDLE_CHECK_NONCE',
+            this.e2eRunNonce,
+          )
+        : prepared,
+      ['pnpm', 'run', 'test:integration'],
+    ).stdout();
   }
 
   @func()
@@ -1316,10 +1460,16 @@ export class AtomicServer {
     /** Publish to the live typedoc site rather than a preview URL. */
     @argument() prod = false,
   ): Promise<string> {
-    const browserDir = this.jsBuild();
+    return this.typedocPrepared(this.jsBuild(), netlifyAuthToken, prod);
+  }
 
+  private typedocPrepared(
+    prepared: Container,
+    netlifyAuthToken: Secret,
+    prod: boolean,
+  ): Promise<string> {
     return (
-      browserDir
+      prepared
         .withWorkdir('/app')
         .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
         // The `--prod` flag lives in the pnpm script, so it is steered by env
@@ -1355,6 +1505,17 @@ export class AtomicServer {
       .withFile(
         '/app/data-browser/package.json',
         browser.file('data-browser/package.json'),
+      )
+      .withFile('/app/ui/package.json', browser.file('ui/package.json'))
+      .withFile('/app/utils/package.json', browser.file('utils/package.json'))
+      .withFile('/app/table/package.json', browser.file('table/package.json'))
+      .withFile(
+        '/app/resource-ui/package.json',
+        browser.file('resource-ui/package.json'),
+      )
+      .withFile(
+        '/app/table-page/package.json',
+        browser.file('table-page/package.json'),
       )
       .withFile('/app/lib/package.json', browser.file('lib/package.json'))
       .withFile('/app/react/package.json', browser.file('react/package.json'))
@@ -1394,9 +1555,6 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
-      // Integration sources live at the repository root. The browser mounts at
-      // /app, and its raw imports resolve these paths from /integrations.
-      .withDirectory('/integrations', this.source.directory('integrations'))
       // `@tomic/plugin`'s export-bindings test reads the Rust example's
       // manifest and checked-in bindings from the repository root, which
       // resolves from /app/plugin/src to /plugin-examples.
@@ -1404,9 +1562,7 @@ export class AtomicServer {
         '/plugin-examples/host-abi-statement',
         this.source.directory('plugin-examples/host-abi-statement'),
       )
-      // integrations/localthought/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
-      // so that relative path resolves.
+      // jsTypecheck() addresses the data-browser project through this alias.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
@@ -1498,10 +1654,17 @@ export class AtomicServer {
       dag
         .container()
         .from(image)
+        // Clang on an ARM host otherwise finds glibc headers for this musl
+        // target. Scope the musl headers to this target, not nested WASI or
+        // host builds that run in the same container.
+        .withEnvVariable(
+          `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+          `-isystem /usr/local/musl/${target}/include`,
+        )
         .withExec([
           'sh',
           '-c',
-          'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+          APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
         ]),
       CARGO_HOME_MUSL,
     )
@@ -1733,7 +1896,8 @@ export class AtomicServer {
    */
   private rustChecksContainer(): Container {
     const source = this.source;
-    const image = TARGET_IMAGE_MAP['x86_64-unknown-linux-musl'];
+    const target = 'x86_64-unknown-linux-musl';
+    const image = TARGET_IMAGE_MAP[target];
 
     // musl-cross: CARGO_HOME=/root/.cargo (NOT /usr/local/cargo). Mounting
     // the bookworm path here was a silent miss — every CI run re-ran
@@ -1743,6 +1907,11 @@ export class AtomicServer {
         dag
           .container()
           .from(image)
+          // Match rustBuild's target-specific musl bindgen headers.
+          .withEnvVariable(
+            `BINDGEN_EXTRA_CLANG_ARGS_${target.replaceAll('-', '_')}`,
+            `-isystem /usr/local/musl/${target}/include`,
+          )
           // `protobuf-compiler` gives `protoc`, needed by `lance-encoding`'s
           // build script (a transitive dep via the vector-search feature) —
           // without it `cargo fetch`-triggered builds under this container
@@ -1752,7 +1921,7 @@ export class AtomicServer {
           .withExec([
             'sh',
             '-c',
-            'apt-get update -qq && apt-get install -y nasm protobuf-compiler',
+            APT_UPDATE + ' && apt-get install -y nasm protobuf-compiler',
           ]),
         CARGO_HOME_MUSL,
       )
@@ -1810,7 +1979,6 @@ export class AtomicServer {
           source.file('browser/data-browser/src/chunks/AppPage/appFrameDocument.ts'),
         )
         .withDirectory('/code/server', source.directory('server'))
-        .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
         .withDirectory(
@@ -1845,8 +2013,24 @@ export class AtomicServer {
   }
 
   @func()
-  rustTest(): Promise<string> {
-    return (
+  rustTest(
+    /** Test execution threads for this invocation; 0 keeps the host profile. */
+    @argument() testThreads: number = 0,
+  ): Promise<string> {
+    if (
+      !Number.isSafeInteger(testThreads) ||
+      testThreads < 0 ||
+      testThreads > 128
+    ) {
+      throw new Error('test-threads must be an integer between 0 and 128');
+    }
+
+    const threads =
+      testThreads === 0
+        ? this.hostKnobs.nextestTestThreads
+        : String(testThreads);
+
+    return this.testExec(
       this.rustChecksContainer()
         .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
         .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
@@ -1872,43 +2056,43 @@ export class AtomicServer {
         // concurrent run sees either no binary or a complete one.
         .withMountedCache('/opt/cargo-bin', dag.cacheVolume('cargo-bin'), {
           sharing: CacheSharingMode.Shared,
-        })
-        // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
-        // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
-        // that aren't installed in the musl-cross CI image.
-        //
-        // `--no-default-features --features light`: `atomic-server`'s
-        // default features include `vector-search`, which pulls in `ort`
-        // with `cuda`/`coreml`/`directml` all requested unconditionally.
-        // `ort` ships no prebuilt binary for musl + cuda, so the workspace
-        // fails to even compile here. Mirrors the existing
-        // `aarch64-unknown-linux-musl` release-build carve-out in
-        // `rustBuild()` (same underlying ort/musl gap, same fix). Verified
-        // locally: `--no-default-features --features light` at `--workspace`
-        // scope only strips `atomic-server`'s own defaults — other members
-        // don't define a `light` feature and are unaffected.
-        //
-        // `--build-jobs` / `--test-threads` / `--retries`: from
-        // `--host-profile` (mancave hot / hosted quiet). The toml still
-        // caps `it` at 2 and serializes `iroh_pairing::*`.
-        .withExec([
-          'sh',
-          '-c',
-          'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
-            'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
-            'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
-            'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
-            'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
-            'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
-            'rm -rf "$STAGE"; fi && ' +
-            'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light,wasm-plugins ' +
-            `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
-            `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
-            `--retries ${this.hostKnobs.nextestRetries}`,
-        ])
-        .stdout()
-    );
+        }),
+      // `--exclude atomic-server-tauri`: same reason as `rustClippy` —
+      // the Tauri desktop crate needs system libs (glib-2.0, pkg-config)
+      // that aren't installed in the musl-cross CI image.
+      //
+      // `--no-default-features --features light`: `atomic-server`'s
+      // default features include `vector-search`, which pulls in `ort`
+      // with `cuda`/`coreml`/`directml` all requested unconditionally.
+      // `ort` ships no prebuilt binary for musl + cuda, so the workspace
+      // fails to even compile here. Mirrors the existing
+      // `aarch64-unknown-linux-musl` release-build carve-out in
+      // `rustBuild()` (same underlying ort/musl gap, same fix). Verified
+      // locally: `--no-default-features --features light` at `--workspace`
+      // scope only strips `atomic-server`'s own defaults — other members
+      // don't define a `light` feature and are unaffected.
+      //
+      // `--build-jobs` / `--test-threads` / `--retries`: from
+      // `--host-profile` (mancave hot / hosted quiet), with an optional
+      // per-invocation test-thread override. The toml still caps `it` at 2
+      // and serializes `iroh_pairing::*`.
+      [
+        'sh',
+        '-c',
+        'export PATH="/opt/cargo-bin/bin:$PATH" && ' +
+          'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
+          'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
+          'STAGE=$(mktemp -d "$BIN_DIR/.nextest-XXXXXX") && ' +
+          'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
+          'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
+          'rm -rf "$STAGE"; fi && ' +
+          'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
+          '--no-default-features --features light,wasm-plugins ' +
+          `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
+          `--test-threads ${threads} ` +
+          `--retries ${this.hostKnobs.nextestRetries}`,
+      ],
+    ).stdout();
   }
 
   @func()
@@ -1957,6 +2141,16 @@ export class AtomicServer {
         '--no-default-features',
         '--features',
         'light',
+      ])
+      // `atomic_lib` embedded in another wasm32 crate (main thread, no
+      // tokio-tungstenite/iroh/rdf; #2633). The cfg flag is getrandom's.
+      .withExec([
+        'sh',
+        '-c',
+        'rustup target add wasm32-unknown-unknown && ' +
+          'CARGO_ENCODED_RUSTFLAGS=\'--cfg\x1fgetrandom_backend="wasm_js"\' ' +
+          'cargo check --locked -p atomic_lib --target wasm32-unknown-unknown ' +
+          '--no-default-features --features db,wasm',
       ])
       .stdout();
   }
@@ -2141,6 +2335,15 @@ export class AtomicServer {
       e2e,
     ).file('/atomic-server-binary');
 
+    return this.atomicServiceFromBinary(atomicServerBinary, e2e, instance);
+  }
+
+  /** Runtime-only path, also used by workers importing the builder's binary. */
+  private atomicServiceFromBinary(
+    atomicServerBinary: File,
+    e2e: boolean,
+    instance: string,
+  ): Service {
     let runtime = dag
       .container()
       .from('alpine:latest')
@@ -2223,9 +2426,9 @@ export class AtomicServer {
    * `atomicService` so 4 servers don't share state.
    */
   private e2eBaseContainer(): Container {
-    // Workspace deps only — SPA assets come from `atomicService(true)` →
-    // `rustBuild(..., e2e=true)` → `jsBuild(true)`.
-    const browserContainer = this.jsBuild();
+    // Match the server's exact graph, including VITE_E2E, so SDK dependencies
+    // reuse its build instead of triggering a second production SPA build.
+    const browserContainer = this.jsBuild(true);
 
     // Reuses the npm-global volume so `netlify-cli` isn't re-downloaded when
     // docs deploy already warmed it.
@@ -2344,14 +2547,22 @@ export class AtomicServer {
   private readonly e2eRunNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   /** One Playwright shard against its own atomic-server service. */
-  private e2eShardContainer(base: Container, shardIndex: number): Container {
-    const shardCount = this.e2eRun.shardCount;
+  private e2eShardContainer(
+    base: Container,
+    shardIndex: number,
+    shardCount: number = this.e2eRun.shardCount,
+    binary?: File,
+    runScript?: string,
+  ): Container {
+    const instance = `${this.e2eRunNonce}-${shardIndex}`;
 
     return (
       base
         .withServiceBinding(
           'atomic',
-          this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
+          binary
+            ? this.atomicServiceFromBinary(binary, true, instance)
+            : this.atomicService(true, instance),
         )
         .withExec([
           'sh',
@@ -2370,8 +2581,453 @@ export class AtomicServer {
         .withExec([
           '/bin/bash',
           '-c',
-          e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
+          runScript ??
+            e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
         ])
+    );
+  }
+
+  /** Actual content hash; Dagger object IDs are not portable across engines. */
+  private async browserArtifactHash(file: File): Promise<string> {
+    const output = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withFile('/artifact', file)
+      .withExec(['sha256sum', '/artifact'])
+      .stdout();
+    const hash = output.trim().split(/\s+/)[0];
+    validateBundleHash(hash);
+    return hash;
+  }
+
+  private async browserSourceFingerprint(): Promise<string> {
+    const fingerprint = await dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec(['node', '-e', BROWSER_SOURCE_FINGERPRINT_SCRIPT])
+      .stdout();
+    validateBundleHash(fingerprint);
+    return fingerprint;
+  }
+
+  /** Inspect exact filtered build inputs before allocating time to compilation. */
+  @func()
+  browserSourceInputs(): Promise<string> {
+    return dag
+      .container()
+      .from(NODE_IMAGE)
+      .withDirectory('/source', this.source)
+      .withExec([
+        'node',
+        '-e',
+        BROWSER_SOURCE_FINGERPRINT_SCRIPT,
+        '/source',
+        '--manifest',
+      ])
+      .stdout();
+  }
+
+  private async requireBrowserBundlePlatform(): Promise<void> {
+    const platform = await dag.container().from(NODE_IMAGE).platform();
+    if (String(platform) !== BROWSER_BUNDLE_PLATFORM) {
+      throw new Error('Portable browser bundles require a linux/amd64 worker');
+    }
+  }
+
+  /**
+   * Build once on one engine, then export this directory to independent workers.
+   * The controller verifies a clean checkout at sourceCommit before this call.
+   */
+  @func()
+  async prepareBrowserBundle(
+    @argument() sourceCommit: string,
+  ): Promise<Directory> {
+    validateBundleCommit(sourceCommit);
+    await this.requireBrowserBundlePlatform();
+
+    // These two frontend variants share their real WASM build in this one
+    // invocation. The check workspace keeps the normal production flags.
+    const wasm = this.wasmBuild();
+    this.bundleWasm = wasm;
+    const checks = this.jsBuild(false)
+      .withDirectory('/lib/defaults', this.source.directory('lib/defaults'))
+      .withDirectory('/atomic-ci/wasm/pkg', wasm)
+      .withoutMount('/app/.pnpm-store');
+    const checksArchive = checks.asTarball();
+
+    // No service or browser execution is captured in the portable client.
+    const base = this.e2eBaseContainer();
+    const client = base
+      // Cache mounts and their contents are not part of an OCI image. Workers
+      // execute the installed tools and packages, without another install or
+      // Netlify upload; reports are returned directly to the controller.
+      .withoutMount('/opt/npm-global')
+      .withoutMount('/root/.npm')
+      .withoutMount('/app/.pnpm-store');
+    const archive = client.asTarball();
+    const inventory = client
+      .withExec([
+        'sh',
+        '-c',
+        'pnpm exec playwright test --config=./playwright.config.ts --list --reporter=json > /test-inventory.json',
+      ])
+      .file('/test-inventory.json');
+    const binary = this.rustBuild(
+      false,
+      'x86_64-unknown-linux-musl',
+      true,
+    ).file('/atomic-server-binary');
+    const [
+      sourceFingerprint,
+      binaryHash,
+      archiveHash,
+      inventoryHash,
+      checksHash,
+    ] = await Promise.all([
+      this.browserSourceFingerprint(),
+      this.browserArtifactHash(binary),
+      this.browserArtifactHash(archive),
+      this.browserArtifactHash(inventory),
+      this.browserArtifactHash(checksArchive),
+    ]).finally(() => {
+      this.bundleWasm = undefined;
+    });
+    const manifest: BrowserBundleManifest = {
+      version: 2,
+      sourceCommit,
+      sourceFingerprint,
+      sourceFingerprintVersion: BROWSER_SOURCE_FINGERPRINT_VERSION,
+      platform: BROWSER_BUNDLE_PLATFORM,
+      rustVersion: RUST_VERSION,
+      pnpmVersion: PNPM_VERSION,
+      playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      files: {
+        'atomic-server-binary': binaryHash,
+        'client.oci.tar': archiveHash,
+        'checks.oci.tar': checksHash,
+        'test-inventory.json': inventoryHash,
+      },
+    };
+    return dag
+      .directory()
+      .withFile('atomic-server-binary', binary)
+      .withFile('client.oci.tar', archive)
+      .withFile('checks.oci.tar', checksArchive)
+      .withFile('test-inventory.json', inventory)
+      .withNewFile('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+  }
+
+  /** Shared validation constructs no build and imports no executable image. */
+  private async validatedBrowserBundle(
+    bundle: Directory,
+    expectedCommit: string,
+    manifestSha256: string,
+  ): Promise<BrowserBundleManifest> {
+    validateBundleCommit(expectedCommit);
+    validateBundleHash(manifestSha256);
+    await this.requireBrowserBundlePlatform();
+    const manifestFile = bundle.file('manifest.json');
+    if ((await this.browserArtifactHash(manifestFile)) !== manifestSha256) {
+      throw new Error(
+        'Browser bundle manifest SHA256 does not match the builder',
+      );
+    }
+    const manifest = validateBrowserManifest(
+      JSON.parse(await manifestFile.contents()),
+      {
+        sourceCommit: expectedCommit,
+        sourceFingerprint: await this.browserSourceFingerprint(),
+        rustVersion: RUST_VERSION,
+        pnpmVersion: PNPM_VERSION,
+        playwrightVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      },
+    );
+    for (const name of [
+      'atomic-server-binary',
+      'client.oci.tar',
+      'checks.oci.tar',
+      'test-inventory.json',
+    ] as const) {
+      if (
+        (await this.browserArtifactHash(bundle.file(name))) !==
+        manifest.files[name]
+      ) {
+        throw new Error(
+          `Browser bundle ${name} SHA256 does not match the manifest`,
+        );
+      }
+    }
+    return manifest;
+  }
+
+  /** Validate an existing bundle without executing a build or a browser shard. */
+  @func()
+  async validateBrowserBundle(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 recorded by the original successful builder. */
+    @argument() manifestSha256: string,
+  ): Promise<string> {
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    return JSON.stringify({
+      ...manifest,
+      kind: 'browser-bundle-validation',
+      manifestSha256,
+      validatedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Run the existing checks against one verified, completely built workspace. */
+  @func()
+  async bundleCheck(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    @argument() manifestSha256: string,
+    @argument() checkName: string,
+    @argument() netlifyAuthToken: Secret,
+  ): Promise<string> {
+    if (
+      ![
+        'js-test',
+        'js-typecheck',
+        'typedoc-publish',
+        'js-test-integration',
+      ].includes(checkName)
+    ) {
+      throw new Error('Unsupported prepared-workspace check');
+    }
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    const imported = dag.container().import_(bundle.file('checks.oci.tar'));
+    if (String(await imported.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser check workspace platform does not match its manifest',
+      );
+    }
+    // The image contains build outputs, never completed test executions.
+    // Even a standalone call with no explicit test-run key executes checks.
+    const prepared = imported
+      .withWorkdir('/app')
+      .withEnvVariable('ATOMIC_BUNDLE_CHECK_NONCE', this.e2eRunNonce);
+    switch (checkName) {
+      case 'js-test':
+        return this.jsTestPrepared(prepared);
+      case 'js-typecheck':
+        return this.jsTypecheckPrepared(prepared);
+      case 'typedoc-publish':
+        return this.typedocPrepared(prepared, netlifyAuthToken, false);
+      default:
+        // Keep the integration suite's native debug/glibc server and its
+        // original minimal /repo/browser layout; only its WASM is shared.
+        return this.jsTestIntegrationWithWasm(
+          imported.directory('/atomic-ci/wasm/pkg'),
+          true,
+        );
+    }
+  }
+
+  /**
+   * Execute one global shard without rebuilding or installing its dependencies.
+   * Browser assertion failures still return all artifacts; the controller must
+   * gate on test-exit-code and reconcile JSON identities with the full inventory.
+   */
+  @func()
+  async browserShard(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    /** SHA256 received directly from the trusted builder, outside the bundle. */
+    @argument() manifestSha256: string,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightRetries: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBrowserShard(
+      shardIndex,
+      shardCount,
+      playwrightWorkers,
+      playwrightRetries,
+    );
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    this.e2eRun = {
+      shardCount,
+      workers: String(playwrightWorkers),
+      retries: String(playwrightRetries),
+      grep: '',
+    };
+    this.e2eCloneSessions = playwrightCloneSessions;
+    const base = dag
+      .container()
+      .import_(bundle.file('client.oci.tar'))
+      .withEnvVariable('PLAYWRIGHT_WORKERS', String(playwrightWorkers))
+      .withEnvVariable('PLAYWRIGHT_RETRIES', String(playwrightRetries))
+      .withEnvVariable(
+        'ATOMIC_E2E_CLONE_SESSION',
+        playwrightCloneSessions ? '1' : '0',
+      );
+    if (String(await base.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser bundle client platform does not match its manifest',
+      );
+    }
+    const run = this.e2eShardContainer(
+      base,
+      shardIndex,
+      shardCount,
+      bundle.file('atomic-server-binary'),
+    );
+    // Startup/configuration errors may leave no HTML or JSON. Keep their log
+    // and exit code as well; a missing JSON report cannot count as a pass.
+    return this.exportBrowserRun(run, {
+      version: 1,
+      kind: 'browser-first-pass',
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      playwrightRetries,
+    });
+  }
+
+  /** Keep raw first/retry artifacts separate and bind each export to its inputs. */
+  private exportBrowserRun(
+    run: Container,
+    identity: Record<string, string | number>,
+  ): Directory {
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    return run
+      .withExec([
+        'sh',
+        '-c',
+        'mkdir -p /browser-results/playwright-report /browser-results/test-results; ' +
+          'cp /test-exit-code /test-output.log /browser-results/; ' +
+          'if [ -f /test-results.json ]; then cp /test-results.json /browser-results/; fi; ' +
+          'if [ -d /app/e2e/playwright-report ]; then cp -a /app/e2e/playwright-report/. /browser-results/playwright-report/; fi; ' +
+          'if [ -d /app/e2e/test-results ]; then cp -a /app/e2e/test-results/. /browser-results/test-results/; fi; ' +
+          'if [ -f /retry-last-run.json ]; then cp /retry-last-run.json /browser-results/test-results/.last-run.json; fi; ' +
+          `node -e ${quote(BROWSER_RUN_RECEIPT_SCRIPT)} ${quote(JSON.stringify(identity))}`,
+      ])
+      .directory('/browser-results');
+  }
+
+  /** One unsharded, zero-immediate-retry round for completed first-pass failures. */
+  @func()
+  async browserRetry(
+    @argument() bundle: Directory,
+    @argument() expectedCommit: string,
+    @argument() manifestSha256: string,
+    @argument() firstRun: Directory,
+    @argument() shardIndex: number,
+    @argument() shardCount: number,
+    @argument() playwrightWorkers: number = 1,
+    @argument() playwrightCloneSessions: boolean = false,
+  ): Promise<Directory> {
+    validateBrowserShard(shardIndex, shardCount, playwrightWorkers, 0);
+    const manifest = await this.validatedBrowserBundle(
+      bundle,
+      expectedCommit,
+      manifestSha256,
+    );
+    const reportFile = firstRun.file('test-results.json');
+    const lastRunFile = firstRun.file('test-results/.last-run.json');
+    const exitFile = firstRun.file('test-exit-code');
+    const [
+      report,
+      inventory,
+      lastRun,
+      receipt,
+      exitCode,
+      reportSha256,
+      lastRunSha256,
+      exitCodeSha256,
+    ] = await Promise.all([
+      reportFile.contents().then(JSON.parse),
+      bundle.file('test-inventory.json').contents().then(JSON.parse),
+      lastRunFile.contents().then(JSON.parse),
+      firstRun.file('browser-run.json').contents().then(JSON.parse),
+      exitFile.contents(),
+      this.browserArtifactHash(reportFile),
+      this.browserArtifactHash(lastRunFile),
+      this.browserArtifactHash(exitFile),
+    ]);
+    const selection = validateBrowserRetryInput({
+      report,
+      inventory,
+      lastRun,
+      receipt,
+      exitCode,
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      reportSha256,
+      lastRunSha256,
+      exitCodeSha256,
+    });
+    this.e2eRun = {
+      shardCount,
+      workers: String(playwrightWorkers),
+      retries: '0',
+      grep: '',
+    };
+    this.e2eCloneSessions = playwrightCloneSessions;
+    const base = dag
+      .container()
+      .import_(bundle.file('client.oci.tar'))
+      .withEnvVariable('PLAYWRIGHT_WORKERS', String(playwrightWorkers))
+      .withEnvVariable('PLAYWRIGHT_RETRIES', '0')
+      .withEnvVariable(
+        'ATOMIC_E2E_CLONE_SESSION',
+        playwrightCloneSessions ? '1' : '0',
+      )
+      // Never ask Playwright to infer a selection from a missing/stale file:
+      // its native --last-failed implementation falls back to the full suite.
+      .withNewFile(
+        '/retry-last-run.json',
+        JSON.stringify({
+          status: 'failed',
+          failedTests: selection.failedTestIds,
+        }),
+      );
+    if (String(await base.platform()) !== manifest.platform) {
+      throw new Error(
+        'Browser bundle client platform does not match its manifest',
+      );
+    }
+    const selected = base
+      .withExec(['/bin/bash', '-c', BROWSER_RETRY_LIST_SCRIPT])
+      .withExec(['node', '-e', BROWSER_RETRY_LIST_CHECK_SCRIPT]);
+    const run = this.e2eShardContainer(
+      selected,
+      shardIndex,
+      shardCount,
+      bundle.file('atomic-server-binary'),
+      BROWSER_RETRY_RUN_SCRIPT,
+    );
+    return this.exportBrowserRun(run, {
+      version: 1,
+      kind: 'browser-deferred-retry',
+      sourceCommit: expectedCommit,
+      manifestSha256,
+      shardIndex,
+      shardCount,
+      playwrightRetries: 0,
+    }).withNewFile(
+      'retry-selection.json',
+      JSON.stringify(selection, null, 2) + '\n',
     );
   }
 
@@ -2419,7 +3075,7 @@ export class AtomicServer {
         grep: playwrightGrep,
       };
     console.info(
-      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
+      `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.cappedBuildJobs(this.hostKnobs.cargoBuildJobs)}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
     );
     const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();

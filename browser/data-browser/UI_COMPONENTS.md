@@ -1,5 +1,11 @@
 # Reusable UI Components
 
+Basic controls, overlays and their shared contexts live in `browser/ui`
+(`@tomic/ui`). The `src/components` and `src/hooks` paths below remain compatible
+re-exports. Atomic's spinner, dialog and dropdown wrappers retain only boot-splash,
+welcome-feedback, translated defaults and router integration. Reuse the package
+implementation instead of copying it into a feature package.
+
 Read this before changing UI in the data browser. Prefer these existing primitives over rebuilding layout, overlay, button, loading, resource rendering, or accessibility patterns from scratch.
 
 This list intentionally focuses on components meant to be reused across screens. Feature-specific components in `src/components`, `src/views`, `src/routes`, `src/chunks`, and resource-specific folders are not listed unless they provide a broadly useful UI primitive.

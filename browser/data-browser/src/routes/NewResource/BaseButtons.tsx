@@ -1,5 +1,5 @@
 import { ai, canvas, core, dataBrowser } from '@tomic/react';
-import { OutlinedSection } from '../../components/OutlinedSection';
+import { OutlinedSection } from '@tomic/ui/components/OutlinedSection';
 import { ClassButton } from './ClassButton';
 
 import type { JSX } from 'react';
@@ -16,7 +16,6 @@ const buttons = [
   dataBrowser.classes.documentV2,
   dataBrowser.classes.meeting,
   dataBrowser.classes.chatroom,
-  dataBrowser.classes.bookmark,
   canvas.classes.canvas,
   core.classes.ontology,
 ];

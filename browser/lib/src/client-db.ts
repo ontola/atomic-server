@@ -46,6 +46,8 @@ import type {
   RpcReq,
   RpcRes,
   RpcType,
+  VaultBlobPlan,
+  VaultBlobRestoreResult,
   VaultExportResult,
   VaultImportSummary,
   WorkerRequest,
@@ -170,6 +172,34 @@ export interface ClientDbQueryOpts {
   /** Also return resources in the Trash. Default false, like the server. */
   includeTrashed?: boolean;
 }
+
+/** What a tab writes to the local database for one resource. A resource with
+ *  a Loro doc is written as that doc (`loro`): the database derives the row.
+ *  `jsonAd` is the row as text, for the resources that have no Loro state of
+ *  their own to derive it from (a Commit, or a page without Loro loaded). */
+export type ClientDbRow =
+  | { kind: 'loro'; snapshot: Uint8Array; lastCommit?: string }
+  | { kind: 'jsonAd'; jsonAd: string; snapshot?: Uint8Array };
+
+type PendingPutItem =
+  | {
+      kind: 'jsonAd';
+      jsonAd: string;
+      snapshot?: Uint8Array;
+      outbox?: ClientDbOutboxWrite;
+    }
+  | {
+      kind: 'loro';
+      subject: string;
+      snapshot: Uint8Array;
+      lastCommit?: string;
+      outbox?: ClientDbOutboxWrite;
+    };
+
+type PendingPut = PendingPutItem & {
+  resolve: () => void;
+  reject: (e: unknown) => void;
+};
 
 /** Outbox rows to store (`puts`) and subjects whose row goes (`deletes`),
  *  for one agent's queue. Values are opaque JSON owned by `LocalOutbox`. */
@@ -951,11 +981,37 @@ export class ClientDbWorker {
     snapshot?: Uint8Array,
     outbox?: ClientDbOutboxWrite,
   ): Promise<void> {
-    // Writes made in the same tick leave as one message: a chunk of pushed
-    // resources is applied in a loop, and one transaction per resource made a
-    // 1200-folder first sync keep the worker busy for minutes.
+    return this.queuePut({ kind: 'jsonAd', jsonAd, snapshot, outbox });
+  }
+
+  /**
+   * Persist `subject` from its Loro snapshot alone: the WASM side derives the
+   * row and the indexes from that doc, in one transaction, then flushes like
+   * {@link putResourceWithSnapshot}. `lastCommit` is the one value no doc
+   * holds (it is derived from the newest envelope). Rejects when the snapshot
+   * does not import; there is no fallback to a JSON-AD row.
+   */
+  putLoroSnapshot(
+    subject: string,
+    snapshot: Uint8Array,
+    lastCommit?: string,
+    outbox?: ClientDbOutboxWrite,
+  ): Promise<void> {
+    return this.queuePut({
+      kind: 'loro',
+      subject,
+      snapshot,
+      lastCommit,
+      outbox,
+    });
+  }
+
+  // Writes made in the same tick leave as one message: a chunk of pushed
+  // resources is applied in a loop, and one transaction per resource made a
+  // 1200-folder first sync keep the worker busy for minutes.
+  private queuePut(item: PendingPutItem): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      this.pendingPuts.push({ jsonAd, snapshot, outbox, resolve, reject });
+      this.pendingPuts.push({ ...item, resolve, reject });
 
       if (this.pendingPuts.length === 1) {
         queueMicrotask(() => this.flushPendingPuts());
@@ -963,17 +1019,12 @@ export class ClientDbWorker {
     });
   }
 
-  private pendingPuts: {
-    jsonAd: string;
-    snapshot?: Uint8Array;
-    outbox?: ClientDbOutboxWrite;
-    resolve: () => void;
-    reject: (e: unknown) => void;
-  }[] = [];
+  private pendingPuts: PendingPut[] = [];
 
-  /** Send the writes queued by {@link putResourceWithSnapshot}. Called before
-   *  any other message too, so the worker sees them in the order they were
-   *  made. */
+  /** Send the writes queued by {@link putResourceWithSnapshot} and
+   *  {@link putLoroSnapshot}. Called before any other message too, so the
+   *  worker sees them in the order they were made: a run of one kind is one
+   *  message, and the runs go out in order. */
   private flushPendingPuts(): void {
     const batch = this.pendingPuts;
 
@@ -981,26 +1032,70 @@ export class ClientDbWorker {
 
     this.pendingPuts = [];
 
-    const message =
-      batch.length === 1
-        ? {
-            type: 'putResourceWithSnapshot',
-            jsonAd: batch[0].jsonAd,
-            snapshot: batch[0].snapshot,
-            outbox: batch[0].outbox,
-          }
-        : {
-            type: 'putResourcesWithSnapshots',
-            items: batch.map(({ jsonAd, snapshot, outbox }) => ({
-              jsonAd,
-              snapshot,
-              outbox,
-            })),
-          };
+    for (let start = 0; start < batch.length; ) {
+      let end = start + 1;
+
+      while (end < batch.length && batch[end].kind === batch[start].kind) {
+        end++;
+      }
+
+      this.sendPutRun(batch.slice(start, end));
+      start = end;
+    }
+  }
+
+  private sendPutRun(run: PendingPut[]): void {
+    const first = run[0];
+    let message: Record<string, unknown>;
+
+    if (first.kind === 'loro') {
+      const items = run.filter(
+        (item): item is PendingPut & { kind: 'loro' } => item.kind === 'loro',
+      );
+      message =
+        items.length === 1
+          ? {
+              type: 'putLoroSnapshot',
+              subject: first.subject,
+              snapshot: first.snapshot,
+              lastCommit: first.lastCommit,
+              outbox: first.outbox,
+            }
+          : {
+              type: 'putLoroSnapshots',
+              items: items.map(({ subject, snapshot, lastCommit, outbox }) => ({
+                subject,
+                snapshot,
+                lastCommit,
+                outbox,
+              })),
+            };
+    } else {
+      const items = run.filter(
+        (item): item is PendingPut & { kind: 'jsonAd' } =>
+          item.kind === 'jsonAd',
+      );
+      message =
+        items.length === 1
+          ? {
+              type: 'putResourceWithSnapshot',
+              jsonAd: first.jsonAd,
+              snapshot: first.snapshot,
+              outbox: first.outbox,
+            }
+          : {
+              type: 'putResourcesWithSnapshots',
+              items: items.map(({ jsonAd, snapshot, outbox }) => ({
+                jsonAd,
+                snapshot,
+                outbox,
+              })),
+            };
+    }
 
     this.send(message, true).then(
-      () => batch.forEach(item => item.resolve()),
-      e => batch.forEach(item => item.reject(e)),
+      () => run.forEach(item => item.resolve()),
+      e => run.forEach(item => item.reject(e)),
     );
   }
 
@@ -1287,6 +1382,63 @@ export class ClientDbWorker {
       drivePseudonym,
       devicePubkey,
       segment,
+    });
+  }
+
+  /** Hashes of the files this drive's File resources reference. */
+  vaultFileHashes(driveSubject: string): Promise<string[]> {
+    return this.call('vaultFileHashes', { driveSubject });
+  }
+
+  /** Whether this device holds the bytes for a file hash. */
+  vaultBlobPresent(hash: string): Promise<boolean> {
+    return this.call('vaultBlobPresent', { hash });
+  }
+
+  /**
+   * Load one local file, verified against its hash, derive its id in this
+   * vault and get its chunk layout. The worker keeps that one file until
+   * `vaultBlobClose` or the next open.
+   */
+  vaultBlobOpen(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+  ): Promise<VaultBlobPlan> {
+    return this.call('vaultBlobOpen', { hash, key, keyEpoch });
+  }
+
+  /** One chunk of the file opened with {@link vaultBlobOpen}, sealed. */
+  vaultBlobChunk(
+    hash: string,
+    key: Uint8Array,
+    keyEpoch: number,
+    index: number,
+  ): Promise<Uint8Array> {
+    return this.call('vaultBlobChunk', { hash, key, keyEpoch, index });
+  }
+
+  vaultBlobClose(): Promise<void> {
+    return this.call('vaultBlobClose');
+  }
+
+  /**
+   * Open one stored file from its sealed chunks and store it if one of the
+   * `wanted` hashes (plain BLAKE3) names it.
+   */
+  vaultBlobRestore(
+    key: Uint8Array,
+    keyEpoch: number,
+    blobId: string,
+    chunks: Uint8Array[],
+    wanted: string[],
+  ): Promise<VaultBlobRestoreResult> {
+    return this.call('vaultBlobRestore', {
+      key,
+      keyEpoch,
+      blobId,
+      chunks,
+      wanted,
     });
   }
 

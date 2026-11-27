@@ -341,7 +341,9 @@ export class WSClient {
     number,
     {
       subjects: string[];
-      resolve: (results: Array<Resource | Error>) => void;
+      resolve: (
+        results: Array<Resource | Error> | Promise<Array<Resource | Error>>,
+      ) => void;
       reject: (e: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -1298,8 +1300,17 @@ export class WSClient {
           err.retryAfterMs = busyRetryAfterMs(msg.message, msg.code);
           const pendingGet = this.takePending(msg.requestId);
 
+          const pendingGetMany = this.pendingGetManys.get(msg.requestId);
+
           if (pendingGet) {
             pendingGet.reject(getError(msg));
+          } else if (pendingGetMany) {
+            // The whole batch was refused (more subjects than allowed, say):
+            // fail it now instead of waiting out the timeout. Only per-entry
+            // errors inside a GET_MANY_RESULT are refetched.
+            clearTimeout(pendingGetMany.timer);
+            this.pendingGetManys.delete(msg.requestId);
+            pendingGetMany.reject(getError(msg));
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
@@ -1321,6 +1332,7 @@ export class WSClient {
           this.store.failDriveSync(
             this.driveFromRejection(msg.message),
             msg.message,
+            msg.code,
           );
         } else if (
           msg.code === ErrorCode.AUTH_REQUIRED ||
@@ -1525,7 +1537,20 @@ export class WSClient {
                 ErrorType.Server,
               );
         });
-        pending.resolve(results);
+        // The server stopped fetching at its byte budget: the subject itself
+        // is fine, so ask for it alone rather than surface the refusal.
+        pending.resolve(
+          Promise.all(
+            results.map((result, index) =>
+              result instanceof AtomicError &&
+              result.code === ErrorCode.RESULT_TOO_LARGE
+                ? this.fetch(pending.subjects[index]).catch((e: unknown) =>
+                    asError(e),
+                  )
+                : result,
+            ),
+          ),
+        );
 
         break;
       }

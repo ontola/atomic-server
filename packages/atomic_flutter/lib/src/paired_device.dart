@@ -7,6 +7,8 @@
 /// to add (`agent`, `agent_name`, `relation`).
 library;
 
+import 'strings.dart';
+
 /// Whose device it is, as far as this device knows.
 enum PeerRelation {
   /// Signed in as this device's own agent: one of your devices.
@@ -112,21 +114,28 @@ class PairedDevice {
   }
 
   /// The chip: whose it is, when that is known.
-  String? get relationLabel => switch (relation) {
-        PeerRelation.sameAgent => 'Your device',
-        PeerRelation.contact => 'Shared with you',
-        PeerRelation.replica => 'Holds your data',
+  String? get relationLabel => relationText();
+
+  /// [relationLabel] in the language of [strings].
+  String? relationText([AtomicStrings strings = AtomicStrings.en]) =>
+      switch (relation) {
+        PeerRelation.sameAgent => strings.relationSameAgent,
+        PeerRelation.contact => strings.relationContact,
+        PeerRelation.replica => strings.relationReplica,
         PeerRelation.unknown => null,
       };
 
   /// What the last sync moved, or null before the first one.
-  String? get lastSyncCounts {
+  String? get lastSyncCounts => lastSyncCountsText();
+
+  /// [lastSyncCounts] in the language of [strings].
+  String? lastSyncCountsText([AtomicStrings strings = AtomicStrings.en]) {
     final sent = lastSent;
     final received = lastReceived;
     if (sent == null && received == null) return null;
     return [
-      if (received != null) 'received $received',
-      if (sent != null) 'sent $sent',
+      if (received != null) strings.received(received),
+      if (sent != null) strings.sent(sent),
     ].join(', ');
   }
 

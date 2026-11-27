@@ -12,7 +12,7 @@ import {
   ResourceContextMenuContext,
   ResourceContextMenuStateContext,
   type ResourceMenuState,
-} from './ResourceContextMenuContext';
+} from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 
 /**
  * Holds the app-level resource-context-menu state and exposes `openResourceMenu`

@@ -24,7 +24,6 @@ import {
   entityTableKey,
   sourceConfigFingerprint,
   type FlatIdentityAlias,
-  type LegacySourceAlias,
   type SyncablePrincipal,
 } from './builtinSyncIdentity.js';
 import {
@@ -43,39 +42,6 @@ export interface FlatMigrationBlock {
   message: string;
 }
 
-/** Older bindings without a complete entity proof may not allocate a competing flat mirror. */
-export function unsupportedLegacyFlatBlocks(
-  sources: LegacySourceAlias[],
-  scope: { proxyOrigin: string; platform: string },
-): FlatMigrationBlock[] {
-  const blocked = new Map<string, FlatMigrationBlock>();
-
-  for (const alias of sources) {
-    if (
-      alias.kind !== 'collection' ||
-      !alias.principal ||
-      !alias.sourceKey ||
-      typeof alias.collection?.resource !== 'string'
-    )
-      continue;
-    const key = parseSyncableSourceKey(alias.sourceKey);
-    if (
-      key.version !== 1 ||
-      key.proxyOrigin !== scope.proxyOrigin ||
-      key.platform !== scope.platform
-    )
-      continue;
-    const resource = alias.collection.resource;
-    blocked.set(groupKey(alias.principal, resource), {
-      principal: alias.principal,
-      resource,
-      message:
-        'This saved collection needs historical identity review before a flat destination can be created. Its cached resources were retained.',
-    });
-  }
-
-  return [...blocked.values()];
-}
 export interface SyncableFlatAdoptionRule {
   tableSourceKey: string;
   definition: ReadSelection;
@@ -313,11 +279,14 @@ export async function collectSyncableFlatAdoption(
       }
 
       if (
-        key.version === 1 ||
         key.proxyOrigin !== options.proxyOrigin ||
         key.platform !== options.platform
       )
         continue;
+      if (key.version === 1)
+        throw new Error(
+          'This integration has saved sources in an older format. Their data was retained.',
+        );
       const resource =
         key.version === 3 ? key.resource : key.collection?.resource;
 

@@ -79,7 +79,7 @@ vi.mock('@tomic/lib', async original => ({
   ...(await original<typeof import('@tomic/lib')>()),
   findSchema: async () => state.terms,
 }));
-vi.mock('@components/AtomicLink', () => ({
+vi.mock('@tomic/resource-ui/components/AtomicLink', () => ({
   AtomicLink: ({
     subject,
     children,

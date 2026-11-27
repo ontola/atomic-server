@@ -1,7 +1,7 @@
 import { MdTextFormat } from 'react-icons/md';
 import { styled } from 'styled-components';
-import { IconButton } from '@components/IconButton/IconButton';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { useLocalStorage } from '@tomic/resource-ui/hooks/useLocalStorage';
 
 const SHOW_TOOLBAR_KEY = 'atomic.rte.showToolbar';
 

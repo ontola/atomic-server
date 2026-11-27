@@ -15,11 +15,11 @@
     "vitest": "^4.1.7"
   },
   "name": "@tomic/root",
-  "version": "0.41.0-beta.8",
+  "version": "0.41.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "cd .. && husky",
+    "prepare": "if [ \"${HUSKY:-}\" != 0 ]; then cd .. && husky; fi",
     "dev": "pnpm run start",
     "lint": "pnpm run -r lint",
     "lint-fix": "pnpm run -r lint-fix",
@@ -47,7 +47,10 @@
       "data-browser",
       "svelte",
       "cli",
-      "create-template"
+      "create-template",
+      "ui",
+      "table",
+      "utils"
     ]
   },
   "packageManager": "pnpm@11.10.0+sha512.0b7f8b98060031904c017e3a41eb187a16d40eeb829b95c4f8cb03681761fc4ab53dd219115b9b447f4dce1a05a214764461e7d3703392a9f32f9511ce8c86c8"

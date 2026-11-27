@@ -1095,7 +1095,6 @@ async function legacyPublicMirror(
           [base + 'name']: 'Legacy imported issue',
           [base + 'localId']: 'syncables:github-issue:9001',
           [base + 'description']: 'Keep this user note',
-          [terms['syncable-issue-number']]: 15,
           [terms['syncable-source-key']]: rowKey,
           [terms['syncable-node-kind']]: 'record',
           [terms['syncable-source-config']]: {

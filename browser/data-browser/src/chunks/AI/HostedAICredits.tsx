@@ -1,4 +1,4 @@
-import { Column } from '@components/Row';
+import { Column } from '@tomic/ui/components/Row';
 import {
   canPurchaseHostedAICredits,
   type HostedAIStatus,

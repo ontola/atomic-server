@@ -6,14 +6,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-} from '@components/Dialog';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
+} from '@tomic/resource-ui/components/Dialog/index';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import {
   InputStyled,
   InputWrapper,
   TextAreaStyled,
-} from '@components/forms/InputStyles';
+} from '@tomic/ui/components/forms/InputStyles';
 import { submitFeedback } from '@helpers/feedback';
 import { loadChatMessages } from './chatConversionUtils';
 import {

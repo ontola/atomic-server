@@ -9,7 +9,10 @@ import { resourceActions } from '../actions/resourceActions';
 import { runAction } from '../actions/runAction';
 import { useActionContext } from '../actions/useActionContext';
 import { shortcuts } from '../actions/shortcuts';
-import { openSearchOverlay, openShortcutsOverlay } from './overlayState';
+import {
+  openSearchOverlay,
+  openShortcutsOverlay,
+} from '@tomic/resource-ui/components/overlayState';
 
 import type { JSX } from 'react';
 
@@ -90,10 +93,16 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     e.preventDefault();
     runAction(themeSettings, ctx);
   });
-  useHotkeys(shortcuts.search, e => {
-    e.preventDefault();
-    openSearchOverlay();
-  });
+  // Search must open from anywhere, also from inside an input, the AI chat
+  // box or an editor: ⌘K is not a character anyone types there.
+  useHotkeys(
+    shortcuts.search,
+    e => {
+      e.preventDefault();
+      openSearchOverlay();
+    },
+    { enableOnFormTags: true, enableOnContentEditable: true },
+  );
   useHotkeys(shortcuts.keyboardShortcuts, e => {
     e.preventDefault();
     openShortcutsOverlay();

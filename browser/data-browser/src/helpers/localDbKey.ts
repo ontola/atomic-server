@@ -1,6 +1,6 @@
 import { del, get, keys, set, update } from 'idb-keyval';
 import { encodeB64 } from '@tomic/lib';
-import { base64ToBytes, randomBytes } from './bytes';
+import { base64ToBytes, randomBytes } from '@tomic/resource-ui/helpers/bytes';
 
 /**
  * Per-agent encryption keys for the local OPFS ClientDb cache.

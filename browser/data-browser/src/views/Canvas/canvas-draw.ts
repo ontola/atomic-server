@@ -1,7 +1,15 @@
 import type { CanvasStroke } from '@tomic/lib';
 import { adjustStrokeColorForDarkMode } from '@tomic/lib';
 import {
+  arrowheadPoints,
+  controlPoint,
+  handlePosition,
+  resolveArrowIn,
+  resolveArrows,
+} from './canvas-connectors';
+import {
   elementBounds,
+  layoutShapeText,
   TEXT_FONT_FAMILY,
   TEXT_LINE_HEIGHT,
   type Bounds,
@@ -77,20 +85,141 @@ export function drawCanvasStrokes(
   offsetX: number,
   offsetY: number,
   darkMode: boolean,
+  /** A shape to outline, such as the one an arrow would bind to. */
+  highlightId?: string | null,
+  accent = '#3b82f6',
 ): void {
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
 
-  for (const stroke of strokes) {
+  // Arrows are routed from the shapes' bounds as they are now.
+  for (const stroke of resolveArrows(strokes)) {
     drawStroke(ctx, stroke, darkMode);
   }
 
   if (currentStroke) {
-    drawStroke(ctx, currentStroke, darkMode);
+    drawStroke(
+      ctx,
+      currentStroke.kind === 'arrow'
+        ? resolveArrowIn(currentStroke, strokes)
+        : currentStroke,
+      darkMode,
+    );
+  }
+
+  const target = highlightId
+    ? strokes.find(el => el.kind === 'shape' && el.id === highlightId)
+    : undefined;
+
+  if (target) {
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 3 / scale;
+    ctx.setLineDash([]);
+    shapePath(ctx, target, 4 / scale);
+    ctx.stroke();
   }
 
   ctx.restore();
+}
+
+/** The outline of a shape, grown by `grow` on every side. */
+function shapePath(
+  ctx: CanvasRenderingContext2D,
+  el: CanvasStroke,
+  grow = 0,
+): void {
+  const [x, y] = el.path[0];
+  const w = (el.w ?? 0) + grow * 2;
+  const h = (el.h ?? 0) + grow * 2;
+
+  ctx.beginPath();
+
+  if (el.shape === 'ellipse') {
+    ctx.ellipse(
+      x + (el.w ?? 0) / 2,
+      y + (el.h ?? 0) / 2,
+      w / 2,
+      h / 2,
+      0,
+      0,
+      Math.PI * 2,
+    );
+  } else {
+    ctx.roundRect(x - grow, y - grow, w, h, Math.min(w, h) * 0.18);
+  }
+}
+
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  el: CanvasStroke,
+  darkMode: boolean,
+): void {
+  // A faint wash of the outline colour, so a shape reads as a block.
+  ctx.fillStyle = adjustStrokeColorForDarkMode(
+    ((el.color & 0xffffff) | 0x1a000000) >>> 0,
+    darkMode,
+  );
+  ctx.strokeStyle = adjustStrokeColorForDarkMode(el.color, darkMode);
+  ctx.lineWidth = el.width;
+  ctx.lineJoin = 'round';
+  shapePath(ctx, el);
+  ctx.fill();
+  ctx.stroke();
+
+  if (!el.text) return;
+
+  const { size, lines } = layoutShapeText(el);
+  const lineHeight = size * TEXT_LINE_HEIGHT;
+  const [x, y] = el.path[0];
+  const top = y + ((el.h ?? 0) - lines.length * lineHeight) / 2;
+
+  ctx.fillStyle = adjustStrokeColorForDarkMode(el.color, darkMode);
+  ctx.font = `${size}px ${TEXT_FONT_FAMILY}`;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
+  lines.forEach((line, i) => {
+    ctx.fillText(line, x + (el.w ?? 0) / 2, top + i * lineHeight + size * 0.1);
+  });
+  ctx.textAlign = 'start';
+}
+
+/** The arrow's line: straight, or one quadratic curve through its bend. */
+function arrowPath(el: CanvasStroke): Path2D {
+  const [p0, p1] = el.path;
+  const path = new Path2D();
+
+  path.moveTo(p0[0], p0[1]);
+
+  if (el.bend) {
+    const c = controlPoint(p0, p1, el.bend);
+
+    path.quadraticCurveTo(c[0], c[1], p1[0], p1[1]);
+  } else {
+    path.lineTo(p1[0], p1[1]);
+  }
+
+  return path;
+}
+
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  el: CanvasStroke,
+  darkMode: boolean,
+): void {
+  const [p0, p1] = el.path;
+  const { tip, wings } = arrowheadPoints(p0, p1, el.bend, el.width);
+
+  ctx.strokeStyle = adjustStrokeColorForDarkMode(el.color, darkMode);
+  ctx.lineWidth = el.width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke(arrowPath(el));
+  ctx.beginPath();
+  ctx.moveTo(wings[0][0], wings[0][1]);
+  ctx.lineTo(tip[0], tip[1]);
+  ctx.lineTo(wings[1][0], wings[1][1]);
+  ctx.stroke();
 }
 
 function drawStroke(
@@ -104,6 +233,18 @@ function drawStroke(
 
   if (stroke.kind === 'text') {
     drawText(ctx, stroke, darkMode);
+
+    return;
+  }
+
+  if (stroke.kind === 'shape') {
+    drawShape(ctx, stroke, darkMode);
+
+    return;
+  }
+
+  if (stroke.kind === 'arrow' && stroke.path.length >= 2) {
+    drawArrow(ctx, stroke, darkMode);
 
     return;
   }
@@ -202,7 +343,15 @@ export function drawSelectionHalo(
   for (const el of elements) {
     if (el.path.length === 0) continue;
 
-    if (el.kind === 'text' || el.kind === 'image') {
+    if (el.kind === 'shape') {
+      ctx.lineWidth = el.width + 10 / scale;
+      shapePath(ctx, el);
+      ctx.fill();
+      ctx.stroke();
+    } else if (el.kind === 'arrow') {
+      ctx.lineWidth = el.width + 10 / scale;
+      ctx.stroke(arrowPath(el));
+    } else if (el.kind === 'text' || el.kind === 'image') {
       const b = elementBounds(el);
       const pad = 4 / scale;
 
@@ -228,6 +377,35 @@ export function drawSelectionHalo(
   ctx.restore();
 }
 
+/** The handle that bends a selected arrow, at the middle of its curve. */
+export function arrowHandleScreenPosition(
+  arrow: CanvasStroke,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+): [number, number] {
+  const [hx, hy] = handlePosition(arrow.path[0], arrow.path[1], arrow.bend);
+
+  return [hx * scale + offsetX, hy * scale + offsetY];
+}
+
+function drawArrowHandle(
+  ctx: CanvasRenderingContext2D,
+  [hx, hy]: [number, number],
+  accent: string,
+): void {
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(hx, hy, HANDLE_RADIUS * 0.8, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Lasso loop and selection box, painted in screen space on top. */
 export function drawSelectionOverlay(
   ctx: CanvasRenderingContext2D,
@@ -237,6 +415,8 @@ export function drawSelectionOverlay(
   offsetX: number,
   offsetY: number,
   accent: string,
+  /** A lone selected arrow: handles on both ends and one to bend it. */
+  bendable?: CanvasStroke,
 ): void {
   ctx.save();
   ctx.strokeStyle = accent;
@@ -286,6 +466,32 @@ export function drawSelectionOverlay(
       ctx.strokeStyle = '#fff';
       ctx.stroke();
     }
+  }
+
+  if (bendable) {
+    // Solid end handles, hollow bend handle.
+    for (const end of bendable.path) {
+      ctx.beginPath();
+      ctx.arc(
+        end[0] * scale + offsetX,
+        end[1] * scale + offsetY,
+        HANDLE_RADIUS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = accent;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fff';
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+
+    drawArrowHandle(
+      ctx,
+      arrowHandleScreenPosition(bendable, scale, offsetX, offsetY),
+      accent,
+    );
   }
 
   ctx.restore();

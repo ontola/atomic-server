@@ -47,7 +47,7 @@ jobs:
           # Keep both registry logins and Dagger on one job-local config.
           docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
-      # Not for publishing — this job no longer publishes anything. Dagger
+      # Not for publishing; Dagger
       # pulls `alpine` and the musl-cross images through the host docker
       # config, and an anonymous Docker Hub pull is rate limited per IP; a
       # box that runs CI all day exhausts that.
@@ -92,17 +92,19 @@ jobs:
           engine-stop: "false"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          # `--publish-docs` only from a stable `v*` tag (no hyphen), matching
-          # production. This pipeline previously ran on every push, and
-          # netlifyDeploy used to pass `--prod` unconditionally — so a feature
-          # branch republished the public docs and typedoc. `master` used to own live
-          # docs while the app shipped from tags; both now follow the tag.
+          # `--publish-docs` only from `develop`, the branch production
+          # follows (see deploy_staging.yml), so the live docs describe what
+          # runs in production. This pipeline previously ran on every push, and
+          # netlifyDeploy used to pass `--prod` unconditionally, so a feature
+          # branch republished the public docs and typedoc. Tags no longer
+          # publish docs: the develop push of the same commit already did.
           # Every other ref gets a preview URL. `--host-profile` selects
-          # parallelism (mancave hot / hosted quiet). Main currently passes
-          # full for develop, tags, and dispatched integration batches.
+          # parallelism (mancave hot / hosted quiet). main.yml's `pick` job
+          # chooses the mode: full for develop, tags and trekmeester/combined-*
+          # branches, light for other dispatched branches unless overridden.
           # Not `--e2e-mode`: Dagger maps that kebab to `e2EMode` and misses
           # the argument.
-          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} --results-key ${{ github.run_id }}-${{ github.run_attempt }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
+          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} --results-key ${{ github.run_id }}-${{ github.run_attempt }} ${{ github.ref == 'refs/heads/develop' && '--publish-docs' || '' }}
       # Traces, screenshots and page snapshots of failed e2e tests. The `ci`
       # call keeps them in a Dagger cache volume under this run's key (it
       # fails, so it cannot return them); this second call hands them back.
@@ -126,72 +128,9 @@ jobs:
           path: e2e-test-results/
           if-no-files-found: ignore
           retention-days: 14
-  # Floating `:develop` image tracks the integration branch. There is no
-  # `main` branch here — that clause could never fire, and left in place
-  # it invites someone to conclude one exists. `master` is not a docker
-  # trigger either. Versioned images are published from tags via the
-  # release process (`dagger call create-docker-images --tags …`).
-  #
-  # Its own job rather than a step at the end of `ci`, since 2026-09-18.
-  # As a step it inherited whatever the `ci` step had already spent: when
-  # the Dagger engine on the runner was unreachable, `ci` burned the ten
-  # minute connect timeout and the publish was skipped without ever
-  # trying. It was also unre-runnable on its own, so recovering a missed
-  # `:develop` image meant re-running a pipeline that takes hours. As a
-  # job it gets a fresh connect and shows up under "Re-run failed jobs".
-  # `develop` went three days without an image publish that way.
-  #
-  # `needs: ci` keeps the gate exactly where it was: a red pipeline still
-  # publishes nothing. To publish without waiting for one, run the
-  # "Publish :develop image" workflow.
-  images:
-    name: Docker images
-    needs: ci
-    if: github.ref == 'refs/heads/develop'
-    runs-on: ${{ fromJSON(inputs.runner) }}
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-      - name: Isolate Docker credentials for this job
-        shell: bash
-        run: |
-          docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
-          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
-      # Transition period: images publish to BOTH registries. GHCR
-      # (org-owned, GITHUB_TOKEN-authenticated, no pull rate limits) is the
-      # long-term home; the Docker Hub image stays until users and docs have
-      # moved over. Dagger's publish reads the host docker config, so these
-      # login steps are what authenticate it.
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: joepmeneer
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: |
-            joepmeneer/atomic-server
-            ghcr.io/ontola/atomic-server
-          # The tags land in a dagger `--tags` list argument, which is
-          # comma-separated — the default newline separator would split the
-          # shell command instead.
-          sep-tags: ","
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Dagger docker images (build images & publish)
-        uses: dagger/dagger-for-github@8.0.0
-        with:
-          version: "latest"
-          # Keep the shared engine up: Mancave runs several jobs at once, and the
-          # default stop would kill the engine under a job still using it.
-          engine-stop: "false"
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
-          verb: call
-          args: --cache-namespace ${{ runner.environment == 'self-hosted' && runner.name || 'hosted' }} create-docker-images --tags ${{ steps.meta.outputs.tags }}
+  # The `:develop` docker image is deliberately NOT a job here. It used to be
+  # (`images`, `needs: ci`), and its ~50 minute build then sat on the critical
+  # path: staging, production, atomic.place, TestFlight and Play all fire on
+  # this pipeline's completion. publish-develop-image.yml now builds it on a
+  # `workflow_run` of this pipeline instead, so a green `ci` still gates the
+  # image but nothing waits for it.

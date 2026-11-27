@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { FaEllipsisVertical } from 'react-icons/fa6';
-import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
+import type { DropdownTriggerComponent } from '@tomic/ui/components/Dropdown/DropdownTrigger';
 import { shortcuts } from '../HotKeyWrapper';
 import { LabelButton } from '../NavBarButton';
 

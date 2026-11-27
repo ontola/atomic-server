@@ -1,0 +1,37 @@
+{
+  "base": "782977871eb2b3e6f335aaf67b36b5c50bce50c0",
+  "sources": [
+    {
+      "pr": 2534,
+      "head": "f746f5df176f6e682568f4328a3e2e48dc242372",
+      "adaptation": "Capture tab identity and await actual resource loading; retain canonical direct save policy, membership/owner checks and permission/account fences."
+    },
+    {
+      "pr": 2603,
+      "head": "11e9371405789f51d413a4c2ab6c931e0eda904a",
+      "adaptation": "Add the missing compiled stable-row readiness regression. The production guard and seasonal fixture clock are already on develop."
+    },
+    {
+      "pr": 2580,
+      "head": "8fafeef3555705ae690e439abe22976021da9a9d",
+      "adaptation": "Apply accessible name/error identities and disabled presentation in the canonical property form; preserve existing focus and explicit saves."
+    },
+    {
+      "pr": 2577,
+      "head": "48827bc5e785efd6747149e6f3bb3413629b222c",
+      "adaptation": "Keep numeric drafts and unsupported stored choices in the canonical value input; guard disabled callbacks and retain explicit Atomic numeric normalization."
+    },
+    {
+      "pr": 2578,
+      "head": "123feeb835c9541feb86dd2f855ee5d7f6ec739f",
+      "adaptation": "Repair unsupported operators and unavailable columns; guard current and retained busy-control callbacks and deduplicate Add candidates in current page controls."
+    },
+    {
+      "pr": 2604,
+      "head": "518fc4510b9cc1753ecef999f2b030c80a5379ae",
+      "adaptation": "Canonical page dialogs/tabs/quick-add/precision/filter controls already exist. Complete shared selects, optional default selection buttons, dialog unmount cleanup and aria-busy passthrough. Do not import absent legacy save-controller APIs."
+    }
+  ],
+  "original_branches_preserved": true,
+  "validation_location": "Exact integration-head results are recorded in the integration PR and external CI artifacts."
+}

@@ -21,18 +21,18 @@ vi.mock('@tomic/react', async original => ({
 vi.mock('../chunks/PluginRuns/SyncableRecordActions', () => ({
   SyncableRecordActions: h.actions,
 }));
-vi.mock('../components/AllProps', () => ({
+vi.mock('@tomic/resource-ui/components/AllProps', () => ({
   default: () => <div data-testid='properties'>Properties</div>,
 }));
 vi.mock('../components/ClassDetail', () => ({ ClassDetail: () => null }));
 vi.mock('../components/CommitDetail', () => ({ CommitDetail: () => null }));
-vi.mock('../components/EditableTitle', () => ({
+vi.mock('@tomic/resource-ui/components/EditableTitle', () => ({
   EditableTitle: () => <h1>Stored resource</h1>,
 }));
-vi.mock('../components/ResourceDecorations', () => ({
+vi.mock('@tomic/resource-ui/components/ResourceDecorations', () => ({
   ResourceCoverImage: () => null,
 }));
-vi.mock('../components/forms/ValueForm/ValueForm', () => ({
+vi.mock('@tomic/resource-ui/components/forms/ValueForm/ValueForm', () => ({
   ValueForm: () => null,
 }));
 vi.mock('../hooks/useNavigateWithTransition', () => ({

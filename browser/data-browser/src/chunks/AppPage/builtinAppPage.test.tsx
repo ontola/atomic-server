@@ -22,12 +22,14 @@ vi.mock('@chunks/PluginRuns/BuiltinSyncablesApp', () => ({
     <div data-testid='builtin-app'>{table}</div>
   ),
 }));
-vi.mock('@chunks/TablePage/TableResource', () => ({
+vi.mock('@tomic/table-page/TablePage/TableResource', () => ({
   TableResource: ({ resource }: { resource: Resource }) => (
     <div data-testid='principal-app-collections'>{resource.subject}</div>
   ),
 }));
-vi.mock('@components/Loader', () => ({ LoaderBlock: () => <p>Loading</p> }));
+vi.mock('@tomic/ui/components/Loader', () => ({
+  LoaderBlock: () => <p>Loading</p>,
+}));
 
 afterEach(() => {
   cleanup();

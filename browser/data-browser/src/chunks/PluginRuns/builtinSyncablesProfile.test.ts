@@ -31,6 +31,7 @@ import {
 import {
   assertSyncAppDrive,
   assertSyncAppContext,
+  captureSyncAppWriteScope,
   syncAppContext,
   syncProxyTransport,
   canonicalSyncAppContext,
@@ -75,6 +76,29 @@ function cachedDriveStore(records: Record<string, Record<string, unknown>>) {
 }
 
 describe('running Sync drive authority', () => {
+  it('invalidates a captured source or rule when an inherited write grant changes', () => {
+    const records: Record<string, Record<string, unknown>> = {
+      table: { [core.properties.parent]: 'folder' },
+      rule: { [core.properties.parent]: 'table' },
+      folder: {
+        [core.properties.write]: ['did:ad:agent:person'],
+        [core.properties.parent]: 'drive',
+      },
+      drive: {},
+    };
+    const store = cachedDriveStore(records);
+    const assertCurrent = captureSyncAppWriteScope(store, ['table', 'rule']);
+    records.folder[core.properties.write] = [
+      'atomic:agent:person',
+      'did:ad:agent:person',
+    ];
+    expect(() => assertCurrent()).not.toThrow();
+    records.folder[core.properties.write] = [];
+    expect(() => assertCurrent()).toThrow(
+      'Write access to this Sync source changed',
+    );
+  });
+
   it('keeps a same-drive move bound to its stable source and rejects a root moved into another writable drive', () => {
     const records: Record<string, Record<string, unknown>> = {
       mirror: {
@@ -651,7 +675,6 @@ describe('catalog-derived host relay', () => {
         if (!active) throw new Error('Stopped');
       },
       { document: doc },
-      undefined,
       undefined,
       undefined,
       observed,
@@ -1327,7 +1350,6 @@ it('reports only actual catalog-verified typed principal responses to the native
     () => undefined,
     { document: apiDocument() },
     () => undefined,
-    async () => false,
     verified,
   );
   await transport.request!(request());

@@ -1,9 +1,12 @@
 import { styled } from 'styled-components';
 import { useState, type JSX } from 'react';
-import { ErrorChip } from '@components/forms/ErrorChip';
-import Field from '@components/forms/Field';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import type { FieldOptionsBag } from './useFieldOptions';
+import { ErrorChip } from '@tomic/resource-ui/components/forms/ErrorChip';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import type { FieldOptionsBag } from '@tomic/resource-ui/chunks/FormBuilder/FieldOptions/useFieldOptions';
 
 interface BoundFieldProps {
   label: string;

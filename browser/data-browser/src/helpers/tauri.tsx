@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 // This application can be used in a Tauri context.
 
 declare global {
@@ -43,4 +44,53 @@ export function getLocalServerOrigin(): string {
   }
 
   return window.location.origin;
+}
+
+/**
+ * The macOS desktop app draws its window controls over the page (an overlay
+ * title bar, see `desktop/tauri.conf.json`), so the top bar must leave room for
+ * them and act as the drag handle. `/Mac/` as a regex, not a string, so the
+ * translation extractor leaves it alone.
+ */
+export function hasOverlayTitleBar(): boolean {
+  return isRunningInTauri() && /Mac/.test(navigator.platform);
+}
+
+/**
+ * Whether the window controls are covering the top-left corner right now: they
+ * are in a normal window and gone in full screen, where the bar should use the
+ * whole width again.
+ */
+export function useWindowControlsInset(): boolean {
+  const overlay = hasOverlayTitleBar();
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!overlay) return;
+
+    let active = true;
+    let unlisten: (() => void) | undefined;
+
+    void (async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const win = getCurrentWindow();
+
+      const check = async () => {
+        const full = await win.isFullscreen();
+
+        if (active) setFullscreen(full);
+      };
+
+      await check();
+      // Entering or leaving full screen resizes the window.
+      unlisten = await win.onResized(() => void check());
+    })().catch(() => undefined);
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [overlay]);
+
+  return overlay && !fullscreen;
 }

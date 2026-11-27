@@ -61,7 +61,9 @@ vi.mock('@helpers/integrationProxy', () => ({
   useIntegrationProxy: () => 'https://proxy.example',
 }));
 vi.mock('@helpers/proxyConnections', () => ({ ProxyConnections: class {} }));
-vi.mock('@components/AtomicLink', () => ({ AtomicLink: () => null }));
+vi.mock('@tomic/resource-ui/components/AtomicLink', () => ({
+  AtomicLink: () => null,
+}));
 vi.mock('../../routes/ShowRoute', () => ({
   ShowRoute: { useSearch: () => undefined },
 }));
@@ -89,10 +91,10 @@ vi.mock('./syncableFlatAdoption', () => ({
 
     return { aliases: [], blocks: [], warnings: [], rules: [] };
   },
-  unsupportedLegacyFlatBlocks: () => [],
 }));
 vi.mock('./builtinSyncablesProfile', () => ({
   assertSyncAppDrive: () => undefined,
+  captureSyncAppWriteScope: () => () => undefined,
   assertSyncAppContext: (context: { revision: number }) => {
     if (context.revision !== state.revision)
       throw new Error('The Sync filter source entity changed');

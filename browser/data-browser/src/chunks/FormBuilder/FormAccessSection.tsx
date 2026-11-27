@@ -15,14 +15,20 @@ import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import { FaDownload, FaLink, FaTrash } from 'react-icons/fa6';
-import Field from '@components/forms/Field';
-import { Button } from '@components/Button';
-import { IconButton } from '@components/IconButton/IconButton';
-import { Column, Row } from '@components/Row';
-import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import { Card } from '@components/Card';
-import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
-import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { Button } from '@tomic/ui/components/Button';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Column, Row } from '@tomic/ui/components/Row';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
+import { Card } from '@tomic/ui/components/Card';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
 
 const ACCESS_PUBLIC = 'public';
 const ACCESS_INVITE_ONLY = 'invite-only';

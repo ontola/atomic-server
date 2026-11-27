@@ -62,7 +62,7 @@ import {
   setCrumbHint,
   type CrumbHint,
 } from '../components/BreadCrumbs';
-import { CalculatedPageHeight } from '../globalCssVars';
+import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
@@ -342,7 +342,7 @@ const showRoute = createRoute({
       return () => window.removeEventListener('atomic-embed-menu', open);
     }, []);
 
-    // A chat room is the app's native chat screen when it has one.
+    // A chat room or meeting is the app's native screen when it has one.
     useNativeChatRoom(menu ? '' : subject, () => {
       if (history.canGoBack()) history.back();
     });

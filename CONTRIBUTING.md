@@ -119,15 +119,15 @@ Check the Dagger index.ts file to see how cross compilation is done in the CI.
 
 ## Git policy
 
-One long-lived branch: `develop`. Staging follows it. Production is a stable
-`v*` tag, not a branch.
+One long-lived branch: `develop`. Staging, production and the live docs all
+follow it: every green `develop` commit is deployed. Code reaches real users
+fast, so a regression surfaces while the change is still fresh, instead of
+piling up behind a release tag.
 
-Do not add a `main` that is updated when you tag `develop`. The tag already
-*is* the release — a second pointer for the same commit drifts (failed update
-job, a direct push, a PR against the GitHub default), and production that
-deploys from both `main` and tags can disagree. `master` is not part of this
-flow either; it used to own live docs, which now publish from the same stable
-tags as production.
+Do not add a `main` that is updated when you tag `develop`. A second pointer
+for the same commit drifts (failed update job, a direct push, a PR against the
+GitHub default), and a production that deploys from both `main` and `develop`
+can disagree. `master` is not part of this flow either.
 
 ### Open a PR
 
@@ -177,27 +177,18 @@ Create new branches off `develop`. When an issue is ready for PR, open PR agains
 
 ### Hotfixes
 
-When production needs a fix that must not wait for everything already on
-`develop`, branch from the tag, tag the fix, merge back:
-
-```sh
-git checkout -b hotfix/describe-it v0.40.3
-# fix, open a PR, merge
-git tag v0.40.4
-git push origin v0.40.4
-git checkout develop
-git merge hotfix/describe-it
-```
-
-The new tag is what production deploys. `develop` must get the fix too, or the
-next release reintroduces the bug.
+Fix it on `develop` like any other change. Because every green `develop`
+commit goes to production, the fix reaches it as soon as its pipeline passes;
+there is no separate hotfix branch or tag. To get production back to a known
+good state first, roll back (see [Deployments](#deployments)), then land the
+fix or a revert on `develop`: the next green run deploys over a manual rollback.
 
 ## Testing
 
 - We try to test at every level, unit tests, integration tests, e2e tests (playwright).
 - When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
 - If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
-- Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. Opt in to full on a branch with a `full-e2e` PR label, `[full-e2e]` in the commit message, or `workflow_dispatch` `e2e_mode=full`. See `planning/e2e-light-heavy.md`.
+- Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. `main.yml` picks the mode by ref (`develop`, `v*` tags and `trekmeester/combined-*` branches run full, any other dispatched branch runs light). Force either with the `workflow_dispatch` input `e2e` (`auto`, `light` or `full`). See `planning/e2e-light-heavy.md`.
 
 Feature-specific browser journeys belong in `browser/e2e/tests/` and run through
 the shared CI pipeline. For a focused run with CI's service setup, use Dagger
@@ -211,6 +202,197 @@ dagger call end-to-end --netlify-auth-token env://NETLIFY_TOKEN \
 Replace the grep expression with any test title or regular expression; a focused
 run uses one shard. Use this for feature iteration instead of adding a
 branch-specific workflow under `.github/workflows/`.
+
+For independent Docker/Dagger engines, build the E2E artifacts once and copy
+them to the browser workers. The bundle contains the optimized E2E server
+(with its production frontend and WASM), the installed Playwright client image,
+a complete Node 22 checks image (`checks.oci.tar`), and the complete test
+inventory. Manifest version 2 hashes every artifact. Both images are prepared
+in the same builder invocation so their WASM compilation is shared; the checks
+image keeps the normal production build flags and full workspace/fixtures,
+while the browser image retains its E2E routes. Obtain the manifest hash from the trusted
+builder, rather than from an untrusted copy of the bundle:
+
+```sh
+commit=$(git rev-parse HEAD)
+dagger call prepare-browser-bundle --source-commit "$commit" \
+  export --path /absolute/path/browser-bundle
+manifest_hash=$(shasum -a 256 /absolute/path/browser-bundle/manifest.json | cut -d ' ' -f 1)
+
+# On each worker, check out the same commit and copy the bundle first.
+# Give every worker a different index, from 1 through shard-count.
+dagger call browser-shard --bundle /absolute/path/browser-bundle \
+  --expected-commit "$commit" --manifest-sha256 "$manifest_hash" \
+  --shard-index 1 --shard-count 20 --playwright-workers 1 \
+  --playwright-retries 0 export --path /absolute/path/browser-results
+```
+
+Workers verify the manifest, file hashes, platform, pinned tool versions and
+the actual checkout contents before importing the image. Each shard gets a
+fresh server database and browser state. This path always selects the full
+suite; it does not compile the frontend, WASM or server again. It returns
+reports even when a browser assertion fails: the caller must require
+`test-exit-code` to be zero and reconcile every test against the inventory.
+Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
+checks still run independently; the shared E2E build does not replace them.
+The DO runner executes `js-test`, `js-typecheck` and `typedoc-publish` through
+`bundle-check`, importing the verified checks image instead of building the
+workspace again. Typechecking still runs every existing TypeScript check.
+`js-test-integration` reuses the verified WASM package but retains its own
+minimal Node setup and glibc debug server, profile and feature flags. All test
+bodies execute with the run's fresh key. Missing, old-version or corrupt checks
+artifacts are rejected rather than silently rebuilt on each worker.
+Checks without this bundle dependency can run while the builder prepares it;
+dependent checks start only after their worker has the validated bundle.
+
+`dagger call browser-source-inputs` reports the exact source files and their
+hashes before compilation. The fingerprint excludes generated package stores,
+Python bytecode and empty directories; ordinary source files and symlinks,
+including untracked source files, still count. The temporary runner compares
+these inputs after setup and before building, retaining file-level diagnostics
+when two checkouts differ.
+
+For repeated jobs on the same machine, use the host artifact cache. Run this
+from the checked-out repository root, with separate absolute cache and output
+paths:
+
+```sh
+python3 scripts/ci-browser-build.py --source-commit "$(git rev-parse HEAD)" \
+  --cache-root /var/cache/atomic-ci/browser-bundles \
+  --output /opt/atomic-ci/share/bundle \
+  --receipt /opt/atomic-ci/build-result.json --cache-namespace browser-builder
+```
+
+A completed entry contains the successful build's original commit, command,
+timestamps, exit code and manifest hash, protected by a completion marker.
+Every reuse validates the actual checkout, tool versions and all bundle file
+hashes through `validate-browser-bundle`. A valid hit runs no compiler,
+package installation or image import. It reuses the successful build check
+and feeds its exact outputs to the browser shards; the new receipt records
+`cached` and retains the original build provenance. Missing, partial, corrupt
+or mismatched entries are built into a temporary directory and published only
+after success. Concurrent jobs share one writer per cache entry.
+
+Set the temporary runner's optional `artifact_cache_dir` to the same host path
+to use this automatically. A persistent filesystem or a Docker bind mount at
+that path preserves complete bundles independently of the Dagger engine.
+Ordinary Droplet storage is deleted with the machine; mount persistent storage
+before the job when reuse across machines is required. The runner creates no
+volumes. An older manually exported bundle without its successful-build
+receipt and completion marker is rebuilt before entering this cache. Browser
+commands can use the published bundle with a fresh results directory after an
+interruption; the fleet's deadline and cleanup policy still apply.
+
+The temporary DigitalOcean runner is `scripts/ci-fanout.py`. It takes an
+external batch JSON file with the frozen source commit, worktree and runtime
+directory, explicit account contexts and expected account UUIDs, and a node
+count per account. Keep credentials and runtime state outside the checkout.
+Required keys are `batch_key`, `source_commit`, `worktree`, `runtime_dir` and
+`accounts`; each account supplies `context`, `expected_uuid` and `nodes`.
+Optional `region`, `size`, `expected_hourly_rate`, `max_hours`, `workers` and
+`retries` set the budget. The default is a four-vCPU Amsterdam machine and a
+four-hour deadline. `build_jobs` (default 4, range 1–128) sets the explicit
+Cargo compilation width for the build and independent checks;
+`rust_test_threads` (default 0, range 0–128) overrides Rust test execution
+threads only when nonzero. `workers` accepts 1–64 Playwright workers per
+shard; its default remains one. `retries` is either 0 (no retry) or 1 (the
+default: one final browser retry round). Both browser attempts disable
+Playwright's immediate retries. Choose these widths for the actual CPU and
+memory budget rather than assuming more parallel tests always finish sooner.
+Standalone Dagger calls can use constructor `--build-jobs N` to override the
+host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+For a warm-cache measurement, optional `cache_namespace` keeps the seeded Cargo
+volume names stable across cloned engines; omitting it retains the per-batch/node
+namespace. Give `test_run_key` a fresh safe identifier that differs from seed and
+previous measurement keys. It reaches only test execution, so matching cached
+test results cannot satisfy the benchmark. Empty keys retain normal CI caching.
+Rust's combined nextest install/compile/run command and Flutter's post-Dart
+bridge tail execute again; their Cargo target volumes can still reuse compiled
+objects. Browser execution already has its own per-invocation nonce.
+
+For a focused Flutter refresh, optional `"check_only": "flutter-test"` runs
+only the standalone Flutter check on one worker. The configured fleet size and
+price ceiling remain conservative (the cloud launcher still plans three), but
+the other planned workers are never created. The plan explicitly reports
+`validation_scope: selected-check`, one initial worker, `check_jobs:
+[flutter-test]` and zero browser shards. This mode skips the browser build,
+portable OCI probe and browser tests; its successful source-pinned receipt
+certifies Flutter analysis, root Flutter tests and Rust bridge tests only.
+It retains the normal watchdog, deadline, source verification, artifact retrieval
+and resource cleanup. Other check names are rejected before provider access.
+Omit `check_only` for the unchanged full pipeline. A selected check pass cannot
+replace full CI or relabel an older build/test receipt as a new-source pass.
+
+The tiny cross-engine probe ships with the runner.
+`plan` checks capacity and prices without creating resources; `run` builds and
+runs the checks, then distributes the bundle directly to the browser workers:
+
+```sh
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json plan
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json run
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json status
+# To stop and remove only this batch's resources:
+python3 scripts/ci-fanout.py --config /absolute/private/batch.json cleanup
+```
+
+The runner records machine lifetimes and actual hourly prices, saves logs and
+browser reports, and removes its temporary machines and keys. A separate
+watchdog enforces the configured deadline (four hours by default). Completed
+checks are not repeated merely to occupy otherwise idle machines; additional
+browser workers are started after the build is ready. The first imported
+browser shard must return a complete, source-verified report before the rest
+of the fleet is created. Completed check or browser assertion failures are
+collected while later independent checks and browser shards continue. The
+runner reconciles all ten checks and the complete browser inventory before
+starting the final retry round. Only completed, unexpected browser failures
+are selected again, using the same verified bundle and a fresh isolated server.
+Passing and intentionally skipped tests are not rerun. Retry selection is
+validated before execution; a missing or corrupt selection cannot fall back
+to running the whole suite. Failed workers remain available until this round,
+within the original deadline; workers that passed can be removed earlier.
+The original reports and traces remain available alongside the retry reports.
+The combined JSON report classifies a recovered failure as `flaky`, preserving
+both attempts. Read the validated aggregate at `runtime_dir/browser-merged.json`
+or each worker's `results/browser-merged/test-results.json`; the original
+`results/browser/browser/test-results.json` deliberately keeps the first pass.
+Custom schedulers call `finish_validation` after all first-pass futures finish;
+it validates coverage and performs the final round before the aggregate gate.
+A failed check, persistent browser failure, missing test or
+unexpectedly skipped/interrupted retry keeps the result red. Other CI checks
+are not automatically repeated as whole suites.
+Source, build, transport, malformed-report and deadline errors still stop the
+run because the remaining results could not be validated safely.
+The bundle is shared directly between DO machines. Controller backup defaults
+to disabled (`host_bundle_backup: false`); explicitly enabling it copies the
+completed bundle and original build receipt to `artifact_archive_dir` in the
+background, bounded to 120 seconds and the original deadline. Only a fully
+verified archive can restore a same-commit build on a fresh runner. A
+browser-preparation failure preserves an already-running Rust check within the
+existing deadline; explicit interruption and the deadline still stop the run.
+Failed backups are reported, and cleanup cancels unfinished transfers.
+Full-suite acceptance requires successful independent checks and an exact,
+disjoint union of all browser shard reports. Quota and a listed machine size
+do not guarantee regional capacity. These commands do not dispatch GitHub CI.
+Public-IP artifact transfers count against the sender account's bandwidth
+allowance. The runner records payload bytes separately from compute costs;
+the eventual bandwidth bill depends on that account's monthly usage and
+allowance. See [DigitalOcean bandwidth billing](https://docs.digitalocean.com/platform/billing/bandwidth/).
+
+For laptop-independent orchestration, use `scripts/ci-fanout-cloud-launch.py`.
+Its read-only `plan` checks the three test machines plus a small separate
+controller, a regional 10-GiB volume and the complete time/cost bound. Only
+`launch` provisions resources. Cloud-init starts separate supervisor and
+reaper services before tool installation, so closing the monitoring connection
+does not stop CI. The absolute deadline includes controller bootstrap time.
+Credentials and the live runtime stay on the temporary controller boot disk;
+only allowlisted evidence and verified build archives are copied to the
+explicitly retained volume. `collect` retrieves reports, never the large build
+cache. After collecting, `finalize` requests controller removal; the independent
+reaper also removes it at the original deadline when the laptop is offline.
+The build volume remains paid storage until deliberately removed. See the
+[DO operator guide](docs/skills/atomic-do-ci/references/operations.md) for the
+configuration, ownership/recovery rules and result interpretation. This wrapper
+runs the existing ten-check/full-browser scheduler; it is not another test lane.
 
 ```sh
 # Make sure nextest is installed
@@ -230,6 +412,22 @@ pnpm test-e2e
 # if things go wrong, debug!
 pnpm run test-query {testname}
 ```
+
+The workspace Rust test profile uses optimization level 1 to reduce repeated
+real database/bootstrap and signed-fixture execution costs. Debug assertions and
+arithmetic overflow checks remain enabled. This affects `cargo test` and
+`cargo nextest run`, including Dagger's Rust tests; ordinary development builds,
+release/E2E builds and the workspace-excluded Flutter bridge retain their own
+profiles. An initial test compile can take longer, so compare compilation and
+execution times separately when evaluating a change.
+
+TablePage and shared-package PR changes also run the separate **Table package**
+workflow. It checks the SDK-aware package, application consumer types, real WASM
+formula behavior and packed dependencies/locales without running the full Rust
+suite. Its isolated WASM target and checkout-local tool install use an exact
+OS/architecture/Rust-input cache key. Cargo still runs on a cache hit; download
+and pnpm caches only avoid fetching dependencies again. Full integration CI
+remains necessary for a combined merge candidate.
 
 ## Performance monitoring / benchmarks
 
@@ -312,7 +510,7 @@ We believe AI can be useful for improving software while also recognizing that i
 
 1. Commit changes
 1. Make sure all tests run properly
-1. Pick one version for the release, including pre-release suffixes when needed (for example `0.41.0-beta.0`).
+1. Pick one version for the release, a plain `X.Y.Z`. We do not use pre-release suffixes (`-beta.N`, `-rc.N`): the code is already running in production and on testers' phones before it is tagged.
 1. Bump every version site in lockstep — 15 of them across the Rust crates, the
    `@tomic/*` packages, the starter templates' dependency constraints and
    `desktop/tauri.conf.json`:
@@ -328,6 +526,8 @@ We believe AI can be useful for improving software while also recognizing that i
    - `cargo update --workspace` — **not** `cargo metadata --no-deps`, which
      skips resolution and leaves the workspace members' own versions stale in
      `Cargo.lock`.
+   - `cargo update -p atomic_lib --manifest-path packages/atomic_store_flutter/rust/Cargo.toml`:
+     the Flutter bridge is outside the workspace and has its own lockfile.
    - `cd browser && pnpm install --lockfile-only`
 1. Confirm nothing lagged behind:
 
@@ -338,14 +538,17 @@ We believe AI can be useful for improving software while also recognizing that i
    for a version you are actually about to tag — a section for a release that
    never shipped is worse than no section, see the `[v0.40.2]` entry for how
    confusing that gets.
-1. Tag `v<version>` and push it. CI publishes crates.io, npm, GitHub release
-   assets, and (on a stable tag) production. Publish crates or npm by hand
+1. Tag `v<version>` and push it. Only the owner pushes release tags. CI
+   publishes crates.io, npm, Docker, GitHub release assets and desktop
+   installers. It does not deploy: production already runs the commit, because
+   it followed `develop`. The tag marks which build goes to the App Store and
+   Play production, which is still done by hand. Publish crates or npm by hand
    only when CI failed (see [Publishing manually](#publishing-manually---doing-the-cis-work)).
 
 The following should be triggered automatically:
 
 - Push the `v*` tag, a Release will automatically be created on Github with the binaries. This will read `CHANGELOG.md`, so make sure to add the changes from there.
-- The same tag publishes Rust crates to crates.io and `@tomic/*` packages to npm (`latest` for a stable tag, the pre-release identifier — `beta`, `rc`, … — otherwise).
+- The same tag publishes Rust crates to crates.io and `@tomic/*` packages to npm (`latest`).
 - The main action required on this repo, is to _update the changelog_ and _tag releases_. The tags trigger the build and publish processes in the CI.
 
 Note:
@@ -356,32 +559,42 @@ Note:
 ### CI/CD pipeline
 
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
-- Github Action for `tag`: create release + publish binaries + crates.io + npm
-- Docker tags should include immutable release tags such as `0.41.0-beta.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
+- Github Action for green `develop`: ask atomic-saas to deploy atomic.place, deploy staging, then atomicdata.dev + live docs, and upload to TestFlight and Play internal testing (`deploy_staging.yml`, `flutter-develop.yml`)
+- Github Action for `tag`: create release + publish binaries + crates.io + npm + Docker (no deploy)
+- Docker tags should include immutable release tags such as `0.41.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
 
 ### Deployments
 
 Nothing deploys until its pipeline is green.
 
-| Trigger | Deploys to | Docs |
+| Trigger | Deploys to | Docs / apps |
 | --- | --- | --- |
-| push to `develop` | staging.atomicdata.dev | Netlify preview URL |
-| a stable `v*` **tag** | atomicdata.dev | the live docs + typedoc sites |
+| green `develop` | staging.atomicdata.dev, then atomicdata.dev | the live docs + typedoc sites; TestFlight and Play internal testing |
+| a `v*` **tag** | nothing | nothing (crates.io, npm, Docker, GitHub release, desktop installers only) |
 
-Staging follows a branch; **production runs a tagged release**. A branch pointer
-answers "what was merged most recently", which is not the question you are
-asking when production is misbehaving — "which release is this" is, and a tag
-answers it. It also means the deployed thing has a name that appears in the
-changelog, and that redeploying it later gets you the same bytes. Live docs
-follow the same rule, so docs.atomicdata.dev describes the tagged software
-rather than whatever last landed on a docs-only branch.
+Production follows `develop`, with staging as the canary: `deploy_staging.yml`
+deploys the tested commit to staging, and only if that succeeds (the deploy
+health-checks and rolls back) does the same commit go to production. Right before
+that it re-checks that the commit is still the `develop` tip, so a slow staging
+deploy can never push an older commit over a newer one. Live docs publish from
+the same `develop` run, so docs.atomicdata.dev describes what production runs.
+The `flutter-develop.yml` workflow ("Apps from green develop") builds the iOS and
+Android apps from the same commit with a build number of minutes since the Unix
+epoch, so it always increases, and uploads them to TestFlight and Google Play
+internal testing (Play needs the `PLAY_SERVICE_ACCOUNT_JSON` secret; without it
+the upload is skipped and noted in the run summary). A newer green `develop`
+supersedes an older pending app run. Store releases stay manual.
 
-Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy the app or
-publish live docs. They exist to be published and tested. Put one on production
-deliberately via the `workflow_dispatch` if you want it there.
+Docs publishing runs in parallel with the tests inside the Dagger pipeline, so a
+`develop` commit that fails e2e may still update the live docs. Production does
+not move in that case.
 
-There is no `main` branch, and nothing should refer to one. Do not introduce
-one as a fast-forward of the latest tag — see [Git policy](#git-policy).
+Which release is this? Ask for the commit: production's sha is in the deploy run.
+Tags are for published artifacts (crates, packages, installers), not for
+deploys.
+
+There is no `main` branch, and nothing should refer to one. See
+[Git policy](#git-policy).
 
 `release-plz` used to live here, triggered on pushes to `main` — a branch this
 repo does not have — so it never ran once, while holding a
@@ -400,28 +613,27 @@ afterwards. Removing that gate is easy to do by accident, so:
 - **Staging** waits on `workflow_run`: _Main pipeline: build, lint, test_ must
   **conclude successfully** on `develop`, and only then does the tested commit
   deploy. Moving it back to `push` removes the gate, not just the delay.
-- **Production** cannot use `workflow_run` — that event has no tag filter — so
-  its `verify` job asks the API whether a successful pipeline exists for the
-  tagged commit, and the deploy `needs:` it. `skip_ci_check` exists for
-  emergencies and should feel like a decision.
+- **Production** is a job in the same `deploy_staging.yml` run, so it has the
+  same gate plus a green staging deploy. Manual dispatches of
+  `deploy_production.yml` have a `verify` job that asks the API whether a
+  successful pipeline exists for the commit, and the deploy `needs:` it.
+  `skip_ci_check` exists for emergencies and should feel like a decision.
 
 Two consequences worth knowing:
 
 - `workflow_run` checks out the **default branch**, not the commit that passed.
   Staging therefore passes `github.event.workflow_run.head_sha` into
-  `deployment.yml`'s required `ref` input; production passes the resolved tag
-  SHA. Leaving it out deploys something other than what CI tested, silently.
+  `deployment.yml`'s required `ref` input; production gets the same sha. Leaving it out deploys something other than what CI tested, silently.
 - Docs publishing is opt-in per ref. `dagger call ci` takes `--publish-docs`,
-  and `main-ci.yml` passes it only for a stable `v*` tag (no hyphen in the tag
-  name). Without it Netlify gets a preview deploy. This used to be
-  unconditional `--prod`, which meant pushing any feature branch republished
-  the public documentation, and later `master`-only, which left live docs on a
-  branch that was not production.
-- Playwright is `--playwright-mode light` on feature-branch pushes (`@smoke` only)
-  and `full` on `develop` and `v*` tags. `dagger call ci` defaults to `full`
-  so omitting the flag cannot shrink a release gate. Opt in from a branch
-  with a `full-e2e` PR label, `[full-e2e]` in the commit message, or
-  `workflow_dispatch` `e2e_mode=full`. (Do not name the Dagger flag
+  and `main-ci.yml` passes it only on `develop`, the branch production follows.
+  Without it Netlify gets a preview deploy. This used to be unconditional
+  `--prod`, which meant pushing any feature branch republished the public
+  documentation.
+- Playwright is `--playwright-mode light` on dispatched feature branches (`@smoke` only)
+  and `full` on `develop`, `v*` tags and `trekmeester/combined-*` batch branches.
+  `main.yml`'s `pick` job chooses; `dagger call ci` defaults to `full`
+  so omitting the flag cannot shrink a release gate. Override from the
+  `workflow_dispatch` `e2e` input (`auto`, `light`, `full`). (Do not name the Dagger flag
   `--e2e-mode`: the CLI camelCases it to `e2EMode` and the call fails.)
 
 Every deploy then has to prove itself: the job polls `/server` on the target
@@ -438,8 +650,10 @@ export taken during the deploy, and expect to think.
 
 To deploy a specific commit — a rollback, or a fix that cannot wait for a full
 pipeline — use the `workflow_dispatch` on either deploy workflow and give it a
-ref. Production dispatch has no default on purpose: type the tag (or SHA) you
-mean; the old default was `master`. To require human approval for production,
+ref. This is the rollback path: dispatch `deploy_production.yml` with the older
+sha you want live. Production dispatch has no default on purpose: type the sha
+you mean. Staging's dispatch also takes a `production` checkbox to continue to
+production. To require human approval for production,
 add reviewers to the `production` environment in the repository settings; the
 environment is already declared, so no workflow change is needed.
 
@@ -464,12 +678,11 @@ OR
 #### Publishing to npm
 
 CI does this on a `v*` tag (`release.yml` `npm` job) through npm Trusted
-Publishing, so no token is stored. Pre-releases go to the `beta` / `rc`
-dist-tag, never `latest`. By hand:
+Publishing, so no token is stored. By hand:
 
 1. `cd browser && pnpm install --frozen-lockfile`
 1. `pnpm --filter @tomic/lib run build`, then the same for `@tomic/react`, `@tomic/cli`, `@tomic/svelte`, `@tomic/create-template`, `@tomic/plugin` and `@tomic/edit-mode`
-1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag <latest|beta>`
+1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag latest`
    - `--ignore-scripts` skips `prepublishOnly`. Build first (step 2);
      `@tomic/lib`'s `attw` currently crashes and would fail the publish.
    - Never `pnpm npm publish`: it skips the `workspace:*` rewrite and publishes a package that cannot resolve `@tomic/lib`.
@@ -478,15 +691,15 @@ dist-tag, never `latest`. By hand:
 
 Docker publishing is handled by the Dagger pipeline. Prefer publishing immutable version tags and, when appropriate, `latest`.
 
-1. build and publish: `dagger call create-docker-images --tags 0.41.0-beta.0 --tags latest`
-1. run, make sure it works: `docker run -p 9883:80 ghcr.io/ontola/atomic-server:0.41.0-beta.0`
+1. build and publish: `dagger call create-docker-images --tags 0.41.0 --tags latest`
+1. run, make sure it works: `docker run -p 9883:80 ghcr.io/ontola/atomic-server:0.41.0`
 
 For a single local ARM64 image, use `dagger call create-docker-image --target aarch64-unknown-linux-musl export --path /tmp/atomic-server.tar`, then load and tag it with Docker.
 
 #### Deploying to atomicdata.dev
 
-Push a stable `v*` tag. That is what production follows. To deploy a tag (or
-commit) by hand, run the
+Merge to `develop`; a green run deploys it. To deploy a commit by hand (or
+roll back), run the
 [`deploy_production` GitHub Action](https://github.com/atomicdata-dev/atomic-server/actions/workflows/deploy_production.yml)
 and pass that ref.
 
@@ -548,3 +761,11 @@ rewrite the tested dependency graph. Commit any needed lockfile updates in the
 paired PR, run the affected Rust suites, and merge the pair together after CI.
 The SaaS alignment gate requires the Server checker, so land the Server PR
 before the SaaS PR when first introducing this policy.
+
+
+The autonomous DO launcher also supports `cloud_worker_mode: "warm"`, separate
+worker/controller regions and explicit snapshot companions. Temporary writable
+cache clones are included in the bounded budget and independent cleanup; the
+retained artifact disk is separate. See the
+[operator guide](docs/skills/atomic-do-ci/references/operations.md#autonomous-snapshot-backed-workers)
+for configuration, cache evidence and acceptance limitations.

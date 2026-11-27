@@ -1,5 +1,5 @@
-import { IconButton } from '@components/IconButton/IconButton';
-import { Column, Row } from '@components/Row';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   FaStar,
   FaTriangleExclamation,
@@ -10,14 +10,17 @@ import {
 } from 'react-icons/fa6';
 import type { AIAgent } from './types';
 import { styled, useTheme } from 'styled-components';
-import { transition } from '@helpers/transition';
+import { transition } from '@tomic/ui/helpers/transition';
 import { useAIAgentConfig } from './AgentConfig';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useId } from 'react';
-import { VisuallyHidden } from '@components/VisuallyHidden';
-import { DropdownMenu, type DropdownItem } from '@components/Dropdown';
-import { buildDefaultTrigger } from '@components/Dropdown/DefaultTrigger';
-import { addIf } from '@helpers/addIf';
+import { VisuallyHidden } from '@tomic/ui/components/VisuallyHidden';
+import {
+  DropdownMenu,
+  type DropdownItem,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
+import { addIf } from '@tomic/resource-ui/helpers/addIf';
 
 interface AgentConfigItemProps {
   agent: AIAgent;

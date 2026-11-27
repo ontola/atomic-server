@@ -215,4 +215,34 @@ describe('describeSyncProblem', () => {
       expect(problem?.key).toBe('not-hosted');
     });
   });
+
+  describe('an update to a resource the server never received', () => {
+    const message =
+      'Resource not found. DID Resource atomic:Scnngpwt not found locally';
+    const entry = {
+      subject: 'atomic:Scnngpwt',
+      blocked: false,
+      failures: 5,
+      lastAttemptError: message,
+    };
+
+    it('asks the person to connect a device or discard it', () => {
+      const problem = describeSyncProblem({ ...base, entries: [entry] });
+
+      expect(problem).toMatchObject({
+        cause: 'you',
+        actions: ['connect-device', 'discard'],
+        subjects: ['atomic:Scnngpwt'],
+      });
+    });
+
+    it('keeps blaming us for a genesis entry', () => {
+      const problem = describeSyncProblem({
+        ...base,
+        entries: [{ ...entry, signedGenesis: {} as never }],
+      });
+
+      expect(problem?.cause).toBe('ours');
+    });
+  });
 });

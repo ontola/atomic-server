@@ -4,8 +4,8 @@ import {
   compactIntegrationActionHistory,
   type ActionCompactionPage,
 } from '@tomic/lib';
-import { Button } from '@components/Button';
-import { Column } from '@components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 
 export function ActionHistoryCleanup({
   drive,

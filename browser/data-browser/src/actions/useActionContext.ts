@@ -1,8 +1,11 @@
 import {
+  core,
+  dataBrowser,
   useCanWrite,
   useDrive,
   useResource,
   useStore,
+  useString,
   isAtomicIdentifier,
   type Store,
 } from '@tomic/react';
@@ -11,7 +14,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useNewRoute } from '../helpers/useNewRoute';
 import { useFavorites } from '../hooks/useFavorites';
-import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances';
+import { useInlineTitleAffordances } from '@tomic/resource-ui/hooks/useInlineTitleAffordances';
 import {
   newContextItem,
   useAISidebar,
@@ -89,6 +92,8 @@ export async function buildActionContext(
     enableScope: input.enableScope ?? (() => undefined),
     addChild: input.addChild ?? (() => undefined),
     drive: input.drive,
+    parent: resource.get(core.properties.parent) as string | undefined,
+    trashFolder: input.store.peekTrashFolder(input.drive),
     titleAffordancesInline: false,
     toggleSidebar: input.toggleSidebar,
   };
@@ -112,6 +117,12 @@ export function useActionContext(
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const [drive] = useDrive();
+  const [parent] = useString(resource, core.properties.parent);
+  const driveResource = useResource(drive);
+  const [trashFolder] = useString(
+    driveResource,
+    dataBrowser.properties.trashFolder,
+  );
   const titleAffordancesInline = useInlineTitleAffordances();
   const { setPanelOpen } = useRightPanel();
 
@@ -155,6 +166,8 @@ export function useActionContext(
     enableScope,
     addChild,
     drive,
+    parent,
+    trashFolder,
     titleAffordancesInline,
     ...overrides,
   };

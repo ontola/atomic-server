@@ -35,6 +35,10 @@ class Access {
 typedef InviteSigner = String Function(
     String target, bool write, int? expiresAtMs, int? maxUsages);
 
+/// Signs an invite with its HTTP redemption origin included in the signature.
+typedef ServerInviteSigner = String Function(
+    String target, bool write, int? expiresAtMs, int? maxUsages, String origin);
+
 /// Opens a token a person was given and returns what it let them into: the
 /// node's bridge call (see `AtomicNode`). Throws a [StoreException] with a
 /// sentence for the person.
@@ -94,8 +98,8 @@ class InviteLink {
 /// (pass a `null` origin to [inviteLink]). [acceptInvite] finds the target's
 /// devices through the pkarr directory, asks the one that holds the inviter's
 /// agent to sign the right, and syncs the drive from it. That device must be
-/// online (and the inviter's agent on it) when the invite is opened. A usage
-/// limit is not counted for this form.
+/// online (and the inviter's agent on it) when the invite is opened. Usage
+/// limits require an issuing server.
 ///
 /// ```dart
 /// await node.sharing.grant(folder, friendAgent, ShareRole.write);
@@ -106,11 +110,14 @@ class InviteLink {
 /// final joined = await node.sharing.acceptInvite(pastedLink);
 /// ```
 class Sharing {
-  Sharing(this._store, this._sign, {InviteAcceptor? acceptor})
-      : _accept = acceptor;
+  Sharing(this._store, this._sign,
+      {InviteAcceptor? acceptor, ServerInviteSigner? serverSigner})
+      : _accept = acceptor,
+        _serverSign = serverSigner;
 
   final Store _store;
   final InviteSigner _sign;
+  final ServerInviteSigner? _serverSign;
   final InviteAcceptor? _accept;
 
   /// Whether this node can open an invite ([acceptInvite]).
@@ -177,10 +184,18 @@ class Sharing {
   /// can share). [expiresAt] defaults to 30 days from now, [maxUsages]
   /// (at least 1) to unlimited.
   String inviteToken(String target,
-      {ShareRole role = ShareRole.read, DateTime? expiresAt, int? maxUsages}) {
+      {ShareRole role = ShareRole.read,
+      DateTime? expiresAt,
+      int? maxUsages,
+      String? serverOrigin}) {
     if (maxUsages != null && maxUsages < 1) {
       throw const StoreException(StoreErrorKind.invalid,
           'The usage limit of an invite must be a whole number of at least 1.');
+    }
+    final hosted = _serverSign;
+    if (serverOrigin != null && hosted != null) {
+      return hosted(target, role == ShareRole.write,
+          expiresAt?.millisecondsSinceEpoch, maxUsages, serverOrigin);
     }
     return _sign(target, role == ShareRole.write,
         expiresAt?.millisecondsSinceEpoch, maxUsages);
@@ -195,7 +210,10 @@ class Sharing {
       inviteUrl(
           serverOrigin,
           inviteToken(target,
-              role: role, expiresAt: expiresAt, maxUsages: maxUsages));
+              role: role,
+              expiresAt: expiresAt,
+              maxUsages: maxUsages,
+              serverOrigin: serverOrigin));
 
   /// The invite link for an existing [token].
   static String inviteUrl(String? serverOrigin, String token) => serverOrigin ==
@@ -237,9 +255,8 @@ class Sharing {
   /// [StoreException] with a sentence for the person (the link is damaged, it
   /// has expired, the device that made it is offline).
   ///
-  /// A server link is opened the same way, through the inviter's devices: this
-  /// package has no client for a server's `/invites` endpoint, so when no
-  /// device answers the error points at the link's own server.
+  /// A hosted token is redeemed at the issuer's signed origin. Peer-only
+  /// tokens require a reachable device holding the issuer's identity.
   Future<AcceptedInvite> acceptInvite(String linkOrToken) async {
     final accept = _accept;
     if (accept == null) {

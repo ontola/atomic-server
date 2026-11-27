@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { useStore, type Resource, type DataBrowser } from '@tomic/react';
-import { LoaderBlock } from '@components/Loader';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { AppFrame } from './AppFrame';
 import { BuiltinSyncablesApp } from '@chunks/PluginRuns/BuiltinSyncablesApp';
 import { resolveBuiltinApp, type BuiltinApp } from './builtinApp';
-import { TableResource } from '@chunks/TablePage/TableResource';
+import { TableResource } from '@tomic/table-page/TablePage/TableResource';
 
 /**
  * An app opens to its view.
@@ -77,12 +77,12 @@ export function AppPage({
  * Not ContainerFull: its bottom padding exists so a scrolling column of
  * resources clears the navigation bar, but a frame cannot grow into padding —
  * it would just leave a strip of empty page under an app that had already run
- * out of room.
+ * out of room. No padding either: the app draws its own edges, and a margin
+ * the app cannot remove only gets in its way.
  */
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  padding: ${p => p.theme.size()};
 `;

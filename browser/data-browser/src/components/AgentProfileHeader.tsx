@@ -8,14 +8,14 @@ import {
   useString,
   useSubject,
 } from '@tomic/react';
-import { AvatarCropper } from './AvatarCropper';
-import { ResourceGlyph } from './ResourceGlyph';
-import { useUpload } from '../hooks/useUpload';
+import { AvatarCropper } from '@tomic/resource-ui/components/AvatarCropper';
+import { ResourceGlyph } from '@tomic/resource-ui/components/ResourceGlyph';
+import { useUpload } from '@tomic/resource-ui/hooks/useUpload';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
 import {
   accountAddress,
-  getManagedAccount,
+  getManagedAccountOrNull,
   PRODUCT_NAME,
   safePortalUrl,
   type ManagedAccount,
@@ -55,7 +55,7 @@ export function AgentProfileHeader({ subject }: { subject: string }) {
 
     void (async () => {
       const [session, info] = await Promise.all([
-        getManagedAccount().catch(() => null),
+        getManagedAccountOrNull(),
         fetchManagedInfo(baseURL).catch(() => null),
       ]);
 

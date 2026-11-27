@@ -29,7 +29,7 @@ Options:
   --ontology <subject>  lock: the subject of the Ontology resource. Required.
   --shortname <slug>    The ontology's shortname. Defaults to the one in the file.
   --lockfile <path>     Lockfile path. Defaults to <file>.lock.json
-  --accept-changes      push: push even if the lockfile no longer matches (new properties are made).
+  --accept-changes      push: push even if a pinned property changed or is gone (a changed property makes a new one).
   --types               push: also generate typescript types (adds the ontology to atomic.config.json).
   --agent, -a <secret>  push: the agent that signs. Defaults to agentSecret in atomic.config.json.
 `;
@@ -172,11 +172,15 @@ const push = async (
 
   if (!parent) throw new Error('push needs --parent <subject>');
 
-  // A pinned lockfile must still match, or the push would quietly make new
-  // properties next to the old ones.
+  // A pinned property must still match, or the push would quietly make a
+  // second one next to it. A property the lockfile lacks is simply new. The
+  // fingerprint is for `check`: a push is what gives a changed schema a new one.
   if (previous && !switches.has('--accept-changes')) {
     try {
-      assertLockfileMatches(previous, input);
+      assertLockfileMatches(previous, input, {
+        fingerprint: false,
+        newProperties: true,
+      });
     } catch (error) {
       throw new Error(
         `${lockfilePath}: ${(error as Error).message}\nPass --accept-changes to push anyway`,
@@ -199,7 +203,7 @@ const push = async (
   }
 
   const ensured = await ensureOntology(store, parent, input);
-  const lock = lockfileFromEnsured(ensured);
+  const lock = lockfileFromEnsured(ensured, input);
 
   console.log(
     chalk.green('Ontology'),

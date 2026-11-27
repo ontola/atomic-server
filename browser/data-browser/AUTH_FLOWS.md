@@ -8,7 +8,7 @@ not prevent signing in with an agent secret, including while offline.
 
 - [GettingStartedFlow](src/views/getting-started/GettingStartedFlow.tsx): welcome, secret/passkey unlock, restore and post-unlock navigation. The unconditional portal redirect was here.
 - [IdentityReconcileGate](src/components/IdentityReconcileGate.tsx): compares the portal account with the local agent and resolves identity conflicts. Stale asynchronous results previously redirected after sign-in.
-- [SettingsAgent](src/routes/SettingsAgent.tsx): requires an unlocked agent before managing the backup/passkeys.
+- [AccountSettings](src/components/Settings/AccountSettings.tsx): requires an unlocked agent before managing the backup/passkeys.
 - [WelcomeRoute](src/routes/WelcomeRoute.tsx): validates the internal sign-in continuation parameters.
 - [Portal App](../../../atomic-saas/portal/src/App.tsx): `checkAuth`, `enterApp` and `addPasskey` control session detection, dashboard routing and the handoff to app settings.
 
@@ -25,8 +25,8 @@ not prevent signing in with an agent secret, including while offline.
 | Secret / passkey / recovery-code unlock, workspace present | Open the requested or personal drive. |
 | Unlock, workspace absent | Try hosting and encrypted vault restore. If the requested workspace is the identity’s derived private home, initialize a writable home and offer an optional device/backup nudge. This does not mean previous data was recovered. Other missing workspaces retain recovery actions. |
 | Portal Add passkey, no recovery backup | Register the portal passkey in the portal. |
-| Portal Add passkey, recovery backup exists | Open `/app/agent` to manage the encrypted account backup. |
-| `/app/agent` without a local agent | `/app/welcome?return_to=agent` opens sign-in, then returns to `/app/agent`. Managing a passkey does not require restoring all workspace data. |
+| Portal Add passkey, recovery backup exists | Open `/app/settings?section=account` to manage the encrypted account backup. |
+| `/app/settings?section=account` without a local agent (`/app/agent` redirects there) | `/app/welcome?return_to=agent` opens sign-in, then returns to `/app/settings?section=account`. Managing a passkey does not require restoring all workspace data. |
 | Portal account differs from the local agent, disposable local identity | Reconciliation opens `/app/welcome?step=signin`; preserve `return_to=agent` when coming from settings. |
 | Same mismatch, local identity has a workspace | Ask before switching; choosing the account follows the unlock route above. |
 | Sign-in explicitly selects a different secret | Release the conflicting portal session using the existing secret-sign-in handler. Outdated reconciliation results cannot navigate, bind an identity, or repoint the server. |

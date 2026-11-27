@@ -1,5 +1,10 @@
 import { canonicalIdentifier, encodeB64 } from '@tomic/lib';
-import { base64ToBytes, randomBytes } from '../bytes';
+import {
+  OtherAgentSecretError,
+  agentFromOwnSecret,
+} from '../verifyAgentSecret';
+import { base64ToBytes, randomBytes } from '@tomic/resource-ui/helpers/bytes';
+import { hasPasskeyApi } from '../passkeySupport';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
@@ -241,74 +246,14 @@ export async function decryptRecoverySecret(
 
 // --- Envelope v2 (DEK + recovery-code wrapper via Argon2id) ---
 
-export type AtomicWasmModule = {
-  default: (init?: {
-    module_or_path: string | WebAssembly.Module;
-  }) => Promise<unknown>;
-  /** `values` is `{ [propertySubject]: number | string | boolean | null }`. */
-  evaluateFormula: (
-    expression: unknown,
-    values: unknown,
-    nowMs: number,
-    /** Minutes east of UTC; a DATE is midnight in this zone. */
-    tzOffsetMinutes: number,
-  ) => number | null;
-  validateFormula: (expression: unknown) => string | null;
-  argon2idDeriveKey: (
-    secret: string,
-    salt: Uint8Array,
-    memKib: number,
-    iterations: number,
-    parallelism: number,
-  ) => Uint8Array;
-};
+export type { AtomicWasmModule } from '@tomic/resource-ui/helpers/loadAtomicWasm';
+import { loadAtomicWasm as loadSharedAtomicWasm } from '@tomic/resource-ui/helpers/loadAtomicWasm';
 
-/** What the dynamic import actually gives us: an older build of the glue has
- * `default` but not the exports added later, which is what {@link loadAtomicWasm}
- * checks. */
-type LoadedWasmModule = Partial<AtomicWasmModule> &
-  Pick<AtomicWasmModule, 'default'>;
-
-let wasmModulePromise: Promise<AtomicWasmModule> | null = null;
-
-/**
- * Lazily loads the atomic_wasm bundle on the main thread, independent of the
- * ClientDb worker (initClientDb.ts) — its stateless exports (the KDF, formula
- * evaluation) are not a database, so it doesn't need OPFS or worker/leader-election machinery.
- *
- * The export is verified rather than assumed. A page that spans a deploy can
- * hold a module from an older build (see `helpers/wasmUrls.ts`), where calling
- * the missing KDF surfaces as a bare "is not a function" TypeError halfway
- * through generating a recovery code. Failing here instead says what to do.
- */
-export async function loadAtomicWasm(): Promise<AtomicWasmModule> {
-  if (!wasmModulePromise) {
-    wasmModulePromise = (async () => {
-      try {
-        const url = wasmJsUrl();
-        const loaded = (await import(
-          /* @vite-ignore */ url
-        )) as LoadedWasmModule;
-        await loaded.default({ module_or_path: await atomicWasmSource() });
-
-        if (typeof loaded.argon2idDeriveKey !== 'function') {
-          throw new Error(
-            'This page is running an outdated version of Atomic. Reload the page and try again.',
-          );
-        }
-
-        return loaded as AtomicWasmModule;
-      } catch (e) {
-        // Never memoize a failure: after the reload this asks for, and for an
-        // offline blip on the way to a 6MB binary, a retry must be able to
-        // load it rather than replay the rejection for the tab's lifetime.
-        wasmModulePromise = null;
-        throw e;
-      }
-    })();
-  }
-
-  return wasmModulePromise;
+export function loadAtomicWasm() {
+  return loadSharedAtomicWasm({
+    jsUrl: wasmJsUrl,
+    wasmSource: atomicWasmSource,
+  });
 }
 
 async function deriveKeyFromRecoveryCode(
@@ -419,7 +364,7 @@ export class AccountPasskeyUnsupportedError extends PrfUnsupportedError {
  * missing.
  */
 export async function isPasskeySupported(): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+  if (!hasPasskeyApi()) {
     return false;
   }
 
@@ -1354,6 +1299,106 @@ export async function decryptEnvelopeV2(
   );
 }
 
+export type UnlockMethod =
+  | 'assisted'
+  | 'passkey'
+  | 'code'
+  | 'password'
+  | 'secret';
+
+/**
+ * The ways this backup opens, best first. Assisted needs the account that owns
+ * the backup to be the one signed in; a v1 backup only knows its password.
+ */
+export function unlockMethods(
+  recovery: RecoverySecret,
+  accountEmail: string | undefined,
+): UnlockMethod[] {
+  if (recovery.format_version < 2) return ['password'];
+
+  const { hasPasskey, hasCode } = envelopeWrapperKinds(recovery);
+  const methods: UnlockMethod[] = [];
+
+  if (hasAssistedWrapper(recovery) && accountEmail === recovery.owner_email) {
+    methods.push('assisted');
+  }
+
+  if (hasPasskey) methods.push('passkey');
+
+  if (hasCode) methods.push('code');
+
+  return methods;
+}
+
+/** The unlocked agent has to be the one the backup says it holds. */
+export async function assertSecretIsBackupAgent(
+  secret: string,
+  backupSubject: string,
+): Promise<void> {
+  try {
+    await agentFromOwnSecret(secret, backupSubject);
+  } catch (err) {
+    if (!(err instanceof OtherAgentSecretError)) throw err;
+
+    throw new Error('This backup holds a different identity than expected.');
+  }
+}
+
+async function openBackup(
+  recovery: RecoverySecret,
+  method: UnlockMethod,
+  input = '',
+): Promise<string> {
+  return method === 'secret'
+    ? input.trim()
+    : method === 'assisted'
+      ? await decryptEnvelopeWithAssisted(recovery)
+      : method === 'passkey'
+        ? await decryptEnvelopeWithPasskey(recovery)
+        : method === 'code'
+          ? await decryptEnvelopeV2(recovery, input.trim())
+          : await decryptRecoverySecret(recovery, input.trim());
+}
+
+/** Open the backup. Passkey and code unlocks also add the assisted wrapper. */
+export async function unlockBackup(
+  recovery: RecoverySecret,
+  method: UnlockMethod,
+  input = '',
+): Promise<string> {
+  const secret = await openBackup(recovery, method, input);
+
+  await assertSecretIsBackupAgent(secret, recovery.agent_subject);
+
+  return secret;
+}
+
+/**
+ * The silent part of unlocking: the account alone when it can, then the
+ * passkey on the same user gesture. Whatever is left (secret paste always
+ * works) comes back for the person to choose from.
+ */
+export async function tryAutoUnlock(
+  recovery: RecoverySecret,
+  accountEmail: string | undefined,
+): Promise<{ secret: string } | { methods: UnlockMethod[] }> {
+  const methods = unlockMethods(recovery, accountEmail);
+
+  for (const method of methods) {
+    if (method !== 'assisted' && method !== 'passkey') break;
+
+    // Cancelled or refused (Safari can, after network round trips): the
+    // choices stay.
+    try {
+      return { secret: await unlockBackup(recovery, method) };
+    } catch {
+      // Fall through to the next way.
+    }
+  }
+
+  return { methods: [...methods.filter(m => m !== 'assisted'), 'secret'] };
+}
+
 /**
  * Recover the plaintext agent secret from the stored backup.
  *
@@ -1375,21 +1420,21 @@ export async function revealSecretFromBackup(
 
   if (!recovery) return null;
 
-  const { hasPasskey, hasCode } = envelopeWrapperKinds(recovery);
-
-  if (hasPasskey && !recoveryCode) {
-    return decryptEnvelopeWithPasskey(recovery);
-  }
+  const [first] = unlockMethods(recovery, undefined);
 
   if (recoveryCode) {
-    return recovery.format_version >= 2
-      ? decryptEnvelopeV2(recovery, recoveryCode)
-      : decryptRecoverySecret(recovery, recoveryCode);
+    return openBackup(
+      recovery,
+      recovery.format_version >= 2 ? 'code' : 'password',
+      recoveryCode,
+    );
   }
 
-  if (hasCode || recovery.format_version < 2) {
+  if (first === 'passkey') return openBackup(recovery, 'passkey');
+
+  if (first) {
     throw new Error(
-      recovery.format_version < 2
+      first === 'password'
         ? 'Enter your recovery password to show your secret.'
         : 'Enter your recovery code to show your secret.',
     );

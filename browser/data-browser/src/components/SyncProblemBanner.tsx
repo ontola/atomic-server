@@ -2,7 +2,7 @@ import { useEffect, useRef, type JSX } from 'react';
 import { Link } from '@tanstack/react-router';
 import { styled } from 'styled-components';
 import { FaCircleExclamation } from 'react-icons/fa6';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { focusConnectDevice } from './ConnectDevice';
 import { cardSurface, CARD_SUB_FONT } from './cardSurface';
 import { compactButtons } from './Cloud/ServiceRow';
@@ -34,12 +34,15 @@ export function SyncProblemBanner({
   notified,
   retrying,
   onTryAgain,
+  onDiscard,
 }: {
   problem: SyncProblem;
   /** Error reporting is on, so "we have been notified" is true. */
   notified: boolean;
   retrying: boolean;
   onTryAgain: () => void;
+  /** Drop the changes named by `problem.subjects`. */
+  onDiscard: () => void;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -102,6 +105,25 @@ export function SyncProblemBanner({
                   return (
                     <Button key={action} subtle onClick={reviewSync}>
                       Turn off server sync
+                    </Button>
+                  );
+                case 'discard':
+                  return (
+                    <Button
+                      key={action}
+                      alert
+                      data-testid='sync-problem-discard'
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Discard these changes? They never reached the server, so they will be gone for good.',
+                          )
+                        ) {
+                          onDiscard();
+                        }
+                      }}
+                    >
+                      Discard these changes
                     </Button>
                   );
                 case 'storage':

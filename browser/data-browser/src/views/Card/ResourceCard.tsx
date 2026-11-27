@@ -12,8 +12,8 @@ import {
   useArray,
   ai,
 } from '@tomic/react';
-import AllProps from '../../components/AllProps';
-import { AtomicLink } from '../../components/AtomicLink';
+import AllProps from '@tomic/resource-ui/components/AllProps';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { Card } from '../../components/Card';
 import CollectionCard from './CollectionCard';
 import { ErrorLook } from '../../components/ErrorLook';
@@ -21,20 +21,19 @@ import { ValueForm } from '../../components/forms/ValueForm';
 import FileCard from '../File/FileCard';
 import { defaultHiddenProps } from '../ResourcePageDefault';
 import { MessageCard } from './MessageCard';
-import { BookmarkCard } from './BookmarkCard.jsx';
 import { CardViewProps, CardViewPropsBase } from './CardViewProps';
 import { ElementCard } from './ElementCard';
 import { ArticleCard } from '../Article';
 import { styled } from 'styled-components';
 import { ResourceCardTitle } from './ResourceCardTitle';
-import { Column, Row } from '../../components/Row';
-import { Tag } from '../../components/Tag';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { Tag } from '@tomic/resource-ui/components/Tag/index';
 import { ResourceContextMenu } from '../../components/ResourceContextMenu';
 import { AIChatContentCard } from './AIChatContentCard';
 import { DocumentV2Card } from './DocumentV2Card';
 import { MeetingCard } from './MeetingCard';
-import { HideInPrint } from '@components/HideInPrint';
-import { useOnValueChange } from '@helpers/useOnValueChange';
+import { HideInPrint } from '@tomic/ui/components/HideInPrint';
+import { useOnValueChange } from '@tomic/ui/helpers/useOnValueChange';
 import { FolderCard } from './FolderCard';
 import { Spinner } from '../../components/Spinner';
 
@@ -117,8 +116,6 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <FileCard resource={resource} {...props} />;
     case dataBrowser.classes.message:
       return <MessageCard resource={resource} {...props} />;
-    case dataBrowser.classes.bookmark:
-      return <BookmarkCard resource={resource} {...props} />;
     case dataBrowser.classes.paragraph:
       return <ElementCard resource={resource} {...props} />;
     case dataBrowser.classes.article:

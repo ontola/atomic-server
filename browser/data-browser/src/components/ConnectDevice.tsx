@@ -1,6 +1,6 @@
 import { useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { Button } from './Button';
+import { Button } from '@tomic/ui/components/Button';
 import { PairingCode } from './PairingCode';
 import { cardSurface } from './cardSurface';
 import {
@@ -37,6 +37,8 @@ interface ConnectDeviceProps {
   /** The address a browser tab reads from, named when showing its code. */
   serverName: string;
   onAddServer: (url: string) => void;
+  /** Smaller and quieter for a dialog: no explanatory note, a smaller QR. */
+  compact?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export function ConnectDevice({
   canTakeCode,
   serverName,
   onAddServer,
+  compact,
 }: ConnectDeviceProps): JSX.Element {
   const [input, setInput] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -113,24 +116,35 @@ export function ConnectDevice({
   }
 
   return (
-    <Section id={SECTION_ID} tabIndex={-1} data-testid='connect-device'>
-      <Title>Connect a device</Title>
-      <Note>
-        {showPairing
-          ? 'Codes only route. Your key still decides what syncs.'
-          : 'An always-on device has an address. One you carry has a code.'}
-      </Note>
+    <Section
+      id={SECTION_ID}
+      tabIndex={-1}
+      data-testid='connect-device'
+      $embedded={compact}
+    >
+      {!compact && (
+        <Note>
+          {showPairing
+            ? 'Codes only route. Your key still decides what syncs.'
+            : 'An always-on device has an address. One you carry has a code.'}
+        </Note>
+      )}
       <Card>
         {showPairing && pairNodeDid && (
           <Side data-testid='connect-device-show'>
             <Label>Show this device</Label>
             <Hint>
-              {canTakeCode
-                ? 'Scan this from your other device, or copy the code.'
-                : `Scan from your other device to sync with ${serverName}.`}
+              <AppLink
+                href='https://atomic.place/app'
+                target='_blank'
+                rel='noopener'
+              >
+                Scan with the app
+              </AppLink>
             </Hint>
+            {!canTakeCode && <Hint>{`Syncs with ${serverName}.`}</Hint>}
             <Centered>
-              <PairingCode nodeDid={pairNodeDid} />
+              <PairingCode nodeDid={pairNodeDid} compact={compact} />
             </Centered>
           </Side>
         )}
@@ -183,18 +197,13 @@ export function ConnectDevice({
   );
 }
 
-const Section = styled.section`
-  margin-bottom: 2rem;
+const Section = styled.section<{ $embedded?: boolean }>`
+  margin-bottom: ${p => (p.$embedded ? 0 : '2rem')};
   scroll-margin-top: 1rem;
 
   &:focus {
     outline: none;
   }
-`;
-
-const Title = styled.h2`
-  font-size: 1.1rem;
-  margin-bottom: 0.8rem;
 `;
 
 const Note = styled.p`
@@ -278,6 +287,11 @@ const Message = styled.p`
   margin: 0;
   color: ${p => p.theme.colors.alert};
   font-size: 0.82rem;
+`;
+
+const AppLink = styled.a`
+  color: inherit;
+  text-decoration: underline;
 `;
 
 const DocsLink = styled.a`

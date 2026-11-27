@@ -24,9 +24,9 @@ import {
   type HostStoreProfile,
   type HostReply,
 } from './hostStore';
-import { LoaderBlock } from '@components/Loader';
-import { Button } from '@components/Button';
-import { Row } from '@components/Row';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
+import { Button } from '@tomic/ui/components/Button';
+import { Row } from '@tomic/ui/components/Row';
 import { newContextItem, useAISidebar } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
 
@@ -246,7 +246,9 @@ function AppFrameSession({
 
     if (profile) return;
 
-    if (store.noServer) {
+    // No node holds a local-only drive either, so its apps run from the
+    // source this device has.
+    if (store.noServer || store.isLocalOnlyDrive(drive)) {
       appSourceOf(store, drive, entrypoint)
         .then(source => {
           if (cancelled) return;
@@ -835,7 +837,7 @@ async function appLabel(
   }
 }
 
-/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+/** Turns a platform slug into a display label when branding is unavailable. */
 function platformName(id: string) {
   return id
     .split('-')

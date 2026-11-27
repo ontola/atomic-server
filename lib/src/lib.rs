@@ -29,6 +29,9 @@ pub mod datatype;
 #[cfg(feature = "db")]
 /// **Internal:** database implementation and storage helpers; outside the application API contract.
 pub mod db;
+/// Device-local agent secret storage (IndexedDB + WebCrypto), main thread.
+#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+pub mod device_key;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[doc(hidden)]
@@ -57,6 +60,9 @@ pub mod loro;
 pub mod mapping;
 /// **Internal:** instrumentation; outside the application API contract.
 pub mod metrics;
+/// The server notifier: follows, Inbox delivery, batching (`notify.rs`).
+#[cfg(all(feature = "db", not(target_arch = "wasm32")))]
+pub mod notify;
 /// **Internal:** parsing helpers; outside the application API contract.
 pub mod parse;
 #[cfg(feature = "db")]

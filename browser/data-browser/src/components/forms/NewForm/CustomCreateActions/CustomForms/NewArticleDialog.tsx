@@ -1,8 +1,8 @@
 import { validateDatatype, Datatype, core, dataBrowser } from '@tomic/react';
 import { useState, useCallback, FormEvent, FC, useEffect } from 'react';
 import { styled } from 'styled-components';
-import { stringToSlug } from '../../../../../helpers/stringToSlug';
-import { Button } from '../../../../Button';
+import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
+import { Button } from '@tomic/ui/components/Button';
 import {
   useDialog,
   Dialog,
@@ -10,7 +10,10 @@ import {
   DialogActions,
 } from '../../../../Dialog';
 import Field from '../../../Field';
-import { InputWrapper, InputStyled } from '../../../InputStyles';
+import {
+  InputWrapper,
+  InputStyled,
+} from '@tomic/ui/components/forms/InputStyles';
 import { CustomResourceDialogProps } from '../../useNewResourceUI';
 import { useCreateAndNavigate } from '../../../../../hooks/useCreateAndNavigate';
 

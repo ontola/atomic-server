@@ -5,8 +5,8 @@ import { Resource } from '@tomic/react';
 
 import { ContainerWide } from '../components/Containers';
 import { ErrorBlock } from '../components/ErrorLook';
-import { Button } from '../components/Button';
-import { Column, Row } from '../components/Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column, Row } from '@tomic/ui/components/Row';
 
 import type { JSX } from 'react';
 import { styled } from 'styled-components';

@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../atomic_spinner.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../click_cursor.dart';
 import '../copyable_error.dart';
+import '../strings.dart';
 import 'client.dart';
 
 /// Connect this app to a hosted account, as the web app does: a short code is
@@ -87,7 +90,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
         case AtomicLinkProgress.pending:
           _timer = Timer(_every(request), () => _poll(request, generation));
         case AtomicLinkProgress.expired:
-          setState(() => _error = 'That code expired. Start again.');
+          setState(() => _error = AtomicStrings.of(context).codeExpired);
         case AtomicLinkProgress.approved:
           await widget.save(widget.client.exportSession());
           if (mounted) Navigator.pop(context, true);
@@ -119,16 +122,17 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
   static bool _isRateLimit(Object e) =>
       '$e'.toLowerCase().contains('too many attempts');
 
-  static String _friendly(Object e) => _isRateLimit(e)
-      ? 'Too many attempts. Wait a minute, then try again.'
+  String _friendly(Object e) => _isRateLimit(e)
+      ? AtomicStrings.of(context).tooManyAttempts
       : '$e'.replaceFirst('Bad state: ', '');
 
   @override
   Widget build(BuildContext context) {
     final request = _request;
+    final s = AtomicStrings.of(context);
     final theme = Theme.of(context);
     return AlertDialog(
-      title: Text('Connect to ${widget.client.origin.host}'),
+      title: Text(s.connectTo(widget.client.origin.host)),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -139,13 +143,13 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
               if (request == null && _error == null)
                 const LinearProgressIndicator()
               else if (request != null) ...[
-                const Text('On any device, go to'),
+                Text(s.goToOnAnyDevice),
                 const SizedBox(height: 4),
                 SelectableText('${widget.client.origin.host}/link',
                     style: theme.textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                const Text('and enter this code:'),
+                Text(s.andEnterCode),
                 const SizedBox(height: 16),
                 Center(
                   child: ClickCursor(
@@ -180,24 +184,19 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
                 ),
                 const SizedBox(height: 4),
                 Center(
-                  child: Text('Or scan it with a phone that is signed in.',
-                      style: theme.textTheme.bodySmall),
+                  child: Text(s.orScan, style: theme.textTheme.bodySmall),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
-                  const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 14, height: 14, child: AtomicSpinner()),
                   const SizedBox(width: 8),
-                  Text('Waiting for approval…',
-                      style: theme.textTheme.bodySmall),
+                  Text(s.waitingForApproval, style: theme.textTheme.bodySmall),
                 ]),
                 if (_error == null && widget.openInBrowser != null) ...[
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.open_in_browser, size: 18),
-                    label: const Text('Open in your browser'),
+                    label: Text(s.openInBrowser),
                     onPressed: () => widget.openInBrowser!(_url(request)),
                   ),
                 ],
@@ -205,7 +204,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 ErrorText(_error!),
-                TextButton(onPressed: _start, child: const Text('Try again')),
+                TextButton(onPressed: _start, child: Text(s.tryAgain)),
               ],
             ],
           ),
@@ -214,7 +213,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+            child: Text(s.cancel)),
       ],
     );
   }

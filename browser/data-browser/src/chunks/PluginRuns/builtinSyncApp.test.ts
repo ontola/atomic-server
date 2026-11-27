@@ -58,7 +58,7 @@ const classes = {
 const prop = (name: string) => properties['syncable-' + name];
 
 /** An unrelated provider with a mutable address, response Link, direct child and public input. */
-function apiDocument(): OpenApiDocument {
+function apiDocument(pageField?: string): OpenApiDocument {
   const operation = (resource: string, collection?: string) => ({
     operationId: collection ?? resource + 'Detail',
     ...(collection
@@ -174,7 +174,12 @@ function apiDocument(): OpenApiDocument {
       paginationSchemes: {
         pages: {
           type: 'nextLink',
-          request: { queryParameters: { limit: { role: 'pageSize' } } },
+          request: {
+            queryParameters: {
+              limit: { role: 'pageSize' },
+              ...(pageField ? { [pageField]: { role: 'page' } } : {}),
+            },
+          },
           response: { headers: { Link: { role: 'nextLink' } } },
         },
       },
@@ -937,35 +942,6 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       ).toBe(true);
     },
   );
-
-  it('retains a historical saved account when its connection expires and no modern principal exists', async () => {
-    const subject = 'atomic:historical-account';
-    const set = setup('platform', {
-      legacySources: [{ subject, kind: 'principal', connectionId: 'slot' }],
-    });
-    set.data.set(subject, {
-      [P + 'parent']: root,
-      [P + 'name']: 'Saved legacy account',
-      [P + 'localId']: 'old-local-id',
-    });
-    set.request.mockResolvedValue({
-      status: 401,
-      headers: {},
-      body: { error: 'credential_refresh_failed' },
-    });
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    expect(element.textContent).toContain('Saved legacy account');
-    expect(element.textContent).not.toContain('No accounts connected');
-    const account = [...element.querySelectorAll('button')].find(
-      button => button.textContent === 'Saved legacy account',
-    )!;
-    account.click();
-    await vi.waitFor(() =>
-      expect(set.store.ui.openResource).toHaveBeenCalledWith(subject),
-    );
-    expect(set.data.get(subject)![P + 'localId']).toBe('old-local-id');
-  });
 
   it.each([403, 503])(
     'keeps HTTP %s visible alongside recoverable authorization failures',
@@ -1783,23 +1759,11 @@ describe('shared entity tables and independent saved filters', () => {
     ).toBe(true);
   });
   it('retains unsupported historical Public data and refuses a competing destination when native blocks that exact resource', async () => {
-    const old = 'atomic:v1-public-cache';
+    const old = 'atomic:old-public-cache';
     const publicPrincipal = { kind: 'public' };
     const set = setup('principal', {
       principal: publicPrincipal,
       connectionId: undefined,
-      legacySources: [
-        {
-          subject: old,
-          kind: 'collection',
-          principal: publicPrincipal,
-          collection: {
-            name: 'tasks',
-            resource: 'task',
-            context: { workspace_id: '200' },
-          },
-        },
-      ],
       flatMigrationBlocks: [
         {
           principal: publicPrincipal,
@@ -1812,7 +1776,7 @@ describe('shared entity tables and independent saved filters', () => {
       [P + 'parent']: root,
       [P + 'localId']: 'historical-public-local-id',
       [P + 'description']: 'Keep saved public values',
-      [prop('source-key')]: 'old-v1-public-source',
+      [prop('source-key')]: 'historical-public-source',
       [prop('node-kind')]: 'public-mirror',
     };
     set.data.set(old, saved);
@@ -2126,8 +2090,8 @@ describe('shared entity tables and independent saved filters', () => {
     }
   });
 
-  it('takes a page total from a matching last Link and leaves unreported totals unknown', () => {
-    const document = apiDocument();
+  it('takes a page total from a matching last Link with a catalog-declared page input', () => {
+    const document = apiDocument('pageIndex');
     const bound = bindCollection(document, { collection: 'myTeams' });
     const selection = {
       version: 1 as const,
@@ -2139,20 +2103,23 @@ describe('shared entity tables and independent saved filters', () => {
       method: 'GET' as const,
       headers: {},
     };
-    const total = (link: string) =>
-      syncablePageTotal(document, selection, request, {
+    const total = (link: string, catalog = document) =>
+      syncablePageTotal(catalog, selection, request, {
         status: 200,
         body: '[]',
         headers: { link },
       });
     expect(
       total(
-        '</v2/me/teams?page=2>; rel="next", </v2/me/teams?page=8>; rel="last"',
+        '</v2/me/teams?pageIndex=2>; rel="next", </v2/me/teams?pageIndex=8>; rel="last"',
       ),
     ).toBe(8);
-    expect(total('</v2/me/teams?page=2>; rel="next"')).toBeUndefined();
+    expect(total('</v2/me/teams?pageIndex=2>; rel="next"')).toBeUndefined();
     expect(
-      total('<https://other.example/v2/me/teams?page=8>; rel="last"'),
+      total('<https://other.example/v2/me/teams?pageIndex=8>; rel="last"'),
+    ).toBeUndefined();
+    expect(
+      total('</v2/me/teams?page=8>; rel="last"', apiDocument()),
     ).toBeUndefined();
   });
 
@@ -2253,164 +2220,6 @@ describe('shared entity tables and independent saved filters', () => {
     ).toBe(true);
     expect(set.data.get(root)![prop('mirror-status')]).toBeUndefined();
   });
-});
-
-describe('verified principal migration compatibility', () => {
-  it.each([false, true])(
-    'migrates a host-validated principal alias with cross-slot identity proof (%s)',
-    async crossSlot => {
-      const set = setup('platform');
-      const subject = 'atomic:legacy-account';
-      set.data.set(subject, {
-        [P + 'parent']: root,
-        [P + 'isA']: ['atomic:old-account'],
-        [P + 'localId']: 'old-account-local-id',
-        [P + 'name']: 'Custom account title',
-        [prop('source-key')]: 'old-source-key',
-        [prop('node-kind')]: 'account',
-      });
-      const app = createSyncApp(set.store, {
-        ...set.context,
-        legacySources: [
-          {
-            subject,
-            sourceKey: 'old-source-key',
-            localId: 'old-account-local-id',
-            kind: 'principal',
-            connectionId: crossSlot ? 'historical-slot' : 'slot',
-            ...(crossSlot ? { principal } : {}),
-          },
-        ],
-      });
-      expect((await app.openPrincipal('slot')).subject).toBe(subject);
-      const saved = set.data.get(subject)!;
-      expect(saved[P + 'localId']).toBe('old-account-local-id');
-      expect(saved[P + 'name']).toBe('Custom account title');
-      expect(saved[P + 'isA']).toEqual(
-        expect.arrayContaining([
-          tableClass,
-          classes['syncable-principal'],
-          'atomic:old-account',
-        ]),
-      );
-      expect(JSON.parse(saved[prop('source-key')] as string)).toMatchObject({
-        version: 2,
-        kind: 'principal',
-        principal: { subject: 7 },
-      });
-      expect(config(saved).principal).toEqual(principal);
-      expect(nodes(set.data, 'principal')).toHaveLength(1);
-    },
-  );
-
-  it('does not allocate a duplicate principal when a different historical slot lacks identity proof', async () => {
-    const set = setup('platform');
-    const subject = 'atomic:historical-account';
-    const old = {
-      [P + 'parent']: root,
-      [P + 'name']: 'Saved account',
-      [P + 'localId']: 'historical-account',
-      [prop('source-key')]: 'historical-source',
-    };
-    set.data.set(subject, old);
-    const app = createSyncApp(set.store, {
-      ...set.context,
-      legacySources: [
-        {
-          subject,
-          sourceKey: 'historical-source',
-          localId: 'historical-account',
-          kind: 'principal',
-          connectionId: 'older-slot',
-        },
-      ],
-    });
-    await expect(app.openPrincipal('slot')).rejects.toThrow('saved account');
-    expect(set.store.newResource).not.toHaveBeenCalled();
-    expect(set.data.get(subject)).toEqual(old);
-  });
-
-  it('refuses competing canonical and legacy resources for the same proven typed principal', async () => {
-    const set = setup('platform');
-    const canonical = await set.app.openPrincipal('slot');
-    const subject = 'atomic:historical-account';
-    set.data.set(subject, {
-      [P + 'parent']: root,
-      [P + 'name']: 'Saved account',
-      [P + 'localId']: 'historical-account',
-      [prop('source-key')]: 'historical-source',
-    });
-    const before = structuredClone([...set.data]);
-    set.store.newResource.mockClear();
-    const app = createSyncApp(set.store, {
-      ...set.context,
-      legacySources: [
-        {
-          subject,
-          sourceKey: 'historical-source',
-          localId: 'historical-account',
-          kind: 'principal',
-          connectionId: 'older-slot',
-          principal,
-        },
-      ],
-    });
-    await expect(app.openPrincipal('slot')).rejects.toThrow(
-      'conflicting saved sources',
-    );
-    expect(set.store.newResource).not.toHaveBeenCalled();
-    expect([...set.data]).toEqual(before);
-    expect(set.data.has(canonical.subject)).toBe(true);
-  });
-
-  it('reports canonical and proven historical principal conflicts even when the canonical slot is already known', async () => {
-    const set = setup('platform');
-    const canonical = await set.app.openPrincipal('slot');
-    const subject = 'atomic:historical-account';
-    set.data.set(subject, {
-      [P + 'parent']: root,
-      [P + 'name']: 'Historical saved name',
-    });
-    Object.assign(set.context, {
-      legacySources: [
-        { subject, kind: 'principal', connectionId: 'old-slot', principal },
-      ],
-    });
-    set.request.mockClear();
-    const element = document.createElement('div');
-    await view({ root: element, store: set.store });
-    expect(element.textContent).toContain('conflicting saved sources');
-    expect(element.textContent).toContain('Historical saved name');
-    expect(element.textContent).toContain('Ada');
-    expect(set.data.has(canonical.subject)).toBe(true);
-    expect(set.request).not.toHaveBeenCalled();
-  });
-
-  it.each([false, true])(
-    'allows a distinct proven principal or an already adopted historical alias (%s)',
-    async adopted => {
-      const set = setup('platform');
-      const first = await set.app.openPrincipal('old-slot');
-      const alias = {
-        subject: first.subject,
-        kind: 'principal',
-        connectionId: 'old-slot',
-        ...(adopted ? {} : { principal }),
-      };
-      const app = createSyncApp(set.store, {
-        ...set.context,
-        legacySources: [alias],
-      });
-      set.request.mockResolvedValue({
-        status: 200,
-        headers: {},
-        body: { id: 8, label: 'Another account' },
-      });
-      await app.openPrincipal('another-slot');
-      expect(nodes(set.data, 'principal')).toHaveLength(2);
-      expect(set.data.get(first.subject)![P + 'name']).toBe('Ada');
-    },
-  );
 });
 
 describe('principal Apps outside the setup write root', () => {

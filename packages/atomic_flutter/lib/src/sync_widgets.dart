@@ -19,7 +19,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'atomic_spinner.dart';
 import 'theme.dart';
+import 'strings.dart';
+
+export 'atomic_spinner.dart';
 
 /// The Sync screen's spacing scale.
 abstract final class SyncGap {
@@ -267,7 +271,8 @@ class KeyValueRow extends StatelessWidget {
         ? () {
             Clipboard.setData(ClipboardData(text: copy!));
             ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-                content: Text('${copyLabel ?? label} copied'),
+                content:
+                    Text(AtomicStrings.of(context).copied(copyLabel ?? label)),
                 duration: const Duration(seconds: 2)));
           }
         : onTap;
@@ -553,8 +558,7 @@ class SyncSpinner extends StatelessWidget {
   const SyncSpinner({super.key});
 
   @override
-  Widget build(BuildContext context) => const SizedBox.square(
-      dimension: 20, child: CircularProgressIndicator(strokeWidth: 2));
+  Widget build(BuildContext context) => const AtomicSpinner(size: 20);
 }
 
 /// A two-line row: an icon, a title, a muted subtitle and a trailing widget;

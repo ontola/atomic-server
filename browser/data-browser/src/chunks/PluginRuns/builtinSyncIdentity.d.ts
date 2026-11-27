@@ -19,23 +19,6 @@ export interface SourceKeyInput {
   parentSourceKeyHash?: string;
   remoteId?: string | number;
 }
-/** Provider compatibility is interpreted natively before descriptors reach the iframe. */
-export interface LegacySourceAlias {
-  subject: string;
-  sourceKey?: string;
-  localId?: string;
-  kind: 'principal' | 'collection' | 'record';
-  connectionId?: string;
-  principal?: SyncablePrincipal;
-  collection?: Record<string, unknown>;
-  parentSourceSubject?: string;
-  parentSourceKey?: string;
-  remoteId?: string | number;
-  previousParent?: string;
-  reparentToLogicalParent?: boolean;
-  sourceConfigFingerprint?: string;
-  remoteIdProperty?: string;
-}
 export function canonicalValue<T>(value: T): T;
 export function sourceConfigFingerprint(value: unknown): string;
 export function principalIdentity(principal: unknown): SyncablePrincipal;

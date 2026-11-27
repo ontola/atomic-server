@@ -14,7 +14,6 @@ import {
   FaRegCircle,
   FaCloud,
 } from 'react-icons/fa6';
-import { LuChevronsUpDown } from 'react-icons/lu';
 import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
@@ -22,9 +21,13 @@ import { useDriveVisits } from '../../hooks/useDriveVisits';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
 import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { paths } from '../../routes/paths';
-import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
-import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import type { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
+import {
+  type DropdownItem,
+  DIVIDER,
+  DropdownMenu,
+} from '@tomic/resource-ui/components/Dropdown/index';
+import { buildDefaultTrigger } from '@tomic/resource-ui/components/Dropdown/DefaultTrigger';
+import type { DropdownTriggerComponent } from '@tomic/ui/components/Dropdown/DropdownTrigger';
 import { useNewResourceUI } from '../forms/NewForm/useNewResourceUI';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 
@@ -32,12 +35,6 @@ const MAX_SHOWN_DRIVES = 10;
 
 const DefaultTrigger = buildDefaultTrigger(
   <FaCaretDown />,
-  () => 'Switch Drive',
-);
-
-/** Up/down chevron trigger, for placing the switcher next to a drive title. */
-export const DriveSwitcherChevronTrigger = buildDefaultTrigger(
-  <LuChevronsUpDown />,
   () => 'Switch Drive',
 );
 
@@ -50,7 +47,8 @@ function getTitle(resource: Resource): string {
 
 /**
  * Quick-switch between the user's drives: private drive plus the 10 most recently
- * visited drives. The full lists live on the User Settings page.
+ * visited drives. The others are found by typing in the filter, and all of
+ * them are listed in the Drive section of settings.
  */
 export function DriveSwitcher({
   Trigger = DefaultTrigger,
@@ -106,9 +104,13 @@ export function DriveSwitcher({
   const visitTime = (subject: string) =>
     driveVisits[canonicalizeScheme(subject)] ?? 0;
   // Array.prototype.sort is stable, so ties keep their original order.
-  const shownDrives = merged
-    .sort((a, b) => visitTime(b) - visitTime(a))
-    .slice(0, MAX_SHOWN_DRIVES);
+  const sortedDrives = merged.sort((a, b) => visitTime(b) - visitTime(a));
+  const shownDrives = sortedDrives.slice(0, MAX_SHOWN_DRIVES);
+  // The rest only show up while typing in the filter, so a drive outside the
+  // top 10 (a new device, a fresh origin) is still findable. Their names come
+  // from the catalog: loading every drive just to label it would defeat lazy
+  // loading of other drives.
+  const searchOnlyDrives = sortedDrives.slice(MAX_SHOWN_DRIVES);
 
   const shownDrivesMap = useResources(shownDrives);
 
@@ -155,6 +157,21 @@ export function DriveSwitcher({
         icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
       };
     }),
+    ...searchOnlyDrives.map(subject => {
+      const label =
+        catalog.entries.find(e => e.drive_subject === subject)?.drive_name ||
+        driveDisplayName(undefined, subject);
+
+      return {
+        id: subject,
+        label,
+        helper: `Switch to ${label}`,
+        searchOnly: true,
+        disabled: false,
+        onClick: (): void => switchTo(subject),
+        icon: subject === drive ? <FaSquareCheck /> : <FaRegCircle />,
+      };
+    }),
     DIVIDER,
     {
       id: 'new-drive',
@@ -171,7 +188,7 @@ export function DriveSwitcher({
       icon: <FaGear />,
       helper: 'View and organize all your drives.',
       onClick: (): void => {
-        void navigate(paths.agentSettings);
+        void navigate(paths.driveSettings);
       },
     },
     {
@@ -181,7 +198,7 @@ export function DriveSwitcher({
       helper:
         'Local stays on your devices. Vault is encrypted backup. Server hosts a readable copy. Remote is another connected server.',
       onClick: () =>
-        navigate(`/app/sync?drive=${encodeURIComponent(drive ?? '')}`),
+        navigate(`${paths.sync}&drive=${encodeURIComponent(drive ?? '')}`),
     },
   ];
 

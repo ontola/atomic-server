@@ -1,5 +1,8 @@
 import { core, dataBrowser, type SchemaStore } from '@tomic/lib';
-import { appViewOf, normalizeViewKind } from '../TablePage/tableViewKinds';
+import {
+  appViewOf,
+  normalizeViewKind,
+} from '@tomic/table-page/TablePage/tableViewKinds';
 
 const viewList = dataBrowser.properties.tableViews;
 const defaultView = dataBrowser.properties.tableDefaultView;

@@ -46,6 +46,7 @@ const state = vi.hoisted(() => ({
     }),
   },
   restoreVault: vi.fn(),
+  methods: [] as string[],
   identityProps: undefined as Record<string, unknown> | undefined,
   // What the identity this browser already holds has to bring along; see
   // helpers/bringAlong.test.ts for the decision itself.
@@ -85,15 +86,18 @@ vi.mock('../../helpers/managed', () => ({
   clearManagedAccountBinding: vi.fn(),
   logoutManagedSession: vi.fn(),
 }));
+vi.mock('../../helpers/managed/signOut', () => ({
+  endAccountSession: () => logoutManagedSession(),
+}));
 vi.mock('../../helpers/managed/cloudSync', () => ({
-  getManagedPortalUrl: () => state.portal,
+  getAccountServiceUrl: () => state.portal,
 }));
 vi.mock('../../helpers/managed/deviceLink', () => ({
-  getRememberedProvider: () => null,
   canHoldProviderCookie: () => true,
 }));
 vi.mock('../../helpers/managed/session', () => ({
   getManagedAccount: async () => state.account,
+  getManagedAccountOrNull: async () => state.account,
   accountAddress: (account: { email: string; address?: string }) =>
     account.address ?? account.email,
 }));
@@ -112,6 +116,7 @@ vi.mock('../../helpers/managed/recovery', () => ({
   getRecoverySecret: () => state.recovery(),
   readUnlockableCachedBackups: () => [],
   envelopeWrapperKinds: () => ({ hasPasskey: true, hasCode: false }),
+  unlockMethods: () => state.methods,
   secretAccountConflict: (
     stored: { owner_email: string; agent_subject: string } | null,
     secretAgent: string,
@@ -123,6 +128,10 @@ vi.mock('../../helpers/managed/recovery', () => ({
           secretAgent,
         }
       : null,
+}));
+// The tests sign in with placeholder secrets; Agent.fromSecret is stubbed below.
+vi.mock('../../helpers/verifyAgentSecret', () => ({
+  isAgentSecret: () => true,
 }));
 vi.mock('../../helpers/managed/vaultAutoBackup', () => ({
   ensureVaultBackup: vi.fn(),
@@ -265,7 +274,7 @@ it.each([true, false])(
   },
 );
 
-it('starts with a real local identity and lands on the Welcome drive page, without a nudge', async () => {
+it('starts with a real local identity and lands on the Start here document of the Welcome drive, without a nudge', async () => {
   await show();
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
@@ -278,7 +287,7 @@ it('starts with a real local identity and lands on the Welcome drive page, witho
   );
   expect(state.setDrive).toHaveBeenCalledWith('did:ad:welcome');
   expect(state.navigate).toHaveBeenCalledWith(
-    '/app/show?subject=did:ad:welcome',
+    '/app/show?subject=did:ad:welcomedoc',
   );
   expect(state.nudge).not.toHaveBeenCalled();
 });
@@ -330,6 +339,24 @@ it('preserves private-drive unlock', async () => {
   expect(screen.getByLabelText('Agent secret')).toBeTruthy();
 });
 
+it('signs in with the same passkey button and code-or-secret field as every unlock screen', async () => {
+  state.methods = ['passkey', 'code'];
+  state.recovery.mockResolvedValue({
+    owner_email: 'joep@ontola.io',
+    agent_subject: 'did:ad:agent:test',
+    format_version: 2,
+  });
+  await show('?step=signin');
+  expect(
+    await screen.findByRole('button', { name: 'Use your passkey' }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText('Recovery code or secret')).toBeTruthy();
+  expect(
+    screen.queryByRole('button', { name: 'Use a recovery code instead' }),
+  ).toBeNull();
+  state.methods = [];
+});
+
 it('preserves new-account creation from the portal', async () => {
   await show('?from_portal=true&email=new%40example.com');
   expect(screen.getByText('Create identity')).toBeTruthy();
@@ -368,7 +395,9 @@ it.each([true, false])(
         target: { value: 'test-secret' },
       });
     });
-    expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+    expect(state.navigate).toHaveBeenCalledWith(
+      '/app/settings?section=account',
+    );
     expect(state.restoreVault).not.toHaveBeenCalled();
   },
 );
@@ -443,8 +472,6 @@ it('ignores arbitrary return destinations', async () => {
 
 it('resumes an invitation instead of settings after unlock', async () => {
   await show('?invite=invitation-token&return_to=agent');
-  // Back from restore opens secret sign-in without dropping the invitation.
-  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Agent secret'), {
       target: { value: 'test-secret' },
@@ -529,7 +556,7 @@ it('signs out of the account only once the user picks the secret', async () => {
   });
   expect(logoutManagedSession).toHaveBeenCalledTimes(1);
   expect(state.setAgent).toHaveBeenCalled();
-  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+  expect(state.navigate).toHaveBeenCalledWith('/app/settings?section=account');
 });
 
 it('signs in without asking when the secret is the account agent', async () => {
@@ -544,5 +571,5 @@ it('signs in without asking when the secret is the account agent', async () => {
     });
   });
   expect(logoutManagedSession).not.toHaveBeenCalled();
-  expect(state.navigate).toHaveBeenCalledWith('/app/agent');
+  expect(state.navigate).toHaveBeenCalledWith('/app/settings?section=account');
 });

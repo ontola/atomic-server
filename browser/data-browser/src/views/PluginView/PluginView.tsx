@@ -6,7 +6,7 @@ import { usePluginRPC } from '@views/PluginView/pluginRPC';
 import styled from 'styled-components';
 import { useEffect, useState } from 'react';
 import { signRequest } from '@tomic/lib';
-import { ErrorBlock } from '@components/ErrorLook';
+import { ErrorBlock } from '@tomic/resource-ui/components/ErrorLook';
 
 import resetCss from '../../reset.css?raw';
 import { useCreateThemeVars, useFrameColorScheme } from './useCreateThemeVars';
@@ -93,7 +93,7 @@ const PluginViewSession: React.FC<PluginViewProps> = ({ plugin }) => {
       });
       if (!response.ok)
         throw new Error(
-          /* @wc-ignore */ `Plugin asset request failed (${response.status})`,
+          /* @wc-ignore */ `App asset request failed (${response.status})`,
         );
 
       return response.text();

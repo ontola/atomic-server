@@ -456,6 +456,9 @@ test.describe('kanban', () => {
 
     await cardIn(todo, 'KB nav').click({ button: 'right' });
     await expect(page.getByRole('menu')).toBeVisible();
+    await expect(
+      page.getByRole('textbox', { name: 'Filter actions' }),
+    ).toBeFocused();
 
     // The right-click menu is searchable, so focus stays in its filter input
     // and the keyboard selection is the item marked `data-selected`.
@@ -468,8 +471,16 @@ test.describe('kanban', () => {
       );
 
     await page.keyboard.press('ArrowDown');
+    await expect.poll(activeId).toBeTruthy();
     const first = await activeId();
     await page.keyboard.press('ArrowDown');
+    await expect
+      .poll(async () => {
+        const current = await activeId();
+
+        return current !== null && current !== first;
+      })
+      .toBe(true);
     const second = await activeId();
 
     // Each arrow moves the selection — the bug was it sticking after the first.

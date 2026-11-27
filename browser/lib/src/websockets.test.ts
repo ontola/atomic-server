@@ -140,7 +140,13 @@ describe('WSClient handshake', () => {
     const failed = vi.spyOn(store, 'failDriveSync');
     const message = `SYNC_PUSH rejected for drive ${drive}: not enrolled`;
     socket.receive(encodeError(0, ErrorCode.SYNC_REJECTED, message));
-    await vi.waitFor(() => assert(failed).toHaveBeenCalledWith(drive, message));
+    await vi.waitFor(() =>
+      assert(failed).toHaveBeenCalledWith(
+        drive,
+        message,
+        ErrorCode.SYNC_REJECTED,
+      ),
+    );
     client.close();
   });
 
@@ -1487,6 +1493,73 @@ describe('WSClient.fetchMany', () => {
     expect(store.resources.get('atomic:found')).toBe(found);
     expect(missing).toMatchObject({ type: ErrorType.NotFound });
     expect(unauthorized).toMatchObject({ type: ErrorType.Unauthorized });
+    client.close();
+  });
+
+  it('fetches an entry refused as RESULT_TOO_LARGE again with a single GET', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    socket.receive(encodeAuthOk(['get-many']));
+
+    await LoroLoader.initializeLoro();
+    const { LoroDoc } = LoroLoader.Loro;
+    const doc = new LoroDoc();
+    doc
+      .getMap('properties')
+      .set('https://atomicdata.dev/properties/name', 'Late');
+    doc.commit();
+    const snapshot = doc.export({ mode: 'snapshot' });
+
+    const results = client.fetchMany(['did:ad:first', 'did:ad:second']);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET_MANY)).toHaveLength(1),
+    );
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET_MANY)[0]);
+    socket.receive(
+      resultFrame(requestId, [
+        updateFrame(requestId, 'did:ad:first', snapshot),
+        encodeError(
+          requestId,
+          ErrorCode.RESULT_TOO_LARGE,
+          'GET_MANY size limit reached',
+        ),
+      ]),
+    );
+
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET)).toHaveLength(1),
+    );
+    const getId = requestIdOf(framesWithTag(socket, Tag.GET)[0]);
+    socket.receive(updateFrame(getId, 'did:ad:second', snapshot));
+
+    const [first, second] = await results;
+    expect(first).toBeInstanceOf(Resource);
+    expect(second).toBeInstanceOf(Resource);
+    expect((second as Resource).subject).toBe('atomic:second');
+    client.close();
+  });
+
+  it('rejects the whole batch on a top-level ERROR without refetching', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    socket.receive(encodeAuthOk(['get-many']));
+
+    const results = client.fetchMany(['did:ad:a', 'did:ad:b']);
+    const settled = results.catch((e: unknown) => e);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET_MANY)).toHaveLength(1),
+    );
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET_MANY)[0]);
+    socket.receive(
+      encodeError(requestId, ErrorCode.RESULT_TOO_LARGE, 'too many subjects'),
+    );
+
+    expect(await settled).toMatchObject({ code: ErrorCode.RESULT_TOO_LARGE });
+    expect(framesWithTag(socket, Tag.GET)).toHaveLength(0);
     client.close();
   });
 

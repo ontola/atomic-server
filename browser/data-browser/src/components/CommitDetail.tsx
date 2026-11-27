@@ -1,6 +1,9 @@
-import { ResourceInline } from '../views/ResourceInline';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/index';
 import { Detail } from './Detail';
-import { DateTime, DateTimeRelative } from './datatypes/DateTime';
+import {
+  DateTime,
+  DateTimeRelative,
+} from '@tomic/resource-ui/components/datatypes/DateTime';
 
 import type { JSX } from 'react';
 

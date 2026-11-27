@@ -2,10 +2,10 @@ import { FaInfo } from 'react-icons/fa6';
 import {
   IconButton,
   IconButtonVariant,
-} from '../../components/IconButton/IconButton';
+} from '@tomic/ui/components/IconButton/IconButton';
 import { useState } from 'react';
-import { Collapse } from '../../components/Collapse';
-import { Row } from '../../components/Row';
+import { Collapse } from '@tomic/ui/components/Collapse';
+import { Row } from '@tomic/ui/components/Row';
 import Markdown from '../../components/datatypes/Markdown';
 
 interface InfoTitleProps {

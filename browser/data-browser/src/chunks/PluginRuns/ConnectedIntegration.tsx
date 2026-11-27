@@ -5,10 +5,10 @@ import {
   pluginWorkspace,
   useStore,
 } from '@tomic/react';
-import { Card } from '@components/Card';
-import { Column, Row } from '@components/Row';
-import { AtomicLink } from '@components/AtomicLink';
-import { ResourceInline } from '../../views/ResourceInline/ResourceInline';
+import { Card } from '@tomic/ui/components/Card';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
+import { ResourceInline } from '@tomic/resource-ui/views/ResourceInline/ResourceInline';
 
 export function ConnectedIntegration({
   subject,

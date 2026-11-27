@@ -8,10 +8,12 @@ navigation. All 18 native browser journeys passed. The follow-up production
 revision `847a1955b` hides generated duplicate Collection tabs and makes bare
 links use the ordinary Table settings.
 
-- [ ] Trekmeester resolves PR #2522's conflicts with develop, runs full shared
-  Main/server CI on the final integration candidate, reviews and merges.
-  Integration and shared CI remain with trekmeester; workers must not rebase,
-  dispatch or rerun shared CI. Remove this handoff after that acceptance.
+- [x] Integrate current develop into PR #2522 in the feature worktree.
+  The browser host supplies Syncables table behavior through an optional
+  extension to the shared TablePage package. The catalog controls provider
+  identity, schema, collection topology, relations and transport.
+- [ ] Trekmeester runs full shared Main/server CI on the final integration
+  candidate, reviews and merges. Remove this handoff after acceptance.
 - [x] Signed-in Chrome verification on `fa9cb95f4` completed 25 November.
   The existing GitHub account synced the embedded Apptorrent organization's
   saved Repositories filter. Its Table showed five rows, and the run completed
@@ -118,7 +120,17 @@ source records and groups them by a declared Atomic link when available. Saving
 a choice uses a related selection tied to its stable identity. Public collections
 can still use catalog entry points when they have no enumerable sources.
 
-Proven legacy sources preserve subjects, local IDs, user fields and read plans.
+Catalog-proven v2 sources preserve subjects, local IDs, user fields and read plans.
+Unproven v1 preview sources retain their Atomic data and require a separately
+reviewed migration. The runtime owns no provider-specific preview identity or
+issue schema. Unknown retired view kinds use the ordinary Table renderer.
+
+Page totals come from catalog-declared pagination fields. The UI shows the
+current page when the catalog cannot prove a total. Proxy relay support for
+catalog-specific response header names remains a follow-up.
+
+The native reference projector revalidates the selected table and filter's
+write authority while provider observations are outstanding.
 Ambiguous/unprovable sources block competing allocations. Out-of-root moves remain
 protected. Adopted tables are navigation leaves despite retained old local IDs;
 cold rows hydrate before ownership validation. Canonical `github` replaces

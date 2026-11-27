@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button } from '../Button';
-import { Column } from '../Row';
+import { Button } from '@tomic/ui/components/Button';
+import { Column } from '@tomic/ui/components/Row';
 import { useAISettings } from './AISettingsContext';
 import {
   requiresLocalNetworkPermission,

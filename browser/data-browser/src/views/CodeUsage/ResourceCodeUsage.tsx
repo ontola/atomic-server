@@ -6,8 +6,8 @@ import {
   type Resource,
 } from '@tomic/react';
 import { useMemo, useState } from 'react';
-import { Checkbox, CheckboxLabel } from '../../components/forms/Checkbox';
-import { Column } from '../../components/Row';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
+import { Column } from '@tomic/ui/components/Row';
 import { CodeUsage } from './CodeUsage';
 import { PropSelector } from './PropSelector';
 import { BasicCodeGenerator } from './generators/BasicCodeGenerator';

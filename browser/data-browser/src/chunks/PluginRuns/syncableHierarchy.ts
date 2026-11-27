@@ -55,23 +55,6 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
         'Run generation, completeness and observed entity membership for one saved filter.',
       datatype: Datatype.JSON,
     },
-    ...(
-      [
-        ['syncable-repository-count', 'Visible repositories', Datatype.INTEGER],
-        ['syncable-repository-private', 'Private repository', Datatype.BOOLEAN],
-        ['syncable-repository-has-issues', 'Issues enabled', Datatype.BOOLEAN],
-        [
-          'syncable-repository-open-issues',
-          'Open issues and pull requests',
-          Datatype.INTEGER,
-        ],
-      ] as const
-    ).map(([shortname, name, datatype]) => ({
-      shortname,
-      name,
-      datatype,
-      description: name,
-    })),
     {
       shortname: 'syncable-collection-view',
       name: 'Syncable collection view',
@@ -90,36 +73,6 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
       name: 'Mirror status',
       description: 'Last acknowledged synchronization and pause state.',
       datatype: Datatype.JSON,
-    },
-    {
-      shortname: 'syncable-issue-number',
-      name: 'GitHub issue number',
-      description: 'Stable issue number within its repository.',
-      datatype: Datatype.INTEGER,
-    },
-    {
-      shortname: 'syncable-issue-state',
-      name: 'Issue state',
-      description: 'Open or closed at last successful read.',
-      datatype: Datatype.STRING,
-    },
-    {
-      shortname: 'syncable-issue-updated',
-      name: 'Updated at',
-      description: 'Last GitHub update timestamp.',
-      datatype: Datatype.TIMESTAMP,
-    },
-    {
-      shortname: 'syncable-issue-link',
-      name: 'Issue URL',
-      description: 'Canonical GitHub issue link.',
-      datatype: Datatype.URI,
-    },
-    {
-      shortname: 'syncable-issue-body',
-      name: 'Issue body',
-      description: 'GitHub issue description in Markdown.',
-      datatype: Datatype.MARKDOWN,
     },
     {
       shortname: 'syncable-source-config',
@@ -146,13 +99,6 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
       shortname: 'syncable-node-kind',
       name: 'Syncable node kind',
       description: 'Role of this resource in the discovery hierarchy.',
-      datatype: Datatype.STRING,
-    },
-    {
-      shortname: 'syncable-owner-kind',
-      name: 'Remote owner kind',
-      description:
-        'Whether this owner namespace is an organization or personal account.',
       datatype: Datatype.STRING,
     },
   ],
@@ -184,35 +130,10 @@ export const syncableHierarchySchema = (): SchemaSpec => ({
       recommends: ['name'],
     },
     {
-      shortname: 'syncable-account',
-      name: 'Syncable account',
-      description: 'An authorized remote account.',
-      recommends: ['name'],
-    },
-    {
-      shortname: 'syncable-owner',
-      name: 'Syncable owner namespace',
-      description: 'A remote organization or personal repository owner.',
-      recommends: ['name'],
-    },
-    {
-      shortname: 'syncable-repository',
-      name: 'Syncable repository',
-      description: 'A repository within its canonical remote owner namespace.',
-      recommends: ['name'],
-    },
-    {
       shortname: 'syncable-record',
       name: 'Syncable record',
       description: 'A record mirrored from a selected remote collection.',
-      recommends: [
-        'name',
-        'syncable-issue-number',
-        'syncable-issue-state',
-        'syncable-issue-updated',
-        'syncable-issue-link',
-        'syncable-issue-body',
-      ],
+      recommends: ['name'],
     },
   ],
 });

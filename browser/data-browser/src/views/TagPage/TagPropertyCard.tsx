@@ -11,9 +11,9 @@ import {
   type Resource,
 } from '@tomic/react';
 import { Card } from '../../components/Card';
-import { Column } from '../../components/Row';
-import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
-import { optionSubjects } from '@helpers/withConstraint';
+import { Column } from '@tomic/ui/components/Row';
+import { InlineFormattedResourceList } from '@tomic/resource-ui/components/InlineFormattedResourceList';
+import { optionSubjects } from '@tomic/resource-ui/helpers/withConstraint';
 
 interface TagPropertyCardProps {
   resource: Resource<DataBrowser.Tag>;

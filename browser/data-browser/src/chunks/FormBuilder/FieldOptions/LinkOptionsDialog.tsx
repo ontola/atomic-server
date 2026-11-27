@@ -11,19 +11,19 @@ import {
 import { useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { Button } from '@components/Button';
+import { Button } from '@tomic/ui/components/Button';
 import {
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   type InternalDialogProps,
-} from '@components/Dialog';
-import Field from '@components/forms/Field';
-import { RadioInput } from '@components/forms/RadioInput';
-import { ResourceSelector } from '@components/forms/ResourceSelector';
-import { Column } from '@components/Row';
-import { WarningBlock } from '@components/WarningBlock';
+} from '@tomic/resource-ui/components/Dialog/index';
+import Field from '@tomic/resource-ui/components/forms/Field';
+import { RadioInput } from '@tomic/ui/components/forms/RadioInput';
+import { ResourceSelector } from '@tomic/resource-ui/components/forms/ResourceSelector/index';
+import { Column } from '@tomic/ui/components/Row';
+import { WarningBlock } from '@tomic/ui/components/WarningBlock';
 import {
   applyOptionsSource,
   sourceColumn,

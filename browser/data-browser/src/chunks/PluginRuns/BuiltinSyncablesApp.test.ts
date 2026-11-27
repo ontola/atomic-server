@@ -7,19 +7,16 @@ import {
 } from './BuiltinSyncablesApp';
 import type { SyncablePrincipalAppRef } from './syncablePrincipalApp';
 import { prepareDocument } from 'syncables/browser';
-import { collectSyncableLegacySources } from './syncableLegacy';
+import { fetchSyncableDocument } from './syncableDocument';
 import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
 import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import { syncableApiSchema } from './syncableApiSchema';
+import { materializeSyncableReferences } from './syncableReferenceRecords';
 import {
   syncProxyTransport,
   subscribeSyncAppContext,
 } from './builtinSyncablesProfile';
-import {
-  ruleSourceKey,
-  sourceConfigFingerprint,
-  sourceKey,
-} from './builtinSyncIdentity.js';
+import { ruleSourceKey, sourceKey } from './builtinSyncIdentity.js';
 import { CollectionBuilder, core, dataBrowser } from '@tomic/lib';
 import { readSelectionKey } from 'syncables/browser';
 
@@ -37,6 +34,7 @@ const state = vi.hoisted(() => ({
   invalidateOrigins: undefined as (() => void) | undefined,
   ruleSubject: undefined as string | undefined,
   ruleStatus: {} as Record<string, unknown>,
+  writeScopeActive: true,
   ruleResource: {
     get: vi.fn((_property: string): unknown => undefined),
     getSubjects: vi.fn((_property: string): string[] => []),
@@ -61,14 +59,9 @@ const state = vi.hoisted(() => ({
       { connection_id: 's'.repeat(43), platform: 'calendar-service' },
     ]),
     canReconnectKeyed: vi.fn(async () => true),
-    canReconnectLegacyKeyed: vi.fn(async () => false),
-    prepareLegacyKeyedReconnect: vi.fn(
-      async (..._args: unknown[]) => undefined,
-    ),
     startKeyedReconnect: vi.fn(async () => '/same-slot-reconnect'),
     startKeyed: vi.fn(async () => '/new-account'),
   },
-  legacy: { sources: [] as unknown[], warnings: [] as string[] },
   resource: {
     get: vi.fn((_property: string): unknown => undefined),
     getSubjects: vi.fn((_property: string): string[] => []),
@@ -101,7 +94,9 @@ vi.mock('@helpers/proxyConnections', () => ({
     }
   },
 }));
-vi.mock('@components/AtomicLink', () => ({ AtomicLink: () => null }));
+vi.mock('@tomic/resource-ui/components/AtomicLink', () => ({
+  AtomicLink: () => null,
+}));
 vi.mock('@chunks/AppPage/AppFrame', () => ({ AppFrame: () => null }));
 vi.mock('@chunks/AppPage/AppExecutionRuntime', async original => ({
   ...(await original<typeof import('@chunks/AppPage/AppExecutionRuntime')>()),
@@ -123,9 +118,6 @@ vi.mock('./syncablePrincipalApp', () => ({
   listSyncablePrincipalApps: vi.fn(async () => state.principalApps),
   ensureSyncablePrincipalApp: (...args: unknown[]) => state.promote(...args),
 }));
-vi.mock('./syncableLegacy', () => ({
-  collectSyncableLegacySources: vi.fn(async () => state.legacy),
-}));
 vi.mock('./syncableFlatAdoption', async importActual => ({
   ...(await importActual<typeof import('./syncableFlatAdoption')>()),
   collectSyncableFlatAdoption: vi.fn(async () => ({
@@ -140,9 +132,15 @@ vi.mock('./syncableApiSchemaViews', () => ({
 vi.mock('./syncableApiSchema', () => ({
   syncableApiSchema: vi.fn(async () => ({ classes: {}, properties: {} })),
 }));
+vi.mock('./syncableReferenceRecords', () => ({
+  materializeSyncableReferences: vi.fn(),
+}));
 vi.mock('./builtinSyncablesProfile', () => ({
   assertSyncAppDrive: vi.fn(),
   assertSyncAppContext: vi.fn(),
+  captureSyncAppWriteScope: () => () => {
+    if (!state.writeScopeActive) throw new Error('Sync write scope revoked');
+  },
   subscribeSyncAppContext: vi.fn((_context, invalidate: () => void) => {
     state.invalidateOrigins = invalidate;
 
@@ -195,7 +193,6 @@ vi.mock('./builtinSyncablesProfile', () => ({
       assertSession: () => void,
       _trusted,
       assertRead: () => void = () => undefined,
-      _canReconnectLegacy?: (slot: string) => Promise<boolean>,
     ) => {
       assertSession();
 
@@ -251,9 +248,6 @@ beforeEach(() => {
     warnings: [],
     rules: [],
   });
-  vi.mocked(collectSyncableLegacySources).mockImplementation(
-    async () => state.legacy as never,
-  );
   vi.mocked(migrateSyncableApiViews).mockResolvedValue(undefined);
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   vi.stubGlobal('localStorage', {});
@@ -269,6 +263,7 @@ beforeEach(() => {
   state.runSchema = false;
   state.ruleSubject = undefined;
   state.ruleStatus = {};
+  state.writeScopeActive = true;
   state.resource.getSubjects.mockReturnValue([]);
   state.ruleResource.getSubjects.mockReturnValue([dataBrowser.classes.view]);
   state.ruleResource.get.mockImplementation(property =>
@@ -285,12 +280,6 @@ beforeEach(() => {
     { connection_id: 's'.repeat(43), platform: 'calendar-service' },
   ]);
   state.proxy.canReconnectKeyed.mockResolvedValue(true);
-  state.proxy.canReconnectLegacyKeyed.mockResolvedValue(false);
-  state.proxy.prepareLegacyKeyedReconnect.mockImplementation(
-    async (...args) => {
-      (args[4] as () => void)();
-    },
-  );
   state.proxy.startKeyedReconnect.mockResolvedValue('/same-slot-reconnect');
   state.proxy.startKeyed.mockResolvedValue('/new-account');
   state.installation = 'atomic:installation';
@@ -299,7 +288,6 @@ beforeEach(() => {
   state.resource.get.mockImplementation(property =>
     property === 'atomic:status' ? { paused: state.paused } : undefined,
   );
-  state.legacy = { sources: [], warnings: [] };
   vi.mocked(store.getResource).mockImplementation(
     async subject =>
       (subject === state.ruleSubject
@@ -404,163 +392,40 @@ it('revokes a reconnect handoff when the signed-in actor changes during its crea
     spec.profile.connect!('calendar-service', 's'.repeat(43)),
   ).rejects.toThrow();
 });
-it('passes validated installation aliases and blocking warnings into the existing scoped host', async () => {
-  const alias = {
-    subject: 'atomic:old-principal',
-    kind: 'principal',
-    connectionId: 's'.repeat(43),
+it('passes catalog adoption warnings and exact resource blocks into the scoped host', async () => {
+  const block = {
+    principal: { kind: 'public' as const },
+    resource: 'event',
+    message: 'The saved source is ambiguous.',
   };
-  state.legacy = {
-    sources: [alias],
-    warnings: ['A saved source is ambiguous.'],
-  };
+  vi.mocked(collectSyncableFlatAdoption).mockResolvedValueOnce({
+    aliases: [],
+    blocks: [block],
+    warnings: [block.message],
+    rules: [],
+  });
   const spec = await open();
-  expect(collectSyncableLegacySources).toHaveBeenCalledWith(
-    store,
-    expect.objectContaining({
-      app: 'atomic:installation',
-      appDataProperty: 'atomic:app-data',
-      drive: 'drive',
-      platform: 'calendar-service',
-      proxyOrigin: 'https://proxy.example',
-      currentSourceIsLegacy: false,
-      collections: [],
-    }),
-  );
   expect(spec.profile.context).toMatchObject({
-    legacySources: [alias],
-    legacyWarnings: state.legacy.warnings,
-    legacyMigrationBlocked: true,
+    adoptionWarnings: [block.message],
+    flatMigrationBlocks: [block],
   });
   expect(spec.profile.access?.root).toBe('atomic:source');
   expect(spec.profile).toHaveProperty('authoritativeQueries', true);
-  expect(syncProxyTransport).toHaveBeenCalledWith(
-    expect.anything(),
-    expect.objectContaining({ subject: 'atomic:source' }),
-    expect.any(Function),
-    expect.objectContaining({ document: state.document }),
-    expect.any(Function),
-    expect.any(Function),
-    expect.any(Function),
-    expect.any(Function),
-    undefined,
-  );
 });
 
-it('passes an exact Public item-type block for an unsupported v1 cache even when no legacy warnings exist', async () => {
-  state.legacy = {
-    warnings: [],
-    sources: [
-      {
-        subject: 'atomic:old-public-table',
-        kind: 'collection',
-        principal: { kind: 'public' },
-        collection: { name: 'projectIssues', resource: 'issue' },
-        sourceKey: JSON.stringify([
-          'https://proxy.example',
-          'calendar-service',
-          'public-mirror',
-          'project',
-          'issues',
-        ]),
-      },
-    ],
-  };
-  const spec = await open();
-  expect(spec.profile.context).toMatchObject({
-    legacyMigrationBlocked: false,
-    flatMigrationBlocks: [
-      {
-        principal: { kind: 'public' },
-        resource: 'issue',
-        message: expect.stringContaining('historical identity review'),
-      },
-    ],
-  });
-  expect(state.resource.set).not.toHaveBeenCalled();
-});
-
-it('prepares a legacy slot only on explicit reconnect and rechecks its saved source before marker mutation', async () => {
-  const slot = 's'.repeat(43);
-  const config = { connectionId: slot, ownerLogin: 'historical-label' };
-  const principal = {
-    kind: 'authenticated',
-    namespace: 'https://identity.example',
-    subject: 408412,
-  };
-  const alias = {
-    subject: 'atomic:old-account',
-    kind: 'principal',
-    connectionId: slot,
-    principal,
-    sourceKey: 'old-source',
-    localId: 'old-local',
-    sourceConfigFingerprint: sourceConfigFingerprint(config),
-  };
-  state.legacy.sources = [alias];
-  let savedConfig = config;
-  const row = {
-    get: (property: string) =>
-      property === 'atomic:source-key'
-        ? alias.sourceKey
-        : property === core.properties.localId
-          ? alias.localId
-          : property === 'atomic:source-config'
-            ? savedConfig
-            : undefined,
-  };
-  vi.mocked(store.getResource).mockImplementation(
-    async subject =>
-      (subject === alias.subject ? row : state.resource) as never,
-  );
-  state.proxy.canReconnectKeyed.mockResolvedValue(false);
-  state.proxy.canReconnectLegacyKeyed.mockResolvedValue(true);
-  const spec = await open();
-  expect(state.proxy.prepareLegacyKeyedReconnect).not.toHaveBeenCalled();
-  const eligibility = vi.mocked(syncProxyTransport).mock.calls.at(-1)![5]!;
-  await expect(eligibility(slot)).resolves.toBe(true);
-  expect(state.proxy.prepareLegacyKeyedReconnect).not.toHaveBeenCalled();
-  await expect(spec.profile.connect!('calendar-service', slot)).resolves.toBe(
-    '/same-slot-reconnect',
-  );
-  expect(state.proxy.prepareLegacyKeyedReconnect).toHaveBeenCalledWith(
-    'calendar-service',
-    slot,
-    principal,
-    [],
-    expect.any(Function),
-  );
-  expect(state.proxy.startKeyed).not.toHaveBeenCalled();
-  state.proxy.prepareLegacyKeyedReconnect.mockClear();
-  state.proxy.startKeyedReconnect.mockClear();
-  state.proxy.prepareLegacyKeyedReconnect.mockImplementationOnce(
-    async (...args) => {
-      savedConfig = { ...config, ownerLogin: 'changed-during-preparation' };
-      (args[4] as () => void)();
-    },
-  );
-  await expect(spec.profile.connect!('calendar-service', slot)).rejects.toThrow(
-    'saved account source changed',
-  );
-  expect(state.proxy.startKeyedReconnect).not.toHaveBeenCalled();
-});
 it('rejects unresolved legacy sources before schema installation or frame mounting and retains a validated installation link', async () => {
   state.kind = 'legacy';
   await expect(open()).rejects.toMatchObject({
     installationApp: 'atomic:installation',
-    message: expect.stringContaining('no replacement'),
+    message: expect.stringContaining('Its data was retained'),
   });
-  expect(collectSyncableLegacySources).toHaveBeenCalledWith(
-    store,
-    expect.objectContaining({ currentSourceIsLegacy: true }),
-  );
+  expect(fetchSyncableDocument).not.toHaveBeenCalled();
   expect(syncableApiSchema).not.toHaveBeenCalled();
   expect(syncProxyTransport).not.toHaveBeenCalled();
 });
 it('does not create a replacement when its installation cannot be validated', async () => {
   state.installation = undefined;
   await expect(open()).rejects.toThrow('installation is unavailable');
-  expect(collectSyncableLegacySources).not.toHaveBeenCalled();
   expect(syncableApiSchema).not.toHaveBeenCalled();
 });
 
@@ -1083,7 +948,6 @@ it.each([undefined, 'atomic:selected-rule'])(
     state.ruleSubject = ruleSubject;
     const blocked = new Promise<never>(() => undefined);
     vi.mocked(collectSyncableFlatAdoption).mockReturnValue(blocked);
-    vi.mocked(collectSyncableLegacySources).mockReturnValue(blocked);
     vi.mocked(migrateSyncableApiViews).mockReturnValue(blocked);
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -1106,7 +970,6 @@ it.each([undefined, 'atomic:selected-rule'])(
       expect(spec.profile.proxy).toBeDefined();
       expect(spec.profile.execution).toBeDefined();
       expect(collectSyncableFlatAdoption).not.toHaveBeenCalled();
-      expect(collectSyncableLegacySources).not.toHaveBeenCalled();
       expect(migrateSyncableApiViews).not.toHaveBeenCalled();
       expect(syncableApiSchema).toHaveBeenCalled();
       expect(state.resource.set).not.toHaveBeenCalled();
@@ -1199,13 +1062,25 @@ it('still waits for complete adoption evidence when the actual canonical worker 
   release();
   const worker = await operation;
   expect(prepared).toBe(true);
-  expect(collectSyncableLegacySources).toHaveBeenCalled();
   expect(worker.profile.context).toMatchObject({
     worker: true,
     kind: 'collection',
     resource: 'event',
   });
   expect(state.ruleResource.set).toHaveBeenCalled();
+});
+
+it('rejects delayed native observations when the source write scope is revoked', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.ruleSubject = 'atomic:rule';
+  await open(true, state.ruleSubject);
+  const observe = vi.mocked(syncProxyTransport).mock.lastCall?.[6];
+  expect(observe).toBeDefined();
+
+  state.writeScopeActive = false;
+  await expect(observe!([])).rejects.toThrow('Sync write scope revoked');
+  expect(materializeSyncableReferences).not.toHaveBeenCalled();
 });
 
 it('retains setup adoption and view migration for noncanonical collection contexts', async () => {
@@ -1217,6 +1092,5 @@ it('retains setup adoption and view migration for noncanonical collection contex
     worker: false,
   });
   expect(collectSyncableFlatAdoption).toHaveBeenCalled();
-  expect(collectSyncableLegacySources).toHaveBeenCalled();
   expect(migrateSyncableApiViews).toHaveBeenCalled();
 });

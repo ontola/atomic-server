@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:atomic_store/atomic_store.dart';
 
@@ -29,6 +31,31 @@ abstract final class AtomicFlutter {
   /// find the same secret.
   static String agentSecretKey(String path, {String? keychainGroup}) =>
       keychainGroup == null ? 'atomic_agent:$path' : 'atomic_agent';
+
+  /// The key the database encryption key is stored under: always per [path],
+  /// also with a `keychainGroup` (each app keeps its own database).
+  static String storeKeyName(String path) => 'atomic_store_key:$path';
+
+  /// A new random 32-byte database key, hex encoded (64 characters), as it
+  /// is kept in the [AgentSecretStore].
+  static String newStoreKey([Random? random]) {
+    final r = random ?? Random.secure();
+    return [for (var i = 0; i < 32; i++) r.nextInt(256)]
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
+  /// The 32 bytes behind a hex key from [newStoreKey].
+  static Uint8List storeKeyBytes(String hex) {
+    if (hex.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(hex)) {
+      throw const StoreException(StoreErrorKind.storage,
+          'The saved database key is not 32 bytes of hex; refusing to guess.');
+    }
+    return Uint8List.fromList([
+      for (var i = 0; i < 64; i += 2)
+        int.parse(hex.substring(i, i + 2), radix: 16)
+    ]);
+  }
 
   static Future<void>? _init;
 
@@ -81,6 +108,20 @@ abstract final class AtomicFlutter {
   /// configures the default store, so passing it together with a custom
   /// [secretStore] throws an [ArgumentError].
   ///
+  /// With [encryptAtRest] a NEW database file is encrypted on disk
+  /// (XChaCha20-Poly1305 over the whole redb file, so resources, history, the
+  /// search index and the device's peer identity are unreadable without the
+  /// key). A random 32-byte key is made on first open and kept in
+  /// [secretStore] (the keychain / keystore by default) under
+  /// [storeKeyName], next to the agent secret. Once a key is saved for
+  /// [path] it is used on every open, with or without the flag. Existing
+  /// plaintext databases are not migrated: they keep opening as they were
+  /// and [AtomicNode.encryptedAtRest] is `false`, so an app that must not
+  /// store data in the clear can check it. If the key is lost, the data is
+  /// unrecoverable (a wrong or missing key is a [StoreException], the file is
+  /// never touched). Native platforms only; the web build ignores it.
+  /// Files kept outside the database (downloads, caches) are not covered.
+  ///
   /// A file is opened once per process: call this once and keep the result.
   static Future<AtomicNode> open({
     required String path,
@@ -90,6 +131,7 @@ abstract final class AtomicFlutter {
     AgentSecretStore? secretStore,
     String? keychainGroup,
     bool startPeers = true,
+    bool encryptAtRest = false,
   }) async {
     if (secretStore != null && keychainGroup != null) {
       throw ArgumentError(
@@ -100,9 +142,27 @@ abstract final class AtomicFlutter {
     await init();
     final key = agentSecretKey(path, keychainGroup: keychainGroup);
     agentSecret ??= await secretStore.read(key);
+    final keyName = storeKeyName(path);
+    var storeKeyHex = await secretStore.read(keyName);
+    var freshKey = false;
+    if (storeKeyHex == null && encryptAtRest) {
+      // Saved before the file is made, so a crash in between cannot leave an
+      // encrypted file whose key was never kept.
+      storeKeyHex = newStoreKey();
+      await secretStore.write(keyName, storeKeyHex);
+      freshKey = true;
+    }
+    final storeKey = storeKeyHex == null ? null : storeKeyBytes(storeKeyHex);
     try {
       final handle = await bridge.AtomicStore.open(
-          path: path, agentSecret: agentSecret, drive: drive);
+          path: path,
+          agentSecret: agentSecret,
+          drive: drive,
+          storeKey: storeKey);
+      if (freshKey && !handle.isEncryptedAtRest()) {
+        // An existing plaintext database (or the web): the key is not used.
+        await secretStore.delete(keyName);
+      }
       var secret = agentSecret;
       var workingDrive = handle.drive();
       var needsSync = false;
@@ -132,7 +192,12 @@ abstract final class AtomicFlutter {
       node._startPeers();
       return node;
     } on bridge.AtomicError catch (e) {
-      throw storeExceptionFromBridge(e);
+      final ex = storeExceptionFromBridge(e);
+      if (freshKey && ex.message.contains('wrong encryption key')) {
+        // A file we do not hold the key of: the key made just now is no use.
+        await secretStore.delete(keyName);
+      }
+      throw ex;
     }
   }
 }
@@ -190,18 +255,26 @@ class AtomicNode implements AtomicParts {
             target: target,
             write: write,
             expiresAt: expiresAt,
-            maxUsages: maxUsages), acceptor: (token) async {
-      try {
-        final r = await handle.acceptInvite(token: token);
-        return AcceptedInvite(
-            drive: r.drive,
-            write: r.write,
-            imported: r.imported,
-            syncPending: r.syncPending);
-      } on bridge.AtomicError catch (e) {
-        throw storeExceptionFromBridge(e);
-      }
-    });
+            maxUsages: maxUsages),
+        serverSigner: (target, write, expiresAt, maxUsages, origin) =>
+            handle.createInviteToken(
+                target: target,
+                write: write,
+                expiresAt: expiresAt,
+                maxUsages: maxUsages,
+                serverOrigin: origin),
+        acceptor: (token) async {
+          try {
+            final r = await handle.acceptInvite(token: token);
+            return AcceptedInvite(
+                drive: r.drive,
+                write: r.write,
+                imported: r.imported,
+                syncPending: r.syncPending);
+          } on bridge.AtomicError catch (e) {
+            throw storeExceptionFromBridge(e);
+          }
+        });
   }
 
   @override
@@ -255,6 +328,10 @@ class AtomicNode implements AtomicParts {
   /// Who may read or write a resource, and invite links.
   @override
   late final Sharing sharing;
+
+  /// Whether the database file is encrypted at rest (see
+  /// [AtomicFlutter.open]'s `encryptAtRest`).
+  bool get encryptedAtRest => handle.isEncryptedAtRest();
 
   /// The secret of the signing agent. Persist it: it is the identity. Empty
   /// after [Identity.signOut].

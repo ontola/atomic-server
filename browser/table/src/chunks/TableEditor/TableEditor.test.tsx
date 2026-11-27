@@ -1,0 +1,79 @@
+// @wc-ignore-file
+import { describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { ThemeProvider, type DefaultTheme } from 'styled-components';
+import { FancyTable } from './TableEditor.js';
+import { IndexCell } from './Cell.js';
+import { TableEditorContextProvider } from './TableEditorContext.js';
+import { TableHostProvider } from '../../host.js';
+
+vi.mock('./DndWrapper.js', () => ({
+  DndWrapper: ({ children }: { children: React.ReactNode }) => children,
+}));
+vi.mock('./TableHeader.js', () => ({ TableHeader: () => <div role='row' /> }));
+
+// Only the theme fields used by this grid fixture.
+const theme = {
+  colors: { main: '#4C6FA5' },
+  animation: { duration: '0s' },
+  size: () => '8px',
+} as unknown as DefaultTheme;
+
+function renderGrid(busy: boolean, itemCount = 1) {
+  return renderToStaticMarkup(
+    <ThemeProvider theme={theme}>
+      <FancyTable
+        busy={busy}
+        columns={[]}
+        itemCount={itemCount}
+        columnToKey={String}
+        labelledBy='table-title'
+        HeadingComponent={() => <></>}
+        NewColumnButtonComponent={() => null}
+      >
+        {() => <div role='row' />}
+      </FancyTable>
+    </ThemeProvider>,
+  );
+}
+
+describe('table loading feedback', () => {
+  it('shows a visible loading status while only the entry row is available', () => {
+    const html = renderGrid(true);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Loading');
+    expect(html).toContain('<svg');
+  });
+
+  it.each([0, 1, 5])(
+    'removes loading feedback once %i rows have settled',
+    count => {
+      const html = renderGrid(false, count);
+      expect(html).toContain('aria-busy="false"');
+      expect(html).not.toContain('role="status"');
+      expect(html).not.toContain('Loading');
+    },
+  );
+});
+
+it('retains the host translations for row actions across the extraction', () => {
+  const html = renderToStaticMarkup(
+    <TableHostProvider
+      value={{ rowMenuLabel: 'Rijmenu', openResourceLabel: 'Open bron' }}
+    >
+      <TableEditorContextProvider readOnly={false}>
+        <IndexCell
+          rowIndex={0}
+          columnIndex={0}
+          onExpand={() => undefined}
+          onContextMenu={() => undefined}
+        >
+          1
+        </IndexCell>
+      </TableEditorContextProvider>
+    </TableHostProvider>,
+  );
+  expect(html).toContain('title="Rijmenu"');
+  expect(html).toContain('title="Open bron"');
+});

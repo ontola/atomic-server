@@ -10,13 +10,13 @@ import {
 import type { JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaCodeBranch, FaTrash } from 'react-icons/fa6';
-import { Column, Row } from '@components/Row';
+import { Column, Row } from '@tomic/ui/components/Row';
 import {
   IconButton,
   IconButtonVariant,
-} from '@components/IconButton/IconButton';
-import { VisuallyHidden } from '@components/VisuallyHidden';
-import { transition } from '@helpers/transition';
+} from '@tomic/ui/components/IconButton/IconButton';
+import { VisuallyHidden } from '@tomic/ui/components/VisuallyHidden';
+import { transition } from '@tomic/ui/helpers/transition';
 import {
   isLayoutType,
   type AddableFieldType,

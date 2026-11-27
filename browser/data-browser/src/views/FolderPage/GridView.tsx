@@ -5,7 +5,7 @@ import {
   GridCard,
   GridItemTitle,
   GridItemWrapper,
-} from './GridItem/components';
+} from '@tomic/resource-ui/views/FolderPage/GridItem/components';
 import { ResourceGridItem } from './GridItem/ResourceGridItem';
 import type { JSX } from 'react';
 

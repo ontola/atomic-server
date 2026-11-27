@@ -10,7 +10,7 @@ import {
 } from '../../views/Conversation/ConversationTitle';
 import { NewMessageDialogBody } from '../../views/Conversation/NewMessageDialog';
 import { Dialog, useDialog } from '../Dialog';
-import { IconButton } from '../IconButton/IconButton';
+import { IconButton } from '@tomic/ui/components/IconButton/IconButton';
 import {
   SideBarMenuItemLink,
   SideBarMenuRow,
@@ -27,7 +27,7 @@ interface MessagesPanelProps {
 /** The signed-in agent's encrypted conversations, from any drive. */
 export function MessagesPanel({
   onItemClick,
-}: MessagesPanelProps): JSX.Element {
+}: MessagesPanelProps): JSX.Element | null {
   const conversations = useConversations();
   const [dialogProps, show, close, isOpen] = useDialog();
   const [searching, setSearching] = useState(false);
@@ -42,6 +42,13 @@ export function MessagesPanel({
     setSearching(false);
     setQuery('');
   };
+
+  // Nothing to show until a conversation exists: one you started, or one
+  // someone started with you. Starting one goes through a person (their
+  // avatar's Message), so an empty panel would only be noise.
+  if (conversations.length === 0) {
+    return null;
+  }
 
   return (
     <>

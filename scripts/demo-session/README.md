@@ -108,11 +108,12 @@ scripts/demo-session/demo-session.sh <atomic-plugins pin> --plugin issue-tracker
 
 1. builds `integrations/NAME/app/build.mjs` into the session folder
    (`plugin-app.js`, served to the page at `/__demo-plugin/app.js`);
-2. starts `integrations/localthought/mock-proxy.mjs` on `--mock-port`
+2. starts `integrations/localthought/mock-proxy.mjs` from the Atomic Plugins
+   checkout specified by `--plugins-dir`. It listens on `--mock-port`
    (default: `--port` + 10000) with `MOCK_SCENARIO=user-testing` (change it
-   with `--mock-scenario`), and points the server
+   with `--mock-scenario`). The script points the server
    (`ATOMIC_INTEGRATION_PROXY_URL`) and Vite (`VITE_INTEGRATION_PROXY_URL`)
-   at it. The mock's `/connect` returns to the Vite origin;
+   at the mock. The mock's `/connect` returns to the Vite origin;
 3. seeds NAME: the app is installed with `createApp` and `handOverAppKey`,
    as "New app" does, but with the built source instead of the starter.
 

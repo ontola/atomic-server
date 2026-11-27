@@ -153,3 +153,124 @@ describe('canvas-elements', () => {
     });
   });
 });
+
+describe('shapes and arrows in the element helpers', () => {
+  const block = (id: string, x: number, y: number): CanvasStroke => ({
+    ...stroke([[x, y]], 2),
+    kind: 'shape',
+    shape: 'rect',
+    id,
+    w: 100,
+    h: 60,
+  });
+  const link = (from: string, to: string): CanvasStroke => ({
+    ...stroke(
+      [
+        [0, 0],
+        [1, 1],
+      ],
+      2,
+    ),
+    kind: 'arrow',
+    id: `${from}${to}`,
+    from,
+    to,
+  });
+
+  it('bounds a shape by its box and the content bounds route arrows', () => {
+    const a = block('a', 0, 0);
+
+    expect(elementBounds(a)).toEqual({
+      minX: -1,
+      minY: -1,
+      maxX: 101,
+      maxY: 61,
+    });
+    // The arrow's stored points (0,0)-(1,1) are stale; the shapes win.
+    expect(contentBounds([a, block('b', 300, 0), link('a', 'b')])).toEqual({
+      minX: -1,
+      minY: -1,
+      maxX: 401,
+      maxY: 61,
+    });
+  });
+
+  it('lasso picks shapes and the arrows between them', () => {
+    const list = [block('a', 0, 0), block('b', 300, 0), link('a', 'b')];
+
+    expect(
+      lassoSelect(
+        [
+          [-10, -10],
+          [500, -10],
+          [500, 100],
+          [-10, 100],
+        ],
+        list,
+      ),
+    ).toEqual([0, 1, 2]);
+    expect(
+      lassoSelect(
+        [
+          [-10, -10],
+          [60, -10],
+          [60, 100],
+          [-10, 100],
+        ],
+        list,
+      ),
+    ).toEqual([0]);
+  });
+
+  it('lasso leaves out a bound arrow that only brushes the loop', () => {
+    const list = [block('a', 0, 0), block('b', 300, 0), link('a', 'b')];
+
+    expect(
+      lassoSelect(
+        [
+          [-10, -10],
+          [150, -10],
+          [150, 100],
+          [-10, 100],
+        ],
+        list,
+      ),
+    ).toEqual([0]);
+  });
+
+  it('moves a shape and scales its size and text', () => {
+    const a = { ...block('a', 10, 10), text: 'x', size: 20 };
+    const [moved] = transformSelection([a], [0], 2, 0, 0, 5, 5);
+
+    expect(moved.path).toEqual([[25, 25]]);
+    expect([moved.w, moved.h, moved.size, moved.id]).toEqual([
+      200,
+      120,
+      40,
+      'a',
+    ]);
+  });
+
+  it('an arrow moved with its shapes stays bound, alone it lets go', () => {
+    const list = [block('a', 0, 0), block('b', 300, 0), link('a', 'b')];
+    const [, , together] = transformSelection(list, [0, 1, 2], 1, 0, 0, 10, 0);
+    const [, , alone] = transformSelection(list, [2], 1, 0, 0, 10, 0);
+
+    expect(together.from).toBe('a');
+    expect(alone.from).toBeUndefined();
+    expect(alone.path[0]).toEqual([110, 30]);
+  });
+
+  it('scales the bend of an arrow with the arrow', () => {
+    const a = {
+      ...link('a', 'b'),
+      from: undefined,
+      to: undefined,
+      bend: [4, 8] as [number, number],
+    };
+
+    expect(transformSelection([a], [0], 2, 0, 0, 0, 0)[0].bend).toEqual([
+      8, 16,
+    ]);
+  });
+});

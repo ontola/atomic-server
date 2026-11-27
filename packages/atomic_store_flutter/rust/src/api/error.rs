@@ -85,6 +85,7 @@ mod tests {
             message: "m".into(),
             error_type,
             subject: None,
+            code: 0,
         }
     }
 

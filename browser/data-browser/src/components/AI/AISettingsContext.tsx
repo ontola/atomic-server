@@ -1,4 +1,12 @@
-import { createContext, ReactNode, useContext, useMemo, type JSX } from 'react';
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type JSX,
+} from 'react';
 import { useLocalNetworkBlocked } from '@helpers/localNetworkAccess';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { AIProvider } from './aiContstants';
@@ -11,6 +19,46 @@ import { useProviderAvailability } from './useProviderAvailability';
 import { useHostedAI } from './useHostedAI';
 import { enableHostedAI, type HostedAIStatus } from '@helpers/managed/ai';
 import { showWebAI } from '../../embed/settings';
+import { isHostedDistribution } from '@helpers/managedServer';
+import {
+  hasManagedSession,
+  onManagedLogout,
+  onManagedSessionChanged,
+} from '@helpers/managed/session';
+
+/**
+ * Whether someone is signed in to the account service. Unknown (`undefined`)
+ * until the first answer arrives.
+ */
+function useSignedIn(): boolean | undefined {
+  const [signedIn, setSignedIn] = useState<boolean>();
+
+  useEffect(() => {
+    let active = true;
+
+    const refresh = () => {
+      hasManagedSession()
+        .catch(() => false)
+        .then(value => {
+          if (active) setSignedIn(value);
+        });
+    };
+
+    refresh();
+
+    const removeChanged = onManagedSessionChanged(refresh);
+
+    const removeLogout = onManagedLogout(() => setSignedIn(false));
+
+    return () => {
+      active = false;
+      removeChanged();
+      removeLogout();
+    };
+  }, []);
+
+  return signedIn;
+}
 
 export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
   id: '~google/gemini-flash-latest',
@@ -125,7 +173,8 @@ export const AISettingsContextProvider = (
     true,
   );
   // The app's web view has no AI of its own; see `showWebAI`.
-  const enableAI = enableAISetting && showWebAI();
+  const hostedBuild = isHostedDistribution();
+  const signedIn = useSignedIn();
   const [storedMcpServers, setStoredMcpServers] = useLocalStorage<MCPServer[]>(
     'atomic.ai.mcpServers',
     defaultMCPServers,
@@ -192,6 +241,13 @@ export const AISettingsContextProvider = (
     'atomic.ai.shouldGenerateTitles',
     true,
   );
+
+  // A hosted build ships Included AI, which needs an account. A guest would
+  // only meet "Included AI isn't reachable", so AI stays hidden until they
+  // register, unless they brought a provider of their own.
+  const guestInHostedBuild =
+    hostedBuild && signedIn === false && !openRouterApiKey && !ollamaUrl;
+  const enableAI = enableAISetting && showWebAI() && !guestInHostedBuild;
 
   const { hostedAI, setHostedAI } = useHostedAI();
   // SaaS is ready immediately; consent is recorded on the first explicit send,

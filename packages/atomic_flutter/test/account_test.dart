@@ -118,6 +118,17 @@ void main() {
     client.close();
     mismatch.close();
   });
+  test('a session the portal no longer knows asks to sign in again', () async {
+    // GET /api/me answers 204 without a body for an unknown session.
+    final client = AtomicAccountClient('https://provider.example',
+        client: MockClient((r) async => http.Response('', 204)))
+      ..restoreSession('{"origin":"https://provider.example","token":"old"}');
+    await expectLater(
+        client.account(),
+        throwsA(isA<StateError>().having(
+            (e) => e.message, 'message', 'Sign in again to continue')));
+    client.close();
+  });
   test('expired links and malformed replies never produce a linked session',
       () async {
     final client = AtomicAccountClient('https://provider.example',
@@ -203,6 +214,47 @@ void main() {
       expect(client.linked, isFalse);
       expect(client.sessionCookie, isNull);
       await expectLater(client.aiStatus(), throwsStateError);
+    });
+  });
+
+  group('sign-in link', () {
+    test('redeems the token with a POST and keeps the session cookie',
+        () async {
+      final seen = <http.Request>[];
+      final client = AtomicAccountClient('https://provider.example',
+          client: MockClient((request) async {
+        seen.add(request);
+        return http.Response(jsonEncode({'email': 'me@example.com'}), 200,
+            headers: {
+              'set-cookie': 'session_token=sess9; Path=/; HttpOnly; Secure',
+            });
+      }));
+      await client.loginWithLinkToken('link-token');
+      expect(seen.single.method, 'POST');
+      expect(seen.single.url.toString(), 'https://provider.example/api/login');
+      expect(jsonDecode(seen.single.body), {'token': 'link-token'});
+      expect(seen.single.url.query, isEmpty);
+      expect(client.linked, isTrue);
+      expect(client.sessionCookie, 'sess9');
+    });
+
+    test('a 401 says the link is spent and leaves the client signed out',
+        () async {
+      final client = AtomicAccountClient('https://provider.example',
+          client: MockClient((_) async =>
+              http.Response(jsonEncode({'error': 'Invalid or expired token'}), 401)));
+      await expectLater(
+          client.loginWithLinkToken('old'),
+          throwsA(isA<StateError>().having((e) => e.message, 'message',
+              contains('expired or was already used'))));
+      expect(client.linked, isFalse);
+    });
+
+    test('an answer without a session cookie is an error', () async {
+      final client = AtomicAccountClient('https://provider.example',
+          client: MockClient((_) async => http.Response('{}', 200)));
+      await expectLater(client.loginWithLinkToken('t'), throwsStateError);
+      expect(client.linked, isFalse);
     });
   });
 

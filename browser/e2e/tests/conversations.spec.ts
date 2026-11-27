@@ -9,6 +9,7 @@ import {
   before,
   devDrive,
   installCommitWatcher,
+  openSubject,
   SERVER_URL,
   timestamp,
 } from './test-utils';
@@ -62,10 +63,15 @@ test.describe('conversations', () => {
     const bobSubject = await agentSubject(bob);
     await waitForEncryptionKey(bobSubject);
 
-    // Alice starts the conversation from the Messages panel.
-    await page.getByTestId('new-message').click();
-    await page.getByLabel('Who').fill(bobSubject);
-    await page.getByRole('button', { name: 'Start conversation' }).click();
+    // Alice has no conversations yet, so the Messages panel is hidden. She
+    // starts one from Bob's agent page.
+    await openSubject(page, bobSubject);
+    await expect(
+      page.getByRole('button', { name: 'Send message' }),
+    ).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByText('End-to-end encrypted')).toBeVisible({
       timeout: 30_000,
     });

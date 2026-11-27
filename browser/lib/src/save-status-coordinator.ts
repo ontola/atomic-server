@@ -72,11 +72,18 @@ export class SaveStatusCoordinator {
     const target = resource.__internalObject;
     const scheduledCount = this.scheduledByResource.get(target) ?? 0;
     const entry = this.dependencies.getOutboxEntry(target.subject);
-    const error = entry?.lastAttemptError ?? target.commitError?.message;
+    // A failed local write is not a safely queued edit. A deferred remote
+    // drain, however, remains a normal queue state rather than an error.
+    const commitError =
+      target.commitError instanceof SaveQueuedError
+        ? undefined
+        : target.commitError;
+    const error = commitError?.message ?? entry?.lastAttemptError;
     let kind: ResourceSaveState['kind'];
     if (target.isSaving) kind = 'saving';
     else if (scheduledCount) kind = 'scheduled';
     else if (entry?.blocked) kind = 'error';
+    else if (commitError) kind = 'error';
     else if (entry) kind = 'queued';
     else if (error) kind = 'error';
     else if (target.hasUnsavedChanges()) kind = 'dirty';

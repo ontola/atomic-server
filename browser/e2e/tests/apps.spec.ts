@@ -55,7 +55,18 @@ test.describe('apps', () => {
       // `New app` is search-only: it creates the drive's plugin schema on first
       // use, so it stays out of the default listing.
       // An app page is the app: no chrome of its own, just the frame.
-      await newApp(page);
+      // A server-backed app can render while its persisted identity handover
+      // is completing. Its first write needs the node to acknowledge the key.
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            new URL(response.url()).pathname === '/app-agent' &&
+            response.request().method() === 'POST' &&
+            response.ok(),
+          { timeout: 90_000 },
+        ),
+        newApp(page),
+      ]);
 
       // And the frame is the page. An iframe never grows to fit its document,
       // so a box shorter than the page does not scroll — it clips the app and

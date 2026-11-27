@@ -2,28 +2,27 @@ import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaKey } from 'react-icons/fa6';
 import { Agent, useStore, isAtomicIdentifier } from '@tomic/react';
-import { Button } from './Button';
-import { Checkbox, CheckboxLabel } from './forms/Checkbox';
+import { Button } from '@tomic/ui/components/Button';
+import { Checkbox, CheckboxLabel } from '@tomic/ui/components/forms/Checkbox';
 import { hasPasskeyApi } from '../helpers/passkeySupport';
-import { Column, Row } from './Row';
-import { CodeBlock } from './CodeBlock';
+import { Column, Row } from '@tomic/ui/components/Row';
+import { CodeBlock } from '@tomic/resource-ui/components/CodeBlock';
 import { SecretCodeBlock } from './SecretCodeBlock';
-import { ErrorLook } from './ErrorLook';
-import { InputStyled, InputWrapper } from './forms/InputStyles';
+import { ErrorLook } from '@tomic/resource-ui/components/ErrorLook';
+import {
+  InputStyled,
+  InputWrapper,
+} from '@tomic/ui/components/forms/InputStyles';
 import {
   accountAddress,
-  getManagedAccount,
+  getManagedAccountOrNull,
   isAssistedRecoveryAvailable,
   PRODUCT_NAME,
   setAssistedRecovery,
 } from '../helpers/managed';
 import { useSettings } from '../helpers/AppSettings';
 import { fetchManagedInfo } from '../helpers/managedServer';
-import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
-import {
-  getRememberedManagedPortalUrl,
-  safePortalUrl,
-} from '../helpers/managed/api';
+import { getAccountServiceUrl } from '../helpers/managed/cloudSync';
 import {
   addRecoveryCodeWrapper,
   addPasskeyWrapper,
@@ -119,7 +118,7 @@ export function AccountRecoveryCard({
 
     void (async () => {
       const [session, info, assisted] = await Promise.all([
-        getManagedAccount().catch(() => null),
+        getManagedAccountOrNull(),
         fetchManagedInfo(baseURL).catch(() => null),
         isAssistedRecoveryAvailable().catch(() => false),
       ]);
@@ -142,11 +141,7 @@ export function AccountRecoveryCard({
       // node, or a desktop app on its own embedded one. Worse, the hint below
       // still told the reader to sign in, because it keys off `hasSession`
       // alone: instructions to do something with no way to do it.
-      setPortalUrl(
-        safePortalUrl(
-          getManagedPortalUrl(info) ?? getRememberedManagedPortalUrl(),
-        ) ?? null,
-      );
+      setPortalUrl(getAccountServiceUrl(info));
     })();
 
     return () => {

@@ -51,6 +51,9 @@ impl Clone for Resource {
     }
 }
 
+/// Gives the `datatypes` tag a property's definition implies, or `None`.
+pub type TagResolver<'a> = dyn Fn(&str) -> Option<&'static str> + 'a;
+
 impl Resource {
     fn clone_loro_state(doc: &crate::loro::AtomicLoroDoc) -> crate::loro::AtomicLoroDoc {
         let snapshot = doc.export_snapshot();
@@ -103,11 +106,26 @@ impl Resource {
     }
 
     fn materialize_propvals_from_loro_doc(doc: &crate::loro::AtomicLoroDoc) -> PropVals {
+        Self::materialize_propvals_with_resolver(doc, None)
+    }
+
+    /// [`Self::materialize_propvals_from_loro_doc`], where `resolve_tag` gives
+    /// the tag a property's definition implies. It is asked only for a
+    /// property the doc left untagged, so an untagged string that merely looks
+    /// like a URL keeps the type its Property says.
+    fn materialize_propvals_with_resolver(
+        doc: &crate::loro::AtomicLoroDoc,
+        resolve_tag: Option<&TagResolver<'_>>,
+    ) -> PropVals {
         let mut propvals = PropVals::new();
         let datatypes = doc.get_all_datatypes();
 
         for (prop, loro_val) in doc.get_all_properties() {
-            let tag = datatypes.get(&prop).map(String::as_str);
+            let resolved = match datatypes.get(&prop) {
+                Some(_) => None,
+                None => resolve_tag.and_then(|resolve| resolve(&prop)),
+            };
+            let tag = datatypes.get(&prop).map(String::as_str).or(resolved);
             if let Some(atomic_val) = crate::loro::loro_value_to_atomic_value_tagged(&loro_val, tag)
             {
                 propvals.insert(prop.clone(), dedupe_rights(&prop, atomic_val));
@@ -353,6 +371,40 @@ impl Resource {
         Ok(())
     }
 
+    /// The resource a Loro snapshot describes, as a replicated copy: the
+    /// propvals are materialized from the doc alone (datatype tags, genesis
+    /// metadata, `lenses`), so a caller that holds only the CRDT state does not
+    /// have to ship a second, parsed copy of it. `last_commit` is the one
+    /// value no doc holds (it is derived from the newest envelope, see
+    /// [`Self::set_derived_last_commit`]) and is passed explicitly.
+    ///
+    /// Fails when `snapshot` does not import. `resolve_tag` types the values
+    /// the doc left untagged from their Property (see
+    /// [`Self::materialize_propvals_with_resolver`]); a property it does not
+    /// know keeps the heuristic.
+    pub fn from_loro_snapshot(
+        subject: &str,
+        snapshot: Vec<u8>,
+        last_commit: Option<&str>,
+        lenses: Option<&crate::lens::LensIndex>,
+        resolve_tag: Option<&TagResolver<'_>>,
+    ) -> AtomicResult<Resource> {
+        let doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .map_err(|e| format!("Loro snapshot for '{subject}' does not import: {e}"))?;
+        let mut resource = Resource::new(subject.to_string());
+        let mut propvals = Self::materialize_propvals_with_resolver(&doc, resolve_tag);
+        if let Some(lenses) = lenses {
+            lenses.apply_propvals(&mut propvals);
+        }
+        propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
+        resource.propvals = propvals;
+        resource.loro = Some(doc);
+        if let Some(id) = last_commit.filter(|id| !id.is_empty()) {
+            resource.set_derived_last_commit(Value::AtomicUrl(id.into()));
+        }
+        Ok(resource)
+    }
+
     /// Set the served `lastCommit` on the propvals only. The value is derived
     /// (the id of the newest retained envelope) and never written into the
     /// Loro doc, so it costs no change in the oplog and cannot diverge between
@@ -410,11 +462,11 @@ impl Resource {
                         self.get_subject(),
                         self.propvals.keys().collect::<Vec<_>>()
                     );
-                    return Err(format!(
+                    return Err(crate::errors::AtomicError::from(format!(
                         "Property {} missing. Is required in class {} ",
                         required_prop, class.subject
-                    )
-                    .into());
+                    ))
+                    .with_code(crate::sync::protocol::error_code::MISSING_REQUIRED_PROPERTY));
                 }
             }
         }
@@ -578,6 +630,12 @@ impl Resource {
         self.propvals
             .insert(urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
         self.loro = None;
+    }
+
+    /// Borrow already loaded state for read-only consumers without exporting
+    /// and re-importing a snapshot. Does not initialize a properties-only doc.
+    pub(crate) fn loaded_state_doc(&self) -> Option<&crate::loro::AtomicLoroDoc> {
+        self.loro.as_ref()
     }
 
     /// Persisted or in-memory materialized state bytes (for sync and signing).
@@ -839,10 +897,16 @@ impl Resource {
                         ),
                         error_type: err.error_type.clone(),
                         subject: err.subject.clone(),
+                        code: crate::sync::protocol::error_code::MISSING_PARENT,
                     }),
                 }
             }
-            Err(e) => Err(format!("Parent of {} not found: {}", self.get_subject(), e).into()),
+            Err(e) => Err(crate::errors::AtomicError::from(format!(
+                "Parent of {} not found: {}",
+                self.get_subject(),
+                e
+            ))
+            .with_code(crate::sync::protocol::error_code::MISSING_PARENT)),
         }
     }
 
