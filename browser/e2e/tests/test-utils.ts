@@ -15,7 +15,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
-import { installEmptyDiscoveryRoom } from './fixtures';
+import { installEmptyDiscoveryRoom, openSidebarPanels } from './fixtures';
 import type { DiagnosticCollector } from './diagnostic-collector';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
@@ -353,6 +353,7 @@ export const before = async (
   // configured, so this is a guard for the day a build or a stored setting
   // names one; registering it a second time is harmless.
   await installEmptyDiscoveryRoom(page.context());
+  await openSidebarPanels(page.context());
 
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));
