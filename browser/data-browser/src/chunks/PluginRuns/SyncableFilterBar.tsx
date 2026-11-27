@@ -236,7 +236,20 @@ export function SyncableFilterBar({
       search: prev => ({
         ...prev,
         syncFilter: subject || undefined,
+        createSyncFilter: undefined,
         view: prev.view && ruleSubjects.has(prev.view) ? baseView : prev.view,
+      }),
+    });
+  };
+
+  const addFilter = () => {
+    setRenaming(false);
+    void navigate({
+      to: '.',
+      search: prev => ({
+        ...prev,
+        syncFilter: undefined,
+        createSyncFilter: true,
       }),
     });
   };
@@ -263,6 +276,7 @@ export function SyncableFilterBar({
           ...search,
           view: syncViewSubject,
           syncFilter: selected?.resource.subject,
+          createSyncFilter: undefined,
         },
       });
   };
@@ -281,7 +295,7 @@ export function SyncableFilterBar({
             {!syncView && <option value=''>All cached rows</option>}
             {syncView && !selected && (
               <option disabled value=''>
-                Select a saved filter
+                Add filter
               </option>
             )}
             {state.rules.map(rule => (
@@ -330,8 +344,8 @@ export function SyncableFilterBar({
         </Button>
       )}
       {selected && syncView && canWrite && (
-        <Button subtle onClick={() => choose('')}>
-          Add sync filter
+        <Button subtle onClick={addFilter}>
+          Add filter
         </Button>
       )}
       {selected && renaming && (

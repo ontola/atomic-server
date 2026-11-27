@@ -35,6 +35,8 @@ export type ShowRouteSearch = {
   syncRow?: string;
   /** Saved provider scope, preserved when switching Collection/Table/Sync. */
   syncFilter?: string;
+  /** Open the Sync filter form even when the table has a default filter. */
+  createSyncFilter?: boolean;
 };
 
 export const ShowRoute = createRoute({
@@ -54,6 +56,7 @@ export const ShowRoute = createRoute({
       Client.isValidSubject(search.syncFilter)
         ? search.syncFilter
         : undefined,
+    createSyncFilter: search.createSyncFilter === true || undefined,
     syncRow:
       typeof search.syncRow === 'string' &&
       Client.isValidSubject(search.syncRow)

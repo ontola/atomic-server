@@ -1390,7 +1390,8 @@ This does not yet prove restoration of the user's private staging workspace.
   selection through a typed group link, and saving a related rule without a
   remote lookup. The GitHub Chromium journey verifies Organizations and
   Repositories begin syncing when the empty Issues Table opens, and a stored
-  repository can be chosen in Sync.
+  repository can be chosen in Sync. Adding a second filter stays on Sync and
+  opens the picker even when an existing filter would normally be selected.
 - Principal App tests cover a same-drive Public reinstall after confirmed
   permanent deletion and preserve the previous registration on a live
   target, failed signed read, pending delete, or competing source. The Chromium

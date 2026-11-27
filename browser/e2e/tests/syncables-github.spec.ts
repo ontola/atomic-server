@@ -1801,9 +1801,11 @@ test.describe('catalog-driven built-in Syncables', () => {
       }),
     ).toBeVisible();
     await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '1');
-    expect(
-      (await sourceState(page, await getCurrentSubject(page))).config,
-    ).toMatchObject({ resource: 'issue' });
+    const initialIssuesTable = await getCurrentSubject(page);
+    const initialIssueScopeUrl = page.url();
+    expect((await sourceState(page, initialIssuesTable)).config).toMatchObject({
+      resource: 'issue',
+    });
     await page.goto(organizationResourceUrl.href);
     await related
       .getByRole('button', { name: 'Repositories', exact: true })
@@ -1831,6 +1833,42 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(requests.providerRequests).toHaveLength(nativeReads);
     expect(requests.documentRequests).toHaveLength(nativeDocuments);
     await page.unroute(PROXY + '/proxy/**', offline);
+
+    // A single saved issue scope normally reselects itself on Sync. Adding a
+    // filter must keep the source picker open while preserving that scope.
+    await page.goto(initialIssueScopeUrl);
+    await selectView(page, 'Sync');
+    const issueFilterBar = page.locator(
+      '[aria-label="Saved collection filters"]',
+    );
+    const savedIssueFilters = issueFilterBar.getByRole('combobox', {
+      name: 'Saved filter',
+      exact: true,
+    });
+    await expect(savedIssueFilters.getByRole('option')).toHaveCount(1);
+    await expect(
+      iframe.getByRole('button', { name: 'Sync now', exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+    await issueFilterBar
+      .getByRole('button', { name: 'Add filter', exact: true })
+      .click();
+    await expect(page.getByRole('main')).toHaveAttribute(
+      'about',
+      initialIssuesTable,
+    );
+    await expect(
+      page.getByRole('tab', { name: 'Sync', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(repositories).toBeVisible();
+    await expect(
+      repositories.getByRole('option', { name: 'atomic-server', exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      savedIssueFilters.locator('option[value]:not([value=""])'),
+    ).toHaveCount(1);
+    expect(requests.providerRequests).toHaveLength(nativeReads);
+
+    await page.goto(repositoriesUrl);
     await sync(page, repositoriesRule);
     expect(requests.providerRequests).toContain('/orgs/ontola');
     expect(requests.providerRequests).toContain('/orgs/ontola/repos');

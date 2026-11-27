@@ -14,6 +14,7 @@ import { useTableView, UseTableViewResult } from './useTableView';
 import { toAggregation } from './tableAggregates';
 import { getTableDrive } from './tableDrive';
 import { quantizedNow, splitFilters } from './tableFiltering';
+import { ShowRoute } from '../../routes/ShowRoute';
 
 import { useSyncableFilters } from '../PluginRuns/useSyncableFilters';
 import { syncableEntityViewKind } from '../PluginRuns/syncableCollectionCompatibility';
@@ -41,6 +42,9 @@ export function useTableData(
   embedded = false,
 ): UseTableDataResult {
   const savedFilters = useSyncableFilters(resource, embedded);
+  const creatingFilter = ShowRoute.useSearch({
+    select: search => search.createSyncFilter,
+  });
   const tableView = useTableView(resource, viewOverride, embedded, {
     entity: savedFilters.flat,
     rules: new Set(savedFilters.rules.map(rule => rule.resource.subject)),
@@ -49,6 +53,7 @@ export function useTableData(
     !embedded &&
     tableView.viewKind === 'syncables' &&
     savedFilters.ready &&
+    !creatingFilter &&
     !savedFilters.requested
       ? {
           ...savedFilters,
