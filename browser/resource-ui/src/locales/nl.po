@@ -9248,6 +9248,7 @@ msgstr "Vooraf geselecteerd wanneer het formulier opent. Laat op \"Geen standaar
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Voorbeeld"
 
@@ -11836,6 +11837,7 @@ msgstr "Instellen"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Webadres"
 
@@ -13407,15 +13409,9 @@ msgstr "Gebruik voor meer mensen een Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Alleen deze browser kan je werk openen. Log in of registreer met je e-mailadres, of koppel een ander apparaat, zodat je het elders kunt openen en de toegang niet kwijtraakt."
 
-#~ msgid "Save your work"
-#~ msgstr "Bewaar je werk"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registreer je e-mailadres of koppel een apparaat om het elders te openen"
-
-#~ msgid "Save your work here"
-#~ msgstr "Bewaar je werk hier"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13936,3 +13932,69 @@ msgstr "Update beschikbaar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Herstart om versie {0} te gebruiken"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Bron van de import"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Webpagina of tekst"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Voeg een webadres toe of plak tekst of de paginabron."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Plak tekst, of de HTML van de pagina..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Tekst of paginabron"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Bewaar in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "De map of drive waaraan het resultaat wordt toegevoegd."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Plak het adres van een pagina, de tekst of de bron. Atomic Server haalt geen pagina's voor je op: open de pagina, kopieer wat je wilt bewaren en plak het hier."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "{0}-gegevens op de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "De titel en beschrijving van de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Geen gestructureerde gegevens gevonden, dus dit wordt een gewone link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Alleen tekst gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Alleen een adres gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Voorbereiden..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Je kunt alles aanpassen voordat je bewaart. Er is nog niets bewaard."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Deze pagina is eerder geïmporteerd. Bewaren werkt die bij in plaats van een kopie te maken."
