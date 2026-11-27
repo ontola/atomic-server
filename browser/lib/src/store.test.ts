@@ -1120,6 +1120,40 @@ describe('Store', () => {
     expect(syncState.resources[dirty.subject]).toBeUndefined();
   });
 
+  it('leaves an unsaved new-resource draft out of the drive sync state (#2697)', async ({
+    expect,
+  }) => {
+    // The new-resource form's draft is never saved until the user presses
+    // Save. Telling the server we hold it makes the reconcile push it up,
+    // and it shows in the sidebar.
+    const { store } = await testStore();
+    const driveSubject = 'https://example.com/drive';
+
+    const saved = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      propVals: { [core.properties.name]: 'Saved' },
+      parent: driveSubject,
+    });
+    await saved.save();
+
+    const draft = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      parent: driveSubject,
+      deferGenesis: true,
+    });
+    expect(draft.new).toBe(true);
+
+    for (const sparse of [false, true]) {
+      const state = await store.computeDriveSyncState(driveSubject, {
+        sparse,
+      });
+      const subjects = Object.keys(state.vvs ?? state.resources);
+
+      expect(subjects).toContain(saved.subject);
+      expect(subjects).not.toContain(draft.subject);
+    }
+  });
+
   it('builds a sparse sync state whose size does not grow with the peer count', async ({
     expect,
   }) => {
