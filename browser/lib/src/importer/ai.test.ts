@@ -331,6 +331,17 @@ describe('extractWithModel with a mocked model', () => {
     expect(calls[0]).toContain('<page url="https://example.test/lab">');
   });
 
+  it('accepts the class key in another letter case', async () => {
+    const html = fixture('article');
+    const p = await extractWithModel({
+      capture: { url: 'https://example.test/a', html },
+      candidates: await candidatesFor(html),
+      call: scripted('ARTICLE', { name: 'x', description: 'y' }),
+    });
+
+    expect(p.class).toBe(dataBrowser.classes.article);
+  });
+
   it('reports what is still missing and what was dropped', async () => {
     const html = fixture('event');
     const p = await extractWithModel({

@@ -310,6 +310,22 @@ function firstText(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
+/** From the plain proposal only the image and preview carry over: the rest is the model's job. */
+function keep(
+  propvals: Record<string, JSONValue> | undefined,
+): Record<string, JSONValue> {
+  const out: Record<string, JSONValue> = {};
+
+  for (const k of [
+    dataBrowser.properties.imageUrl,
+    dataBrowser.properties.preview,
+  ]) {
+    if (propvals?.[k] !== undefined) out[k] = propvals[k];
+  }
+
+  return out;
+}
+
 /**
  * Chooses a class, then fills it: two small structured calls, the second with
  * a schema built from the class that was chosen. An answer that names no
@@ -335,7 +351,13 @@ export async function extractWithModel(args: {
   const choice = (await call(chooseRequest(snapshot, candidates))) as
     | { class?: unknown; reason?: unknown }
     | undefined;
-  const chosen = candidates.find(c => c.key === choice?.class);
+  const chosen =
+    candidates.find(c => c.key === choice?.class) ??
+    candidates.find(
+      c =>
+        typeof choice?.class === 'string' &&
+        c.key.toLowerCase() === choice.class.toLowerCase(),
+    );
   const klass = chosen ?? generic;
   const reason = chosen
     ? (firstText(choice?.reason) ?? '')
@@ -345,7 +367,7 @@ export async function extractWithModel(args: {
   const sourceUrl = snapshot.url;
   const propvals: Record<string, JSONValue> = {
     ...(klass.subject === dataBrowser.classes.bookmark
-      ? fallback?.propvals
+      ? keep(fallback?.propvals)
       : {}),
     ...v.propvals,
   };
