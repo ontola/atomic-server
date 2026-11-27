@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
+import 'strings.dart';
 
 /// The app's loader: the atomic.place mark, its fading trail circling the
 /// orb, as the web app's `Spinner` (`browser/data-browser/src/components/
@@ -18,13 +19,14 @@ class AtomicSpinner extends StatefulWidget {
   /// The trail's colour; the theme's text colour when null.
   final Color? color;
 
-  final String semanticsLabel;
+  /// What a screen reader says; "Loading" in the app's language when null.
+  final String? semanticsLabel;
 
   const AtomicSpinner({
     super.key,
     this.size = pageSize,
     this.color,
-    this.semanticsLabel = 'Loading',
+    this.semanticsLabel,
   });
 
   @override
@@ -60,7 +62,7 @@ class _AtomicSpinnerState extends State<AtomicSpinner>
         Theme.of(context).extension<AppColors>()?.textPrimary ??
         Theme.of(context).colorScheme.onSurface;
     return Semantics(
-      label: widget.semanticsLabel,
+      label: widget.semanticsLabel ?? AtomicStrings.of(context).loading,
       child: SizedBox.square(
         dimension: widget.size,
         child: RepaintBoundary(

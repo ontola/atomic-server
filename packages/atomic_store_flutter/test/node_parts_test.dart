@@ -4,6 +4,7 @@ import 'package:atomic_store/atomic_store.dart';
 import 'package:atomic_store/testing.dart';
 import 'package:atomic_store_flutter/atomic_store_flutter.dart';
 import 'package:atomic_store_flutter/bridge/api/node.dart' as bridge;
+import 'package:atomic_store_flutter/src/identity.dart' show driveAfterSignIn;
 import 'package:atomic_store_flutter/testing.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -165,6 +166,47 @@ void main() {
       expect(found.needsSync, isTrue);
       expect(store.drive, 'did:ad:other');
       await expectLater(id.signIn('bad'), throwsA(isA<StoreException>()));
+    });
+
+    test('signing in keeps working in the drive that came along', () async {
+      final store = _store();
+      final id = FakeIdentity(store);
+      final made = await id.create('Guest');
+      // The drive the person works in is brought along to the new account.
+      id.work = [made.drive];
+      id.known['bob'] = (drive: 'did:ad:bob', needsSync: false);
+
+      final found = await id.signIn('bob');
+      expect(found.broughtAlong, [made.drive]);
+      expect(found.drive, made.drive, reason: 'SignIn.drive is truthful');
+      expect(store.drive, made.drive);
+    });
+
+    test('a plain sign-in goes to the account drive', () async {
+      final store = _store();
+      final id = FakeIdentity(store);
+      await id.create('Guest');
+      // Nothing was brought along (the guest had no work).
+      id.known['bob'] = (drive: 'did:ad:bob', needsSync: false);
+
+      final found = await id.signIn('bob');
+      expect(found.broughtAlong, isEmpty);
+      expect(found.drive, 'did:ad:bob');
+      expect(store.drive, 'did:ad:bob');
+    });
+
+    test('driveAfterSignIn: only a drive that came along is kept', () {
+      expect(
+          driveAfterSignIn(
+              before: 'a', signedInDrive: 'b', broughtAlong: ['x', 'a']),
+          'a');
+      expect(
+          driveAfterSignIn(
+              before: 'a', signedInDrive: 'b', broughtAlong: ['x']),
+          'b');
+      expect(
+          driveAfterSignIn(before: null, signedInDrive: 'b', broughtAlong: []),
+          'b');
     });
 
     test('signing in as someone else brings the work along, once', () async {

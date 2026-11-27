@@ -107,7 +107,7 @@ void main() {
     expect(isLiveAtomicPeer('atomic:node:$id', {'did:ad:node:$id'}), isTrue);
   });
 
-  testWidgets('the panel works at phone width and switches/creates workspaces',
+  testWidgets('the panel works at phone width and switches/creates drives',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -126,15 +126,15 @@ void main() {
     await tester.tap(find.text('Pair with QR code'));
     await tester.pumpAndSettle();
     expect(backend.paired, 1);
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Drawings'));
     await tester.pumpAndSettle();
     expect(backend.active, 'drive-b');
     expect(find.text('Drawings'), findsOneWidget);
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('New workspace'));
+    await tester.tap(find.text('New drive'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'New music');
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -143,22 +143,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a workspace without a name is called Workspace', (tester) async {
+  testWidgets('a drive without a name is called Drive', (tester) async {
     final backend = TestBackend()..names['drive-a'] = '';
     await showSettings(tester, backend);
-    expect(find.text('Workspace'), findsNWidgets(2));
+    expect(find.text('Drive'), findsNWidgets(2));
   });
 
-  testWidgets('failed workspace switch keeps the active one and says so',
+  testWidgets('failed drive switch keeps the active one and says so',
       (tester) async {
     final backend = TestBackend()..failSwitch = true;
     await showSettings(tester, backend);
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Drawings'));
     await tester.pumpAndSettle();
     expect(backend.active, 'drive-a');
-    expect(find.textContaining('Could not switch workspace'), findsWidgets);
+    expect(find.textContaining('Could not switch drive'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -274,11 +274,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final backend = TestBackend()..failSwitch = true;
     await openDialog(tester, backend);
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Drawings'));
     await tester.pumpAndSettle();
-    expectOnceInDialog(tester, 'Could not switch workspace: Drive switch');
+    expectOnceInDialog(tester, 'Could not switch drive: Drive switch');
     expect(find.byType(SnackBar), findsOneWidget);
   });
 
