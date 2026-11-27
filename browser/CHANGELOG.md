@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Property tables (the data view, the default resource page, class pages and the table row dialog) show every value on one line: long text, links and lists end in an ellipsis, markdown shows as plain text and JSON minified, with a chevron to show the full value. Labels are muted and long values can no longer spill out of the table. Editable values light up on hover with a pencil (always visible on touch), and clicking the value starts editing. The data view's subject and genesis are rows of the same table.
+
 ## [v0.41.0] - 2026-11-26
 
 0.41.0 is the first stable release of 0.41, after the beta series (beta.0 to beta.9).

@@ -1442,16 +1442,8 @@ msgid "Data for"
 msgstr "Data untuk"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "subjek:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "URL sumber daya"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "genesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1891,6 +1883,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} bukan subjek yang valid."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "subjek"
 
@@ -2768,9 +2761,11 @@ msgstr "Sumber daya ini memiliki <0/> turunan"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "Sunting {0}"
 
@@ -12202,10 +12197,12 @@ msgid "Activity will show up here"
 msgstr "Aktivitas akan muncul di sini"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Tampilkan lebih sedikit"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Tampilkan semua"
 
@@ -13898,6 +13895,10 @@ msgstr "Pembaruan tersedia"
 msgid "Restart to use version {0}"
 msgstr "Mulai ulang untuk memakai versi {0}"
 
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
+
 #: ../data-browser/src/views/ImporterPage.tsx
 msgid "Import source"
 msgstr "Sumber impor"
@@ -13976,3 +13977,60 @@ msgstr "<0/> Pengaturan aplikasi"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
 msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuatnya di drive Anda. Bagikan, host marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Back to the plain link"
+msgstr "Kembali ke tautan biasa"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI can read this page and file it under a better kind of item. Set up a model first."
+msgstr "AI dapat membaca halaman ini dan menyimpannya sebagai jenis item yang lebih sesuai. Siapkan model terlebih dahulu."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+msgstr "AI dimatikan. Nyalakan di pengaturan agar AI dapat membaca halaman ini dan menyimpannya sebagai jenis item yang lebih sesuai."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Set up AI"
+msgstr "Siapkan AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The AI could not read this page."
+msgstr "AI tidak dapat membaca halaman ini."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Reading the page..."
+msgstr "Membaca halaman..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Extract with AI"
+msgstr "Ekstrak dengan AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+msgstr "Impor biasa menemukan sedikit informasi. AI dapat membaca halaman dan memilih salah satu jenis item yang sudah Anda miliki."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI read the page and filled in this item."
+msgstr "AI telah membaca halaman dan mengisi item ini."
+
+#. 0: ai.dropped.map(d => d.property).join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Left out because they did not fit: {0}"
+msgstr "Dilewati karena tidak cocok: {0}"
+
+#. 0: ai.missing.join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Still to fill in: {0}"
+msgstr "Masih harus diisi: {0}"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) melalui Atomic ke penyedia AI-nya. Anda memeriksa hasilnya sebelum apa pun disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke server Ollama Anda. Anda memeriksa hasilnya sebelum apa pun disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke OpenRouter. Anda memeriksa hasilnya sebelum apa pun disimpan."
