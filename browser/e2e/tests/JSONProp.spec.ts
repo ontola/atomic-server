@@ -97,6 +97,15 @@ test.describe('JSON prop', () => {
         .first(),
     ).toBeVisible();
 
-    await expect(page.getByText('{\n  "valid": true\n  }')).toHaveRole('code');
+    // The property table shows JSON minified on one line; expanding it shows
+    // the highlighted block.
+    await expect(page.getByText('{"valid":true}')).toBeVisible();
+    // The title is still in edit mode: the first click may only blur it.
+    const expanded = page.getByText('{\n  "valid": true\n  }');
+    await expect(async () => {
+      await page.getByRole('button', { name: 'Show all' }).click();
+      await expect(expanded).toBeVisible({ timeout: 2000 });
+    }).toPass();
+    await expect(expanded).toHaveRole('code');
   });
 });
