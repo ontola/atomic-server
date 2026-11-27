@@ -12,6 +12,7 @@ import contextlib
 import datetime as dt
 import fcntl
 import importlib.util
+import inspect
 import json
 import math
 import os
@@ -110,6 +111,68 @@ def validate_cache_profile(config, dagger_version=None):
             raise ValueError('snapshot cache namespace, pinned engine, architecture or Docker root differs')
 
 
+def observe_restored_engine(root, version):
+    """Read stopped Docker metadata, never infer the engine from a volume name."""
+    import hashlib
+    import json
+    from pathlib import Path
+    import re
+
+    root = Path(root)
+    if not root.is_absolute() or root.resolve() != root or not root.is_dir():
+        raise ValueError('restored Docker root is absent or traverses a symlink')
+    def checked(path):
+        if not path.is_relative_to(root) or any(p.is_symlink() for p in (path, *path.parents) if p.is_relative_to(root)):
+            raise ValueError('restored engine path traverses a symlink or foreign root')
+        return path
+    containers = checked(root / 'containers')
+    matches = []
+    for path in sorted(containers.glob('*/config.v2.json')):
+        data = json.loads(checked(path).read_text())
+        if not isinstance(data, dict):
+            raise ValueError('restored container config must be an object')
+        if data.get('Name') == '/dagger-engine-v' + version:
+            matches.append((path, data))
+    if len(matches) != 1:
+        raise ValueError('expected exactly one stopped pinned Dagger container')
+    path, data = matches[0]
+    image = data.get('Config', {}).get('Image', '') if isinstance(data.get('Config'), dict) else ''
+    if (not re.fullmatch(r'[a-f0-9]{64}', path.parent.name) or data.get('ID') != path.parent.name
+            or not re.fullmatch(r'sha256:[a-f0-9]{64}', str(data.get('Image', '')))
+            or not isinstance(image, str) or not re.fullmatch(r'registry\.dagger\.io/engine:v' + re.escape(version) + r'(?:@sha256:[a-f0-9]{64})?', image)):
+        raise ValueError('restored Dagger container ID or pinned image differs')
+    mount = data.get('MountPoints', {}).get('/var/lib/dagger', {}) if isinstance(data.get('MountPoints'), dict) else {}
+    if not isinstance(mount, dict):
+        raise ValueError('restored engine mount metadata must be an object')
+    name = mount.get('Name', '')
+    if (mount.get('Destination') != '/var/lib/dagger' or mount.get('Type') != 'volume'
+            or mount.get('Driver') != 'local' or not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,255}', name)):
+        raise ValueError('restored engine lacks its exact local /var/lib/dagger volume binding')
+    source = root / 'volumes' / name / '_data'
+    if mount.get('Source') != str(source) or not checked(source).is_dir() or not any(source.iterdir()):
+        raise ValueError('restored engine cache is empty, absent or outside the Docker root')
+    return {'restored_docker_entries': len(list(root.iterdir())), 'restored_dagger_cache_nonempty': True,
+            'restored_engine': {'id': data['ID'], 'name': data['Name'], 'image': image,
+                                'image_id': data['Image'], 'mount_name': name, 'mount_source': str(source)},
+            'restored_container_config_sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def observe_started_engine(expected):
+    """Inspect only the pre-observed container; do not expose its Env or labels."""
+    import json
+    import subprocess
+
+    try:
+        data = json.loads(subprocess.check_output(['docker', 'inspect', '--type', 'container', expected['id']], text=True))[0]
+        mounts = [mount for mount in data.get('Mounts', []) if mount.get('Destination') == '/var/lib/dagger']
+        if len(mounts) != 1 or mounts[0].get('Type') != 'volume' or mounts[0].get('Driver') != 'local':
+            raise ValueError('running Docker metadata lacks one local Dagger volume binding')
+        return {'id': data['Id'], 'name': data['Name'], 'image': data['Config']['Image'],
+                'image_id': data['Image'], 'mount_name': mounts[0]['Name'], 'mount_source': mounts[0]['Source']}
+    except (KeyError, IndexError, TypeError, AttributeError, ValueError, OSError, subprocess.SubprocessError) as error:
+        return {'error': type(error).__name__ + ': ' + str(error)}
+
+
 def validate_startup_cache(config, node, entry, observation):
     """Prove restored nonempty engine state, never a job cache hit."""
     validate_cache_profile(config)
@@ -117,7 +180,7 @@ def validate_startup_cache(config, node, entry, observation):
     source = entry.get('source_snapshot', {})
     device = '/dev/disk/by-id/scsi-0DO_Volume_' + entry['name']
     version = profile['dagger_engine_version']
-    image_version = re.compile(r'^registry\.dagger\.io/engine:v?' + re.escape(version) + r'(?:@sha256:[a-f0-9]+)?$')
+    image_version = re.compile(r'^registry\.dagger\.io/engine:v?' + re.escape(version) + r'(?:@sha256:[a-f0-9]{64})?$')
     account = next(account for account in config['accounts'] if account['context'] == node['account'])
     failures = []
     def expect(field, actual, expected):
@@ -146,9 +209,29 @@ def validate_startup_cache(config, node, entry, observation):
         failures.append('restored_docker_entries expected=positive integer observed=' + repr(count)[:100])
     if observation.get('restored_dagger_cache_nonempty') is not True:
         failures.append('restored_dagger_cache_nonempty expected=True observed=' + repr(observation.get('restored_dagger_cache_nonempty'))[:100])
+    if not re.fullmatch(r'[a-f0-9]{64}', str(observation.get('restored_container_config_sha256', ''))):
+        failures.append('restored container config hash is absent or invalid')
     images = observation.get('engine_images', [])
     if not isinstance(images, list) or not any(image_version.search(image) for image in images if isinstance(image, str)):
         failures.append('engine_images expected=registry.dagger.io/engine:v' + version + ' observed=' + repr(images)[:400])
+    restored = observation.get('restored_engine', {})
+    current = observation.get('started_engine', {})
+    if not isinstance(restored, dict) or not isinstance(current, dict):
+        failures.append('restored/started engine metadata must be objects')
+    else:
+        expect('restored_engine.name', restored.get('name'), '/dagger-engine-v' + version)
+        if not re.fullmatch(r'[a-f0-9]{64}', str(restored.get('id', ''))) or not re.fullmatch(r'sha256:[a-f0-9]{64}', str(restored.get('image_id', ''))):
+            failures.append('restored engine lacks exact container and image IDs')
+        if not image_version.fullmatch(str(restored.get('image', ''))):
+            failures.append('restored engine image is not the pinned version')
+        mount_name = restored.get('mount_name', '')
+        if not isinstance(mount_name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,255}', mount_name):
+            failures.append('restored engine mount name is invalid')
+        else:
+            expect('restored_engine.mount_source', restored.get('mount_source'), profile['docker_data_root'] + '/volumes/' + mount_name + '/_data')
+        expect('started_engine', current, restored)
+    if observation.get('restored_engine_error'):
+        failures.append('restored_engine_error=' + str(observation['restored_engine_error'])[:300])
     if failures:
         raise ValueError('worker cache startup does not prove the intended nonempty restored engine: ' + '; '.join(failures))
     return dict(observation, restoration_verified=True, cache_hits_proven=False, node_id=node['id'], account=node['account'],
@@ -401,16 +484,17 @@ def controller_class(module, api_factory=None):
             profile = self.config['source_snapshots'][node['account']]
             device = '/dev/disk/by-id/scsi-0DO_Volume_' + entry['name']
             collector = (
-                'import json,os,pathlib,re,subprocess; '
+                'import json,os,pathlib,re,subprocess\n' + inspect.getsource(observe_started_engine) + '\n'
                 'read=lambda args:subprocess.check_output(args,text=True).strip(); '
                 'data=json.loads(pathlib.Path("/var/lib/atomic-ci-cache-before-start.json").read_text()); '
                 'mount=json.loads(read(["findmnt","--json","--mountpoint","/mnt/atomic-ci","--output","TARGET,SOURCE,FSTYPE"]))["filesystems"][0]; '
                 'info=json.loads(read(["docker","info","--format","{{json .}}"])); '
-                'images=read(["docker","ps","-a","--format","{{.Image}}"]).splitlines(); '
+                'started=observe_started_engine(data.get("restored_engine",{})); '
+                'images=[started.get("image","")]; '
                 'data.update(volume_name=' + repr(entry['name']) + ',device=' + repr(device) + ',device_realpath=os.path.realpath(' + repr(device) + '),'
                 'mount_target=mount["target"],mount_source=mount["source"],mount_source_realpath=os.path.realpath(mount["source"]),'
                 'filesystem_type=mount["fstype"],filesystem_uuid=read(["blkid","-s","UUID","-o","value",' + repr(device) + ']),'
-                'docker_root_dir=info["DockerRootDir"],engine_images=images,engine_version=' + repr(profile['dagger_engine_version']) + ','
+                'docker_root_dir=info["DockerRootDir"],engine_images=images,started_engine=started,engine_version=' + repr(profile['dagger_engine_version']) + ','
                 'cache_namespace=' + repr(self.config['cache_namespace']) + '); print(json.dumps(data))')
             observation = json.loads(self.ssh(node_id, 'python3 -c ' + shlex.quote(collector), timeout=60))
             observation_path = self.root / node_id / 'cache-startup-observation.json'
@@ -429,11 +513,11 @@ def controller_class(module, api_factory=None):
             marker = '  - [systemctl, enable, --now, docker]'
             if text.count(marker) != 1:
                 raise ValueError('review the changed base Docker bootstrap before using warm volumes')
-            before_start = ('import json,pathlib; root=pathlib.Path("/mnt/atomic-ci/docker"); '
-                'entries=list(root.iterdir()) if root.exists() else []; '
-                'dagger=[p for p in (root/"volumes").glob("*dagger*/_data") if p.is_dir() and any(p.iterdir())]; '
-                'pathlib.Path("/var/lib/atomic-ci-cache-before-start.json").write_text(json.dumps({'
-                '"restored_docker_entries":len(entries),"restored_dagger_cache_nonempty":bool(dagger)}))')
+            before_start = ('import json,pathlib\n' + inspect.getsource(observe_restored_engine) + '\n'
+                'data={"restored_docker_entries":0,"restored_dagger_cache_nonempty":False}\n'
+                'try:\n data.update(observe_restored_engine("/mnt/atomic-ci/docker",' + repr(version) + '))\n'
+                'except (ValueError,OSError) as error:\n data["restored_engine_error"]=type(error).__name__+": "+str(error)\n'
+                'pathlib.Path("/var/lib/atomic-ci-cache-before-start.json").write_text(json.dumps(data))')
             script = ('set -euo pipefail; systemctl stop docker.service docker.socket; '
                 'set -- /dev/disk/by-id/scsi-0DO_Volume_' + self.config['batch_key'] + '-node-*-cache; '
                 'test "$#" = 1; test -b "$1"; '
