@@ -510,7 +510,23 @@ pub trait Storelike: Sized + Send + Sync {
         for_agent: Option<&Agent>,
     ) -> AtomicResult<Resource> {
         let subject_obj = Subject::from_raw(subject, self.get_base_domain().as_deref());
-        if subject_obj.is_local() {
+        // `is_local()` is not enough: the shared atomicdata.dev vocabulary
+        // stays `External` even on atomicdata.dev itself, so a miss there used
+        // to fetch this very server, which missed again and fetched again.
+        // In production that was ~10,000 self-requests a minute and a 502 for
+        // every `/properties/*` term.
+        let own_authority = self.get_base_domain().is_some_and(|base| {
+            let strip = |s: &str| {
+                s.trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/')
+                    .to_string()
+            };
+            let base = strip(&base);
+            let target = strip(subject);
+            !base.is_empty() && (target == base || target.starts_with(&format!("{base}/")))
+        });
+        if subject_obj.is_local() || own_authority {
             return Err(AtomicError::not_found(format!(
                 "Failed to retrieve locally: '{}'",
                 subject
