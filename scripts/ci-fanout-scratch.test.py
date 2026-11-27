@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Cold scratch regressions; all provider, device and process effects are fakes."""
+import ast
 import copy
 import datetime as dt
 import importlib.util
@@ -8,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 
@@ -162,5 +164,33 @@ class RemoteFormatTests(unittest.TestCase):
         for changes in cases:
             with self.subTest(changes=changes):
                 _,calls=self.check(changes); self.assertEqual(calls,[])
+
+
+class ContainerdConfigTests(unittest.TestCase):
+    def validate_dump(self, text):
+        # Execute the shipped initializer's actual guard, not a second parser.
+        module = ast.parse(scratch.INITIALIZE)
+        guards = [node for node in module.body if isinstance(node, ast.Assert)
+                  and any(isinstance(value, ast.List)
+                          and [item.value for item in value.elts if isinstance(item, ast.Constant)]
+                          == ['containerd', 'config', 'dump']
+                          for value in ast.walk(node))]
+        self.assertEqual(len(guards), 1)
+        def output(args):
+            self.assertEqual(args, ['containerd', 'config', 'dump'])
+            return text
+        exec(compile(ast.Module(body=guards, type_ignores=[]), '<actual-containerd-root-guard>', 'exec'),
+             {'out': output, 'root': Path('/mnt/atomic-ci'), 'tomllib': tomllib})
+
+    def test_semantically_identical_single_and_double_quoted_dump_roots_pass(self):
+        for text in ('root = "/mnt/atomic-ci/containerd"\n',
+                     "root = '/mnt/atomic-ci/containerd'\n",
+                     "version = 3\nroot='/mnt/atomic-ci/containerd'\n[grpc]\naddress='/run/containerd/containerd.sock'\n"):
+            with self.subTest(text=text): self.validate_dump(text)
+
+    def test_foreign_root_rejected_even_if_comment_contains_expected_spelling(self):
+        for text in ('root = "/var/lib/containerd"\n',
+                     'root = "/var/lib/containerd"\n# root = "/mnt/atomic-ci/containerd"\n'):
+            with self.subTest(text=text), self.assertRaises(AssertionError): self.validate_dump(text)
 
 if __name__=='__main__': unittest.main()

@@ -144,9 +144,9 @@ run(['systemctl','daemon-reload']); run(['systemctl','unmask','containerd.servic
 run(['systemctl','enable','--now','containerd.service','docker.service'])
 info=json.loads(out(['docker','info','--format','{{json .}}']))
 assert info['DockerRootDir']==str(root/'docker')
-assert 'root = "'+str(root/'containerd')+'"' in out(['containerd','config','dump'])
-# Inspect all running containerd roots, including Docker-managed daemons.
 import tomllib
+assert tomllib.loads(out(['containerd','config','dump']))['root']==str(root/'containerd')
+# Inspect all running containerd roots, including Docker-managed daemons.
 containerd_roots=[]
 for pid in out(['pgrep','-x','containerd']).splitlines():
  argv=pathlib.Path('/proc',pid,'cmdline').read_bytes().decode().split('\0')
