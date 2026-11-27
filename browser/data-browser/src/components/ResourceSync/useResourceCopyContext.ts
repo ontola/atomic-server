@@ -11,6 +11,7 @@ import {
 } from '../../helpers/managed/vault';
 import { onVaultChanged } from '../../helpers/managed/vaultAutoBackup';
 import {
+  getManagedAccountOrNull,
   onManagedLogout,
   onManagedSessionChanged,
 } from '../../helpers/managed/session';
@@ -85,7 +86,14 @@ export function useResourceCopyContext(
         return;
       }
 
-      void getVaultDriveSummary(drive)
+      void getManagedAccountOrNull()
+        .then(account => {
+          // An identity/session change while checking the account must not
+          // disclose the old workspace to the provider.
+          if (!active || request !== generation || !account) return null;
+
+          return getVaultDriveSummary(drive);
+        })
         .catch(() => null)
         .then(summary => {
           if (active && request === generation)

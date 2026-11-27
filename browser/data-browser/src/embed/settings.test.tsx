@@ -2,7 +2,7 @@
 // @wc-ignore-file
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../styling';
 import {
@@ -14,6 +14,32 @@ import {
   type SettingsSectionId,
 } from './settings';
 import * as embedMode from '../helpers/embedMode';
+
+const colorPickerState = vi.hoisted(() => ({
+  moduleLoads: 0,
+  mainColor: '#4C6FA5',
+  setMainColor: vi.fn(),
+}));
+
+vi.mock('react-colorful', () => {
+  colorPickerState.moduleLoads++;
+
+  return {
+    HexColorPicker: ({
+      color,
+      onChange,
+    }: {
+      color: string;
+      onChange: (color: string) => void;
+    }) => (
+      <input
+        aria-label='Custom color'
+        value={color}
+        onChange={event => onChange(event.target.value)}
+      />
+    ),
+  };
+});
 
 vi.mock('@tanstack/react-router', () => ({
   createRoute: (options: object) => ({ ...options, useSearch: () => ({}) }),
@@ -31,8 +57,8 @@ vi.mock('../helpers/AppSettings', () => ({
     setShowSidebarIcons: () => undefined,
     navbarTop: false,
     setNavbarTop: () => undefined,
-    mainColor: '#4C6FA5',
-    setMainColor: () => undefined,
+    mainColor: colorPickerState.mainColor,
+    setMainColor: colorPickerState.setMainColor,
     viewTransitionsEnabled: false,
     setViewTransitionsEnabled: () => undefined,
     sidebarKeyboardDndEnabled: false,
@@ -136,7 +162,11 @@ const renderPage = () => {
   );
 };
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  colorPickerState.mainColor = '#4C6FA5';
+  colorPickerState.setMainColor.mockClear();
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -255,4 +285,28 @@ it('offers "Show icons in the sidebar", on by default', () => {
   expect(
     screen.getByText('Show icons and pictures next to items in the sidebar'),
   ).toBeTruthy();
+});
+
+it('loads the optional custom color picker on demand and preserves color selection', async () => {
+  vi.spyOn(embedMode, 'isEmbedded').mockReturnValue(true);
+  renderPage();
+
+  expect(colorPickerState.moduleLoads).toBe(0);
+  expect(screen.queryByLabelText('Custom color')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Customize' }));
+  const picker = await screen.findByLabelText('Custom color');
+  expect(colorPickerState.moduleLoads).toBe(1);
+  expect((picker as HTMLInputElement).value).toBe('#4C6FA5');
+  fireEvent.change(picker, { target: { value: '#123456' } });
+  expect(colorPickerState.setMainColor).toHaveBeenCalledWith('#123456');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Customize' }));
+  expect(screen.queryByLabelText('Custom color')).toBeNull();
+  cleanup();
+  colorPickerState.mainColor = '#123456';
+  renderPage();
+  expect(
+    ((await screen.findByLabelText('Custom color')) as HTMLInputElement).value,
+  ).toBe('#123456');
+  expect(colorPickerState.moduleLoads).toBe(1);
 });

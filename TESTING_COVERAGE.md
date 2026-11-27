@@ -956,7 +956,10 @@ proof stays independent when the native bridge fails.
 
 `browser/e2e/tests/native-resource-peer-sync.spec.ts` is an opt-in real native
 renderer journey: build `dist-embed` and the `iroh_receipts` integration binary,
-then set `ATOMIC_NATIVE_EMBED_TEST_BINARY` to that binary. It forwards the existing
+then set `ATOMIC_NATIVE_EMBED_TEST_BINARY` to that binary. The launcher selects
+the distinct ignored `native_iroh_renderer_host` JSON-lines fixture, not the
+ordinary receiver-reopen test. Protocol unit checks cover correlated replies,
+malformed calls and the id-less clean-stop message. It forwards the existing
 NativeChannel into the actual EmbedHost of the two-process Iroh fixture, renders
 the peer count and timestamp, reloads the view while its host remains alive,
 checks mobile layout and removes the confirmation after peer departure. It uses
@@ -1057,8 +1060,9 @@ The validated acceptance set comprises:
   boundary is test-owned; WASM hashing and encryption are real.
 - `native-resource-peer-sync.spec.ts` (one opt-in journey): actual File/direct-
   attachment evidence from two Iroh processes through EmbedHost, desktop/mobile
-  rendering, view reload and peer departure. The Rust two-process integration
-  and matching renderer acceptance both passed locally with zero retries.
+  rendering, view reload and peer departure. Matching native renderer acceptance
+  for the integrated candidate remains a separate required run; the web suite
+  skips this opt-in journey without its explicit executable.
 
 ### Protocol — well covered
 
@@ -1959,6 +1963,18 @@ stays off with its setup action visible.
   present only in local storage, as well as rename/emoji refresh. Manual enable
   and automatic backup share `driveDisplayMetadata`; only name and emoji are sent.
 - FOSS account lookup: `helpers/managed/session.test.ts` verifies that an installation with no managed API does not probe the hosted account endpoint.
+- Account eligibility: `helpers/managed/session.eligibility.test.ts` uses the real
+  API credential policy to refuse offsite/native account probes without a linked
+  token, including fresh reads and cached cookie accounts after eligibility is
+  lost. Hosted/subdomain cookies, local cross-port cookies and linked native
+  bearer tokens remain covered.
+- Workspace-copy metadata: `components/ResourceSync/useResourceCopyContext.test.tsx`
+  mounts the context and requires an account before sending the drive to the
+  provider. Controlled pending-account and pending-summary responses cover
+  logout, identity/resource changes, session refresh and unmount without stale
+  queries or state restoration. These tests simulate the account boundary; live
+  signed-in Vault/provider journeys require their separate integration checks.
+
 - FOSS logout: `helpers/managed/session.test.ts` verifies that an installation
   with no configured control plane makes no SaaS logout request (the CI smoke
   test exposed a 405 at `/api/logout`).
@@ -3708,3 +3724,14 @@ the persisted replay baseline is rewound, the resend imports without missing
 Loro dependencies, both old and new edits survive, and the pending entry clears.
 This controls the worker persistence boundary; it does not prove crash survival
 of a real OPFS database or reproduce the separate first-Share Agent flake #2688.
+
+Bundled defaults startup: `lib/tests/defaults_offline.rs` imports the production
+bundled JSON into a fresh base-model Store whose missing-resource fetches are
+explicitly refused and counted. It reproduces a new vocabulary record using
+`name` before that Property is defined, and verifies the full import completes
+without network lookup after dependency ordering is corrected. The two-process
+Iroh receipt acceptance and the native fixture RPC smoke exercise actual fresh
+persistent databases separately. The smoke checks automatic metadata and file
+receipts, local byte confirmation, correlated errors, peer departure, clean
+id-less shutdown and removal of the owned fixture directory; it does not replace
+the matching embedded-renderer browser journey.

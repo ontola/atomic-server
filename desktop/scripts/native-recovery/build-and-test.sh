@@ -4,7 +4,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 test "$(uname -s)" = Linux
 test -f ../atomic-saas/Cargo.toml
-mkdir -p target/native-recovery-ci /artifacts
+# Build-only callers run Clippy and each real recovery case independently.
+BUILD_ONLY="${NATIVE_RECOVERY_BUILD_ONLY:-false}"
+case "$BUILD_ONLY" in true|false) ;; *) echo 'NATIVE_RECOVERY_BUILD_ONLY must be true or false' >&2; exit 2 ;; esac
+ARTIFACT_DIR="${NATIVE_RECOVERY_ARTIFACT_DIR:-/artifacts}"
+mkdir -p target/native-recovery-ci "$ARTIFACT_DIR"
 export CARGO_BUILD_BUILD_DIR="$ROOT/target/build"
 export CARGO_TARGET_DIR="$ROOT/target"
 export PATH="$ROOT/browser/node_modules/.bin:$PATH"
@@ -28,15 +32,18 @@ export TAURI_CONFIG='{"productName":"Atomic Native Recovery CI","identifier":"io
 cargo build --locked -p atomic-server-tauri -p atomic_lib \
   --features atomic-server-tauri/native-recovery-tests \
   --bin atomic-server-tauri --example native_late_file_peer --example native_vault_remove_blob
-cargo clippy --locked -p atomic-server-tauri --features native-recovery-tests \
-  --all-targets -- -D warnings
+if [[ "$BUILD_ONLY" != true ]]; then
+  cargo clippy --locked -p atomic-server-tauri --features native-recovery-tests \
+    --all-targets -- -D warnings
+fi
 # This is the actual Cloud Vault API. Its static portal is not used by these
 # native tests, but RustEmbed still needs a valid portal build at compile time.
 (cd ../atomic-saas/portal && npm ci && npm run build)
 (cd ../atomic-saas && cargo build --locked --bin atomic-saas)
+if [[ "$BUILD_ONLY" == true ]]; then exit 0; fi
 export NATIVE_RECOVERY_BIN_DIR="$ROOT/target/debug"
 export NATIVE_RECOVERY_SAAS_BINARY="$ROOT/target/debug/atomic-saas"
-export NATIVE_RECOVERY_ARTIFACT_DIR=/artifacts
+export NATIVE_RECOVERY_ARTIFACT_DIR="$ARTIFACT_DIR"
 # Run the actual Tauri WebView; this is not Playwright's separate browser.
 dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
   node desktop/scripts/native-recovery/run.mjs

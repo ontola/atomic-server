@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
 import { Button } from '@tomic/ui/components/Button';
 import { useSettings } from '../helpers/AppSettings';
@@ -28,6 +27,11 @@ import {
   SettingsSection,
   SettingsSearchProvider,
 } from '@components/Settings';
+// Custom colors are an optional appearance interaction, not resource rendering.
+const HexColorPicker = lazy(() =>
+  import('react-colorful').then(m => ({ default: m.HexColorPicker })),
+);
+
 // Web-only sections, out of the Flutter embed's first-use bundle.
 const AccountSettings = lazy(() =>
   import('@components/Settings/AccountSettings').then(m => ({
@@ -409,7 +413,12 @@ const MainColorPicker = () => {
         </CustomizeButton>
       </SwatchRow>
       {customizing && (
-        <HexColorPicker color={mainColor} onChange={val => setMainColor(val)} />
+        <Suspense fallback={null}>
+          <HexColorPicker
+            color={mainColor}
+            onChange={val => setMainColor(val)}
+          />
+        </Suspense>
       )}
     </Column>
   );

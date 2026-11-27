@@ -9,6 +9,7 @@ vi.mock('./api', () => ({
   setManagedDeviceToken: setTokenMock,
   hasManagedApi: configured,
   getManagedDeviceToken: () => null,
+  getManagedApiBase: () => '/api',
 }));
 import {
   getManagedAccount,

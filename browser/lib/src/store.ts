@@ -2744,6 +2744,7 @@ export class Store {
         // and resend the same unappliable delta. Persist the rewind with the
         // snapshot and dirty entry before reporting this delivery failure.
         this.outbox.clearBaseVersion(subject);
+
         if (durable) {
           await resource.persistPendingToClientDb();
           assertCurrent();

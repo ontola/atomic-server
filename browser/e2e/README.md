@@ -274,8 +274,10 @@ ATOMIC_NATIVE_EMBED_TEST_BINARY=/absolute/path/to/iroh_receipts-HASH \
 
 The fixture serves `dist-embed`, forwards the renderer's existing host calls to
 Rust, and checks both metadata and file contents for an actual File/direct
-attachment through view reload and peer departure. Both the two-process Rust
-integration and matching renderer acceptance passed locally with zero retries.
+attachment through view reload and peer departure. The launcher selects the
+ignored `native_iroh_renderer_host` fixture; the ordinary C1/C2/C3 receiver-reopen
+test remains a separate, terminating integration test. Matching renderer
+acceptance must be run separately after rebuilding this binary and `dist-embed`.
 The native process owns the databases and networking; only address exchange and
 process control are test fixtures. Without the explicit executable this test is
 skipped, so an ordinary web E2E pass does not claim native renderer coverage.

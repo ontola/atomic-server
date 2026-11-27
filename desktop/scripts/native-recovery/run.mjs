@@ -7,6 +7,10 @@ import { startStorage } from './storage.mjs';
 import { testPeer } from './peer.mjs';
 import { testVault } from './vault.mjs';
 
+const selectedCase = process.env.NATIVE_RECOVERY_CASE ?? 'both';
+if (!['both', 'peer', 'vault'].includes(selectedCase)) {
+  throw new Error('NATIVE_RECOVERY_CASE must be both, peer or vault');
+}
 const ctx = await new RecoveryContext().init();
 let portal;
 let results;
@@ -18,15 +22,19 @@ try {
     mode: 'signed-out',
     holdMs: 60_000,
   });
-  console.info('Running actual native recovery from a late real peer.');
-  const peer = await testPeer(ctx);
-  console.info(JSON.stringify(peer));
-  console.info('Starting the real Cloud Vault API and S3 storage.');
-  await startStorage(ctx);
-  console.info('Running actual native recovery with Vault as the only copy.');
-  const vault = await testVault(ctx);
-  console.info(JSON.stringify(vault));
-  results = { peer, vault };
+  results = {};
+  if (selectedCase !== 'vault') {
+    console.info('Running actual native recovery from a late real peer.');
+    results.peer = await testPeer(ctx);
+    console.info(JSON.stringify(results.peer));
+  }
+  if (selectedCase !== 'peer') {
+    console.info('Starting the real Cloud Vault API and S3 storage.');
+    await startStorage(ctx);
+    console.info('Running actual native recovery with Vault as the only copy.');
+    results.vault = await testVault(ctx);
+    console.info(JSON.stringify(results.vault));
+  }
 } catch (error) {
   failure = error;
 } finally {
@@ -50,6 +58,7 @@ if (failure) {
   });
   await ctx.record('summary', {
     passed: false,
+    selectedCase,
     reason: 'Native recovery setup, assertion or cleanup failed.',
     stage: ctx.stage,
     errorType: failure.name,
@@ -60,9 +69,14 @@ if (failure) {
 } else {
   await ctx.record('summary', {
     passed: true,
+    selectedCase,
     platform: process.platform,
     arch: process.arch,
     ...results,
   });
-  console.info('Both real native recovery tests passed unattended.');
+  console.info(
+    selectedCase === 'both'
+      ? 'Both real native recovery tests passed unattended.'
+      : `Real native ${selectedCase} recovery passed unattended.`,
+  );
 }

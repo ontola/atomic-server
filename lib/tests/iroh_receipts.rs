@@ -287,3 +287,309 @@ async fn automatic_bulk_and_live_receipts_survive_receiver_reopen() {
         "Receipt C3"
     );
 }
+
+/// Separate interactive entry point: the ordinary persistence test above must
+/// still finish on its own and exercise C1/C2/C3 plus receiver reopen.
+#[derive(serde::Deserialize)]
+struct RendererRequest {
+    id: Option<u64>,
+    method: String,
+    #[serde(default)]
+    args: Vec<serde_json::Value>,
+}
+
+fn renderer_request(line: &str) -> Result<RendererRequest, String> {
+    let request: RendererRequest = serde_json::from_str(line).map_err(|e| e.to_string())?;
+    if request.method.is_empty() || (request.method != "__test_stop" && request.id.is_none()) {
+        return Err("Renderer call requires a method and request id".into());
+    }
+    Ok(request)
+}
+
+fn renderer_reply(id: Option<u64>, result: Result<serde_json::Value, String>) -> serde_json::Value {
+    match result {
+        Ok(value) => serde_json::json!({"id": id, "ok": true, "value": value}),
+        Err(error) => serde_json::json!({"id": id, "ok": false, "error": error}),
+    }
+}
+
+struct IrohRendererFixture {
+    host: atomic_lib::host::embed::EmbedHost,
+    receiver: tokio::sync::Mutex<Option<ChildGuard>>,
+    remote: String,
+}
+
+impl IrohRendererFixture {
+    async fn close_peer(&self) {
+        // Use the same production disconnect boundary as an explicit native
+        // Disconnect action. No receipt or UI state is manufactured here.
+        let child = self.receiver.lock().await.take();
+        drop(child); // ChildGuard kills and reaps only this fixture's receiver.
+        atomic_lib::sync::peer::remove_live_peer_any(&self.remote);
+    }
+
+    async fn call(&self, request: &RendererRequest) -> Result<serde_json::Value, String> {
+        if request.method == "__test_close_peer" {
+            self.close_peer().await;
+            return Ok(serde_json::Value::Null);
+        }
+        let answer = self
+            .host
+            .call(
+                &request.method,
+                &serde_json::to_string(&request.args).unwrap(),
+            )
+            .await?;
+        serde_json::from_str(&answer).map_err(|e| e.to_string())
+    }
+}
+
+async fn renderer_attachment(store: &Db, drive: &str) -> String {
+    use atomic_lib::{urls, Value};
+    let content = b"Real native Iroh attachment bytes";
+    let hash = blake3::hash(content);
+    store.put_blob(hash.as_bytes(), content).await.unwrap();
+    let file = store
+        .create_resource(
+            urls::FILE,
+            drive,
+            "Native Iroh.txt",
+            Some(vec![
+                (urls::FILENAME, Value::String("Native Iroh.txt".into())),
+                (urls::FILESIZE, Value::Integer(content.len() as i64)),
+                (
+                    urls::DOWNLOAD_URL,
+                    Value::AtomicUrl(
+                        format!("https://native.invalid/download/files/{hash}").into(),
+                    ),
+                ),
+                (urls::INTERNAL_ID, Value::String(hash.to_hex().to_string())),
+                (
+                    urls::BLOB,
+                    Value::AtomicUrl(
+                        atomic_lib::identifiers::blob_subject(hash.to_hex().as_ref())
+                            .as_str()
+                            .into(),
+                    ),
+                ),
+            ]),
+        )
+        .await
+        .unwrap();
+    let subject = store
+        .create_resource(urls::FOLDER, drive, "Receipt C1", None)
+        .await
+        .unwrap();
+    let mut resource = store.get_resource(&subject.as_str().into()).await.unwrap();
+    resource
+        .set_unsafe(
+            urls::ATTACHMENTS.into(),
+            Value::ResourceArray(vec![file.into()]),
+        )
+        .unwrap();
+    resource.save_locally(store).await.unwrap();
+    store.flush().unwrap();
+    subject
+}
+
+async fn await_renderer_contents(host: &atomic_lib::host::embed::EmbedHost, subject: &str) {
+    // READY means the real automatic metadata and file receipts have arrived;
+    // an arbitrary boot delay or a synthetic receipt cannot satisfy it.
+    tokio::time::timeout(WAIT, async {
+        loop {
+            let raw = host
+                .call(
+                    "getResourcePeerEvidence",
+                    &serde_json::json!([[subject]]).to_string(),
+                )
+                .await
+                .unwrap();
+            let evidence: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            if evidence["connections"]
+                .as_array()
+                .is_some_and(|connections| {
+                    connections.iter().any(|connection| {
+                        connection["attachmentReceipts"]
+                            .as_array()
+                            .is_some_and(|receipts| {
+                                receipts.iter().any(|receipt| receipt["subject"] == subject)
+                            })
+                    })
+                })
+            {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("automatic native attachment receipt before renderer readiness");
+}
+
+#[test]
+#[ignore = "test-owned JSON-lines native host, driven by Playwright with real Iroh"]
+fn native_iroh_renderer_host() {
+    use atomic_lib::host::{embed::EmbedHost, profiles::AgentProfiles, NoPush};
+    use atomic_lib::{runtime::AtomicNode, sync::peer};
+    use std::{
+        io::{BufRead, Write},
+        sync::Arc,
+    };
+    assert_eq!(
+        std::env::var("ATOMIC_NATIVE_RENDERER_HOST").as_deref(),
+        Ok("1"),
+        "interactive fixture requires the native renderer harness"
+    );
+    trace_sync();
+    let root = std::env::temp_dir().join(format!(
+        "atomic-iroh-renderer-{}-{:016x}",
+        std::process::id(),
+        rand::random::<u64>()
+    ));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&root)
+            .unwrap();
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir(&root).unwrap();
+    eprintln!("Native renderer artifacts: {}", root.display());
+    // The production peer owns background tasks with database clones. Drop the
+    // entire private runtime before removing its files, including on Windows.
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let source_dir = root.join("source");
+        let receiver_dir = root.join("receiver");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&receiver_dir).unwrap();
+        let store = open_store(&source_dir).await;
+        let (agent, drive) = store.setup("Native receipt source").await.unwrap();
+        let subject = renderer_attachment(&store, &drive).await;
+        let version = stored_frontier(&store, &subject);
+        let mut events = store.subscribe_replica_receipts();
+        std::fs::write(
+            receiver_dir.join("agent-secret"),
+            agent.build_secret().unwrap(),
+        )
+        .unwrap();
+        let log = std::fs::File::create(root.join("receiver.log")).unwrap();
+        let mut child = ChildGuard(
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "receipt_receiver_process",
+                    "--exact",
+                    "--ignored",
+                    "--test-threads=1",
+                    "--nocapture",
+                ])
+                .env(CHILD_DIR_ENV, &receiver_dir)
+                .stdout(log.try_clone().unwrap())
+                .stderr(log)
+                .spawn()
+                .unwrap(),
+        );
+        let remote = await_address(&receiver_dir, &mut child).await;
+        let (_, router) = peer::start(store.clone()).await.unwrap();
+        let mut addr = iroh::NodeAddr::new(remote.node_id.parse().unwrap());
+        if let Some(relay) = remote.relay_url.as_deref().and_then(|url| url.parse().ok()) {
+            addr = addr.with_relay_url(relay);
+        }
+        addr = addr.with_direct_addresses(
+            remote
+                .direct_addrs
+                .iter()
+                .map(|address| address.parse::<std::net::SocketAddr>().unwrap()),
+        );
+        router.endpoint().add_node_addr(addr).unwrap();
+        peer::sync_drive_with_peer_using(router.endpoint(), &remote.node_id, &drive, &store, true)
+            .await
+            .unwrap();
+        await_receipt(&mut events, &subject, &version).await;
+        let fixture = Arc::new(IrohRendererFixture {
+            host: EmbedHost::new(
+                AtomicNode::from_db(store.clone()),
+                Arc::new(NoPush),
+                AgentProfiles::none(),
+            ),
+            receiver: tokio::sync::Mutex::new(Some(child)),
+            remote: remote.node_id,
+        });
+        await_renderer_contents(&fixture.host, &subject).await;
+        println!(
+            "NATIVE_HOST_READY {}",
+            serde_json::json!({"drive": drive, "subject": subject})
+        );
+        std::io::stdout().flush().unwrap();
+        let (send, mut receive) = tokio::sync::mpsc::channel::<String>(32);
+        let input_thread = std::thread::spawn(move || {
+            for line in std::io::stdin().lock().lines() {
+                let Ok(line) = line else { break };
+                let stop =
+                    renderer_request(&line).is_ok_and(|request| request.method == "__test_stop");
+                if send.blocking_send(line).is_err() || stop {
+                    break;
+                }
+            }
+        });
+        let mut tasks = tokio::task::JoinSet::new();
+        while let Some(line) = receive.recv().await {
+            let request = match renderer_request(&line) {
+                Ok(request) => request,
+                Err(error) => {
+                    println!("NATIVE_HOST_REPLY {}", renderer_reply(None, Err(error)));
+                    std::io::stdout().flush().unwrap();
+                    continue;
+                }
+            };
+            if request.method == "__test_stop" {
+                break;
+            }
+            let fixture = fixture.clone();
+            tasks.spawn(async move {
+                let answer = fixture.call(&request).await;
+                println!("NATIVE_HOST_REPLY {}", renderer_reply(request.id, answer));
+                std::io::stdout().flush().unwrap();
+            });
+        }
+        fixture.close_peer().await;
+        tasks.abort_all();
+        while tasks.join_next().await.is_some() {}
+        router.shutdown().await.unwrap();
+        drop(router);
+        drop(fixture);
+        drop(store);
+        input_thread.join().expect("fixture stdin reader stopped");
+    });
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn native_renderer_protocol_correlates_calls_and_accepts_clean_shutdown() {
+    use serde_json::json;
+    let request = renderer_request(r#"{"id":7,"method":"__test_close_peer","args":[]}"#).unwrap();
+    assert_eq!(request.id, Some(7));
+    assert_eq!(request.method, "__test_close_peer");
+    assert!(request.args.is_empty());
+    assert_eq!(
+        renderer_reply(request.id, Ok(json!(null))),
+        json!({"id":7,"ok":true,"value":null})
+    );
+    assert_eq!(
+        renderer_reply(Some(8), Err("unknown host method".into())),
+        json!({"id":8,"ok":false,"error":"unknown host method"})
+    );
+    assert!(renderer_request(r#"{"method":"__test_stop","args":[]}"#).is_ok());
+    for invalid in [
+        r#"{"method":"getResource","args":[]}"#,
+        r#"{"id":1,"method":"","args":[]}"#,
+        r#"{"id":1,"method":"getResource","args":{}}"#,
+        "not JSON",
+    ] {
+        assert!(
+            renderer_request(invalid).is_err(),
+            "invalid request: {invalid}"
+        );
+    }
+}

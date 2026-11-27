@@ -86,24 +86,23 @@ beforeEach(() => {
   });
   vi.mocked(onManagedLogout).mockReturnValue(() => {});
   vi.mocked(agentVaultProof).mockResolvedValue(new Uint8Array([1]));
-  vi.mocked(listVaultDrives).mockImplementation(async () =>
-    [FIRST, SECOND].map(drive => ({
-      id: drive,
-      drive_subject: drive,
-      drive_pseudonym: `vault:${drive}`,
-      status: 'active',
-      used_bytes: 1,
-      quota_bytes: 10,
-      last_backup_at: 1,
-    })),
-  );
-  vi.mocked(getVaultState).mockResolvedValue({
-    enrollment: {} as never,
+  const enrollments = [FIRST, SECOND].map(drive => ({
+    id: drive,
+    drive_subject: drive,
+    drive_pseudonym: `vault:${drive}`,
+    status: 'active',
+    used_bytes: 1,
+    quota_bytes: 10,
+    last_backup_at: 1,
+  }));
+  vi.mocked(listVaultDrives).mockResolvedValue(enrollments);
+  vi.mocked(getVaultState).mockImplementation(async pseudonym => ({
+    enrollment: enrollments.find(item => item.drive_pseudonym === pseudonym)!,
     lanes: {},
     checkpoints: [],
     pending_uploads: 0,
     confirmed_objects: 1,
-  });
+  }));
   vi.mocked(recoverDriveKey).mockResolvedValue({
     driveKey: new Uint8Array(32),
     keyEpoch: 2,

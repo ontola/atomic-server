@@ -6,11 +6,13 @@
 import { withDeadline } from '@tomic/lib';
 import { PRODUCT_NAME } from './product';
 import {
+  getManagedApiBase,
   getManagedDeviceToken,
   hasManagedApi,
   managedFetch,
   setManagedDeviceToken,
 } from './api';
+import { canHoldProviderCookie } from './providerCookie';
 
 export type ManagedAccount = {
   /** The account key backups and bindings are stored under (`owner_email`).
@@ -126,6 +128,10 @@ export async function getManagedAccount(
   const generation = sessionGeneration;
   // A device linked in the meantime asks with a different credential.
   const token = getManagedDeviceToken();
+
+  // Offsite and native clients need a linked token. A configured provider alone
+  // is an offer to sign in, not a reason to send anonymous account probes.
+  if (!token && !canHoldProviderCookie(getManagedApiBase())) return null;
 
   if (
     !options.fresh &&

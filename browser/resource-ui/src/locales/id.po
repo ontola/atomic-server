@@ -13917,393 +13917,390 @@ msgstr "Mulai ulang untuk memakai versi {0}"
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The first Cloud Vault backup failed."
-msgstr ""
+msgstr "Pencadangan pertama Cloud Vault gagal."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault hasn’t completed the first backup yet."
-msgstr ""
+msgstr "Cloud Vault belum menyelesaikan pencadangan pertama."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "This workspace has no confirmed Cloud Vault copy."
-msgstr ""
+msgstr "Ruang kerja ini belum memiliki salinan Cloud Vault yang terkonfirmasi."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "Retry backup"
-msgstr ""
+msgstr "Coba cadangkan lagi"
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
-msgstr ""
+msgstr "Tidak ada salinan drive ini yang dapat diverifikasi di Cloud Vault atau di server eksternal."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The last verified full sync with the server was more than 24 hours ago."
-msgstr ""
+msgstr "Sinkronisasi penuh terakhir dengan server yang terverifikasi dilakukan lebih dari 24 jam yang lalu."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The last verified full sync with the server was at least 7 days ago."
-msgstr ""
+msgstr "Sinkronisasi penuh terakhir dengan server yang terverifikasi dilakukan setidaknya 7 hari yang lalu."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "A full sync with the server could not be verified."
-msgstr ""
+msgstr "Sinkronisasi penuh dengan server tidak dapat diverifikasi."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The latest verified backup is more than 24 hours old."
-msgstr ""
+msgstr "Cadangan terverifikasi terbaru berusia lebih dari 24 jam."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The latest verified backup is at least 7 days old."
-msgstr ""
+msgstr "Cadangan terverifikasi terbaru berusia setidaknya 7 hari."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "No backup from the last 7 days could be verified."
-msgstr ""
+msgstr "Tidak ada cadangan dari 7 hari terakhir yang dapat diverifikasi."
 
 #: ../data-browser/src/helpers/managed/useVaultBackup.ts
 msgid "File recovery cancelled."
-msgstr ""
+msgstr "Pemulihan file dibatalkan."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Close copies and sync"
-msgstr ""
+msgstr "Tutup salinan dan sinkronisasi"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Copies & sync"
-msgstr ""
+msgstr "Salinan & sinkronisasi"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Currently connected"
-msgstr ""
+msgstr "Saat ini terhubung"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Currently offline"
-msgstr ""
+msgstr "Saat ini offline"
 
 #. 0: confirmedTime
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed backup: {0}"
-msgstr ""
+msgstr "Cadangan terkonfirmasi terakhir: {0}"
 
 #. 0: formatTime(context.lastBackupAt)
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last workspace backup: {0}"
-msgstr ""
+msgstr "Cadangan ruang kerja terakhir: {0}"
 
 #. 0: peers.confirmedCount
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource-details copies: {0}"
-msgstr ""
+msgstr "Salinan detail sumber daya: {0}"
 
 #. 0: index + 1
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peer {0}"
-msgstr ""
+msgstr "Peer {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peer resource copies"
-msgstr ""
+msgstr "Salinan sumber daya di peer"
 
 #. 0: completePeers
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Confirmed peer copies: {0}"
-msgstr ""
+msgstr "Salinan peer terkonfirmasi: {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peers may become unavailable when browser tabs or apps close."
-msgstr ""
+msgstr "Peer mungkin tidak lagi tersedia ketika tab browser atau aplikasi ditutup."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peers"
-msgstr ""
+msgstr "Peer"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource copies"
-msgstr ""
+msgstr "Salinan sumber daya"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "A complete copy needs both resource details and file contents at the same destination."
-msgstr ""
+msgstr "Salinan lengkap memerlukan detail sumber daya dan isi file di tujuan yang sama."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"
-msgstr ""
+msgstr "Kelola sinkronisasi dan pencadangan"
 
 #. 0: description
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource details: {0}"
-msgstr ""
+msgstr "Detail sumber daya: {0}"
 
 #. 0: time
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed: {0}"
-msgstr ""
+msgstr "Terakhir dikonfirmasi: {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup enabled"
-msgstr ""
+msgstr "Pencadangan ruang kerja diaktifkan"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup paused"
-msgstr ""
+msgstr "Pencadangan ruang kerja dijeda"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup is off"
-msgstr ""
+msgstr "Pencadangan ruang kerja nonaktif"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Checking workspace backup…"
-msgstr ""
+msgstr "Memeriksa cadangan ruang kerja…"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup status unavailable"
-msgstr ""
+msgstr "Status pencadangan ruang kerja tidak tersedia"
 
 #. 0: title; 1: presentation.label
 #: ../data-browser/src/components/ResourceSync/ResourceSyncIndicator.tsx
 msgid "Copies and sync for {0}: {1}"
-msgstr ""
+msgstr "Salinan dan sinkronisasi untuk {0}: {1}"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes received"
-msgstr ""
+msgstr "Perubahan terbaru diterima"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for peers"
-msgstr ""
+msgstr "Perubahan menunggu peer"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource copies not confirmed"
-msgstr ""
+msgstr "Salinan sumber daya belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes backed up"
-msgstr ""
+msgstr "Perubahan terbaru dicadangkan"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for backup"
-msgstr ""
+msgstr "Perubahan menunggu pencadangan"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource backup not confirmed"
-msgstr ""
+msgstr "Cadangan sumber daya belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saved on this device"
-msgstr ""
+msgstr "Tersimpan di perangkat ini"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Saving on this device…"
-msgstr ""
+msgstr "Menyimpan di perangkat ini…"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not save on this device"
-msgstr ""
+msgstr "Tidak dapat menyimpan di perangkat ini"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local storage unavailable"
-msgstr ""
+msgstr "Penyimpanan lokal tidak tersedia"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local copy not confirmed"
-msgstr ""
+msgstr "Salinan lokal belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "No server configured"
-msgstr ""
+msgstr "Tidak ada server yang dikonfigurasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to save"
-msgstr ""
+msgstr "Perubahan menunggu untuk disimpan"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saving changes…"
-msgstr ""
+msgstr "Menyimpan perubahan…"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to sync"
-msgstr ""
+msgstr "Perubahan menunggu sinkronisasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes saved"
-msgstr ""
+msgstr "Perubahan terbaru tersimpan"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Copy not confirmed"
-msgstr ""
+msgstr "Salinan belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents confirmed"
-msgstr ""
+msgstr "Isi file terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Checking file contents…"
-msgstr ""
+msgstr "Memeriksa isi file…"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents"
-msgstr ""
+msgstr "Tidak dapat mengonfirmasi isi file"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File storage unavailable"
-msgstr ""
+msgstr "Penyimpanan file tidak tersedia"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents not confirmed"
-msgstr ""
+msgstr "Isi file belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents on this device"
-msgstr ""
+msgstr "Tidak dapat mengonfirmasi isi file di perangkat ini"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes could not be saved"
-msgstr ""
+msgstr "Perubahan tidak dapat disimpan"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved to server"
-msgstr ""
+msgstr "Sumber daya dan isi file tersimpan di server"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes saved to server"
-msgstr ""
+msgstr "Perubahan terbaru tersimpan di server"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents backed up to Cloud Vault"
-msgstr ""
+msgstr "Sumber daya dan isi file dicadangkan ke Cloud Vault"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes backed up to Cloud Vault"
-msgstr ""
+msgstr "Perubahan terbaru dicadangkan ke Cloud Vault"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents received by peers"
-msgstr ""
+msgstr "Sumber daya dan isi file diterima oleh peer"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes received by peers"
-msgstr ""
+msgstr "Perubahan terbaru diterima oleh peer"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server file contents not confirmed"
-msgstr ""
+msgstr "Isi file di server belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Cloud Vault file contents not confirmed"
-msgstr ""
+msgstr "Isi file di Cloud Vault belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Peer file copies not confirmed"
-msgstr ""
+msgstr "Salinan file di peer belum terkonfirmasi"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved on this device"
-msgstr ""
+msgstr "Sumber daya dan isi file tersimpan di perangkat ini"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server copy not confirmed"
-msgstr ""
+msgstr "Salinan di server belum terkonfirmasi"
 
 #. 0: ago
 #. 0: syncedAgo
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last full sync {0}"
-msgstr ""
+msgstr "Sinkronisasi penuh terakhir {0}"
 
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last full sync just now"
-msgstr ""
+msgstr "Sinkronisasi penuh terakhir baru saja"
 
 #. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last sync activity {0}"
-msgstr ""
+msgstr "Aktivitas sinkronisasi terakhir {0}"
 
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Saved locally"
-msgstr ""
+msgstr "Tersimpan secara lokal"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Not syncing with a server"
-msgstr ""
+msgstr "Tidak menyinkronkan dengan server"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Sync not confirmed"
-msgstr ""
+msgstr "Sinkronisasi belum terkonfirmasi"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Synced with server"
-msgstr ""
+msgstr "Tersinkron dengan server"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Changes not yet synced"
-msgstr ""
+msgstr "Perubahan belum disinkronkan"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Retry file recovery"
-msgstr ""
+msgstr "Coba pulihkan file lagi"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Recover missing files"
-msgstr ""
+msgstr "Pulihkan file yang hilang"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Cancel file recovery"
-msgstr ""
+msgstr "Batalkan pemulihan file"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Scanning for missing files…"
-msgstr ""
+msgstr "Memindai file yang hilang…"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Looking for file contents on connected devices…"
-msgstr ""
+msgstr "Mencari isi file di perangkat yang terhubung…"
 
 #. 0: progress.done; 1: progress.total
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Recovering files from Cloud Vault… {0} of {1}"
-msgstr ""
+msgstr "Memulihkan file dari Cloud Vault… {0} dari {1}"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Checking recovered files…"
-msgstr ""
+msgstr "Memeriksa file yang dipulihkan…"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "All referenced file contents are available on this device."
-msgstr ""
+msgstr "Semua isi file yang dirujuk tersedia di perangkat ini."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# file recovered."
 msgid_plural "# files recovered."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# file dipulihkan."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# file is still unavailable."
 msgid_plural "# files are still unavailable."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# file masih tidak tersedia."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# backup file could not be read."
 msgid_plural "# backup files could not be read."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# file cadangan tidak dapat dibaca."

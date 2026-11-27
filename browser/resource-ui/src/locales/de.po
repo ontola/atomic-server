@@ -13925,393 +13925,393 @@ msgstr "Neu starten, um Version {0} zu verwenden"
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The first Cloud Vault backup failed."
-msgstr ""
+msgstr "Die erste Cloud Vault-Sicherung ist fehlgeschlagen."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "Cloud Vault hasn’t completed the first backup yet."
-msgstr ""
+msgstr "Cloud Vault hat die erste Sicherung noch nicht abgeschlossen."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "This workspace has no confirmed Cloud Vault copy."
-msgstr ""
+msgstr "Für diesen Arbeitsbereich ist keine bestätigte Cloud Vault-Kopie vorhanden."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "Retry backup"
-msgstr ""
+msgstr "Sicherung erneut versuchen"
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
-msgstr ""
+msgstr "Weder in Cloud Vault noch auf einem externen Server konnte eine Kopie dieses Laufwerks verifiziert werden."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The last verified full sync with the server was more than 24 hours ago."
-msgstr ""
+msgstr "Die letzte verifizierte vollständige Synchronisierung mit dem Server liegt mehr als 24 Stunden zurück."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The last verified full sync with the server was at least 7 days ago."
-msgstr ""
+msgstr "Die letzte verifizierte vollständige Synchronisierung mit dem Server liegt mindestens 7 Tage zurück."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "A full sync with the server could not be verified."
-msgstr ""
+msgstr "Eine vollständige Synchronisierung mit dem Server konnte nicht verifiziert werden."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The latest verified backup is more than 24 hours old."
-msgstr ""
+msgstr "Die letzte verifizierte Sicherung ist mehr als 24 Stunden alt."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "The latest verified backup is at least 7 days old."
-msgstr ""
+msgstr "Die letzte verifizierte Sicherung ist mindestens 7 Tage alt."
 
 #: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "No backup from the last 7 days could be verified."
-msgstr ""
+msgstr "Es konnte keine Sicherung aus den letzten 7 Tagen verifiziert werden."
 
 #: ../data-browser/src/helpers/managed/useVaultBackup.ts
 msgid "File recovery cancelled."
-msgstr ""
+msgstr "Dateiwiederherstellung abgebrochen."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Close copies and sync"
-msgstr ""
+msgstr "Kopien und Synchronisierung schließen"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Copies & sync"
-msgstr ""
+msgstr "Kopien und Synchronisierung"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Currently connected"
-msgstr ""
+msgstr "Derzeit verbunden"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Currently offline"
-msgstr ""
+msgstr "Derzeit offline"
 
 #. 0: confirmedTime
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed backup: {0}"
-msgstr ""
+msgstr "Letzte bestätigte Sicherung: {0}"
 
 #. 0: formatTime(context.lastBackupAt)
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last workspace backup: {0}"
-msgstr ""
+msgstr "Letzte Sicherung des Arbeitsbereichs: {0}"
 
 #. 0: peers.confirmedCount
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource-details copies: {0}"
-msgstr ""
+msgstr "Kopien der Ressourcendaten: {0}"
 
 #. 0: index + 1
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peer {0}"
-msgstr ""
+msgstr "Peer {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peer resource copies"
-msgstr ""
+msgstr "Ressourcenkopien auf Peers"
 
 #. 0: completePeers
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Confirmed peer copies: {0}"
-msgstr ""
+msgstr "Bestätigte Kopien auf Peers: {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peers may become unavailable when browser tabs or apps close."
-msgstr ""
+msgstr "Peers sind möglicherweise nicht mehr erreichbar, wenn Browser-Tabs oder Apps geschlossen werden."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Peers"
-msgstr ""
+msgstr "Peers"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource copies"
-msgstr ""
+msgstr "Ressourcenkopien"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "A complete copy needs both resource details and file contents at the same destination."
-msgstr ""
+msgstr "Für eine vollständige Kopie müssen sowohl Ressourcendaten als auch Dateiinhalte am selben Ziel vorhanden sein."
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Manage sync and backup"
-msgstr ""
+msgstr "Synchronisierung und Sicherung verwalten"
 
 #. 0: description
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Resource details: {0}"
-msgstr ""
+msgstr "Ressourcendaten: {0}"
 
 #. 0: time
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Last confirmed: {0}"
-msgstr ""
+msgstr "Zuletzt bestätigt: {0}"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup enabled"
-msgstr ""
+msgstr "Sicherung des Arbeitsbereichs aktiviert"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup paused"
-msgstr ""
+msgstr "Sicherung des Arbeitsbereichs pausiert"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup is off"
-msgstr ""
+msgstr "Sicherung des Arbeitsbereichs ist deaktiviert"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Checking workspace backup…"
-msgstr ""
+msgstr "Sicherung des Arbeitsbereichs wird geprüft …"
 
 #: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 msgid "Workspace backup status unavailable"
-msgstr ""
+msgstr "Sicherungsstatus des Arbeitsbereichs nicht verfügbar"
 
 #. 0: title; 1: presentation.label
 #: ../data-browser/src/components/ResourceSync/ResourceSyncIndicator.tsx
 msgid "Copies and sync for {0}: {1}"
-msgstr ""
+msgstr "Kopien und Synchronisierung für {0}: {1}"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes received"
-msgstr ""
+msgstr "Letzte Änderungen empfangen"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for peers"
-msgstr ""
+msgstr "Änderungen warten auf Peers"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource copies not confirmed"
-msgstr ""
+msgstr "Ressourcenkopien nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes backed up"
-msgstr ""
+msgstr "Letzte Änderungen gesichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting for backup"
-msgstr ""
+msgstr "Änderungen warten auf Sicherung"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Resource backup not confirmed"
-msgstr ""
+msgstr "Ressourcensicherung nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saved on this device"
-msgstr ""
+msgstr "Auf diesem Gerät gespeichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Saving on this device…"
-msgstr ""
+msgstr "Wird auf diesem Gerät gespeichert …"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not save on this device"
-msgstr ""
+msgstr "Speichern auf diesem Gerät fehlgeschlagen"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local storage unavailable"
-msgstr ""
+msgstr "Lokaler Speicher nicht verfügbar"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Local copy not confirmed"
-msgstr ""
+msgstr "Lokale Kopie nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "No server configured"
-msgstr ""
+msgstr "Kein Server eingerichtet"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to save"
-msgstr ""
+msgstr "Änderungen warten auf Speicherung"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Saving changes…"
-msgstr ""
+msgstr "Änderungen werden gespeichert …"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes waiting to sync"
-msgstr ""
+msgstr "Änderungen warten auf Synchronisierung"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Latest changes saved"
-msgstr ""
+msgstr "Letzte Änderungen gespeichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 msgid "Copy not confirmed"
-msgstr ""
+msgstr "Kopie nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents confirmed"
-msgstr ""
+msgstr "Dateiinhalte bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Checking file contents…"
-msgstr ""
+msgstr "Dateiinhalte werden geprüft …"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents"
-msgstr ""
+msgstr "Dateiinhalte konnten nicht bestätigt werden"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File storage unavailable"
-msgstr ""
+msgstr "Dateispeicher nicht verfügbar"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "File contents not confirmed"
-msgstr ""
+msgstr "Dateiinhalte nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Could not confirm file contents on this device"
-msgstr ""
+msgstr "Dateiinhalte auf diesem Gerät konnten nicht bestätigt werden"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Changes could not be saved"
-msgstr ""
+msgstr "Änderungen konnten nicht gespeichert werden"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved to server"
-msgstr ""
+msgstr "Ressource und Dateiinhalte auf dem Server gespeichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes saved to server"
-msgstr ""
+msgstr "Letzte Änderungen auf dem Server gespeichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents backed up to Cloud Vault"
-msgstr ""
+msgstr "Ressource und Dateiinhalte in Cloud Vault gesichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes backed up to Cloud Vault"
-msgstr ""
+msgstr "Letzte Änderungen in Cloud Vault gesichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents received by peers"
-msgstr ""
+msgstr "Ressource und Dateiinhalte von Peers empfangen"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Latest changes received by peers"
-msgstr ""
+msgstr "Letzte Änderungen von Peers empfangen"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server file contents not confirmed"
-msgstr ""
+msgstr "Dateiinhalte auf dem Server nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Cloud Vault file contents not confirmed"
-msgstr ""
+msgstr "Dateiinhalte in Cloud Vault nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Peer file copies not confirmed"
-msgstr ""
+msgstr "Dateikopien auf Peers nicht bestätigt"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Resource and file contents saved on this device"
-msgstr ""
+msgstr "Ressource und Dateiinhalte auf diesem Gerät gespeichert"
 
 #: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
 msgid "Server copy not confirmed"
-msgstr ""
+msgstr "Serverkopie nicht bestätigt"
 
 #. 0: ago
 #. 0: syncedAgo
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last full sync {0}"
-msgstr ""
+msgstr "Letzte vollständige Synchronisierung {0}"
 
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last full sync just now"
-msgstr ""
+msgstr "Letzte vollständige Synchronisierung gerade eben"
 
 #. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
 #. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Last sync activity {0}"
-msgstr ""
+msgstr "Letzte Synchronisierungsaktivität {0}"
 
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Saved locally"
-msgstr ""
+msgstr "Lokal gespeichert"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Not syncing with a server"
-msgstr ""
+msgstr "Keine Synchronisierung mit einem Server"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Sync not confirmed"
-msgstr ""
+msgstr "Synchronisierung nicht bestätigt"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Synced with server"
-msgstr ""
+msgstr "Mit dem Server synchronisiert"
 
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Changes not yet synced"
-msgstr ""
+msgstr "Änderungen noch nicht synchronisiert"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Retry file recovery"
-msgstr ""
+msgstr "Dateiwiederherstellung erneut versuchen"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Recover missing files"
-msgstr ""
+msgstr "Fehlende Dateien wiederherstellen"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Cancel file recovery"
-msgstr ""
+msgstr "Dateiwiederherstellung abbrechen"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Scanning for missing files…"
-msgstr ""
+msgstr "Es wird nach fehlenden Dateien gesucht …"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Looking for file contents on connected devices…"
-msgstr ""
+msgstr "Es wird auf verbundenen Geräten nach Dateiinhalten gesucht …"
 
 #. 0: progress.done; 1: progress.total
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Recovering files from Cloud Vault… {0} of {1}"
-msgstr ""
+msgstr "Dateien aus Cloud Vault werden wiederhergestellt … {0} von {1}"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "Checking recovered files…"
-msgstr ""
+msgstr "Wiederhergestellte Dateien werden geprüft …"
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "All referenced file contents are available on this device."
-msgstr ""
+msgstr "Die Inhalte aller referenzierten Dateien sind auf diesem Gerät verfügbar."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# file recovered."
 msgid_plural "# files recovered."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# Datei wiederhergestellt."
+msgstr[1] "# Dateien wiederhergestellt."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# file is still unavailable."
 msgid_plural "# files are still unavailable."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# Datei ist weiterhin nicht verfügbar."
+msgstr[1] "# Dateien sind weiterhin nicht verfügbar."
 
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 msgid "# backup file could not be read."
 msgid_plural "# backup files could not be read."
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "# Sicherungsdatei konnte nicht gelesen werden."
+msgstr[1] "# Sicherungsdateien konnten nicht gelesen werden."

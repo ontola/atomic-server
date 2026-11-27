@@ -66,12 +66,8 @@ import { CalculatedPageHeight } from '@tomic/ui/globalCssVars';
 import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
-import {
-  createFlutterHost,
-  flutterChannel,
-  lockFlutterChannel,
-} from './flutterHost';
-import { createMockHost } from './mockHost';
+import { flutterChannel, lockFlutterChannel } from './flutterHost';
+import { selectEmbedHost } from './selectHost';
 import { createFlush } from './flush';
 import {
   adoptDriveOf,
@@ -212,9 +208,9 @@ declare global {
 // the app's token from here on.
 lockFlutterChannel();
 
+const selectedHost = selectEmbedHost(window.atomicHost);
 const channel: NativeChannel =
-  window.atomicHost ??
-  (flutterChannel() ? createFlutterHost(flutterChannel()!) : createMockHost());
+  selectedHost instanceof Promise ? await selectedHost : selectedHost;
 // Only the app can open its own screens; the mock host answers nothing to that.
 setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 

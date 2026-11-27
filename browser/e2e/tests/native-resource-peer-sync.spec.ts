@@ -13,7 +13,8 @@ test('native Iroh receipts reach the embedded resource panel and disappear on de
   test.setTimeout(150_000);
   const host = await nativeHost({
     binary: nativeBinary!,
-    testName: 'automatic_bulk_and_live_receipts_survive_receiver_reopen',
+    testName: 'native_iroh_renderer_host',
+    ignored: true,
   });
   let assets: Awaited<ReturnType<typeof serveEmbed>> | undefined;
 
