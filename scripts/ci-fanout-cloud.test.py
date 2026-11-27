@@ -150,6 +150,31 @@ class CloudTests(unittest.TestCase):
         self.metadata = {'droplet_id': 99, 'hostname': 'fixture-cloud-control', 'region': 'mem1'}
         self.api = FakeAPI(self.config)
 
+    def test_selected_check_scope_is_projected_without_claiming_browser_or_full_ci(self):
+        self.config['fanout_config']['check_only'] = 'flutter-test'
+        state = {'source_commit': SHA, 'status': 'passed',
+                 'selected_check_receipt': {'source_commit': SHA, 'check': 'flutter-test', 'validation_scope': 'selected-check'},
+                 'validation_completed_at': NOW.isoformat(), 'nodes': {'node-001': {
+            'phase_results': {'check-flutter-test': {'status': 'passed'}}}}}
+        path = Path(self.config['fanout_config']['runtime_dir']) / 'state.json'
+        cloud.write_json(path, state)
+        result = cloud.status_snapshot(self.config)
+        self.assertEqual(result['validation_scope'], 'selected-check')
+        self.assertEqual(result['selected_check'], 'flutter-test')
+        self.assertEqual(result['completed_checks'], ['flutter-test'])
+        self.assertIsNone(result['browser_test_count'])
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'validate_cached_bundles', return_value=[]):
+            cloud.persist_evidence(self.config, final=True)
+        summary = cloud.read_json(Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key'] / 'cloud-summary.json')
+        self.assertEqual(summary['validation_scope'], 'selected-check')
+        self.assertEqual(summary['selected_check'], 'flutter-test')
+        self.assertEqual(summary['selected_check_receipt'], state['selected_check_receipt'])
+        self.assertEqual(summary['validation_completed_at'], NOW.isoformat())
+        self.assertIsNone(summary['validation_passed_at'])
+        self.config['fanout_config'].pop('check_only')
+        self.assertNotIn('validation_scope', cloud.status_snapshot(self.config))
+
     def test_valid_configuration_retains_original_deadline_and_three_worker_scope(self):
         result = cloud.validate_config(copy.deepcopy(self.config))
         self.assertEqual(result['deadline'], self.config['deadline'])
@@ -1006,6 +1031,31 @@ class LauncherTests(unittest.TestCase):
         self.assertAlmostEqual(plan['maximum_estimated_usd'], 4.5415 * (1 + 120 / 3600) + .15)
         self.assertEqual(self.api.creates, [])
         self.assertFalse(Path(self.config['runtime_dir']).exists())
+
+    def test_selected_check_cloud_plan_and_remote_config_preserve_scope_and_price_ceiling(self):
+        self.config['check_only'] = 'flutter-test'
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        worker = {'validation_scope': 'selected-check', 'check_jobs': ['flutter-test'], 'browser_shards': 0, 'initial_nodes': 1}
+        remote_configs = []
+        remote = self.controller.remote_config
+        def record_remote(state=None):
+            value = remote(state)
+            remote_configs.append(value)
+            return value
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=worker), \
+                mock.patch.object(self.controller, 'remote_config', side_effect=record_remote):
+            plan = self.controller.plan()
+        self.assertEqual(plan['validation_scope'], 'selected-check')
+        self.assertEqual(plan['test_nodes'], 1)
+        self.assertEqual(plan['configured_test_nodes'], 3)
+        self.assertEqual(plan['initial_nodes'], 1)
+        self.assertEqual(plan['browser_shards'], 0)
+        self.assertEqual(plan['check_jobs'], ['flutter-test'])
+        self.assertEqual(plan['fresh_checks'], ['flutter-test'])
+        self.assertAlmostEqual(plan['hourly_usd'], 4.5415)
+        self.assertEqual(remote_configs[0]['fanout_config']['check_only'], 'flutter-test')
+        self.assertEqual(remote_configs[0]['fanout_config']['accounts'][0]['nodes'], 3)
+        self.assertEqual(self.api.creates, [])
 
     def test_one_hour_plan_accepts_a_realistically_ticking_clock(self):
         observed = []

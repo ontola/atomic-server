@@ -289,7 +289,11 @@ class CloudLauncher:
         userdata_bytes = len(cloud_init(scripts['ci-fanout-cloud.py'],remote,credentials).encode())
         if userdata_bytes > 65536-512:
             raise ValueError('cloud-init leaves insufficient room under the 64 KiB user-data limit')
-        return {'source_commit': self.config['source_commit'], 'test_nodes': 3,
+        scope = ({'validation_scope': 'selected-check', 'configured_test_nodes': 3,
+                  'initial_nodes': 1, 'browser_shards': 0, 'check_jobs': ['flutter-test']}
+                 if self.config.get('check_only') else {})
+        return {**scope, 'source_commit': self.config['source_commit'],
+                'test_nodes': 1 if self.config.get('check_only') else 3,
                 'controller_size': self.config['cloud_controller_size'], 'region': self.config['region'],
                 'controller_region': self.config['cloud_controller_region'], 'cloud_worker_mode': self.config['cloud_worker_mode'],
                 'cache_volume_gib': WARM.VOLUME_GIB if cache_hourly else 0,

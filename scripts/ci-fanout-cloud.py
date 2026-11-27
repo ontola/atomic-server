@@ -477,6 +477,10 @@ def persist_evidence(config, final=False):
                'retained_volume_hourly_usd_estimate': config['expected_volume_hourly_rate'],
                'retained_volume_monthly_usd_estimate': 1.0, 'worker_mode': config.get('cloud_worker_mode', 'cold'),
                'temporary_cache_volume_hourly_usd_estimate': config.get('expected_cache_volume_hourly_rate', 0), 'updated_at': utcnow().isoformat()}
+    if config['fanout_config'].get('check_only'):
+        summary.update(validation_scope='selected-check', selected_check=config['fanout_config']['check_only'],
+                       selected_check_receipt=state.get('selected_check_receipt'),
+                       validation_completed_at=state.get('validation_completed_at'))
     write_json(destination / 'cloud-summary.json', summary)
     return receipt
 
@@ -823,7 +827,9 @@ def status_snapshot(config):
     nodes = state.get('nodes', {})
     checks = sorted({name[6:] for node in nodes.values() for name, result in node.get('phase_results', {}).items()
                      if name.startswith('check-') and result.get('status') in ('passed', 'failed')})
-    return {'source_commit': state.get('source_commit', config['source_commit']), 'status': state.get('status', 'not-started'),
+    scope = ({'validation_scope': 'selected-check', 'selected_check': config['fanout_config']['check_only']}
+             if config['fanout_config'].get('check_only') else {})
+    return {**scope, 'source_commit': state.get('source_commit', config['source_commit']), 'status': state.get('status', 'not-started'),
             'deadline': state.get('deadline', config['deadline']), 'completed_checks': checks,
             'browser_counts': state.get('browser_result_stats'), 'browser_test_count': state.get('full_browser_test_count'),
             'nodes': [{key: node.get(key) for key in ('id', 'phase', 'status', 'deleted_at', 'bundle_backup_status')}

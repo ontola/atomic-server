@@ -191,6 +191,8 @@ def validate_archive(path, source, check=None):
 
 
 def validate_config(config):
+    if 'check_only' in config and config['check_only'] != 'flutter-test':
+        raise ValueError('check_only supports only the standalone flutter-test check')
     if not safe_slug(config.get('batch_key')):
         raise ValueError('batch_key must be a unique safe identifier')
     if not re.fullmatch(r'[0-9a-f]{40}', config.get('source_commit', '')):
@@ -616,11 +618,15 @@ class Controller:
             accounts.append({'context': account['context'], 'nodes': account['nodes'],
                              'existing_droplets': len(existing), 'limit': info['droplet_limit']})
         total = sum(account['nodes'] for account in self.config['accounts'])
-        return {'source_commit': actual, 'dagger_version': engine, 'accounts': accounts,
+        plan = {'source_commit': actual, 'dagger_version': engine, 'accounts': accounts,
                 'nodes': total, 'hourly_usd': total * self.config['expected_hourly_rate'],
                 'maximum_hours': self.config['max_hours'], 'check_jobs': [name for name, _ in CHECKS],
                 'browser_shards': total, 'initial_nodes': min(total, len(CHECKS) + 1),
                 'canary_before_remaining_nodes': True}
+        if self.config.get('check_only'):
+            plan.update(validation_scope='selected-check', check_jobs=['flutter-test'],
+                        browser_shards=0, initial_nodes=1, canary_before_remaining_nodes=False)
+        return plan
 
     def initialize(self, plan):
         budget = {}
@@ -654,6 +660,8 @@ class Controller:
                  'batch_key': self.config['batch_key'], 'plan': plan, 'nodes': nodes,
                  'keys': {}, 'status': 'initialized', 'created_at': stamp(), 'stop_requested': False,
                  'controller_pid': os.getpid(), **budget}
+        if self.config.get('check_only'):
+            state.update(validation_scope='selected-check', selected_check=self.config['check_only'])
         self.path.write_text(json.dumps(state, indent=2) + '\n')
         self.path.chmod(0o600)
         (self.root / 'cloud-init.yaml').write_text(self.cloud_init(plan['dagger_version']))
@@ -1775,10 +1783,43 @@ systemctl reload ssh
         self.ssh(worker, 'rm -rf /opt/atomic-ci/bundle')
         self.update(lambda state:state.update(oci_probe_passed_at=stamp()))
 
+    def run_selected_check(self):
+        """One explicit standalone check; this receipt never certifies full CI."""
+        node_id = next(iter(self.read()['nodes']))
+        name = self.config['check_only']
+        phase = 'check-' + name
+        self.create(node_id)
+        self.phase(node_id, phase, 'check', [name])
+        try:
+            self.wait([node_id])
+        except PhaseFailure as error:
+            self.record_phase_failure(error)
+            raise
+        local = self.retrieve(node_id)
+        result_path = local / 'results' / phase / 'result.json'
+        result = json.loads(result_path.read_text())
+        expected = {'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
+                    'node_id': node_id, 'phase': phase}
+        observed = self.read()['nodes'][node_id]['phase_results'].get(phase)
+        commands = result.get('commands')
+        if (result != observed or any(result.get(key) != value for key, value in expected.items())
+                or result.get('status') != 'passed' or not result.get('finished_at')
+                or not isinstance(commands, list) or not commands
+                or any(not isinstance(item, dict) or type(item.get('exit_code')) is not int
+                       or item['exit_code'] != 0 for item in commands)):
+            raise ValueError('selected check result lacks matching successful source-pinned evidence')
+        self.check_deadline()
+        receipt = dict(expected, check=name, status='passed', validation_scope='selected-check',
+                       result_sha256=file_sha256(result_path),
+                       result_path=str(result_path.relative_to(self.root)), finished_at=result['finished_at'])
+        self.update(lambda state: state.update(selected_check_receipt=receipt,
+                    checks_finished_at=stamp(), validation_completed_at=stamp()))
+        self.cleanup('selected check flutter-test passed; full CI was not run', successful=True)
+
     def run(self):
         plan = self.plan()
         fixture = Path(self.config.get('oci_probe_dir', ''))
-        if not fixture.is_absolute() or not (fixture / 'dagger.json').is_file():
+        if not self.config.get('check_only') and (not fixture.is_absolute() or not (fixture / 'dagger.json').is_file()):
             raise ValueError('oci_probe_dir must point to the reviewed portable OCI fixture')
         self.initialize(plan)
         watcher = None
@@ -1792,6 +1833,9 @@ systemctl reload ssh
                     stdout=watcher_log, stderr=subprocess.STDOUT)
             self.update(lambda state: state.update(watchdog_pid=watcher.pid, status='running'))
             self.register_keys()
+            if self.config.get('check_only'):
+                self.run_selected_check()
+                return
             node_ids = list(self.read()['nodes'])
             builder, canary = node_ids[:2]
             initial = node_ids[:min(len(node_ids), len(CHECKS) + 1)]

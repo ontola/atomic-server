@@ -268,7 +268,8 @@ class FakeController(fanout.Controller):
 
     def phase(self, node_id, name, kind, args, preflight=False, module=None):
         self.check_deadline()
-        result = {'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 0,
+        result = {'batch_key': self.config['batch_key'], 'node_id': node_id, 'phase': name,
+                  'source_commit': SHA, 'status': 'passed', 'browser_exit_code': 0,
                   'commands': [{'exit_code': 0}], 'finished_at': fanout.stamp()}
         self.node_update(node_id, status='waiting', phase=name, phase_kind=kind,
                          last_result=result)
@@ -367,6 +368,10 @@ class FakeController(fanout.Controller):
 
     def retrieve(self, node_id):
         node = self.read()['nodes'][node_id]
+        if node.get('phase', '').startswith('check-'):
+            result = self.root / node_id / 'results' / node['phase'] / 'result.json'
+            result.parent.mkdir(parents=True, exist_ok=True)
+            result.write_text(json.dumps(node['phase_results'][node['phase']]))
         if node.get('phase') == 'browser-retry':
             value = self.retry_reports.get(node_id) or report([node['shard_index']])
             if node_id in self.fail_retry_nodes:
@@ -1035,6 +1040,146 @@ class DeferredRetryCoverageTests(unittest.TestCase):
         merged, _ = fanout.merge_browser_retry(first, report([1]), self.result(), SHA)
         self.assertEqual(fanout.browser_stats(merged), {'expected': 0, 'flaky': 1, 'unexpected': 1, 'skipped': 2})
         self.assertEqual(len(fanout.unrun_browser_cases(merged)), 1)
+
+
+class SelectedCheckTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.api = FakeAPI()
+        settings = dict(config(self.root, 2), check_only='flutter-test')
+        settings['accounts'] = [dict(settings['accounts'][0], nodes=3)]
+        self.controller = FakeController(settings, self.api)
+        # Test the real initialization to retain immutable deadline/scope state;
+        # all provider, remote preparation, process and SSH effects remain fake.
+        (self.root / 'credentials').write_text('FAKE')
+        self.controller.initialize = lambda plan: fanout.Controller.initialize(self.controller, plan)
+        self.execution = mock.patch.object(fanout, 'execute', return_value='')
+        self.execution.start()
+        self.addCleanup(self.execution.stop)
+        initialize = self.controller.initialize
+        def initialized(plan):
+            initialize(plan)
+            (self.controller.root / 'operator-key.pub').write_text('ssh-ed25519 FIXTURE')
+        self.controller.initialize = initialized
+
+    def run_controller(self):
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            self.controller.run()
+
+    def test_one_worker_only_runs_selected_check_and_retains_exact_scoped_receipt(self):
+        self.run_controller()
+        state = self.controller.read()
+        self.assertEqual(state['status'], 'passed')
+        self.assertEqual(state['validation_scope'], 'selected-check')
+        self.assertEqual(state['selected_check'], 'flutter-test')
+        self.assertEqual([item for item in self.controller.events if isinstance(item, tuple)],
+                         [('node-001', 'check-flutter-test')])
+        created = [args for _, args in self.api.mutations if args[:3] == ['compute', 'droplet', 'create']]
+        self.assertEqual(len(created), 1)
+        self.assertEqual(len(state['nodes']), 3)
+        self.assertTrue(state['nodes']['node-001']['deletion_verified'])
+        self.assertTrue(all(node['status'] == 'planned' and not node.get('creation_attempted')
+                            for key, node in state['nodes'].items() if key != 'node-001'))
+        self.assertNotIn('bundle', state)
+        self.assertNotIn('browser_result_stats', state)
+        self.assertIn('validation_completed_at', state)
+        receipt = state['selected_check_receipt']
+        self.assertEqual({key: receipt[key] for key in ('batch_key', 'source_commit', 'node_id', 'phase', 'check', 'validation_scope')},
+                         {'batch_key': 'fixture-ci', 'source_commit': SHA, 'node_id': 'node-001',
+                          'phase': 'check-flutter-test', 'check': 'flutter-test', 'validation_scope': 'selected-check'})
+        self.assertEqual(receipt['result_sha256'], fanout.file_sha256(self.controller.root / receipt['result_path']))
+        self.assertFalse(any(self.api.droplets.values()))
+        self.assertFalse(any(self.api.keys.values()))
+
+    def test_failed_selected_check_records_failure_and_removes_resources_without_full_pass(self):
+        self.controller.fail_checks = {'check-flutter-test'}
+        with self.assertRaises(fanout.PhaseFailure):
+            self.run_controller()
+        state = self.controller.read()
+        self.assertEqual(state['status'], 'stopped')
+        self.assertEqual(state['ci_failures'][0]['phase'], 'check-flutter-test')
+        self.assertNotIn('selected_check_receipt', state)
+        self.assertNotIn('validation_completed_at', state)
+        self.assertFalse(any(self.api.droplets.values()))
+        self.assertFalse(any(self.api.keys.values()))
+
+    def test_retrieved_result_mismatch_cannot_certify_selected_check(self):
+        retrieve = self.controller.retrieve
+        def wrong_result(node):
+            local = retrieve(node)
+            path = local / 'results/check-flutter-test/result.json'
+            result = json.loads(path.read_text())
+            result['source_commit'] = 'b' * 40
+            path.write_text(json.dumps(result))
+            return local
+        self.controller.retrieve = wrong_result
+        with self.assertRaisesRegex(ValueError, 'source-pinned evidence'):
+            self.run_controller()
+        self.assertNotIn('selected_check_receipt', self.controller.read())
+        self.assertFalse(any(self.api.droplets.values()))
+
+    def test_check_start_cannot_extend_absolute_deadline(self):
+        deadline = (fanout.utcnow() + dt.timedelta(minutes=10)).isoformat()
+        self.controller.config['absolute_deadline'] = deadline
+        phase = self.controller.phase
+        def expire_after_create(*args, **kwargs):
+            self.assertEqual(self.controller.read()['deadline'], deadline)
+            with mock.patch.object(fanout, 'utcnow', return_value=dt.datetime.fromisoformat(deadline)):
+                phase(*args, **kwargs)
+        self.controller.phase = expire_after_create
+        with self.assertRaisesRegex(TimeoutError, 'elapsed-time limit'):
+            self.run_controller()
+        state = self.controller.read()
+        self.assertEqual(state['deadline'], deadline)
+        self.assertNotIn('selected_check_receipt', state)
+        self.assertFalse(any(self.api.droplets.values()))
+
+    def test_cleanup_failure_keeps_watchdog_alive_until_owned_resources_can_be_removed(self):
+        remove = self.controller.remove
+        self.controller.remove = mock.Mock(side_effect=RuntimeError('temporary provider failure'))
+        with mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = None
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(RuntimeError, 'cleanup incomplete'):
+                self.controller.run()
+            process.return_value.terminate.assert_not_called()
+        state = self.controller.read()
+        self.assertEqual(state['status'], 'cleanup_failed')
+        self.assertTrue(state['cleanup_errors'])
+        self.assertFalse(state.get('finished_at'))
+        self.assertTrue(any(self.api.droplets.values()))
+        self.controller.remove = remove
+        self.assertTrue(self.controller.watchdog_step())
+        self.assertFalse(any(self.api.droplets.values()))
+        self.assertFalse(any(self.api.keys.values()))
+
+    def test_unsupported_selected_check_rejected_before_provider_or_state_creation(self):
+        for value in ('js-test', 'rust-test', '', None, True, ['flutter-test'], 'flutter-test; touch /tmp/no'):
+            with self.subTest(value=value), mock.patch.object(self.api, 'identity') as identity:
+                with self.assertRaisesRegex(ValueError, 'standalone flutter-test'):
+                    fanout.Controller(dict(self.controller.config, check_only=value), self.api)
+                identity.assert_not_called()
+                self.assertFalse(self.controller.path.exists())
+
+    def test_real_plan_is_explicitly_one_selected_worker_with_conservative_fleet_price(self):
+        api = mock.Mock()
+        api.identity.return_value = {'droplet_limit': 10}
+        api.call.side_effect = lambda account, args: ([] if args[:2] == ['compute', 'droplet'] else
+            [{'slug': self.controller.config['size'], 'available': True,
+              'regions': [self.controller.config['region']], 'price_hourly': self.controller.config['expected_hourly_rate']}])
+        with mock.patch.object(fanout, 'execute', side_effect=[SHA, '', json.dumps({'engineVersion': 'v0.21.7'})]):
+            plan = fanout.Controller(self.controller.config, api).plan()
+        self.assertEqual(plan['validation_scope'], 'selected-check')
+        self.assertEqual(plan['check_jobs'], ['flutter-test'])
+        self.assertEqual(plan['browser_shards'], 0)
+        self.assertEqual(plan['initial_nodes'], 1)
+        self.assertEqual(plan['nodes'], 3)
+        self.assertEqual(plan['hourly_usd'], 3 * self.controller.config['expected_hourly_rate'])
+        self.assertFalse(plan['canary_before_remaining_nodes'])
 
 
 class LifecycleTests(unittest.TestCase):

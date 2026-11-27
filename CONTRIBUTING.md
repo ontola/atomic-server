@@ -310,6 +310,19 @@ Rust's combined nextest install/compile/run command and Flutter's post-Dart
 bridge tail execute again; their Cargo target volumes can still reuse compiled
 objects. Browser execution already has its own per-invocation nonce.
 
+For a focused Flutter refresh, optional `"check_only": "flutter-test"` runs
+only the standalone Flutter check on one worker. The configured fleet size and
+price ceiling remain conservative (the cloud launcher still plans three), but
+the other planned workers are never created. The plan explicitly reports
+`validation_scope: selected-check`, one initial worker, `check_jobs:
+[flutter-test]` and zero browser shards. This mode skips the browser build,
+portable OCI probe and browser tests; its successful source-pinned receipt
+certifies Flutter analysis, root Flutter tests and Rust bridge tests only.
+It retains the normal watchdog, deadline, source verification, artifact retrieval
+and resource cleanup. Other check names are rejected before provider access.
+Omit `check_only` for the unchanged full pipeline. A selected check pass cannot
+replace full CI or relabel an older build/test receipt as a new-source pass.
+
 The tiny cross-engine probe ships with the runner.
 `plan` checks capacity and prices without creating resources; `run` builds and
 runs the checks, then distributes the bundle directly to the browser workers:
