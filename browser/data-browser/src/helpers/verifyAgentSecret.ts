@@ -1,5 +1,9 @@
 import { Agent, agentSubject, decodeSecret } from '@tomic/react';
-import { canonicalIdentifier, currentAgentSubject } from '@tomic/lib';
+import {
+  agentPublicKey,
+  canonicalIdentifier,
+  currentAgentSubject,
+} from '@tomic/lib';
 
 /** Whether `value` parses as an agent secret (no key is imported). */
 export function isAgentSecret(value: string): boolean {
@@ -10,6 +14,24 @@ export function isAgentSecret(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether two agent subjects name the same key. Backups spell one agent as
+ * `did:ad:agent:` or `atomic:agent:`, as the pre-DID `https://server/agents/{key}`
+ * URL, and with the key in base64 or base64url, padded or not.
+ */
+export function sameAgentKey(a: string, b: string): boolean {
+  const keyOf = (subject: string) => {
+    const canonical = canonicalIdentifier(currentAgentSubject(subject));
+
+    return (agentPublicKey(canonical) ?? canonical)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  };
+
+  return keyOf(a) === keyOf(b);
 }
 
 /** Thrown when a valid secret belongs to another agent than the expected one. */
@@ -36,11 +58,7 @@ export async function agentFromOwnSecret(
   const agent = await Agent.fromSecret(secret);
   const derived = agentSubject(await agent.getPublicKey());
 
-  // A backup saved by an old account names its agent as the pre-DID
-  // `https://server/agents/{key}` URL: the same key, another spelling.
-  const expected = canonicalIdentifier(currentAgentSubject(expectedSubject));
-
-  if (canonicalIdentifier(derived) !== expected) {
+  if (!sameAgentKey(derived, expectedSubject)) {
     throw new OtherAgentSecretError();
   }
 

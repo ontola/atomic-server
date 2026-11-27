@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Agent, JSCryptoProvider, agentSubject } from '@tomic/react';
-import { OtherAgentSecretError, agentFromOwnSecret } from './verifyAgentSecret';
+import {
+  OtherAgentSecretError,
+  agentFromOwnSecret,
+  sameAgentKey,
+} from './verifyAgentSecret';
 
 async function makeSecret(claimedSubject?: string) {
   const keys = await Agent.generateKeyPair();
@@ -48,5 +52,13 @@ describe('agentFromOwnSecret', () => {
       `https://atomicdata.dev/agents/${key}`,
     );
     expect(agentSubject(await agent.getPublicKey())).toBe(subject);
+  });
+
+  it('ignores key padding and the did:ad: spelling', async () => {
+    const { secret, subject } = await makeSecret();
+    const key = subject.slice('atomic:agent:'.length);
+    const other = `did:ad:agent:${key.replace(/-/g, '+').replace(/_/g, '/')}=`;
+    expect(sameAgentKey(subject, other)).toBe(true);
+    await agentFromOwnSecret(secret, other);
   });
 });
