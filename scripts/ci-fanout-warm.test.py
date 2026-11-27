@@ -573,7 +573,99 @@ class WarmTests(unittest.TestCase):
                      'docker_root_dir':'/mnt/atomic-ci/docker','restored_docker_entries':3,
                      'restored_dagger_cache_nonempty':True,'engine_images':['registry.dagger.io/engine:v0.0.1'],
                      'engine_version':'0.0.1','cache_namespace':'fixturewarm'}
+        engine={'id':'c'*64,'name':'/dagger-engine-v0.0.1','image':'registry.dagger.io/engine:v0.0.1',
+                'image_id':'sha256:'+'d'*64,'mount_name':'e'*64,
+                'mount_source':'/mnt/atomic-ci/docker/volumes/'+'e'*64+'/_data'}
+        observation.update(restored_engine=engine,started_engine=dict(engine),
+                           restored_container_config_sha256='f'*64)
         return node,entry,observation
+
+    def restored_engine_fixture(self):
+        root=(self.root/'restored-docker').resolve()
+        container=root/'containers'/('c'*64)/'config.v2.json'
+        cache=root/'volumes'/('e'*64)/'_data'
+        container.parent.mkdir(parents=True)
+        cache.mkdir(parents=True)
+        (cache/'metadata.db').write_text('restored engine state')
+        data={'ID':'c'*64,'Name':'/dagger-engine-v0.0.1','Image':'sha256:'+'d'*64,
+              'Config':{'Image':'registry.dagger.io/engine:v0.0.1'},
+              'MountPoints':{'/var/lib/dagger':{'Destination':'/var/lib/dagger','Type':'volume',
+                              'Driver':'local','Name':'e'*64,'Source':str(cache)}}}
+        container.write_text(json.dumps(data))
+        return root,container,cache,data
+
+    def test_anonymous_cache_volume_is_proven_by_stopped_container_binding_not_its_name(self):
+        root,container,cache,data=self.restored_engine_fixture()
+        proof=warm.observe_restored_engine(str(root),'0.0.1')
+        self.assertTrue(proof['restored_dagger_cache_nonempty'])
+        self.assertEqual(proof['restored_engine']['mount_source'],str(cache))
+        self.assertEqual(proof['restored_engine']['mount_name'],'e'*64)
+        self.assertEqual(len(proof['restored_container_config_sha256']),64)
+        # The old heuristic sees no directory whose name contains "dagger".
+        self.assertEqual(list((root/'volumes').glob('*dagger*/_data')),[])
+
+    def test_stopped_engine_rejects_wrong_identity_and_foreign_or_unbound_caches(self):
+        root,container,cache,data=self.restored_engine_fixture()
+        variants=[]
+        for key,value in [('ID','b'*64),('Name','/other-service'),('Image','sha256:wrong')]:
+            candidate=copy.deepcopy(data);candidate[key]=value;variants.append(candidate)
+        candidate=copy.deepcopy(data);candidate['Config']['Image']='registry.dagger.io/engine:v0.0.2';variants.append(candidate)
+        for key,value in [('Destination','/other'),('Type','bind'),('Driver','foreign'),
+                          ('Name','../escape'),('Source',str(root.parent/'foreign'))]:
+            candidate=copy.deepcopy(data);candidate['MountPoints']['/var/lib/dagger'][key]=value;variants.append(candidate)
+        candidate=copy.deepcopy(data);candidate['MountPoints']={};variants.append(candidate)
+        for candidate in variants:
+            with self.subTest(candidate=candidate),self.assertRaises(ValueError):
+                container.write_text(json.dumps(candidate))
+                warm.observe_restored_engine(str(root),'0.0.1')
+
+    def test_stopped_engine_rejects_empty_and_symlinked_cache_or_docker_roots(self):
+        root,container,cache,data=self.restored_engine_fixture()
+        (cache/'metadata.db').unlink()
+        with self.assertRaisesRegex(ValueError,'empty'):
+            warm.observe_restored_engine(str(root),'0.0.1')
+        cache.rmdir()
+        foreign=root.parent/'foreign-cache';foreign.mkdir();(foreign/'metadata.db').write_text('foreign')
+        cache.symlink_to(foreign,target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            warm.observe_restored_engine(str(root),'0.0.1')
+        linked=root.parent/'linked-docker';linked.symlink_to(root,target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            warm.observe_restored_engine(str(linked),'0.0.1')
+
+    def test_stopped_engine_rejects_duplicate_metadata_and_symlinked_container_configs(self):
+        root,container,cache,data=self.restored_engine_fixture()
+        duplicate=root/'containers'/('b'*64)/'config.v2.json'
+        duplicate.parent.mkdir();duplicate.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError,'exactly one'):
+            warm.observe_restored_engine(str(root),'0.0.1')
+        duplicate.unlink();duplicate.parent.rmdir()
+        saved=root.parent/'saved-config.json';container.rename(saved);container.symlink_to(saved)
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            warm.observe_restored_engine(str(root),'0.0.1')
+
+    def test_post_start_inspection_uses_config_image_even_when_image_catalog_is_empty(self):
+        node,entry,observation=self.startup_fixture()
+        engine=observation['restored_engine']
+        raw={'Id':engine['id'],'Name':engine['name'],'Image':engine['image_id'],
+             'Config':{'Image':engine['image'],'Env':['DO_NOT_EXPOSE=fixture']},
+             'Mounts':[{'Destination':'/var/lib/dagger','Type':'volume','Driver':'local',
+                        'Name':engine['mount_name'],'Source':engine['mount_source']}]}
+        with mock.patch.object(subprocess,'check_output',return_value=json.dumps([raw])) as read:
+            after=warm.observe_started_engine(engine)
+        self.assertEqual(after,engine)
+        self.assertEqual(read.call_args.args[0],['docker','inspect','--type','container',engine['id']])
+        self.assertNotIn('DO_NOT_EXPOSE',json.dumps(after))
+        observation.update(started_engine=after,engine_images=[after['image']],docker_image_count=0)
+        self.assertTrue(warm.validate_startup_cache(self.config,node,entry,observation)['restoration_verified'])
+
+    def test_startup_proof_rejects_container_or_mount_replaced_after_docker_start(self):
+        node,entry,observation=self.startup_fixture()
+        for field,value in [('id','b'*64),('image_id','sha256:'+'a'*64),('mount_source','/foreign'),
+                            ('image','registry.dagger.io/engine:v0.0.2'),('name','/unrelated')]:
+            candidate=copy.deepcopy(observation);candidate['started_engine'][field]=value
+            with self.subTest(field=field),self.assertRaisesRegex(ValueError,'started_engine'):
+                warm.validate_startup_cache(self.config,node,entry,candidate)
 
     def test_startup_proof_proves_restoration_but_never_claims_job_cache_hits(self):
         node,entry,observation=self.startup_fixture()
@@ -653,6 +745,9 @@ class WarmTests(unittest.TestCase):
         self.assertIn(marker,script)
         self.assertLess(script.index(marker),script.index('systemctl enable --now docker'))
         self.assertNotIn('docker pull',script)
+        self.assertNotIn('*dagger*/_data',script)
+        self.assertIn('config.v2.json',script)
+        self.assertIn('restored_engine_error',script)
         subprocess.run(['bash','-n'],input=script,text=True,check=True)
 
 
