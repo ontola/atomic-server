@@ -1053,9 +1053,46 @@ read-modify-write the same Loro snapshot and end in a replace — was fixed
 operations before the fix and now keeps all of them, with a sequential control
 that isolates concurrency as the cause.
 
-No known flaky tests. The one that was
-(`rbsr_reduced_matches_full_sync_vv`) turned out to be a genuine RBSR bug, not
-test noise — see below. (RBSR itself was removed in 2026-09.)
+Browser CI has six currently tracked flaky journeys (2026-11-27). Keep them
+enabled and distinguish a reproduced cause from a successful retry:
+
+- #2668, catalog app creation: the retained failing trace contains server
+  missing-Loro-base errors. `lib/src/resource-hydration-base.test.ts` reproduces
+  two first-edit failures with a real receiving Loro document. Hydration now
+  acknowledges only imported operations; locally seeded/healed operations remain
+  part of the next genuine edit without causing a write merely on read.
+  A fresh native reproduction also exposed missing `response-message`, `status`
+  and `resources` vocabulary: each external read could consume 30 seconds while
+  creation or ClientDb flush waited. Those Properties and the endpoint-response
+  Class now ship in shared defaults with exact embedded-subject routing.
+  `host-bootstrap-vocabulary.test.ts` and
+  `populate::tests::app_bootstrap_vocabulary_is_stored_locally` cover their
+  metadata and local availability; the same omission blocked the inline-editor
+  clear and controlled connection-acknowledgement browser journeys.
+- #2679, Getting started hover hint: a mounted `UiHint.test.tsx` reproduces a
+  visible target receiving an interaction before its passive registration.
+  Registration now happens before paint. Repeated execution of the original
+  browser journey is still needed before attributing the historical failure.
+- #2667, website version creation: direct model calls now wait for authenticated
+  server connection and a drained outbox. A controlled WebSocket-reply gate
+  demonstrates that the sidebar can appear before authentication completes.
+  The original offline/queued save reason is not available in the old trace.
+- Website slow-preview recovery: the injected fault remains active until its
+  error UI is observed, then the test releases it and requires automatic
+  recovery. The old eight-second wall-clock window could expire during boot.
+  Node regressions also check slow startup and propagation of genuine errors.
+- #2680, generated SvelteKit `/server` HTTP 408, and the separate inline rich-text
+  journey's `/app/dev-drive` HTTP 408: cause unresolved. The responses may occur
+  before handler tracing; worker starvation and connection timing need a
+  controlled reproduction. No diagnostic allowance or timeout increase is a fix.
+
+The historical umbrella #1095 includes scenarios from the 2025 harness. Current
+fixture paths are relative to the test file, and fresh-agent drives isolate
+normal runs; those old observations are not evidence that the same defects
+remain active. Its referenced save-acknowledgement issue #1388 is closed.
+
+The former `rbsr_reduced_matches_full_sync_vv` flake was a genuine RBSR bug — see
+below. RBSR itself was removed in 2026-09.
 
 ---
 
@@ -3246,3 +3283,8 @@ still abort. Coverage is recomputed from raw reports at the full-union barrier,
 and merged errors retain every shard's provenance.
 Warm startup observations are preserved before validation, with per-field
 diagnostics and strict evidence-path filtering when restoration is rejected.
+
+Nov27 focused native validation of the seven affected/current regression journeys:
+7/7 passed, then 35/35 passed across five repetitions with four workers and no
+retries, skips, or global errors. This is targeted evidence, not a full CI result;
+the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.

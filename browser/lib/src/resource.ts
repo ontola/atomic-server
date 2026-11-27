@@ -571,11 +571,13 @@ export class Resource<C extends OptionalClass = any> {
       // If the resource has a persisted Loro snapshot, import it.
       const stored = Resource.decodeStoredSnapshot(this._loroSnapshotBytes);
       const initializedFromSnapshot = !!stored;
+      let acknowledgedVersion = this._loroDoc.oplogVersion();
 
       if (stored) {
         const doc = this._loroDoc;
 
         loroCall('import', doc, () => doc.import(stored), stored.length);
+        acknowledgedVersion = doc.oplogVersion();
       } else {
         for (const [key, value] of Object.entries(this.#cache)) {
           if (!isDerivedByServer(key)) {
@@ -626,11 +628,11 @@ export class Resource<C extends OptionalClass = any> {
 
         // The heal writes above are HYDRATION, not user edits — they copy
         // propvals the server already sent alongside this very snapshot.
-        // Flush them now, tagged with the system origin, for two reasons:
-        // the dirty-marking subscriber below ignores that origin (so merely
-        // OPENING someone else's resource can't enqueue a write we have no
-        // rights to make), and committing before the save cursor is read
-        // keeps them out of the next delta export. Guarded on pending ops
+        // Flush them now, tagged with the system origin, so merely OPENING
+        // someone else's resource cannot enqueue a write we have no rights
+        // to make. Their Loro ops are still client-authored: the next genuine
+        // edit must export them too, or its delta depends on a base the server
+        // never received. Guarded on pending ops
         // because `setRecordTimestamp(true)` makes even an empty commit
         // write a commit-point op and advance `oplogVersion`.
         if (this._loroDoc.getPendingTxnLength() > 0) {
@@ -649,16 +651,16 @@ export class Resource<C extends OptionalClass = any> {
       //     (offline-edit-then-reload case). Leave the cursor
       //     undefined so the next drain exports a full snapshot —
       //     server idempotently replays the ops it already has.
-      //   - Otherwise (clean hydrate from clientDb, or an existing
-      //     resource that wasn't dirty), set the cursor to current
-      //     oplogVersion so subsequent edits export as deltas from
-      //     this point.
+      //   - Otherwise use only the imported snapshot's version, before any
+      //     client-authored hydration/heal ops. JSON-AD alone acknowledges no
+      //     Loro ops, so its cursor stays empty. A later real edit then sends
+      //     its whole dependency chain instead of an unappliable delta.
       const outboxKnowsThisSubjectIsDirty =
         this._store?.outbox.hasPending(this.subject) ?? false;
       this._loroVersionAtLastSave =
         !outboxKnowsThisSubjectIsDirty &&
         (initializedFromSnapshot || (!this.new && !this._dirty))
-          ? this._loroDoc.oplogVersion()
+          ? acknowledgedVersion
           : undefined;
 
       // Drained the buffer — `loading` getter now returns false (assuming

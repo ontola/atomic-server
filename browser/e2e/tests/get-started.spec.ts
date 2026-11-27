@@ -298,7 +298,7 @@ test('Name your drive renames the drive, not the document on screen', async ({
 
 test('Make something points at the New row, and the X or Escape closes it', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto(`${FRONTEND_URL}/app/welcome`);
   await page.getByRole('button', { name: 'Get started' }).click();
   const panel = page.getByTestId('getting-started');
@@ -321,6 +321,14 @@ test('Make something points at the New row, and the X or Escape closes it', asyn
   await waitForSynced(page);
   await step.hover();
   await expect(hint).toHaveText('Make a document or table here');
+
+  if (testInfo.repeatEachIndex === 0) {
+    await testInfo.attach('new-row-hover-hint', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  }
+
   await page.mouse.move(600, 400);
   await expect(hint).toHaveCount(0);
 
