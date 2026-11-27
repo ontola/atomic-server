@@ -50,6 +50,7 @@ These components help with rendering resources in different contexts.
 
 - `src/views/ResourceInline/ResourceInline.tsx` - Compact inline link for any resource subject, with loading/error handling and class-specific inline renderers.
 - `src/views/ResourceRow.tsx` - Compact resource row with class icon, title, truncated description, loading/error states, and optional navigation.
+- `src/components/ResourceSync/ResourceSyncIndicator.tsx` - Resource-specific save evidence and a keyboard-accessible Copies & sync popover. Included in clickable resource rows; use `showSyncStatus={false}` when a row is inside another control.
 - `src/views/Card/ResourceCard.tsx` - Generic card renderer for any resource subject; dispatches to class-specific cards when available and falls back to `ResourceCardDefault`.
   - `src/views/Card/ResourceCardTitle.tsx` - Shared card title row with class icon, resource link, title transition, and optional actions.
 - `src/views/ResourcePage.tsx` - Full-page resource view dispatcher that picks the best page component for a resource class and falls back to `ResourcePageDefault`.

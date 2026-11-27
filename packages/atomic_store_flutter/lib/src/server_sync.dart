@@ -5,8 +5,10 @@ import 'package:http/http.dart' as http;
 
 import '../bridge/api/error.dart' as bridge;
 import '../bridge/api/resources.dart' as bridge;
+import '../bridge/api/server_receipts.dart' as receipts;
 import '../bridge/api/simple/sync.dart' as free;
 import 'bridge_store_backend.dart' show storeExceptionFromBridge;
+import 'replica_receipts.dart';
 
 /// Whether the node is connected to an Atomic Server.
 class SyncStatus {
@@ -63,6 +65,12 @@ abstract interface class ServerSync {
 
   /// [status] now and after every change, as seen by polling once a second.
   Stream<SyncStatus> watchStatus();
+
+  /// Future, automatically correlated storage evidence, with no replay. Listen
+  /// before connecting or saving. Reconnect keeps the stream open; account and
+  /// connection replacements suppress pending old-session observations.
+  /// Missing events mean unknown, never that storage failed or is independent.
+  Stream<ServerReplicaReceipt> watchReplicaReceipts();
 
   /// Opens the session at [origin] (for example `https://example.com`, no
   /// path), replacing the one that is open. Throws a `StoreException` when
@@ -142,6 +150,21 @@ class BridgeServerSync implements ServerSync {
       onCancel: () => timer?.cancel(),
     );
     return controller.stream;
+  }
+
+  @override
+  Stream<ServerReplicaReceipt> watchReplicaReceipts() {
+    // Register synchronously: connect() may immediately follow listen().
+    late final receipts.ServerReceiptSubscription native;
+    return serverReceiptStream(
+      listen: () {
+        native = _handle.subscribeServerReplicaReceipts();
+        return native.stream();
+      },
+      close: () => native.close(),
+      isCurrent: (event) =>
+          _handle.isServerReplicaReceiptCurrent(receipt: event),
+    );
   }
 
   @override

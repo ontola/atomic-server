@@ -218,15 +218,15 @@ export function VaultPanel({
 
   const { enrollment, details } = status;
   const suspended = enrollment.status !== 'active';
+  const hasBackup = details.confirmed_objects > 0;
 
   // The status line is the state: when it last went up. How much is stored
   // is the meter line, in the same place as Cloud Server's.
-  const summary =
-    details.confirmed_objects === 0
-      ? `Nothing backed up to ${PRODUCT_NAME} yet`
-      : enrollment.last_backup_at
-        ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
-        : `Backed up to ${PRODUCT_NAME}`;
+  const summary = !hasBackup
+    ? `Nothing backed up to ${PRODUCT_NAME} yet`
+    : enrollment.last_backup_at
+      ? `Backed up ${formatWhen(enrollment.last_backup_at)}`
+      : `Backed up to ${PRODUCT_NAME}`;
   const objects = plural(details.confirmed_objects, ['# object', '# objects']);
 
   // Included in Cloud Server, the vault's allowance is part of that plan, whose
@@ -235,6 +235,16 @@ export function VaultPanel({
   const quota = enrollment.quota_bytes > 0 ? enrollment.quota_bytes : null;
   const nearlyFull = quota !== null && enrollment.used_bytes >= quota * 0.9;
   const showQuota = !included || nearlyFull;
+  // Tests can check progress from the object count without reading the copy.
+  const backupSummary = (
+    <span
+      data-testid='vault-summary'
+      data-vault-objects={details.confirmed_objects}
+      data-vault-bytes={enrollment.used_bytes}
+    >
+      {summary}
+    </span>
+  );
 
   return (
     <>
@@ -247,7 +257,16 @@ export function VaultPanel({
         tagline={tagline}
         status={
           error
-            ? { tone: 'error', text: <ErrorText>{error}</ErrorText> }
+            ? {
+                tone: 'error',
+                text: (
+                  <>
+                    {backupSummary}
+                    {' · '}
+                    <ErrorText>{error}</ErrorText>
+                  </>
+                ),
+              }
             : restoreProgress !== null
               ? {
                   tone: 'busy',
@@ -268,19 +287,8 @@ export function VaultPanel({
                     ),
                   }
                 : {
-                    tone: 'ok',
-                    text: (
-                      // The object count is an attribute as well as prose: a
-                      // test asserting that a second backup stored something
-                      // should read the number, not parse a sentence.
-                      <span
-                        data-testid='vault-summary'
-                        data-vault-objects={details.confirmed_objects}
-                        data-vault-bytes={enrollment.used_bytes}
-                      >
-                        {summary}
-                      </span>
-                    ),
+                    tone: hasBackup ? 'ok' : 'waiting',
+                    text: backupSummary,
                   }
         }
         details={
@@ -289,7 +297,7 @@ export function VaultPanel({
               data-testid='vault-usage'
               usedBytes={enrollment.used_bytes}
               quotaBytes={showQuota ? quota : null}
-              backedUp
+              backedUp={hasBackup}
               facts={[objects]}
             />
             <IncludedNote data-testid='vault-files-note'>
@@ -305,6 +313,7 @@ export function VaultPanel({
             {notice && (
               <IncludedNote data-testid='vault-notice'>{notice}</IncludedNote>
             )}
+            <FileRecoveryStatus vault={vault} />
             {snapshots && (
               <VaultRestoreDialog
                 snapshots={snapshots}
@@ -342,6 +351,28 @@ export function VaultPanel({
             >
               <FaRotateLeft /> <span>Restore</span>
             </Button>
+            {vault.canRecoverFiles && (
+              <Button
+                data-testid='vault-recover-files'
+                subtle
+                onClick={() => void vault.recoverMissingFiles()}
+                disabled={busy}
+              >
+                {vault.fileRecoveryError ||
+                (vault.fileRecoveryResult?.missing.length ?? 0) > 0
+                  ? 'Retry file recovery'
+                  : 'Recover missing files'}
+              </Button>
+            )}
+            {vault.fileRecoveryProgress && (
+              <Button
+                data-testid='vault-cancel-file-recovery'
+                subtle
+                onClick={vault.cancelFileRecovery}
+              >
+                Cancel file recovery
+              </Button>
+            )}
             <Button
               data-testid='vault-download'
               subtle
@@ -392,6 +423,61 @@ export function VaultPanel({
           </>
         }
       />
+    </>
+  );
+}
+
+function FileRecoveryStatus({ vault }: { vault: UseVaultBackup }) {
+  const { fileRecoveryProgress: progress, fileRecoveryResult: result } = vault;
+  const stage = progress?.stage;
+
+  if (progress)
+    return (
+      <IncludedNote role='status' data-testid='vault-file-recovery-progress'>
+        {stage === 'scanning'
+          ? 'Scanning for missing files…'
+          : stage === 'peers'
+            ? 'Looking for file contents on connected devices…'
+            : stage === 'vault'
+              ? `Recovering files from Cloud Vault… ${progress.done} of ${progress.total}`
+              : 'Checking recovered files…'}
+      </IncludedNote>
+    );
+
+  return (
+    <>
+      {result && (
+        <IncludedNote
+          role='status'
+          data-testid='vault-file-recovery-result'
+          data-files-missing={result.missing.length}
+          data-files-unreadable={result.unreadable}
+        >
+          {result.total === 0 &&
+          result.missing.length === 0 &&
+          result.unreadable === 0
+            ? 'All referenced file contents are available on this device.'
+            : plural(result.repaired, [
+                '# file recovered.',
+                '# files recovered.',
+              ])}
+          {result.missing.length > 0 &&
+            ` ${plural(result.missing.length, [
+              '# file is still unavailable.',
+              '# files are still unavailable.',
+            ])}`}
+          {result.unreadable > 0 &&
+            ` ${plural(result.unreadable, [
+              '# backup file could not be read.',
+              '# backup files could not be read.',
+            ])}`}
+        </IncludedNote>
+      )}
+      {vault.fileRecoveryError && (
+        <IncludedNote role='alert' data-testid='vault-file-recovery-error'>
+          {vault.fileRecoveryError}
+        </IncludedNote>
+      )}
     </>
   );
 }

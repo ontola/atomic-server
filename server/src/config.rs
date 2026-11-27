@@ -4,7 +4,18 @@ use crate::errors::AtomicServerResult;
 use clap::Parser;
 use dotenv::dotenv;
 use std::net::IpAddr;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
+
+fn parse_http_workers(value: &str) -> Result<NonZeroUsize, String> {
+    let workers = value
+        .parse::<usize>()
+        .map_err(|_| "HTTP workers must be an integer from 1 to 128".to_owned())?;
+    if !(1..=128).contains(&workers) {
+        return Err("HTTP workers must be an integer from 1 to 128".to_owned());
+    }
+    Ok(NonZeroUsize::new(workers).expect("range excludes zero"))
+}
 
 /// Store and share Atomic Data! Visit https://atomicdata.dev for more info. Pass no subcommands to launch the server. The `.env` of your current directory will be read.
 #[derive(Clone, Parser, Debug)]
@@ -13,6 +24,11 @@ pub struct Opts {
     /// The subcommand being run
     #[clap(subcommand)]
     pub command: Option<Command>,
+
+    /// HTTP worker threads (1-128). Unset uses available CPUs, capped at 8.
+    /// The process file-descriptor budget can reduce either value.
+    #[clap(long, env = "ATOMIC_HTTP_WORKERS", value_parser = parse_http_workers)]
+    pub http_workers: Option<NonZeroUsize>,
 
     /// Recreates the `/setup` Invite for creating a new Root User. Also re-runs various populate commands, and re-builds the index
     #[clap(long, env = "ATOMIC_INITIALIZE")]
@@ -98,8 +114,10 @@ pub struct Opts {
     pub auto_compact_min_reclaimable_percent: u8,
 
     /// How many write requests per minute one signed agent may make (commits
-    /// over HTTP or WebSocket, uploads, blob puts, peer sync pushes, resource
-    /// posts) before the server answers `429 Too Many Requests`. The budget
+    /// over HTTP or WebSocket, storage-receipt flushes, uploads, blob puts,
+    /// peer sync pushes, resource posts) before the server answers
+    /// `429 Too Many Requests` (optional WebSocket receipt probes are skipped).
+    /// The budget
     /// refills continuously, so a burst up to this size is fine. `0` disables
     /// the limit.
     #[clap(long, default_value = "6000", env = "ATOMIC_WRITE_RATE_LIMIT")]
@@ -774,6 +792,85 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
 mod tests {
     use super::*;
     use atomic_lib::db::compaction::MIB;
+
+    // Exercise Clap's real environment/CLI precedence in child processes so
+    // parallel tests never mutate each other's process-wide environment.
+    #[test]
+    fn http_workers_environment_and_cli_are_validated_in_isolation() {
+        for (case, env) in [
+            ("default", None),
+            ("env", Some("32")),
+            ("cli", Some("16")),
+            ("cli", Some("0")),
+            ("invalid", None),
+            ("invalid-env", Some("0")),
+        ] {
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+            child
+                .args([
+                    "--exact",
+                    "config::tests::http_workers_parser_child",
+                    "--nocapture",
+                ])
+                .env("ATOMIC_TEST_HTTP_WORKERS_CASE", case)
+                .env_remove("ATOMIC_HTTP_WORKERS");
+            if let Some(value) = env {
+                child.env("ATOMIC_HTTP_WORKERS", value);
+            }
+            let output = child.output().unwrap();
+            assert!(String::from_utf8_lossy(&output.stdout).contains("running 1 test"));
+            assert!(
+                output.status.success(),
+                "{case}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    #[test]
+    fn http_workers_parser_child() {
+        let Ok(case) = std::env::var("ATOMIC_TEST_HTTP_WORKERS_CASE") else {
+            return;
+        };
+        match case.as_str() {
+            "default" => assert_eq!(
+                Opts::try_parse_from(["atomic-server"])
+                    .unwrap()
+                    .http_workers,
+                None
+            ),
+            "env" => assert_eq!(
+                Opts::try_parse_from(["atomic-server"])
+                    .unwrap()
+                    .http_workers
+                    .map(NonZeroUsize::get),
+                Some(32)
+            ),
+            "cli" => assert_eq!(
+                Opts::try_parse_from(["atomic-server", "--http-workers", "24"])
+                    .unwrap()
+                    .http_workers
+                    .map(NonZeroUsize::get),
+                Some(24)
+            ),
+            "invalid" => {
+                for value in ["0", "-1", "129", "1.5", "true", "", "184467440737095516160"] {
+                    assert!(
+                        Opts::try_parse_from(["atomic-server", "--http-workers", value]).is_err(),
+                        "accepted {value:?}"
+                    );
+                }
+                for value in ["1", "128"] {
+                    assert!(
+                        Opts::try_parse_from(["atomic-server", "--http-workers", value]).is_ok()
+                    );
+                }
+            }
+            "invalid-env" => assert!(Opts::try_parse_from(["atomic-server"]).is_err()),
+            _ => panic!("unknown parser case {case}"),
+        }
+    }
 
     fn config_from(args: &[&str]) -> AtomicServerResult<Config> {
         let mut argv = vec!["atomic-server", "--data-dir", "./.temp/config-test/db"];

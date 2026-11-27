@@ -4,4 +4,5 @@ pub mod embed;
 pub mod error;
 pub mod node;
 pub mod resources;
+pub mod server_receipts;
 pub mod simple;

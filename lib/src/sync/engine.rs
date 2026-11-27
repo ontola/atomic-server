@@ -671,40 +671,11 @@ pub async fn handle_frame_full_for_caps(
                 // too, since enrollment/quota state can change between the
                 // request and this response.
                 match store.take_pending_blob_request(&resp.hash) {
-                    // Blobs are content-addressed: the bytes must hash to the
-                    // key they are stored under, or any session that answers
-                    // a pending request poisons what every later reader of
-                    // that hash gets.
-                    Some(_drive) if blake3::hash(&resp.bytes).as_bytes() != &resp.hash => {
-                        tracing::warn!(
-                            "BLOB_RESPONSE: bytes do not hash to {}, dropped",
-                            hex::encode(resp.hash)
-                        );
-                        vec![]
-                    }
-                    Some(drive) if store.sync_policy().admit_drive_write(&drive) => {
-                        match store.put_blob(&resp.hash, &resp.bytes).await {
-                            Ok(()) => vec![],
-                            Err(error) => {
-                                tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
-                                vec![protocol::encode_error(
-                                    0,
-                                    protocol::error_code::UNKNOWN,
-                                    "Blob storage failed",
-                                )]
-                            }
-                        }
-                    }
                     Some(drive) => {
-                        tracing::warn!(
-                            "BLOB_RESPONSE: drive {} not admitted by sync policy, dropping blob",
-                            drive
-                        );
-                        vec![protocol::encode_error(
-                            0,
-                            protocol::error_code::UNKNOWN,
-                            "Drive not admitted for sync",
-                        )]
+                        match write_requested_blob(store, &drive, &resp.hash, &resp.bytes).await {
+                            Ok(()) => vec![],
+                            Err(response) => response.into_iter().collect(),
+                        }
                     }
                     None => {
                         tracing::warn!(
@@ -737,6 +708,39 @@ pub async fn handle_frame_full_for_caps(
         subscribe: None,
         unsubscribe: None,
     }
+}
+
+/// Store bytes for a request whose connection or transport has already matched
+/// the hash to a drive. Recheck current admission and the content hash.
+pub(super) async fn write_requested_blob(
+    store: &Db,
+    drive: &str,
+    hash: &[u8; 32],
+    bytes: &[u8],
+) -> Result<(), Option<Vec<u8>>> {
+    if blake3::hash(bytes).as_bytes() != hash {
+        tracing::warn!(
+            "BLOB_RESPONSE: bytes do not hash to {}, dropped",
+            hex::encode(hash)
+        );
+        return Err(None);
+    }
+    if !store.sync_policy().admit_drive_write(drive) {
+        tracing::warn!("BLOB_RESPONSE: drive {drive} not admitted by sync policy, dropping blob");
+        return Err(Some(protocol::encode_error(
+            0,
+            protocol::error_code::UNKNOWN,
+            "Drive not admitted for sync",
+        )));
+    }
+    store.put_blob(hash, bytes).await.map_err(|error| {
+        tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
+        Some(protocol::encode_error(
+            0,
+            protocol::error_code::UNKNOWN,
+            "Blob storage failed",
+        ))
+    })
 }
 
 /// If `resource` points at a blob this store does not hold, record which

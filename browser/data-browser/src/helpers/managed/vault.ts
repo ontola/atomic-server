@@ -1,19 +1,32 @@
-import { AGENT_VAULT_PROOF_MESSAGE, decodeB64 } from '@tomic/lib';
-import { managedFetch } from './api';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  decodeB64,
+  canonicalizeScheme,
+  type Store,
+} from '@tomic/lib';
+import { managedFetch, getManagedApiBase } from './api';
+import { getManagedAccount } from './session';
+import {
+  captureResourceVaultBackup,
+  captureResourceVaultOperation,
+  clearResourceVaultScopes,
+  type ConfirmedVaultExport,
+  type VaultReceiptDb,
+} from './vaultResourceSync';
 
 /**
  * Cloud Vault client: encrypted, blind backup of a drive.
  *
  * The division of labour is deliberate. **WASM does crypto and format, this
  * file does the network.** `vaultExport` hands back bytes that are already
- * sealed; everything here only ever moves ciphertext around. The control plane
- * brokers presigned URLs and never sees a payload, and object bytes go straight
- * to storage rather than through the API — which is why a backup of a large
- * drive does not cost us bandwidth.
+ * sealed. Network uploads contain ciphertext; the control plane brokers
+ * presigned URLs and object bytes go straight to storage rather than through
+ * the API — which is why a backup of a large drive does not cost us bandwidth.
  *
- * What that means for reading this file: nothing here can leak drive contents,
- * because nothing here can read them. The security-critical code is in
- * `atomic_lib::vault`; this is plumbing.
+ * The exporter also returns a private manifest of resource identifiers and
+ * exact versions for local confirmation. That manifest stays on this device;
+ * it is never included in upload reservations, confirmations or checkpoints.
+ * Encryption and the stored format remain in `atomic_lib::vault`.
  */
 
 /** Signs the fixed derivation message. Satisfied by `@tomic/lib`'s `Agent`. */
@@ -301,6 +314,7 @@ export type VaultBlobDb = {
     blobId: string,
     chunks: Uint8Array[],
     wanted: string[],
+    driveSubject?: string,
   ): Promise<VaultBlobRestoreResult> | VaultBlobRestoreResult;
 };
 
@@ -323,47 +337,50 @@ export type VaultBlobPlan = {
   }[];
 };
 
-export type VaultCapableDb = Partial<VaultBlobDb> & {
-  vaultExport(
-    driveSubject: string,
-    key: Uint8Array,
-    keyEpoch: number,
-    drivePseudonym: string,
-    devicePubkey: string,
-    segment: number,
-    checkpointN: number,
-    driveHasCheckpoint: boolean,
-    observedLanes: Record<string, number>,
-    /**
-     * A checkpoint keeps only each resource's current state (shallow
-     * snapshots, no signed envelopes). Ignored by delta packs. Omit for the
-     * default, which keeps the whole edit history.
-     */
-    currentStateOnly?: boolean,
-  ): Promise<{
-    objectKey: string;
-    sealed: Uint8Array;
-    kind: SegmentKind;
-    resources: number;
-    unchanged: number;
-    tombstones: number;
-    /** Checkpoints only; published verbatim to the control plane. */
-    coverage: Record<string, number>;
-  } | null>;
-  vaultImport(
-    key: Uint8Array,
-    keyEpoch: number,
-    drivePseudonym: string,
-    devicePubkey: string,
-    objects: { objectKey: string; sealed: Uint8Array }[],
-  ): Promise<RestoreOutcome>;
-  /** Marks a sealed segment as durably stored. See `backupDrive`. */
-  vaultCommitSegment(
-    drivePseudonym: string,
-    devicePubkey: string,
-    segment: number,
-  ): Promise<void> | void;
-};
+export type VaultCapableDb = VaultReceiptDb &
+  Partial<VaultBlobDb> & {
+    vaultExport(
+      driveSubject: string,
+      key: Uint8Array,
+      keyEpoch: number,
+      drivePseudonym: string,
+      devicePubkey: string,
+      segment: number,
+      checkpointN: number,
+      driveHasCheckpoint: boolean,
+      observedLanes: Record<string, number>,
+      /**
+       * A checkpoint keeps only each resource's current state (shallow
+       * snapshots, no signed envelopes). Ignored by delta packs. Omit for the
+       * default, which keeps the whole edit history.
+       */
+      currentStateOnly?: boolean,
+    ): Promise<{
+      objectKey: string;
+      sealed: Uint8Array;
+      kind: SegmentKind;
+      resources: number;
+      unchanged: number;
+      tombstones: number;
+      /** Checkpoints only; published verbatim to the control plane. */
+      coverage: Record<string, number>;
+      /** Exact resource versions sealed in this object; absent in older adapters. */
+      resourceVersions?: Record<string, Record<string, number>>;
+    } | null>;
+    vaultImport(
+      key: Uint8Array,
+      keyEpoch: number,
+      drivePseudonym: string,
+      devicePubkey: string,
+      objects: { objectKey: string; sealed: Uint8Array }[],
+    ): Promise<RestoreOutcome>;
+    /** Marks a sealed segment as durably stored. See `backupDrive`. */
+    vaultCommitSegment(
+      drivePseudonym: string,
+      devicePubkey: string,
+      segment: number,
+    ): Promise<void> | void;
+  };
 
 // A plain function uses Wuchale's non-reactive runtime. Translating directly
 // in an Error constructor incorrectly injects a React hook outside a component.
@@ -809,8 +826,11 @@ export function nextSegmentFor(
 
 export async function listVaultObjects(
   drivePseudonym: string,
+  signal?: AbortSignal,
 ): Promise<VaultObject[]> {
-  return api<VaultObject[]>(`/cloud-vault/${drivePseudonym}/objects`);
+  return api<VaultObject[]>(`/cloud-vault/${drivePseudonym}/objects`, {
+    signal,
+  });
 }
 
 /**
@@ -845,9 +865,11 @@ async function backupSegment({
   observedLanes,
   collisionRetries = 0,
   beforeNetworkWrite,
+  onResourceVersionsConfirmed,
 }: {
   db: VaultCapableDb;
   collisionRetries?: number;
+  onResourceVersionsConfirmed?: (proof: ConfirmedVaultExport) => Promise<void>;
   beforeNetworkWrite?: () => Promise<void>;
   signal?: AbortSignal;
   driveSubject: string;
@@ -964,6 +986,7 @@ async function backupSegment({
       segment: isCheckpoint ? segment : segment + 1,
       collisionRetries: collisionRetries + 1,
       beforeNetworkWrite,
+      onResourceVersionsConfirmed,
     });
   }
 
@@ -1015,6 +1038,8 @@ async function backupSegment({
   // A rejection here means another device published this number first. Its
   // anchor is just as good as ours, so the pass still counts as backed up and
   // the next one picks the next number.
+  let published = !isCheckpoint;
+
   if (isCheckpoint) {
     try {
       await beforeNetworkWrite?.();
@@ -1028,6 +1053,7 @@ async function backupSegment({
           checkpoint_object_id: upload.object_id,
         }),
       });
+      published = true;
     } catch (error) {
       if (error instanceof VaultSessionEndedError) throw error;
       signal?.throwIfAborted();
@@ -1046,6 +1072,24 @@ async function backupSegment({
   signal?.throwIfAborted();
   await db.vaultCommitSegment(drivePseudonym, devicePubkey, segment);
 
+  // A generic "backed-up" result can also mean an unpublished checkpoint.
+  // Per-resource proof requires the actual object to have completed every
+  // publication step, and rechecks account scope after asynchronous storage.
+  if (published && sealedPack.resourceVersions && onResourceVersionsConfirmed) {
+    try {
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      await onResourceVersionsConfirmed({
+        objectKey: sealedPack.objectKey,
+        resourceVersions: sealedPack.resourceVersions,
+        confirmedAt: Date.now(),
+      });
+    } catch {
+      // Publication already succeeded. An unavailable identity check or local
+      // diagnostic write may withhold proof but cannot undo the remote backup.
+    }
+  }
+
   return {
     status: 'backed-up',
     kind: sealedPack.kind,
@@ -1056,7 +1100,9 @@ async function backupSegment({
   };
 }
 
-type BackupDriveArgs = Parameters<typeof backupSegment>[0];
+type BackupDriveArgs = Parameters<typeof backupSegment>[0] & {
+  onAttachmentHashesConfirmed?: (hashes: readonly string[]) => Promise<void>;
+};
 
 /**
  * Back a drive up: its sealed history, then the sealed bytes of its files.
@@ -1079,6 +1125,7 @@ export async function backupDrive(
     driveKey: args.driveKey,
     keyEpoch: args.keyEpoch ?? 1,
     beforeNetworkWrite: args.beforeNetworkWrite,
+    onAttachmentHashesConfirmed: args.onAttachmentHashesConfirmed,
   });
 
   return blobs ? { ...outcome, blobs } : outcome;
@@ -1154,6 +1201,19 @@ function idCache(drivePseudonym: string) {
   };
 }
 
+type BlobBackupArgs = {
+  db: VaultCapableDb;
+  signal?: AbortSignal;
+  driveSubject: string;
+  drivePseudonym: string;
+  driveKey: Uint8Array;
+  keyEpoch: number;
+  beforeNetworkWrite?: () => Promise<void>;
+  onAttachmentHashesConfirmed?: (hashes: readonly string[]) => Promise<void>;
+};
+
+const blobBackupTails = new WeakMap<VaultCapableDb, Promise<void>>();
+
 /**
  * Upload the sealed bytes of every file the drive references and the vault
  * does not hold.
@@ -1177,23 +1237,11 @@ function idCache(drivePseudonym: string) {
  * Returns `undefined` when the db cannot read files (an app without a local
  * store), which is a different answer from "nothing to do".
  */
-export async function backupBlobs({
-  db,
-  signal,
-  driveSubject,
-  drivePseudonym,
-  driveKey,
-  keyEpoch,
-  beforeNetworkWrite,
-}: {
-  db: VaultCapableDb;
-  signal?: AbortSignal;
-  driveSubject: string;
-  drivePseudonym: string;
-  driveKey: Uint8Array;
-  keyEpoch: number;
-  beforeNetworkWrite?: () => Promise<void>;
-}): Promise<BlobBackupOutcome | undefined> {
+export async function backupBlobs(
+  args: BlobBackupArgs,
+): Promise<BlobBackupOutcome | undefined> {
+  const { db, signal } = args;
+
   if (
     !db.vaultFileHashes ||
     !db.vaultBlobOpen ||
@@ -1203,7 +1251,39 @@ export async function backupBlobs({
     return undefined;
   }
 
-  const blobDb = db as VaultBlobDb;
+  // Both WASM and native databases have one open-file cache. A drive's pass
+  // owns it through its final close, including while uploads are in flight.
+  const previous = blobBackupTails.get(db) ?? Promise.resolve();
+  let release!: () => void;
+  const turn = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const tail = previous.then(() => turn);
+  blobBackupTails.set(db, tail);
+  await previous;
+
+  try {
+    signal?.throwIfAborted();
+
+    return await backupBlobsOnce({ ...args, db: db as VaultBlobDb });
+  } finally {
+    release();
+    if (blobBackupTails.get(db) === tail) blobBackupTails.delete(db);
+  }
+}
+
+async function backupBlobsOnce({
+  db: blobDb,
+  signal,
+  driveSubject,
+  drivePseudonym,
+  driveKey,
+  keyEpoch,
+  beforeNetworkWrite,
+  onAttachmentHashesConfirmed,
+}: Omit<BlobBackupArgs, 'db'> & {
+  db: VaultBlobDb;
+}): Promise<BlobBackupOutcome> {
   const outcome: BlobBackupOutcome = {
     uploaded: 0,
     alreadyStored: 0,
@@ -1217,7 +1297,52 @@ export async function backupBlobs({
   const hashes = (await blobDb.vaultFileHashes(driveSubject)).map(h =>
     h.toLowerCase(),
   );
-  const stored = storedBlobs(await listVaultObjects(drivePseudonym));
+  const listed = await listVaultObjects(drivePseudonym);
+  const stored = storedBlobs(listed);
+  const verified = new Set<string>();
+
+  // Listings and the local hash-to-key cache are routing hints only. Reused
+  // ciphertext must open to the expected whole hash before it can create proof.
+  const verifyExisting = async (
+    hash: string,
+    id: string,
+    objects = listed,
+  ): Promise<boolean> => {
+    if (!onAttachmentHashesConfirmed || !blobDb.vaultBlobRestore) return false;
+
+    try {
+      const chunks = objects
+        .filter(object => blobKeyOf(object)?.id === id)
+        .sort((a, b) => blobKeyOf(a)!.chunk - blobKeyOf(b)!.chunk);
+      if (
+        !chunks.length ||
+        chunks.length > 64 ||
+        chunks.some((object, index) => blobKeyOf(object)!.chunk !== index)
+      )
+        return false;
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      const bodies = await downloadVaultObjects(
+        drivePseudonym,
+        chunks,
+        async response => new Uint8Array(await response.arrayBuffer()),
+      );
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      const result = await blobDb.vaultBlobRestore(
+        driveKey,
+        keyEpoch,
+        id,
+        bodies,
+        [hash],
+      );
+
+      return result.status === 'restored' && result.hash === hash;
+    } catch {
+      return false;
+    }
+  };
+
   const batch: ReadyFile[] = [];
   let batchObjects = 0;
 
@@ -1237,6 +1362,9 @@ export async function backupBlobs({
       outcome,
       cache,
       beforeNetworkWrite,
+      onVerified: hash => verified.add(hash),
+      verifyReused: async (hash, id) =>
+        verifyExisting(hash, id, await listVaultObjects(drivePseudonym)),
     });
   };
 
@@ -1251,6 +1379,7 @@ export async function backupBlobs({
 
       if (known && isContiguous(stored.get(known))) {
         outcome.alreadyStored++;
+        if (await verifyExisting(hash, known)) verified.add(hash);
         continue;
       }
 
@@ -1271,6 +1400,7 @@ export async function backupBlobs({
 
       if (plan.chunks.every(c => have?.has(c.index))) {
         outcome.alreadyStored++;
+        if (await verifyExisting(hash, plan.blobId)) verified.add(hash);
         continue;
       }
 
@@ -1288,6 +1418,16 @@ export async function backupBlobs({
     cache.save();
   }
 
+  if (onAttachmentHashesConfirmed && verified.size) {
+    try {
+      await beforeNetworkWrite?.();
+      signal?.throwIfAborted();
+      await onAttachmentHashesConfirmed([...verified]);
+    } catch {
+      /* Proof metadata must not fail a completed file backup. */
+    }
+  }
+
   return outcome;
 }
 
@@ -1301,6 +1441,8 @@ async function uploadBlobBatch({
   outcome,
   cache,
   beforeNetworkWrite,
+  onVerified,
+  verifyReused,
 }: {
   db: VaultBlobDb;
   signal?: AbortSignal;
@@ -1311,6 +1453,8 @@ async function uploadBlobBatch({
   outcome: BlobBackupOutcome;
   cache: ReturnType<typeof idCache>;
   beforeNetworkWrite?: () => Promise<void>;
+  onVerified: (hash: string) => void;
+  verifyReused: (hash: string, id: string) => Promise<boolean>;
 }): Promise<void> {
   await beforeNetworkWrite?.();
   signal?.throwIfAborted();
@@ -1392,6 +1536,13 @@ async function uploadBlobBatch({
       outcome.alreadyStored++;
     }
 
+    // Every newly uploaded chunk came from this verified plan. A mixed or
+    // reused object set needs a complete decrypt/hash round trip instead.
+    if (
+      confirmations.length === plan.chunks.length ||
+      (await verifyReused(hash, plan.blobId))
+    )
+      onVerified(hash);
     cache.set(hash, plan.blobId);
   }
 }
@@ -1443,7 +1594,9 @@ export async function downloadVaultObjects<T>(
   objects: VaultObject[],
   read: (response: Response) => Promise<T>,
   onProgress?: (done: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<T[]> {
+  signal?.throwIfAborted();
   if (objects.length === 0) return [];
 
   // The control plane signs at most DOWNLOAD_URL_BATCH objects per request,
@@ -1456,6 +1609,7 @@ export async function downloadVaultObjects<T>(
       `/cloud-vault/${drivePseudonym}/download-urls`,
       {
         method: 'POST',
+        signal,
         body: JSON.stringify({ object_ids: batch.map(o => o.object_id) }),
       },
     );
@@ -1475,6 +1629,7 @@ export async function downloadVaultObjects<T>(
   await Promise.all(
     Array.from({ length: Math.min(4, objects.length) }, async () => {
       while (!failed && next < objects.length) {
+        signal?.throwIfAborted();
         const index = next++;
         const object = objects[index];
 
@@ -1482,7 +1637,7 @@ export async function downloadVaultObjects<T>(
           const url = urlByKey.get(object.object_key);
           if (!url)
             throw new Error(`No download URL issued for ${object.object_key}`);
-          const response = await fetch(url);
+          const response = await fetch(url, { signal });
 
           if (!response.ok) {
             throw new Error(
@@ -1491,6 +1646,7 @@ export async function downloadVaultObjects<T>(
           }
 
           fetched[index] = await read(response);
+          signal?.throwIfAborted();
           completed++;
           if (!failed) onProgress?.(completed, objects.length);
         } catch (error) {
@@ -1639,6 +1795,9 @@ export async function restoreDriveBlobs({
   keyEpoch = 1,
   hashes: explicitHashes,
   onProgress,
+  signal,
+  beforeRestore,
+  repairOnly = false,
 }: {
   db: VaultCapableDb;
   driveSubject: string;
@@ -1647,10 +1806,17 @@ export async function restoreDriveBlobs({
   keyEpoch?: number;
   hashes?: string[];
   onProgress?: (done: number, total: number) => void;
+  signal?: AbortSignal;
+  /** Revalidate the operation and return only hashes that still need repair. */
+  beforeRestore?: (wanted: string[]) => Promise<string[]>;
+  /** Ask the database to recheck current drive references after decryption. */
+  repairOnly?: boolean;
 }): Promise<BlobRestoreOutcome | undefined> {
   if (!db.vaultFileHashes || !db.vaultBlobPresent || !db.vaultBlobRestore) {
     return undefined;
   }
+
+  signal?.throwIfAborted();
 
   const hashes = [
     ...new Set(
@@ -1668,13 +1834,14 @@ export async function restoreDriveBlobs({
   const wanted = new Set<string>();
 
   for (const hash of hashes) {
+    signal?.throwIfAborted();
     if (await db.vaultBlobPresent(hash)) outcome.present++;
     else wanted.add(hash);
   }
 
   const groups = new Map<string, { chunk: number; object: VaultObject }[]>();
 
-  for (const object of await listVaultObjects(drivePseudonym)) {
+  for (const object of await listVaultObjects(drivePseudonym, signal)) {
     const key = blobKeyOf(object);
 
     if (key) {
@@ -1687,7 +1854,21 @@ export async function restoreDriveBlobs({
 
   let done = 0;
 
+  const refreshWanted = async () => {
+    if (!beforeRestore) return;
+
+    const current = new Set(await beforeRestore([...wanted]));
+    signal?.throwIfAborted();
+
+    for (const hash of wanted) {
+      if (!current.has(hash)) wanted.delete(hash);
+    }
+  };
+
   for (const [id, parts] of groups) {
+    signal?.throwIfAborted();
+    await refreshWanted();
+
     if (wanted.size === 0) break;
 
     onProgress?.(done++, groups.size);
@@ -1699,25 +1880,62 @@ export async function restoreDriveBlobs({
       continue;
     }
 
+    let bodies: Uint8Array[];
+
     try {
-      const bodies = await downloadVaultObjects(
+      bodies = await downloadVaultObjects(
         drivePseudonym,
         parts.map(part => part.object),
         async response => new Uint8Array(await response.arrayBuffer()),
+        undefined,
+        signal,
       );
-      const result = await db.vaultBlobRestore(driveKey, keyEpoch, id, bodies, [
-        ...wanted,
-      ]);
+    } catch (error) {
+      signal?.throwIfAborted();
+
+      // Losing the session or the network says nothing about this file.
+      if (
+        error instanceof VaultSessionEndedError ||
+        error instanceof TypeError
+      ) {
+        throw error;
+      }
+
+      outcome.unreadable++;
+      continue;
+    }
+
+    // This can involve a fresh account check and a new local file inventory.
+    // Keep its failures outside the unreadable-object catch.
+    await refreshWanted();
+
+    signal?.throwIfAborted();
+    if (wanted.size === 0) break;
+
+    try {
+      const result = repairOnly
+        ? await db.vaultBlobRestore(
+            driveKey,
+            keyEpoch,
+            id,
+            bodies,
+            [...wanted],
+            driveSubject,
+          )
+        : await db.vaultBlobRestore(driveKey, keyEpoch, id, bodies, [
+            ...wanted,
+          ]);
+      signal?.throwIfAborted();
 
       if (result.status === 'restored') {
         outcome.restored++;
-
         if (result.hash) wanted.delete(result.hash.toLowerCase());
       } else if (result.status === 'unreadable') {
         outcome.unreadable++;
       }
     } catch (error) {
-      // Losing the session or the network says nothing about this file.
+      signal?.throwIfAborted();
+
       if (
         error instanceof VaultSessionEndedError ||
         error instanceof TypeError
@@ -1979,6 +2197,8 @@ export async function recoverDriveKey({
 const inFlight = new Map<string, Promise<BackupOutcome>>();
 
 export function runVaultBackup(args: {
+  /** Optional app context for account-scoped per-resource confirmations. */
+  store?: Store;
   /** Revalidate the account after encryption or storage I/O. */
   beforeNetworkWrite?: () => Promise<void>;
   signal?: AbortSignal;
@@ -2020,6 +2240,29 @@ export function runVaultBackup(args: {
   }
 
   const pass = (async () => {
+    const operationCurrent = args.store
+      ? captureResourceVaultOperation(args.store)
+      : undefined;
+    const proofAgent = args.store?.getAgent();
+    const proofDb = args.store?.getClientDb();
+    const proofPortal = getManagedApiBase();
+    const account = args.store
+      ? await getManagedAccount({ fresh: true })
+      : undefined;
+
+    if (
+      args.store &&
+      (!account ||
+        !proofAgent ||
+        args.store.getAgent() !== proofAgent ||
+        args.store.getClientDb() !== proofDb ||
+        (!!proofDb && args.db !== proofDb) ||
+        getManagedApiBase() !== proofPortal)
+    ) {
+      clearResourceVaultScopes(args.store);
+      throw new VaultSessionEndedError();
+    }
+
     args.signal?.throwIfAborted();
     await args.beforeNetworkWrite?.();
     const state = await getVaultState(args.drivePseudonym, args.signal);
@@ -2028,6 +2271,8 @@ export function runVaultBackup(args: {
     // A suspended vault refuses uploads; asking anyway would just produce an
     // error per tick and bury anything else in the log.
     if (state.enrollment.status !== 'active') {
+      if (args.store) clearResourceVaultScopes(args.store);
+
       return { status: 'nothing-to-do' } as BackupOutcome;
     }
 
@@ -2055,8 +2300,59 @@ export function runVaultBackup(args: {
       }
     }
 
+    const currentAccount = args.store
+      ? await getManagedAccount({ fresh: true })
+      : undefined;
+
+    if (
+      operationCurrent &&
+      (!operationCurrent() ||
+        currentAccount?.email !== account?.email ||
+        args.store!.getAgent() !== proofAgent ||
+        args.store!.getClientDb() !== proofDb ||
+        getManagedApiBase() !== proofPortal)
+    ) {
+      clearResourceVaultScopes(args.store!);
+      throw new VaultSessionEndedError();
+    }
+
+    if (
+      args.store &&
+      (canonicalizeScheme(state.enrollment.drive_subject) !==
+        canonicalizeScheme(args.driveSubject) ||
+        (state.enrollment.agent_subject &&
+          canonicalizeScheme(state.enrollment.agent_subject) !==
+            canonicalizeScheme(proofAgent?.subject ?? '')))
+    ) {
+      clearResourceVaultScopes(args.store);
+      throw new VaultSessionEndedError();
+    }
+
+    const proof =
+      args.store && account && proofAgent?.subject
+        ? captureResourceVaultBackup(args.store, args.db, {
+            managedAccount: account.email,
+            agent: proofAgent.subject,
+            portalUrl: proofPortal,
+            drive: args.driveSubject,
+            drivePseudonym: args.drivePseudonym,
+            keyEpoch: currentEpoch,
+          })
+        : undefined;
+
+    const guard = async () => {
+      await args.beforeNetworkWrite?.();
+      if (proof && !(await proof.isCurrent()))
+        throw new VaultSessionEndedError();
+    };
+
+    await guard();
+
     return backupDrive({
       ...args,
+      beforeNetworkWrite: guard,
+      onResourceVersionsConfirmed: proof?.confirm,
+      onAttachmentHashesConfirmed: proof?.confirmAttachments,
       driveKey,
       keyEpoch: currentEpoch,
       segment: nextSegmentFor(state, args.devicePubkey),

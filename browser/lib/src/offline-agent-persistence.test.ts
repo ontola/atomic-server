@@ -29,6 +29,7 @@ describe('Offline Agent Persistence', () => {
       { jsonAd: string; snapshot: Uint8Array | null }
     >();
     const mockClientDb = {
+      supportsDurablePersistence: true,
       isReady: true,
       isInitialized: true,
       initError: undefined,

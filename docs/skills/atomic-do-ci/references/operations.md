@@ -237,6 +237,20 @@ python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json 
 python3 scripts/ci-fanout-cloud-launch.py --config /absolute/private/cloud.json finalize
 ```
 
+For routine investigation, use `collect --metadata-only`. It downloads the JSON
+results, logs and diagnostic text while keeping raw screenshots, videos and
+traces on the retained DO volume. `COLLECTION-SCOPE.json` records the source,
+selected files and omitted artifact sizes; a metadata collection is not a full
+trace download. The default `collect` still exports everything. Both modes keep
+the existing credential and path guards.
+
+Playwright's HTML report and test-results directory can contain identical copies
+of each attachment. Preservation verifies those immutable files before sharing
+their storage with hard links, retaining every original path and byte. Full
+exports expand the links into regular files. Transfer archives are hashed as a
+stream, so simultaneous multi-GB report retrieval does not require loading each
+archive into controller memory.
+
 The one-hour clock starts with the first controller creation request, before
 its installation and source checkout. Cloud-init installs separate supervisor
 and reaper units before bootstrap work; monitoring SSH is optional after launch.
@@ -346,3 +360,91 @@ worker deletion/detachment, reconciles lost provider responses, preserves the
 source snapshot and retained disk, and verifies clone absence before deleting
 the controller. Warm ownership/startup tests are fake-provider tests; a real
 restored-engine/full-CI run is a separate acceptance gate.
+
+## Native persistence and private Vault acceptance
+
+The ten public checks do not execute the Tauri WebView, private SaaS downstream,
+or the optional native/Vault browser journeys. A persistence candidate such as
+#2621 needs the additional fixed profile `pr2621-native-private-v1`. First combine
+the feature and runner changes into one clean public commit. The free plan checks
+the required scripts, fixtures and case-selection interfaces at that Git pin;
+it rejects a runner-only branch that lacks the feature.
+
+Extend an otherwise authorized three-worker cloud configuration with:
+
+```json
+{
+  "cloud_worker_mode": "cold",
+  "cold_scratch_gib": 200,
+  "expected_scratch_volume_hourly_rate": 0.03,
+  "supplemental_profile": "pr2621-native-private-v1",
+  "supplemental_jobs": 16,
+  "worker_profile": "64-core",
+  "sample_resources": true,
+  "cloud_cache_min_free_gib": 4
+}
+```
+
+The rate is a historical example: verify live prices, capacity and the complete
+compute/controller/storage/egress/cleanup bound before allocation. Preserve the
+user's original deadline and spending ceiling. Native compilation time is not
+established by ordinary public CI timings. `supplemental_jobs` also caps the
+supplemental container's CPU allocation (1–32), independently of the public
+HTTP/Playwright profile; record both when comparing utilization.
+
+Pin the paired private SaaS revision separately: an open same-named PR, or main
+when none exists. Use a task-owned clean checkout; never mount another worker's
+checkout or account files. Prepare its capsule locally, under owner-only storage:
+
+```sh
+umask 077
+python3 scripts/ci-fanout-private-input.py create \
+  --repo /TASK/atomic-saas --source-commit PRIVATE_SHA \
+  --output /PRIVATE/new-source-capsule > /PRIVATE/private-input.json
+```
+
+Copy the returned descriptor object into the cloud configuration's `private_input`
+field. It binds the private commit, regular-file inventory and archive/manifest
+checksums. The exporter omits environment/key files, Git history and build caches.
+Do not replace it with an unfiltered checkout archive or production environment.
+Run the alignment and locked Cargo metadata checks on the public/private pair and
+Flutter bridge before spending. Pinning versions alone is not compilation proof.
+
+The launcher waits for a source-bound private-input acknowledgement from the DO
+controller before returning. The supervisor independently verifies the capsule
+on its temporary boot disk before creating workers. Once this acknowledgement
+and normal launch complete, control no longer depends on the laptop. Private
+source, fixture credentials and raw logs stay on ephemeral owned storage; public
+reports receive only constructed case receipts and approved synthetic PNGs.
+
+Each cold worker receives its own blank 200-GiB temporary disk. A separate ledger
+and live attachment proof authorize its first format; both Docker and containerd
+must use that verified mount before builds. This is cold storage, not a warm
+snapshot restore. The independent reaper verifies worker and disk deletion and
+includes their lifetimes in cost receipts. No new snapshot or recurring disk is
+created by this mode.
+
+Public checks remain in their usual queue. Before its browser shard, worker 2
+runs actual native peer/Vault recovery, the persisted Iroh reopen test and both
+native renderer journeys. Worker 3 runs private root/managed-node checks and both
+real Vault workspace journeys with local SaaS and MinIO. Each required browser
+case must pass once with no skip or retry. Independent completed failures are
+collected; missing evidence, source/transport failures and the original deadline
+remain fatal. A public green alone cannot satisfy this profile.
+
+`sample_resources` starts a pinned sampler after source setup. Reports contain
+host CPU/iowait/steal, pressure, disk space and only owned server-process/thread
+CPU counters, affinity and known cgroup-v2 quotas. It reads no argv/environment.
+Per-process percentages use one-core units; earlier setup and short-lived
+unsampled processes remain unmeasured. Shared archive/exclusive append locking
+keeps telemetry collection from racing report retrieval. Do not infer request
+queue saturation from host utilization alone.
+
+For the explicitly retained 10-GiB build disk, `cloud_cache_min_free_gib: 4`
+performs bounded maintenance before workers start. Only fully verified old
+archives are eligible; the newest and current-source builds, partials and unknown
+entries are protected. Eviction removes three regenerable payloads from a hidden
+old entry while retaining its manifest, inventory, build receipt and provenance.
+Reports, snapshots and volume size remain intact. `cache-maintenance.json` records
+the decision. If protected/unknown contents prevent the reserve, setup fails
+before expensive worker allocation.

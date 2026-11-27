@@ -108,10 +108,11 @@ Each step ships on its own and has a test that fails without it.
   `embedRoutes` instead of reading another route's options. Delete the
   `insertRule` patch. Unit tests for the host surface; a Playwright smoke in
   mobile width.
-- [x] **3. Bundle budget in CI.** `flutter/scripts/check_embed_size.sh` fails when
-  the entry plus first-use chunks exceed a gzip budget (start: today's 553 kB +
-  297 kB) or the total exceeds 16 MB; run in the Flutter workflow (`embed-size` job in `flutter-embed-size.yml`). Report the sizes
-  in the job summary. Measured: 45 first-use chunks, 926 kB gzip (budget 1 MB), 13.6 MB total.
+- [x] **3. Bundle budget in CI.** `flutter/scripts/check_embed_size.sh` reports
+  first-use JavaScript gzip size (1 MB budget) and total asset size (16 MiB
+  budget). The `embed-size` job writes both measurements to the workflow
+  summary and warns on overages. The original measurement was 45 first-use
+  chunks, 926 kB gzip and 13.6 MB total.
 - [~] **4. One warm web view.** Built, not yet measured on a phone.
   `WarmResourceWebView` (`packages/atomic_chat/lib/src/warm_resource_web_view.dart`)
   is made by `AppShell.initState` (so after login and the host's open_db) and

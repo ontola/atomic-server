@@ -340,6 +340,7 @@ describe('offline persistence', () => {
   function attachMockClientDb(store: Store): Map<string, DbEntry> {
     const dbState = new Map<string, DbEntry>();
     (store as unknown as { clientDb: unknown }).clientDb = {
+      supportsDurablePersistence: true,
       isReady: true,
       isInitialized: true,
       initError: undefined,

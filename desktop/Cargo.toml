@@ -98,3 +98,6 @@ devtools = ["tauri/devtools"]
 account-acceptance = []
 # The app looks for, downloads and installs newer releases itself.
 updater = ["dep:tauri-plugin-updater"]
+# Destructive, guarded fixtures for the Linux native recovery CI suite only.
+# Never enabled by default or by shipping/release builds.
+native-recovery-tests = []

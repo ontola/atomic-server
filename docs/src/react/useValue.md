@@ -39,6 +39,13 @@ incomplete remote save must also handle `'queued'`, including exhaustive
 for a hosted resource, or local persistence for a local-only resource. Server
 acceptance does not by itself promise a disk flush or another independent copy.
 
+Awaiting the setter waits for local processing, not for its debounced save.
+For version-specific completion evidence, await `resource.saveWithReceipt()`
+and inspect its optional `local` and `server` fields. See the
+[persistence guide](../local-first-guide/4-persist.md#read-version-specific-receipts)
+for examples and limits. The `useSaveState(resource)` hook reports progress and
+errors; it is not a receipt for a particular version.
+
 In practice, you will use typed versions of `useValue` more often.
 These offer better typescript typing and validation on writes.
 

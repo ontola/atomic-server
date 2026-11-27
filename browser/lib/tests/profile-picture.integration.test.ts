@@ -4,26 +4,26 @@
  * agent's drive, or every other device sees an icon pointing at nothing.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { setTimeout as delay } from "node:timers/promises";
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
-import { startServer, type ServerHandle } from "./server-fixture.js";
-import { Agent } from "../src/agent.js";
-import { JSCryptoProvider } from "../src/CryptoProvider.js";
-import { Store } from "../src/store.js";
-import { NodeClientDb } from "../src/client-db.node.js";
-import type { ClientDbWorker } from "../src/client-db.js";
-import { core } from "../src/ontologies/core.js";
-import { server as serverOnt } from "../src/ontologies/server.js";
-import { agentPublicKey, agentSubject } from "../src/subject.js";
+import { startServer, type ServerHandle } from './server-fixture.js';
+import { Agent } from '../src/agent.js';
+import { JSCryptoProvider } from '../src/CryptoProvider.js';
+import { Store } from '../src/store.js';
+import { fileClientDb, disposeFileClientDbs } from './file-client-db.js';
+import type { ClientDbWorker } from '../src/client-db.js';
+import { core } from '../src/ontologies/core.js';
+import { server as serverOnt } from '../src/ontologies/server.js';
+import { agentPublicKey, agentSubject } from '../src/subject.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const wasmPath = path.resolve(here, "../../../wasm/pkg/atomic_wasm_bg.wasm");
+const wasmPath = path.resolve(here, '../../../wasm/pkg/atomic_wasm_bg.wasm');
 const openStores: Store[] = [];
 
-describe("profile picture upload", () => {
+describe('profile picture upload', () => {
   let node: ServerHandle;
 
   beforeAll(async () => {
@@ -65,13 +65,13 @@ describe("profile picture upload", () => {
   }
 
   for (const hosted of [true, false]) {
-    it(`the File reaches the server (profile ${hosted ? "hosted" : "was local-only first"})`, async () => {
+    it(`the File reaches the server (profile ${hosted ? 'hosted' : 'was local-only first'})`, async () => {
       const keys = await Agent.generateKeyPair();
       const did = agentSubject(
         await new JSCryptoProvider(keys.privateKey).getPublicKey(),
       );
       const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
-      const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+      const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
       await clientDb.init();
       const store = new Store({ serverUrl: node.serverUrl, agent });
       store.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -81,17 +81,17 @@ describe("profile picture upload", () => {
       if (!hosted) store.registerLocalOnlyDrive(did);
 
       const profile = store.getResourceLoading(did, { newResource: true });
-      await profile.set(core.properties.publicKey, agentPublicKey(did) ?? "");
+      await profile.set(core.properties.publicKey, agentPublicKey(did) ?? '');
       await profile.set(core.properties.isA, [core.classes.agent]);
-      await profile.set(core.properties.name, "Pat");
+      await profile.set(core.properties.name, 'Pat');
       await profile.save();
       await store.ensurePrivateDrive();
 
-      const png = new File([new Uint8Array([1, 2, 3, 4, 5])], "me.png", {
-        type: "image/png",
+      const png = new File([new Uint8Array([1, 2, 3, 4, 5])], 'me.png', {
+        type: 'image/png',
       });
       const [file] = await store.uploadFiles([png], did);
-      profile.set("https://atomicdata.dev/properties/icon", file);
+      profile.set('https://atomicdata.dev/properties/icon', file);
       await profile.save();
 
       if (!hosted) {
@@ -100,8 +100,10 @@ describe("profile picture upload", () => {
 
       const onServer = await filesOnServer(agent, file);
       expect(onServer[serverOnt.properties.downloadUrl]).toBeTruthy();
-      expect(onServer[serverOnt.properties.mimetype]).toBe("image/png");
+      expect(onServer[serverOnt.properties.mimetype]).toBe('image/png');
       expect(onServer[serverOnt.properties.filesize]).toBe(5);
     }, 90_000);
   }
 });
+
+afterAll(disposeFileClientDbs);

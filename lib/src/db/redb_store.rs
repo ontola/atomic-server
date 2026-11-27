@@ -12,7 +12,7 @@ use redb::{
 use crate::errors::AtomicResult;
 
 use super::{
-    kv_store::{KvIter, KvPair, KvStore},
+    kv_store::{KvIter, KvPair, KvStore, ReplicaIdentity},
     trees::{Method, Operation, Tree},
 };
 
@@ -53,6 +53,7 @@ fn create_all_tables(tx: &redb::WriteTransaction) {
 /// Thread-safe via redb's internal locking (MVCC).
 pub struct RedbStore {
     db: Arc<Database>,
+    persistent: bool,
     /// When Some, operations are buffered instead of committed immediately.
     /// Reads consult the buffer first (read-your-writes within a batch).
     /// Call `commit_batch()` to flush all buffered ops in a single transaction.
@@ -241,6 +242,7 @@ impl RedbStore {
         Ok((
             RedbStore {
                 db: Arc::new(db),
+                persistent: true,
                 batch_buffer: std::sync::Mutex::new(None),
                 dirty: AtomicBool::new(false),
                 flush_lock: std::sync::Mutex::new(()),
@@ -270,6 +272,7 @@ impl RedbStore {
 
         Ok(RedbStore {
             db: Arc::new(db),
+            persistent: false,
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
             flush_lock: std::sync::Mutex::new(()),
@@ -313,6 +316,8 @@ impl RedbStore {
         Ok((
             RedbStore {
                 db: Arc::new(db),
+                // The snapshot handle is memory; its caller owns persistence.
+                persistent: false,
                 batch_buffer: std::sync::Mutex::new(None),
                 dirty: AtomicBool::new(false),
                 flush_lock: std::sync::Mutex::new(()),
@@ -362,6 +367,7 @@ impl RedbStore {
 
         Ok(RedbStore {
             db: Arc::new(db),
+            persistent: true,
             batch_buffer: std::sync::Mutex::new(None),
             dirty: AtomicBool::new(false),
             flush_lock: std::sync::Mutex::new(()),
@@ -387,6 +393,80 @@ fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
 }
 
 impl KvStore for RedbStore {
+    fn replica_identity(&self, scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+        if !self.persistent {
+            return Ok(None);
+        }
+        // A read can see staged snapshots, but flush does not commit somebody
+        // else's batch. Such a view must not support a persistence receipt.
+        let batch = self
+            .batch_buffer
+            .lock()
+            .map_err(|e| format!("redb batch lock: {e}"))?;
+        if batch.is_some() {
+            return Ok(None);
+        }
+        const KEY: &[u8] = b"_replica_identity_v1";
+        let existing = {
+            let tx = self.db.begin_read().map_err(|e| e.to_string())?;
+            let table = tx
+                .open_table(table_def(Tree::PluginMeta))
+                .map_err(|e| e.to_string())?;
+            let found = table
+                .get(KEY)
+                .map_err(|e| e.to_string())?
+                .map(|value| value.value().to_vec());
+            found
+        };
+        let bytes = match existing {
+            Some(bytes) => bytes,
+            None => {
+                // Recheck inside the exclusive transaction: concurrent callers
+                // must return the same identity. Immediate commit makes the
+                // metadata durable before any caller may advertise it.
+                let mut tx = self.db.begin_write().map_err(|e| e.to_string())?;
+                tx.set_durability(redb::Durability::Immediate)
+                    .map_err(|e| e.to_string())?;
+                tx.set_quick_repair(true);
+                let bytes = {
+                    let mut table = tx
+                        .open_table(table_def(Tree::PluginMeta))
+                        .map_err(|e| e.to_string())?;
+                    let existing = table
+                        .get(KEY)
+                        .map_err(|e| e.to_string())?
+                        .map(|value| value.value().to_vec());
+                    match existing {
+                        Some(bytes) => bytes,
+                        None => {
+                            let bytes: [u8; 64] = std::array::from_fn(|_| rand::random());
+                            table
+                                .insert(KEY, bytes.as_slice())
+                                .map_err(|e| e.to_string())?;
+                            bytes.to_vec()
+                        }
+                    }
+                };
+                tx.commit().map_err(|e| e.to_string())?;
+                bytes
+            }
+        };
+        if bytes.len() != 64 {
+            return Err("Invalid persisted replica identity metadata".into());
+        }
+        let scope = crate::identifiers::canonicalize_scheme(scope);
+        let scoped = |key: &[u8], domain: &[u8]| {
+            let mut hasher = blake3::Hasher::new_keyed(key.try_into().unwrap());
+            hasher.update(domain);
+            hasher.update(scope.as_bytes());
+            hasher.finalize().to_hex().to_string()
+        };
+        Ok(Some(ReplicaIdentity {
+            storage_id: scoped(&bytes[..32], b"atomic-storage-v1\0"),
+            generation: scoped(&bytes[32..], b"atomic-generation-v1\0"),
+        }))
+    }
+
     fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
         // Read-your-writes: check the batch buffer first
         {
@@ -723,11 +803,15 @@ impl KvStore for RedbStore {
     }
 
     fn commit_batch(&self) -> AtomicResult<()> {
-        let ops = {
-            let mut buf = self.batch_buffer.lock().unwrap();
-            buf.take().map(|b| b.ops).unwrap_or_default()
+        // Keep the batch visible until the transaction has committed. Otherwise
+        // a receipt could read the staged snapshot, observe "no batch", and
+        // flush before those staged operations actually reach redb.
+        let mut buf = self.batch_buffer.lock().unwrap();
+        let Some(batch) = buf.as_ref() else {
+            return Ok(());
         };
-        if ops.is_empty() {
+        if batch.ops.is_empty() {
+            *buf = None;
             return Ok(());
         }
         // Apply all buffered operations in a single transaction
@@ -739,7 +823,7 @@ impl KvStore for RedbStore {
         tx.set_durability(redb::Durability::None)
             .map_err(|e| format!("redb set_durability: {e}"))?;
         {
-            for op in &ops {
+            for op in &batch.ops {
                 let mut table = tx
                     .open_table(table_def(op.tree))
                     .map_err(|e| format!("redb open table: {e}"))?;
@@ -761,6 +845,7 @@ impl KvStore for RedbStore {
         }
         tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
         self.dirty.store(true, Ordering::SeqCst);
+        *buf = None;
         Ok(())
     }
 }
@@ -814,6 +899,69 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("atomic.redb")
+    }
+
+    #[test]
+    fn replica_identity_survives_reopen_and_clone_but_not_reset() {
+        let path = temp_path("replica-identity");
+        let cloned = path.with_file_name("cloned.redb");
+        let original = {
+            let store = RedbStore::new_file(&path).unwrap();
+            let first = store.replica_identity("drive-a").unwrap().unwrap();
+            assert_eq!(first, store.replica_identity("drive-a").unwrap().unwrap());
+            let other = store.replica_identity("drive-b").unwrap().unwrap();
+            assert_ne!(first.storage_id, other.storage_id);
+            assert_ne!(first.generation, other.generation);
+            first
+        };
+        std::fs::copy(&path, &cloned).unwrap();
+        for file in [&path, &cloned] {
+            let store = RedbStore::new_file(file).unwrap();
+            assert_eq!(
+                original,
+                store.replica_identity("drive-a").unwrap().unwrap()
+            );
+        }
+        std::fs::remove_file(&path).unwrap();
+        let reset = RedbStore::new_file(&path).unwrap();
+        assert_ne!(
+            original,
+            reset.replica_identity("drive-a").unwrap().unwrap()
+        );
+        drop(reset);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn replica_identity_is_unsupported_for_memory() {
+        let store = RedbStore::new_memory().unwrap();
+        store.flush().unwrap();
+        assert!(store.replica_identity("drive-a").unwrap().is_none());
+    }
+
+    #[test]
+    fn snapshot_flush_does_not_claim_external_persistence() {
+        let (store, _handle) = RedbStore::new_snapshot(None, None).unwrap();
+        store.flush().unwrap();
+        assert!(store.replica_identity("drive-a").unwrap().is_none());
+    }
+
+    #[test]
+    fn replica_identity_creation_is_shared_and_alias_scoped() {
+        let path = temp_path("replica-concurrent");
+        let store = Arc::new(RedbStore::new_file(&path).unwrap());
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                let store = store.clone();
+                std::thread::spawn(move || store.replica_identity("did:ad:drive").unwrap().unwrap())
+            })
+            .collect();
+        let expected = store.replica_identity("atomic:drive").unwrap().unwrap();
+        for thread in threads {
+            assert_eq!(thread.join().unwrap(), expected);
+        }
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     /// A store opened with a small read cache (the phone's) stores and

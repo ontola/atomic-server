@@ -32,6 +32,52 @@ pub fn find_in_prop_val_sub_index(store: &Db, prop: &str, val: Option<&Value>) -
     )
 }
 
+/// Read one property/value bucket without the lossy iterator APIs.
+pub(crate) fn strict_children(
+    store: &Db,
+    parent: &crate::Subject,
+) -> AtomicResult<Vec<crate::Subject>> {
+    let mut out = Vec::new();
+    let value = Value::AtomicUrl(parent.clone()).to_sortable_string();
+    for property in [
+        property_key_part(crate::urls::PARENT),
+        crate::urls::PARENT.as_bytes().to_vec(),
+    ] {
+        let prefix = [
+            property.as_slice(),
+            &[SEPARATION_BIT],
+            value.as_bytes(),
+            &[SEPARATION_BIT],
+        ]
+        .concat();
+        let mut end = prefix.clone();
+        while end.last() == Some(&0xff) {
+            end.pop();
+        }
+        let Some(last) = end.last_mut() else {
+            return Err("Invalid index prefix".into());
+        };
+        *last += 1;
+        let mut start = prefix;
+        loop {
+            let page = store
+                .kv
+                .range_page(Tree::PropValSub, start, end.clone(), 512)?;
+            let Some((last, _)) = page.last() else { break };
+            start = last.clone();
+            start.push(0);
+            let full = page.len() == 512;
+            for (key, _) in page {
+                out.push(key_to_index_atom(&key, store.get_base_domain().as_deref())?.subject);
+            }
+            if !full {
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn add_atom_to_prop_val_sub_index(
     index_atom: &IndexAtom,
     transaction: &mut Transaction,

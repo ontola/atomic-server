@@ -178,12 +178,14 @@ describe('a commit transport', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('without one a save stays offline; setting one drains what is queued', async () => {
+  it('keeps a rejected volatile save queued until the host transport arrives', async () => {
     const { store, db, applied } = await embeddedStore({ transport: false });
     const doc = await named(store, 'Before the transport');
 
     expect(store.canCommit).toBe(false);
-    await expect(doc.save()).resolves.toBe('offline');
+    await expect(doc.save()).rejects.toThrow(
+      'could not be saved on this device',
+    );
     expect(applied).toHaveLength(0);
     expect(store.getSyncStatus().pendingDirtyCount).toBeGreaterThan(0);
 

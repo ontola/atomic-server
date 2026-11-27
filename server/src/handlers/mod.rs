@@ -10,10 +10,12 @@ pub mod app_agent;
 mod app_endpoints_test;
 #[cfg(feature = "wasm-plugins")]
 pub mod app_write;
+pub mod attachment_evidence;
 pub mod blob;
 pub mod client_reports;
 pub mod commit;
 pub mod download;
+pub mod drive_sync_confirmation;
 pub mod drive_usage;
 pub mod export;
 pub mod forget_peer;
@@ -47,6 +49,7 @@ pub mod plugin_ui;
 pub mod post_resource;
 pub mod search;
 pub mod single_page_app;
+pub mod storage_receipt;
 pub mod upload;
 #[cfg(feature = "vector-search")]
 pub mod vector_search;

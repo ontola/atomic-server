@@ -1,5 +1,12 @@
-import type { Store } from '@tomic/react';
-import { getManagedAccount } from './session';
+import { getManagedApiBase } from './api';
+import { invalidateResourceVaultProof } from './vaultResourceSync';
+import { BACKUP_DAY_MS } from '../driveProtection';
+import { StoreEvents, type Store } from '@tomic/react';
+import {
+  getManagedAccount,
+  onManagedLogout,
+  onManagedSessionChanged,
+} from './session';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   agentVaultProof,
@@ -28,7 +35,17 @@ import {
   suggestedFileName,
 } from './vaultFile';
 import { restoreDriveToSnapshot } from './vaultRestore';
-import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
+import {
+  notifyVaultChanged,
+  onVaultChanged,
+  setVaultOptOut,
+} from './vaultAutoBackup';
+import { confirmFirstVaultBackup } from './vaultFirstBackupStatus';
+import {
+  repairDriveFiles,
+  type FileRepairOutcome,
+  type FileRepairProgress,
+} from './vaultFileRepair';
 
 /**
  * Cloud Vault state for one drive, ready to bind to a UI.
@@ -88,6 +105,12 @@ export type UseVaultBackup = {
   restoreFromFile: (file: File) => Promise<RestoreOutcome | null>;
   /** 0–1 while a restore is downloading, otherwise null. */
   restoreProgress: number | null;
+  canRecoverFiles: boolean;
+  recoverMissingFiles: () => Promise<FileRepairOutcome | null>;
+  cancelFileRecovery: () => void;
+  fileRecoveryProgress: FileRepairProgress | null;
+  fileRecoveryResult: FileRepairOutcome | null;
+  fileRecoveryError: string | null;
   /**
    * Re-read the enrollment and vault state. For a screen that knows something
    * changed on the control-plane side that no store event reports — a session
@@ -143,6 +166,7 @@ export function useVaultBackup({
   devicePubkey,
   getDisplayMetadata,
   store,
+  tryPeers,
 }: {
   /** Needed to restore a snapshot: the overwrite goes through its resources. */
   store?: Store;
@@ -155,15 +179,35 @@ export function useVaultBackup({
   proofMessage: Uint8Array | null;
   devicePubkey: string | null;
   getDisplayMetadata?: () => Promise<{ name?: string; emoji?: string }>;
+  tryPeers?: (hashes: string[], signal?: AbortSignal) => Promise<void>;
 }): UseVaultBackup {
   const [status, setStatus] = useState<VaultStatus>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoreProgress, setRestoreProgress] = useState<number | null>(null);
+  const [fileRecoveryProgress, setFileRecoveryProgress] =
+    useState<FileRepairProgress | null>(null);
+  const [fileRecoveryResult, setFileRecoveryResult] =
+    useState<FileRepairOutcome | null>(null);
+  const [fileRecoveryError, setFileRecoveryError] = useState<string | null>(
+    null,
+  );
+  const fileRecovery = useRef<AbortController | null>(null);
+  const scopeGeneration = useRef(0);
+  const refreshRequest = useRef(0);
 
   // Kept in a ref rather than state: it is not rendered, and putting a key in
   // state would put it in React DevTools for anyone with the page open.
-  const driveKey = useRef<DriveKeyHandle | null>(null);
+  const driveKey = useRef<{
+    drivePseudonym: string;
+    agentSubject: string | null;
+    generation: number;
+    value: DriveKeyHandle;
+  } | null>(null);
+  const activePseudonym =
+    status.state === 'on' ? status.enrollment.drive_pseudonym : null;
+  const activeKeyEpoch =
+    status.state === 'on' ? (status.enrollment.key_epoch ?? 1) : null;
 
   const ready = Boolean(
     db &&
@@ -174,6 +218,51 @@ export function useVaultBackup({
     proofMessage &&
     devicePubkey,
   );
+  const canRecoverFiles = Boolean(
+    ready &&
+    status.state === 'on' &&
+    status.enrollment.drive_subject === driveSubject &&
+    db?.vaultFileHashes &&
+    db.vaultBlobPresent &&
+    db.vaultBlobRestore &&
+    tryPeers,
+  );
+
+  useEffect(() => {
+    const clearScope = () => {
+      scopeGeneration.current++;
+      refreshRequest.current++;
+      driveKey.current = null;
+      fileRecovery.current?.abort();
+      fileRecovery.current = null;
+    };
+
+    const invalidate = () => {
+      clearScope();
+      setFileRecoveryProgress(null);
+      setFileRecoveryResult(null);
+      setFileRecoveryError(null);
+    };
+
+    invalidate();
+    const offLogout = onManagedLogout(invalidate);
+    const offSession = onManagedSessionChanged(invalidate);
+
+    return () => {
+      clearScope();
+      offLogout();
+      offSession();
+    };
+  }, [
+    agentSubject,
+    db,
+    driveSubject,
+    activePseudonym,
+    activeKeyEpoch,
+    keys,
+    signer,
+    store,
+  ]);
 
   const missing = describeMissingVaultInputs({
     db,
@@ -186,9 +275,14 @@ export function useVaultBackup({
 
   const refresh = useCallback(async () => {
     if (!driveSubject) return;
+    const request = ++refreshRequest.current;
+    const current = () =>
+      request === refreshRequest.current &&
+      (!store || store.getAgent()?.subject === agentSubject);
 
     try {
       if (!(await getManagedAccount())) {
+        if (!current()) return;
         setStatus({ state: 'off' });
 
         return;
@@ -196,6 +290,7 @@ export function useVaultBackup({
 
       const drives = await listVaultDrives();
       const enrollment = drives.find(d => d.drive_subject === driveSubject);
+      if (!current()) return;
 
       if (!enrollment) {
         // Not ours does not mean not backed up: the account that pays may be
@@ -203,6 +298,7 @@ export function useVaultBackup({
         const summary = await getVaultDriveSummary(driveSubject).catch(
           () => null,
         );
+        if (!current()) return;
 
         setStatus(
           summary?.enabled && !summary.is_yours
@@ -218,18 +314,26 @@ export function useVaultBackup({
         return;
       }
 
+      const details = await getVaultState(enrollment.drive_pseudonym);
+      if (!current()) return;
+
+      if (agentSubject && details.confirmed_objects > 0) {
+        confirmFirstVaultBackup(agentSubject, driveSubject);
+      }
+
       setStatus({
         state: 'on',
-        enrollment,
-        details: await getVaultState(enrollment.drive_pseudonym),
+        enrollment: details.enrollment ?? enrollment,
+        details,
       });
     } catch (e) {
       // Not signed in, no portal configured, offline. All of these mean "we
       // cannot say", which is different from "backup is off" — showing an
       // enable button here would produce a confusing failure on click.
-      setStatus({ state: 'unavailable', reason: (e as Error).message });
+      if (current())
+        setStatus({ state: 'unavailable', reason: (e as Error).message });
     }
-  }, [driveSubject]);
+  }, [agentSubject, driveSubject, store]);
 
   // The automatic path (sign-in, the boot watcher) may enrol this drive after
   // the first read came back "off"; re-read when it says so.
@@ -271,18 +375,37 @@ export function useVaultBackup({
   /** Make sure we hold the drive key, fetching and unwrapping if needed. */
   const ensureKey = useCallback(
     async (drivePseudonym: string): Promise<DriveKeyHandle> => {
-      if (driveKey.current) return driveKey.current;
+      const generation = scopeGeneration.current;
+      const cached = driveKey.current;
+
+      if (
+        cached?.drivePseudonym === drivePseudonym &&
+        cached.agentSubject === agentSubject &&
+        cached.generation === generation
+      )
+        return cached.value;
 
       const recovered = await recoverDriveKey({
         keys: keys!,
         drivePseudonym,
         agentSecret: await agentVaultProof(signer!, proofMessage!),
       });
-      driveKey.current = recovered;
+      if (
+        scopeGeneration.current !== generation ||
+        (store && store.getAgent()?.subject !== agentSubject)
+      )
+        throw new DOMException('The account or drive changed.', 'AbortError');
+
+      driveKey.current = {
+        drivePseudonym,
+        agentSubject,
+        generation,
+        value: recovered,
+      };
 
       return recovered;
     },
-    [keys, signer, proofMessage],
+    [agentSubject, keys, signer, proofMessage, store],
   );
 
   /** Drop the cached key and fetch the drive's current envelope. */
@@ -327,13 +450,19 @@ export function useVaultBackup({
         agentSubject: agentSubject!,
         agentSecret: await agentVaultProof(signer!, proofMessage!),
       });
-      driveKey.current = { driveKey: key, keyEpoch };
+      driveKey.current = {
+        drivePseudonym: enrollment.drive_pseudonym,
+        agentSubject,
+        generation: scopeGeneration.current,
+        value: { driveKey: key, keyEpoch },
+      };
       // Turning it on by hand lifts an earlier opt-out, so automatic backups
       // resume as well.
       setVaultOptOut(driveSubject!, false);
       // First backup immediately, so enabling produces something restorable
       // rather than an empty vault waiting on a tick the user cannot see.
       await runVaultBackup({
+        store,
         db: db!,
         driveSubject: driveSubject!,
         drivePseudonym: enrollment.drive_pseudonym,
@@ -342,6 +471,7 @@ export function useVaultBackup({
         driveKeyEpoch: keyEpoch,
         refreshDriveKey: () => refreshKey(enrollment.drive_pseudonym),
       });
+      notifyVaultChanged(driveSubject!);
       await refresh();
     });
   }, [
@@ -356,27 +486,57 @@ export function useVaultBackup({
     db,
     devicePubkey,
     refresh,
+    store,
   ]);
 
   const disable = useCallback(async () => {
     if (status.state !== 'on') return;
 
     await run(async () => {
+      const account = store
+        ? await getManagedAccount({ fresh: true })
+        : undefined;
+      const scope =
+        store && account && agentSubject && driveSubject && db
+          ? {
+              managedAccount: account.email,
+              agent: agentSubject,
+              portalUrl: getManagedApiBase(),
+              drive: driveSubject,
+              drivePseudonym: status.enrollment.drive_pseudonym,
+              keyEpoch: status.enrollment.key_epoch ?? 1,
+            }
+          : undefined;
       await disableVault(status.enrollment.drive_pseudonym);
       driveKey.current = null;
       // Backup is on for everyone by default; switching it off here must not
       // be undone by the next sign-in (see vaultAutoBackup.ts).
       setVaultOptOut(driveSubject!, true);
-      await refresh();
+      notifyVaultChanged(driveSubject!);
+      if (store)
+        try {
+          await invalidateResourceVaultProof(
+            store,
+            status.enrollment.drive_pseudonym,
+            scope && db ? { scope, db } : undefined,
+          );
+        } finally {
+          // The remote switch already succeeded even if diagnostic cleanup fails.
+          await refresh();
+        }
+      else await refresh();
     });
-  }, [run, status, driveSubject, refresh]);
+  }, [run, status, driveSubject, refresh, store, agentSubject, db]);
 
   const backupNow = useCallback(async () => {
     if (status.state !== 'on') return;
 
     await run(async () => {
       const key = await ensureKey(status.enrollment.drive_pseudonym);
+      const lastBackupAt = status.enrollment.last_backup_at;
+
       await runVaultBackup({
+        store,
         db: db!,
         driveSubject: driveSubject!,
         drivePseudonym: status.enrollment.drive_pseudonym,
@@ -384,7 +544,12 @@ export function useVaultBackup({
         driveKey: key.driveKey,
         driveKeyEpoch: key.keyEpoch,
         refreshDriveKey: () => refreshKey(status.enrollment.drive_pseudonym),
+        // A manual backup renews an older recovery point even when there are
+        // no new edits to upload.
+        forceCheckpoint:
+          !lastBackupAt || Date.now() - lastBackupAt * 1000 > BACKUP_DAY_MS,
       });
+      notifyVaultChanged(driveSubject!);
       await refresh();
     });
   }, [
@@ -396,6 +561,7 @@ export function useVaultBackup({
     driveSubject,
     devicePubkey,
     refresh,
+    store,
   ]);
 
   const compact = useCallback(
@@ -410,6 +576,7 @@ export function useVaultBackup({
           includeUndoWindow,
           runBackup: ({ currentStateOnly }) =>
             runVaultBackup({
+              store,
               db: db!,
               driveSubject: driveSubject!,
               drivePseudonym,
@@ -421,6 +588,7 @@ export function useVaultBackup({
               currentStateOnly,
             }),
         });
+        notifyVaultChanged(driveSubject!);
         await refresh();
 
         return result;
@@ -435,6 +603,7 @@ export function useVaultBackup({
       driveSubject,
       devicePubkey,
       refresh,
+      store,
     ],
   );
 
@@ -563,9 +732,132 @@ export function useVaultBackup({
     [run, status, ensureKey, db, devicePubkey],
   );
 
+  const cancelFileRecovery = useCallback(() => {
+    fileRecovery.current?.abort();
+    fileRecovery.current = null;
+    setFileRecoveryProgress(null);
+    setFileRecoveryError('File recovery cancelled.');
+  }, []);
+
+  const recoverMissingFiles = useCallback(async () => {
+    if (
+      !canRecoverFiles ||
+      busy ||
+      fileRecovery.current ||
+      !db ||
+      !driveSubject ||
+      !agentSubject ||
+      !tryPeers ||
+      status.state !== 'on' ||
+      status.enrollment.drive_subject !== driveSubject
+    )
+      return null;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    const generation = scopeGeneration.current;
+    const capturedDb = store?.getClientDb() === db;
+    const active = () =>
+      fileRecovery.current === controller &&
+      scopeGeneration.current === generation &&
+      !signal.aborted;
+
+    const assertCurrent = () => {
+      signal.throwIfAborted();
+
+      if (
+        !active() ||
+        (store &&
+          (store.getAgent()?.subject !== agentSubject ||
+            store.getDrive() !== driveSubject ||
+            (capturedDb && store.getClientDb() !== db)))
+      ) {
+        controller.abort();
+        signal.throwIfAborted();
+      }
+    };
+
+    const stop = () => controller.abort();
+    const offAgent = store?.on(StoreEvents.AgentChanged, stop);
+    const offDrive = store?.on(StoreEvents.DriveChanged, stop);
+    window.addEventListener('pagehide', stop);
+    fileRecovery.current = controller;
+    setFileRecoveryError(null);
+    setFileRecoveryResult(null);
+    setFileRecoveryProgress({ stage: 'scanning', done: 0, total: 0 });
+
+    try {
+      assertCurrent();
+      const account = await getManagedAccount({ fresh: true });
+      assertCurrent();
+      if (!account)
+        throw new Error('Sign in to recover files from Cloud Vault.');
+
+      const throwIfStale = async () => {
+        assertCurrent();
+        const currentAccount = await getManagedAccount();
+        assertCurrent();
+
+        if (currentAccount?.email !== account.email) {
+          controller.abort();
+          signal.throwIfAborted();
+        }
+      };
+
+      const key = await ensureKey(status.enrollment.drive_pseudonym);
+      await throwIfStale();
+      const result = await repairDriveFiles({
+        db,
+        driveSubject,
+        drivePseudonym: status.enrollment.drive_pseudonym,
+        driveKey: key.driveKey,
+        keyEpoch: key.keyEpoch,
+        signal,
+        throwIfStale,
+        tryPeers,
+        onProgress: progress => {
+          assertCurrent();
+          setFileRecoveryProgress(progress);
+        },
+      });
+      assertCurrent();
+      setFileRecoveryResult(result);
+      setFileRecoveryError(result.error ?? null);
+      if (result.repaired > 0) store?.retryFileContentRecovery();
+
+      return result;
+    } catch (cause) {
+      if (active())
+        setFileRecoveryError(
+          cause instanceof Error ? cause.message : String(cause),
+        );
+
+      return null;
+    } finally {
+      offAgent?.();
+      offDrive?.();
+      window.removeEventListener('pagehide', stop);
+
+      if (fileRecovery.current === controller) {
+        fileRecovery.current = null;
+        setFileRecoveryProgress(null);
+      }
+    }
+  }, [
+    agentSubject,
+    busy,
+    canRecoverFiles,
+    db,
+    driveSubject,
+    ensureKey,
+    status,
+    store,
+    tryPeers,
+  ]);
+
   return {
     status,
-    busy,
+    busy: busy || fileRecoveryProgress !== null,
     error,
     devicePubkey,
     downloadBackup,
@@ -576,6 +868,12 @@ export function useVaultBackup({
     compact,
     restore,
     restoreProgress,
+    canRecoverFiles,
+    recoverMissingFiles,
+    cancelFileRecovery,
+    fileRecoveryProgress,
+    fileRecoveryResult,
+    fileRecoveryError,
     refresh,
   };
 }

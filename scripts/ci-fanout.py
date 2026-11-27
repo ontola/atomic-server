@@ -190,7 +190,29 @@ def validate_archive(path, source, check=None):
     return receipt, manifest
 
 
+WORKER_PROFILES = {
+    '64-core': {'vcpus': 64, 'workers': 24, 'server_workers': 32},
+    '32-core': {'vcpus': 32, 'workers': 12, 'server_workers': 16},
+}
+
+
+def worker_budget(config):
+    """Requested runtime widths; actual HTTP width may be FD-capped by the server."""
+    profile = config.get('worker_profile', '')
+    return {'profile': profile, 'profile_vcpus': WORKER_PROFILES.get(profile, {}).get('vcpus'),
+            'playwright_workers_per_host': config['workers'],
+            'http_workers_requested': config['server_workers']}
+
+
 def validate_config(config):
+    profile = config.setdefault('worker_profile', '')
+    if not isinstance(profile, str) or profile not in ('', *WORKER_PROFILES):
+        raise ValueError('worker_profile must be empty, 32-core or 64-core')
+    # Resolve before defaults: an explicitly supplied width (including PW 1 or
+    # HTTP 0/default) always wins, and repeated validation is idempotent.
+    for key in ('workers', 'server_workers'):
+        if profile:
+            config.setdefault(key, WORKER_PROFILES[profile][key])
     if 'check_only' in config and config['check_only'] != 'flutter-test':
         raise ValueError('check_only supports only the standalone flutter-test check')
     if not safe_slug(config.get('batch_key')):
@@ -210,6 +232,7 @@ def validate_config(config):
     if Path(config['runtime_dir']).is_relative_to(Path(config['worktree'])):
         raise ValueError('runtime_dir must be outside the repository')
     for field, default, low, high in (('max_hours', 4, .01, 4), ('workers', 1, 1, 64),
+                                     ('server_workers', 0, 0, 128),
                                      ('retries', 1, 0, 1), ('build_jobs', 4, 1, 128),
                                      ('rust_test_threads', 0, 0, 128)):
         value = config.setdefault(field, default)
@@ -217,6 +240,8 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
         if field != 'max_hours' and not isinstance(value, int):
             raise ValueError(field + ' must be an integer')
+    if type(config.setdefault('sample_resources', False)) is not bool:
+        raise ValueError('sample_resources must be a boolean')
     if type(config.setdefault('host_bundle_backup', False)) is not bool:
         raise ValueError('host_bundle_backup must be a boolean')
     for field in ('test_run_key', 'cache_namespace'):
@@ -603,6 +628,8 @@ class Controller:
                                     cwd=checkout, text=True))['engineVersion'].lstrip('v')
         if not re.fullmatch(r'\d+\.\d+\.\d+', engine):
             raise ValueError('Dagger engine version must be pinned')
+        if self.config['sample_resources']:
+            execute(['git', 'cat-file', '-e', actual + ':scripts/ci-resource-sampler.py'], cwd=checkout)
         accounts = []
         for account in self.config['accounts']:
             info = self.api.identity(account)
@@ -615,17 +642,27 @@ class Controller:
                 raise RuntimeError('Requested size/region unavailable for ' + account['context'])
             if abs(size['price_hourly'] - self.config['expected_hourly_rate']) > .000001:
                 raise RuntimeError('Hourly price differs from configured budget')
+            expected_vcpus = WORKER_PROFILES.get(self.config['worker_profile'], {}).get('vcpus')
+            if expected_vcpus is not None and size.get('vcpus') != expected_vcpus:
+                raise ValueError('worker_profile differs from provider machine vCPUs')
             accounts.append({'context': account['context'], 'nodes': account['nodes'],
                              'existing_droplets': len(existing), 'limit': info['droplet_limit']})
         total = sum(account['nodes'] for account in self.config['accounts'])
         plan = {'source_commit': actual, 'dagger_version': engine, 'accounts': accounts,
+                'worker_budget': worker_budget(self.config), 'sample_resources': self.config['sample_resources'],
                 'nodes': total, 'hourly_usd': total * self.config['expected_hourly_rate'],
                 'maximum_hours': self.config['max_hours'], 'check_jobs': [name for name, _ in CHECKS],
                 'browser_shards': total, 'initial_nodes': min(total, len(CHECKS) + 1),
-                'canary_before_remaining_nodes': True}
+                'canary_before_remaining_nodes': False,
+                'builder_ready_before_parallel_initial_nodes': True,
+                'two_machine_preflight_before_real_build': True,
+                'browser_canary_before_additional_shards': True}
         if self.config.get('check_only'):
             plan.update(validation_scope='selected-check', check_jobs=['flutter-test'],
-                        browser_shards=0, initial_nodes=1, canary_before_remaining_nodes=False)
+                        browser_shards=0, initial_nodes=1, canary_before_remaining_nodes=False,
+                        builder_ready_before_parallel_initial_nodes=False,
+                        two_machine_preflight_before_real_build=False,
+                        browser_canary_before_additional_shards=False)
         return plan
 
     def initialize(self, plan):
@@ -919,7 +956,30 @@ dagger version
         info = self.ssh(node_id, "docker info --format '{{json .}}'; dagger version")
         (local / 'machine-info.log').write_text(info)
         self.scp(node_id, [self.runner], '/opt/atomic-ci/runner.py')
+        self.start_resource_sampler(node_id)
         self.node_update(node_id, status='ready')
+
+    def start_resource_sampler(self, node_id):
+        if not self.config['sample_resources']:
+            return
+        self.check_deadline()
+        deadline = self.read()['deadline']
+        remaining = max(1, int((dt.datetime.fromisoformat(deadline) - utcnow()).total_seconds()))
+        output = '/opt/atomic-ci/results/telemetry/resources.jsonl'
+        self.ssh(node_id, 'mkdir -p /opt/atomic-ci/results/telemetry')
+        command = ['systemd-run', '--unit=atomic-ci-resource-sampler',
+                   '--property=RuntimeMaxSec='+str(remaining), '--property=KillMode=control-group',
+                   '/usr/bin/python3', '/opt/atomic-ci/repo/scripts/ci-resource-sampler.py',
+                   '--output', output, '--deadline', deadline, '--interval', '20']
+        self.ssh(node_id, shlex.join(command))
+        self.node_update(node_id, resource_sampler_started_at=stamp(), resource_sampler_output=output)
+
+    def phase_config_fields(self, node_id, name, kind):
+        """Explicit extension data; wrappers may not replace core phase identity."""
+        return {}
+
+    def validate_additional_results(self, nodes):
+        """Optional reviewed profile gate, after ordinary public reconciliation."""
 
     def phase(self, node_id, name, kind, args, preflight=False, module=None):
         with self.lock(node_id):
@@ -934,8 +994,15 @@ dagger version
                       'artifact_cache_dir': self.config['artifact_cache_dir'],
                       'build_jobs': self.config['build_jobs'],
                       'rust_test_threads': self.config['rust_test_threads'],
+                      'server_workers': 0 if module else self.config['server_workers'],
+                      'playwright_workers': self.config['workers'],
+                      'worker_profile': self.config['worker_profile'],
                       'test_run_key': self.config['test_run_key'],
                       'cache_namespace': self.config['cache_namespace']}
+            additional = self.phase_config_fields(node_id, name, kind)
+            if set(additional) & set(config):
+                raise ValueError('phase extension cannot replace core source/identity fields')
+            config.update(additional)
             path = self.root / node_id / (name + '.json')
             path.write_text(json.dumps(config))
             self.scp(node_id, [path], '/opt/atomic-ci/phase.json')
@@ -1111,9 +1178,13 @@ dagger version
         receipt = json.loads((root / 'browser-run.json').read_text())
         expected = {'version': 1, 'kind': kind, 'sourceCommit': self.config['source_commit'],
                     'manifestSha256': state['bundle']['manifest_sha256'], 'shardIndex': node['shard_index'],
-                    'shardCount': state['plan']['nodes'], 'playwrightRetries': 0}
+                    'shardCount': state['plan']['nodes'], 'playwrightRetries': 0,
+                    'httpWorkersRequested': self.config['server_workers'],
+                    'playwrightWorkers': self.config['workers']}
         if any(receipt.get(key) != value for key, value in expected.items()):
             raise ValueError('browser execution receipt identity differs from the scheduled run')
+        if any(type(receipt.get(key)) is not int for key in ('httpWorkersRequested', 'playwrightWorkers')):
+            raise ValueError('browser execution receipt worker budget is not an integer')
         for field, name in [('reportSha256', 'test-results.json'),
                             ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
             if receipt.get(field) != file_sha256(root / name):
@@ -1296,6 +1367,7 @@ dagger version
             raise CIValidationFailure('CI completed with failures: ' + '; '.join(
                 item['node_id'] + ': ' + item['phase'] for item in unresolved)
                 + ('; unexecuted browser tests=' + str(len(unrun)) if unrun else ''))
+        self.validate_additional_results(nodes)
         self.update(lambda value: value.update(validation_passed_at=stamp()))
         return state['full_browser_test_count']
 
@@ -1593,7 +1665,10 @@ systemctl reload ssh
     def retrieve(self, node_id):
         node = self.read()['nodes'][node_id]
         local = self.root / node_id
-        self.ssh(node_id, 'tar -C /opt/atomic-ci -czf /tmp/atomic-ci-results.tgz results', timeout=90)
+        command = 'tar -C /opt/atomic-ci -czf /tmp/atomic-ci-results.tgz results'
+        if self.config['sample_resources']:
+            command = 'flock -s /opt/atomic-ci/results/telemetry/resources.jsonl.lock ' + command
+        self.ssh(node_id, command, timeout=90)
         self.scp(node_id, ['/tmp/atomic-ci-results.tgz'], local / 'results.tgz', download=True)
         with tarfile.open(local / 'results.tgz') as archive:
             for member in archive.getmembers():
@@ -1605,7 +1680,7 @@ systemctl reload ssh
                     path.parent.mkdir(parents=True, exist_ok=True)
                     with archive.extractfile(member) as source, path.open('wb') as target:
                         shutil.copyfileobj(source, target)
-        self.node_update(node_id, artifact_sha256=digest((local / 'results.tgz').read_bytes()),
+        self.node_update(node_id, artifact_sha256=file_sha256(local / 'results.tgz'),
                          artifacts_retrieved_at=stamp())
         return local
 
@@ -1757,20 +1832,32 @@ systemctl reload ssh
                     task.cancel()
                 raise
 
-    def tiny_probe(self, builder, worker):
+    def prepare_dagger_api(self, node_id):
+        """Prepare one pinned node's portable fixture/API once in this batch."""
+        node = self.read()['nodes'][node_id]
+        prepared = node.get('dagger_api_prepared')
+        if prepared is not None:
+            if prepared.get('node_id') != node_id or prepared.get('source_commit') != self.config['source_commit']:
+                raise ValueError('Dagger API preparation belongs to a different node or source')
+            return
+        self.check_deadline()
         fixture = Path(self.config['oci_probe_dir'])
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w:gz') as archive:
             for path in fixture.rglob('*'):
                 if path.is_file() and not any(part in ('node_modules', '.git') for part in path.parts):
                     archive.add(path, arcname=str(path.relative_to(fixture)), recursive=False)
+        execute(['ssh', *self.ssh_options(node), 'root@' + node['ip'],
+                 'mkdir -p /opt/atomic-ci/oci-smoke && tar -C /opt/atomic-ci/oci-smoke -xzf -'],
+                input=data.getvalue(), timeout=60)
+        output = self.ssh(node_id, 'cd /opt/atomic-ci/repo && dagger functions', timeout=300)
+        (self.root / node_id / 'dagger-functions.log').write_text(output)
+        self.node_update(node_id, dagger_api_prepared={'node_id': node_id,
+                         'source_commit': self.config['source_commit'], 'prepared_at': stamp()})
+
+    def tiny_probe(self, builder, worker):
         for key in (builder, worker):
-            node = self.read()['nodes'][key]
-            execute(['ssh', *self.ssh_options(node), 'root@' + node['ip'],
-                     'mkdir -p /opt/atomic-ci/oci-smoke && tar -C /opt/atomic-ci/oci-smoke -xzf -'],
-                    input=data.getvalue(), timeout=60)
-            output = self.ssh(key, 'cd /opt/atomic-ci/repo && dagger functions', timeout=300)
-            (self.root / key / 'dagger-functions.log').write_text(output)
+            self.prepare_dagger_api(key)
         self.phase(builder, 'probe-export', 'probe', ['prepare', 'export', '--path',
                    '/opt/atomic-ci/share/bundle'], module='/opt/atomic-ci/oci-smoke')
         self.wait([builder])
@@ -1824,6 +1911,8 @@ systemctl reload ssh
         self.initialize(plan)
         watcher = None
         checks = {}
+        startup = {}
+        startup_pool = None
         check_pool = cf.ThreadPoolExecutor(max_workers=len(CHECKS) + 1)
         browser_pool = cf.ThreadPoolExecutor(max_workers=plan['nodes'])
         try:
@@ -1840,13 +1929,29 @@ systemctl reload ssh
             builder, canary = node_ids[:2]
             initial = node_ids[:min(len(node_ids), len(CHECKS) + 1)]
             self.create(builder)
-            self.create(canary)
+            # The first ready node is also the warm-cache restoration canary.
+            # Other initial nodes can bootstrap while its API is prepared, but
+            # the shared-path OCI probe must still finish before the real build.
+            startup_pool = cf.ThreadPoolExecutor(max_workers=min(10, len(initial) - 1))
+            for key in initial[1:]:
+                startup[key] = startup_pool.submit(self.create, key)
+            self.prepare_dagger_api(builder)
+            for future in startup.values():
+                if future.done():
+                    future.result()
+            startup[canary].result()
             self.tiny_probe(builder, canary)
             self.source_preflight(builder, canary)
             self.restore_bundle(builder)
+            for future in startup.values():
+                if future.done():
+                    future.result()
             self.phase(builder, 'build', 'builder', ['prepare-browser-bundle', '--source-commit',
                 self.config['source_commit'], 'export', '--path', '/opt/atomic-ci/share/bundle'])
-            self._parallel_create(initial[2:])
+            for future in cf.as_completed(startup.values()):
+                future.result()
+            startup_pool.shutdown(wait=True)
+            startup_pool = None
             check_nodes = initial[1:]
             pending = self.new_check_queue()
             checks = {key:check_pool.submit(self.run_check_worker, key, pending) for key in check_nodes}
@@ -1893,7 +1998,18 @@ systemctl reload ssh
             self.cleanup('all checks and complete browser suite passed', successful=True)
         except BaseException as error:
             if self.path.exists():
+                # Stop further allocations, then join every startup attempt
+                # before cleanup reconciles/deletes owned provider resources.
                 self.update(lambda state:state.update(validation_error=str(error)))
+                if startup_pool is not None:
+                    self.update(lambda state:state.update(stop_requested=True))
+                    for future in startup.values():
+                        future.cancel()
+                    startup_pool.shutdown(wait=True, cancel_futures=True)
+                    startup_pool = None
+                    failures = {key:str(future.exception()) for key,future in startup.items()
+                                if not future.cancelled() and future.exception() is not None}
+                    self.update(lambda state:state.update(startup_errors=failures))
                 try:
                     if not isinstance(error, (KeyboardInterrupt, SystemExit)):
                         self.preserve_rust(checks)
@@ -1901,6 +2017,8 @@ systemctl reload ssh
                     self.cleanup('controller interrupted or a phase failed')
             raise
         finally:
+            if startup_pool is not None:
+                startup_pool.shutdown(wait=True, cancel_futures=True)
             check_pool.shutdown(wait=False, cancel_futures=True)
             browser_pool.shutdown(wait=False, cancel_futures=True)
             # A failed cleanup still owns paid resources or an unresolved API

@@ -39,6 +39,12 @@ function vaultWith(usedBytes: number): UseVaultBackup {
     downloadBackup: vi.fn(async () => 'saved'),
     restoreFromFile: vi.fn(async () => ({})),
     restoreProgress: null,
+    canRecoverFiles: false,
+    recoverMissingFiles: vi.fn(async () => null),
+    cancelFileRecovery: vi.fn(),
+    fileRecoveryProgress: null,
+    fileRecoveryResult: null,
+    fileRecoveryError: null,
     refresh: vi.fn(),
   } as unknown as UseVaultBackup;
 }
@@ -73,6 +79,21 @@ it('shows the bar and quota when the vault is the only service', () => {
   expect(screen.getByRole('progressbar')).toBeTruthy();
   expect(screen.getByTestId('usage-meter-text').textContent).toContain(' of ');
   expect(screen.queryByTestId('vault-included-note')).toBeNull();
+});
+
+it('keeps the last successful backup visible when a later action fails', () => {
+  const vault = vaultWith(1000);
+
+  if (vault.status.state !== 'on') throw new Error('Expected an active vault');
+
+  vault.status.enrollment.last_backup_at = Math.floor(Date.now() / 1000);
+  vault.error = 'Vault upload failed';
+  show(1000, false, vault);
+
+  expect(screen.getByTestId('vault-summary').textContent).toMatch(
+    /^Backed up /,
+  );
+  expect(screen.getByText('Vault upload failed')).toBeTruthy();
 });
 
 it('brings the bar back when included but nearly full', () => {
@@ -124,6 +145,67 @@ it('says files are included, encrypted on the device and counted per backup', ()
   // The old, shared-store wording must not come back.
   expect(note).not.toContain('not end-to-end encrypted');
   expect(note).not.toContain('can read');
+});
+
+it('recovers file contents without invoking a snapshot restore', () => {
+  const vault = vaultWith(1000);
+  vault.canRecoverFiles = true;
+  vault.recoverMissingFiles = vi.fn();
+  show(1000, false, vault);
+
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Recover missing files' }),
+  );
+
+  expect(vault.recoverMissingFiles).toHaveBeenCalledOnce();
+  expect(vault.restore).not.toHaveBeenCalled();
+});
+
+it('allows cancelling while a file recovery is looking for peers', () => {
+  const vault = vaultWith(1000);
+  vault.canRecoverFiles = true;
+  vault.busy = true;
+  vault.fileRecoveryProgress = { stage: 'peers', done: 0, total: 3 };
+  vault.cancelFileRecovery = vi.fn();
+  show(1000, false, vault);
+
+  expect(
+    screen.getByTestId('vault-file-recovery-progress').textContent,
+  ).toContain('connected devices');
+  expect(
+    (screen.getByTestId('vault-recover-files') as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel file recovery' }));
+  expect(vault.cancelFileRecovery).toHaveBeenCalledOnce();
+});
+
+it('reports files still missing and unreadable files with a retry action', () => {
+  const vault = vaultWith(1000);
+  vault.canRecoverFiles = true;
+  vault.recoverMissingFiles = vi.fn();
+  vault.fileRecoveryResult = {
+    total: 3,
+    repaired: 1,
+    missing: ['a', 'b'],
+    unreadable: 1,
+  };
+  show(1000, false, vault);
+
+  const result = screen.getByTestId('vault-file-recovery-result');
+  expect(result.getAttribute('data-files-missing')).toBe('2');
+  expect(result.textContent).toContain('1 file recovered');
+  expect(result.textContent).toContain('2 files are still unavailable');
+  expect(result.textContent).toContain('1 backup file could not be read');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry file recovery' }));
+  expect(vault.recoverMissingFiles).toHaveBeenCalledOnce();
+});
+
+it('hides file recovery when the local database does not support it', () => {
+  show(1000, false);
+
+  expect(
+    screen.queryByRole('button', { name: 'Recover missing files' }),
+  ).toBeNull();
 });
 
 it('does not reload over a restore that left files behind', async () => {

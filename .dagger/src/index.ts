@@ -388,6 +388,7 @@ export class AtomicServer {
   private maxBuildJobs = 0;
   private buildJobs = 0;
   private testRunKey = '';
+  private httpWorkers = 0;
   /** Only populated while preparing a portable bundle: one shared WASM graph. */
   private bundleWasm: Directory | undefined;
 
@@ -451,6 +452,8 @@ export class AtomicServer {
     @argument() buildJobs: number = 0,
     /** Optional cache-busting identity applied only when executing tests. */
     @argument() testRunKey: string = '',
+    /** Runtime HTTP worker override; 0 retains the server's default/FD budget. */
+    @argument() httpWorkers: number = 0,
   ) {
     if (!Number.isSafeInteger(maxBuildJobs) || maxBuildJobs < 0) {
       throw new Error('max-build-jobs must be an integer >= 0');
@@ -465,6 +468,14 @@ export class AtomicServer {
     ) {
       throw new Error('test-run-key must be empty or a safe identifier');
     }
+    if (
+      !Number.isSafeInteger(httpWorkers) ||
+      httpWorkers < 0 ||
+      httpWorkers > 128
+    ) {
+      throw new Error('http-workers must be an integer between 0 and 128');
+    }
+    this.httpWorkers = httpWorkers;
     this.testRunKey = testRunKey;
     this.buildJobs = buildJobs;
     this.maxBuildJobs = maxBuildJobs;
@@ -1299,13 +1310,11 @@ export class AtomicServer {
       .withWorkdir('/repo/browser/utils')
       .withExec(['pnpm', 'run', 'build'])
       .withWorkdir('/repo/browser/lib');
+    const runtime = this.withHttpWorkers(prepared);
     return this.testExec(
       freshPreparedCheck
-        ? prepared.withEnvVariable(
-            'ATOMIC_BUNDLE_CHECK_NONCE',
-            this.e2eRunNonce,
-          )
-        : prepared,
+        ? runtime.withEnvVariable('ATOMIC_BUNDLE_CHECK_NONCE', this.e2eRunNonce)
+        : runtime,
       ['pnpm', 'run', 'test:integration'],
     ).stdout();
   }
@@ -2091,7 +2100,7 @@ export class AtomicServer {
           'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
           'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
           'rm -rf "$STAGE"; fi && ' +
-          'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
+          'cargo nextest run --no-fail-fast --locked --workspace --exclude atomic-server-tauri ' +
           '--no-default-features --features light,wasm-plugins ' +
           `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
           `--test-threads ${threads} ` +
@@ -2343,6 +2352,12 @@ export class AtomicServer {
     return this.atomicServiceFromBinary(atomicServerBinary, e2e, instance);
   }
 
+  private withHttpWorkers(runtime: Container): Container {
+    return this.httpWorkers > 0
+      ? runtime.withEnvVariable('ATOMIC_HTTP_WORKERS', String(this.httpWorkers))
+      : runtime;
+  }
+
   /** Runtime-only path, also used by workers importing the builder's binary. */
   private atomicServiceFromBinary(
     atomicServerBinary: File,
@@ -2359,6 +2374,8 @@ export class AtomicServer {
       .withEnvVariable('ATOMIC_INITIALIZE', 'true')
       .withExposedPort(9883)
       .withEntrypoint(['/atomic-server-bin']);
+
+    runtime = this.withHttpWorkers(runtime);
 
     if (e2e)
       runtime = runtime
@@ -2891,6 +2908,8 @@ export class AtomicServer {
     return this.exportBrowserRun(run, {
       version: 1,
       kind: 'browser-first-pass',
+      httpWorkersRequested: this.httpWorkers,
+      playwrightWorkers,
       sourceCommit: expectedCommit,
       manifestSha256,
       shardIndex,
@@ -3017,6 +3036,8 @@ export class AtomicServer {
     return this.exportBrowserRun(run, {
       version: 1,
       kind: 'browser-deferred-retry',
+      httpWorkersRequested: this.httpWorkers,
+      playwrightWorkers,
       sourceCommit: expectedCommit,
       manifestSha256,
       shardIndex,

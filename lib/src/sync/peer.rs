@@ -381,6 +381,15 @@ struct LivePeer {
     /// Never read; held so the QUIC connection stays open exactly as long
     /// as the registration does.
     _connection: Option<iroh::endpoint::Connection>,
+    receipt_session: Option<std::sync::Arc<super::iroh_receipts::ReceiptSession>>,
+}
+
+impl Drop for LivePeer {
+    fn drop(&mut self) {
+        if let Some(session) = &self.receipt_session {
+            session.invalidate();
+        }
+    }
 }
 
 /// Monotonic id per live connection; see [`LIVE_PEERS`].
@@ -413,6 +422,52 @@ pub fn live_peer_name(peer_id: &str) -> Option<String> {
         .and_then(|guard| guard.get(&normalize_node_id(peer_id)).cloned())
 }
 
+pub(crate) fn current_receipt_peer(peer: &str, generation: u64, agent: &ForAgent) -> bool {
+    live_peers()
+        .get(peer)
+        .is_some_and(|p| p.generation == generation && &p.agent == agent)
+}
+
+#[cfg(test)]
+pub(crate) fn receipt_peer_for_test(peer: &str, generation: u64, agent: ForAgent) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(64);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    live_peers().insert(
+        peer.into(),
+        LivePeer {
+            generation,
+            tx,
+            canonical_scheme: true,
+            agent,
+            _connection: None,
+            receipt_session: None,
+        },
+    );
+}
+
+pub(crate) fn emit_receipt_if_current(
+    store: &Db,
+    agent: &ForAgent,
+    receipt: super::iroh_receipts::IrohReplicaReceipt,
+) {
+    let peers = live_peers();
+    if peers
+        .get(&receipt.remote_node_id)
+        .is_some_and(|p| p.generation == receipt.connection_generation && &p.agent == agent)
+    {
+        store.emit_replica_receipt(receipt);
+    }
+}
+
+fn receipt_capabilities(store: &Db, drive: &str) -> Vec<&'static str> {
+    let mut caps = super::peer_full_sync::peer_capabilities();
+    if store.kv.replica_identity(drive).ok().flatten().is_some() {
+        caps.push(super::protocol::CAP_IROH_STORAGE_RECEIPTS_V1);
+        caps.push(super::protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1);
+    }
+    caps
+}
+
 /// Returns the number of currently connected live peers.
 pub fn live_peer_count() -> usize {
     live_peers().len()
@@ -421,6 +476,61 @@ pub fn live_peer_count() -> usize {
 /// Returns the node IDs of currently connected live peers.
 pub fn live_peer_ids() -> Vec<String> {
     live_peers().keys().cloned().collect()
+}
+
+/// Request missing files from live peers allowed to read them. Every hash
+/// must still be referenced by the selected drive.
+pub async fn request_drive_blobs(
+    store: &Db,
+    drive: &str,
+    hashes: &[String],
+) -> crate::errors::AtomicResult<()> {
+    use std::collections::HashSet;
+    let base_domain = store.get_base_domain();
+    let drive = crate::Subject::from_raw(drive, base_domain.as_deref());
+    let drive_key = drive.pure_id();
+    if !store.sync_policy().admit_drive_write(&drive_key) {
+        return Err("This drive is not admitted for file sync.".into());
+    }
+    let requested: HashSet<_> = hashes
+        .iter()
+        .map(|hash| hash.to_ascii_lowercase())
+        .collect();
+    if requested.is_empty() {
+        return Ok(());
+    }
+    for subject in super::engine::collect_drive_subjects(store, &drive).await {
+        let resource = store
+            .get_resource(&crate::Subject::from_raw(&subject, base_domain.as_deref()))
+            .await?;
+        let Some(hash) = resource.blob_hash() else {
+            continue;
+        };
+        if !requested.contains(&hex::encode(hash)) || store.has_blob(&hash).await? {
+            continue;
+        }
+        let readable = readable_live_peers(store, &subject).await;
+        let senders: Vec<_> = {
+            let peers = live_peers();
+            readable
+                .iter()
+                .filter_map(|(peer, generation)| {
+                    peers
+                        .get(peer)
+                        .filter(|entry| entry.generation == *generation)
+                })
+                .map(|entry| entry.tx.clone())
+                .collect()
+        };
+        if !senders.is_empty() {
+            store.note_pending_blob_request(hash, drive_key.clone());
+            let frame = frame_with_len(&super::protocol::encode_blob_request(&hash));
+            for sender in senders {
+                let _ = sender.try_send(frame.clone());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Live peers that are not in the known (paired) list, with the name each gave
@@ -1101,6 +1211,133 @@ fn invalidate_drive_cache_on_identity_change(
     }
 }
 
+pub use super::peer_full_sync::last_confirmed_full_syncs;
+
+const FULL_SYNC_RETRY: std::time::Duration = std::time::Duration::from_secs(2);
+const FULL_SYNC_REQUEST_RETRY: std::time::Duration = std::time::Duration::from_secs(10);
+const FULL_SYNC_REFRESH_MIN: std::time::Duration = std::time::Duration::from_secs(60);
+const FULL_SYNC_REFRESH_UNCHANGED: std::time::Duration = std::time::Duration::from_secs(12 * 3600);
+
+struct PendingFullSync {
+    check: super::peer_full_sync::FullSyncCheck,
+    agent: ForAgent,
+    generation: u64,
+    sent_at: tokio::time::Instant,
+}
+
+struct ConfirmedFullSync {
+    hash: String,
+    agent: ForAgent,
+    generation: u64,
+    confirmed_at: tokio::time::Instant,
+}
+
+#[derive(Default)]
+struct FullSyncState {
+    pending: Option<PendingFullSync>,
+    confirmed: Option<ConfirmedFullSync>,
+}
+
+pub(super) fn live_peer_agent(peer: &str, generation: u64) -> Option<ForAgent> {
+    live_peers()
+        .get(peer)
+        .filter(|live| live.generation == generation)
+        .map(|live| live.agent.clone())
+}
+
+fn start_full_sync_checks(
+    store: Db,
+    peer: String,
+    drive: String,
+    generation: u64,
+    wire: super::engine::WireScheme,
+    tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+) -> std::sync::Arc<Mutex<FullSyncState>> {
+    let state = std::sync::Arc::new(Mutex::new(FullSyncState::default()));
+    let worker_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(FULL_SYNC_RETRY);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let Some(agent) = live_peer_agent(&peer, generation) else {
+                break;
+            };
+            let now = tokio::time::Instant::now();
+            let current_generation = store.write_log().generation();
+            let retry = {
+                let mut state = worker_state.lock().unwrap_or_else(|e| e.into_inner());
+                if state.confirmed.as_ref().is_some_and(|confirmed| {
+                    confirmed.agent == agent
+                        && (now - confirmed.confirmed_at < FULL_SYNC_REFRESH_MIN
+                            || (confirmed.generation == current_generation
+                                && now - confirmed.confirmed_at < FULL_SYNC_REFRESH_UNCHANGED))
+                }) {
+                    continue;
+                }
+                if let Some(pending) = state.pending.as_mut().filter(|pending| {
+                    pending.agent == agent && pending.generation == current_generation
+                }) {
+                    if now - pending.sent_at < FULL_SYNC_REQUEST_RETRY {
+                        continue;
+                    }
+                    // Reuse the nonce while our state is unchanged so a large
+                    // blob check can answer after the next retry was sent.
+                    pending.sent_at = now;
+                    Some(pending.check.clone())
+                } else {
+                    None
+                }
+            };
+            let check =
+                if let Some(check) = retry {
+                    check
+                } else {
+                    let Some((check, snapshot_generation)) =
+                        super::peer_full_sync::make_check(&store, &drive, &agent, wire).await
+                    else {
+                        continue;
+                    };
+                    if live_peer_agent(&peer, generation).as_ref() != Some(&agent) {
+                        continue;
+                    }
+                    let mut state = worker_state.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(confirmed) = state.confirmed.as_mut().filter(|confirmed| {
+                        confirmed.agent == agent
+                            && confirmed.hash == check.hash
+                            && now - confirmed.confirmed_at < FULL_SYNC_REFRESH_UNCHANGED
+                    }) {
+                        confirmed.generation = snapshot_generation;
+                        continue;
+                    }
+                    if let Some(pending) = state.pending.as_mut().filter(|pending| {
+                        pending.agent == agent && pending.check.hash == check.hash
+                    }) {
+                        pending.generation = snapshot_generation;
+                        if now - pending.sent_at < FULL_SYNC_REQUEST_RETRY {
+                            continue;
+                        }
+                        pending.sent_at = now;
+                        pending.check.clone()
+                    } else {
+                        state.pending = Some(PendingFullSync {
+                            check: check.clone(),
+                            agent,
+                            generation: snapshot_generation,
+                            sent_at: tokio::time::Instant::now(),
+                        });
+                        check
+                    }
+                };
+            let frame = frame_with_len(&check.encode(super::protocol::tag::VERIFY_FULL_SYNC));
+            if tx.send(frame).await.is_err() {
+                break;
+            }
+        }
+    });
+    state
+}
+
 #[allow(clippy::too_many_arguments)]
 fn register_live_peer(
     peer_id: String,
@@ -1120,6 +1357,11 @@ fn register_live_peer(
     // What the peer listed in its `AUTH_OK` (dial side) or `HELLO` (accept
     // side). Decides the identifier scheme on every frame this link carries.
     peer_caps: Vec<String>,
+    // The drive authenticated during the handshake. Verification never
+    // uses an arbitrary drive named later on a live stream.
+    drive: Option<String>,
+    receipt_drive: Option<String>,
+    local_agent_generation: u64,
 ) {
     let key = normalize_node_id(&peer_id);
     let wire = super::engine::WireScheme::from_caps(&peer_caps);
@@ -1160,15 +1402,65 @@ fn register_live_peer(
                 canonical_scheme: wire.is_canonical(),
                 agent: agent.clone(),
                 _connection: connection,
+                receipt_session: None,
             },
         );
         !replacing
     };
 
+    let receipt_drive =
+        receipt_drive.map(|drive| super::iroh_receipts::wire_subject(&store, &drive));
+    let receipt_session = receipt_drive.as_ref().and_then(|drive| {
+        super::iroh_receipts::ReceiptSession::new(
+            &store,
+            key.clone(),
+            agent.clone(),
+            drive,
+            generation,
+            local_agent_generation,
+            &peer_caps,
+        )
+    });
+    if let Some(session) = &receipt_session {
+        if let Some(peer) = live_peers()
+            .get_mut(&key)
+            .filter(|p| p.generation == generation)
+        {
+            peer.receipt_session = Some(session.clone());
+        }
+        session.start(store.clone(), tx_for_read.clone());
+    }
+
     let peer_short = key[..key.len().min(12)].to_string();
     tracing::info!("[live] registered peer {peer_short} (new={is_new_peer})");
     // Always notify so both sides refresh UI (replacing a dead channel still counts).
     push_event(&key, 0, "connected");
+
+    let drive = drive.map(|drive| super::peer_full_sync::normalized_drive(&store, &drive));
+    let blob_repair = drive.as_ref().map(|drive| {
+        super::peer_blob_repair::start(
+            store.clone(),
+            key.clone(),
+            drive.clone(),
+            generation,
+            tx_for_read.clone(),
+        )
+    });
+    let verification_drive = drive.clone().filter(|_| {
+        peer_caps
+            .iter()
+            .any(|cap| cap == super::protocol::CAP_PEER_FULL_SYNC)
+    });
+    let full_sync = verification_drive.as_ref().map(|drive| {
+        start_full_sync_checks(
+            store.clone(),
+            key.clone(),
+            drive.clone(),
+            generation,
+            wire,
+            tx_for_read.clone(),
+        )
+    });
 
     // Whatever this device wrote while no link was up goes to the peer now,
     // as signed commits it validates like a hub would. Best effort: a
@@ -1284,6 +1576,8 @@ fn register_live_peer(
         // by a full reconnect. So the timeout only becomes a liveness signal
         // once the peer has shown it speaks it.
         let mut peer_sends_keepalives = false;
+        let mut last_full_sync_request = None::<tokio::time::Instant>;
+        let mut verification_tasks = tokio::task::JoinSet::new();
         loop {
             // Silence is treated as death, not idleness. A half-open link is
             // otherwise invisible: this side keeps believing it is connected,
@@ -1384,6 +1678,87 @@ fn register_live_peer(
                 break;
             }
 
+            // Receipt identity is fixed by the original node-bound handshake.
+            // Generic late AUTH may change ordinary sync permissions, but may
+            // never revive proof requests issued under an earlier identity.
+            if buf[0] == super::protocol::tag::AUTH {
+                if let Some(session) = &receipt_session {
+                    session.invalidate();
+                }
+            }
+            if buf[0] == super::protocol::tag::ATTACHMENT_RECEIPT {
+                if let Some(session) = &receipt_session {
+                    session.receive_attachment(&store, &buf[1..]).await;
+                }
+                continue;
+            }
+            if buf[0] == super::protocol::tag::ATTACHMENT_RECEIPT_REQUEST {
+                if let (Some(session), Some(drive)) = (&receipt_session, &receipt_drive) {
+                    if session.attachments_enabled && session.current(&store) {
+                        if let (Some(request), Ok(permit)) = (
+                            super::protocol::AttachmentReceiptRequest::decode(&buf[1..]),
+                            session.attachment_responders.clone().try_acquire_owned(),
+                        ) {
+                            // Large complete-object reads/hashes never stall the
+                            // read loop or its keepalive and commit processing.
+                            let db = store.clone();
+                            let agent = agent.clone();
+                            let drive = drive.clone();
+                            let session = session.clone();
+                            let tx = tx_for_read.clone();
+                            tokio::spawn(async move {
+                                let _permit = permit;
+                                if let Ok(Some(receipt)) =
+                                    super::attachment_receipts::produce_receipt(
+                                        &db, &agent, &drive, &request,
+                                    )
+                                    .await
+                                {
+                                    if session.current(&db) {
+                                        if let Some(frame) = receipt.encode_frame() {
+                                            let _ = tx.try_send(frame_with_len(&frame));
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+                continue;
+            }
+            if buf[0] == super::protocol::tag::STORAGE_RECEIPT {
+                if let Some(session) = &receipt_session {
+                    session.receive(&store, &buf[1..]).await;
+                }
+                continue;
+            }
+            if buf[0] == super::protocol::tag::STORAGE_RECEIPT_REQUEST {
+                if let (Some(session), Some(drive)) = (&receipt_session, &receipt_drive) {
+                    if session.current(&store) {
+                        if let Some(request) =
+                            super::protocol::StorageReceiptRequest::decode(&buf[1..])
+                        {
+                            match super::storage_receipts::produce_receipt(
+                                &store, &agent, drive, &request,
+                            )
+                            .await
+                            {
+                                Ok(Some(receipt)) if session.current(&store) => {
+                                    if let Some(frame) = receipt.encode_frame() {
+                                        let _ = tx_for_read.try_send(frame_with_len(&frame));
+                                    }
+                                }
+                                Ok(_) => {}
+                                Err(error) => {
+                                    tracing::debug!("[live] storage receipt refused: {error}")
+                                }
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
             // The peer answered something we sent (a SYNC_PUSH it refused, a
             // BLOB_REQUEST it couldn't serve) with an ERROR. Nothing to apply;
             // say so and keep the link — an ERROR is a verdict, not a fault.
@@ -1414,6 +1789,117 @@ fn register_live_peer(
             if buf[0] == super::protocol::tag::COMMIT_OK {
                 if let Some(ok) = super::protocol::decode_commit_ok(&buf[1..]) {
                     resolve_commit_waiter(&read_peer_id, ok.request_id, Ok(ok.commit_id));
+                }
+                continue;
+            }
+
+            if buf[0] == super::protocol::tag::BLOB_RESPONSE {
+                if let (Some(repair), Some(drive), Some((hash, bytes))) =
+                    (&blob_repair, &drive, buf[1..].split_first_chunk::<32>())
+                {
+                    if let Some(subject) = repair.requested_subject(hash, &agent) {
+                        if super::peer_blob_repair::can_repair(
+                            &store, drive, &subject, hash, &agent,
+                        )
+                        .await
+                            && live_peer_agent(&read_peer_id, generation).as_ref() == Some(&agent)
+                        {
+                            if let Err(Some(frame)) =
+                                super::engine::write_requested_blob(&store, drive, hash, bytes)
+                                    .await
+                            {
+                                let _ = tx_for_read.send(frame_with_len(&frame)).await;
+                            }
+                        }
+                        repair.complete(hash, &agent);
+                        continue;
+                    }
+                }
+            }
+
+            if buf[0] == super::protocol::tag::VERIFY_FULL_SYNC {
+                let Some(drive) = &verification_drive else {
+                    continue;
+                };
+                let Some(check) = super::peer_full_sync::FullSyncCheck::decode(&buf[1..]) else {
+                    continue;
+                };
+                if super::peer_full_sync::normalized_drive(&store, &check.drive) != *drive {
+                    continue;
+                }
+                let now = tokio::time::Instant::now();
+                if last_full_sync_request.is_some_and(|at| now - at < FULL_SYNC_RETRY / 2) {
+                    continue;
+                }
+                while verification_tasks.try_join_next().is_some() {}
+                if !verification_tasks.is_empty() {
+                    continue;
+                }
+                last_full_sync_request = Some(now);
+                let store = store.clone();
+                let agent = agent.clone();
+                let peer = read_peer_id.clone();
+                let tx = tx_for_read.clone();
+                verification_tasks.spawn(async move {
+                    if let Some(frame) =
+                        super::peer_full_sync::confirm_check(&store, &check, &agent, wire).await
+                    {
+                        if live_peer_agent(&peer, generation).as_ref() == Some(&agent) {
+                            let _ = tx.send(frame_with_len(&frame)).await;
+                        }
+                    }
+                });
+                continue;
+            }
+
+            if buf[0] == super::protocol::tag::FULL_SYNC_CONFIRMED {
+                let (Some(state), Some(drive), Some(reply)) = (
+                    &full_sync,
+                    &verification_drive,
+                    super::peer_full_sync::FullSyncCheck::decode(&buf[1..]),
+                ) else {
+                    continue;
+                };
+                let pending_generation = state
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .pending
+                    .as_ref()
+                    .filter(|pending| pending.check == reply && pending.agent == agent)
+                    .map(|pending| pending.generation);
+                let Some(pending_generation) = pending_generation else {
+                    continue;
+                };
+                let Some(snapshot_generation) = super::peer_full_sync::matching_generation(
+                    &store,
+                    &reply,
+                    &agent,
+                    wire,
+                    pending_generation,
+                )
+                .await
+                else {
+                    continue;
+                };
+                let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+                if state
+                    .pending
+                    .as_ref()
+                    .is_some_and(|pending| pending.check == reply && pending.agent == agent)
+                    && live_peer_agent(&read_peer_id, generation).as_ref() == Some(&agent)
+                {
+                    state.pending = None;
+                    match super::peer_full_sync::record_full_sync(&store, &read_peer_id, drive) {
+                        Ok(()) => {
+                            state.confirmed = Some(ConfirmedFullSync {
+                                hash: reply.hash,
+                                agent: agent.clone(),
+                                generation: snapshot_generation,
+                                confirmed_at: tokio::time::Instant::now(),
+                            });
+                        }
+                        Err(error) => tracing::warn!("[live] could not record full sync: {error}"),
+                    }
                 }
                 continue;
             }
@@ -1846,6 +2332,7 @@ pub async fn sync_drive_with_peer_using_outcome(
     store: &Db,
     force: bool,
 ) -> crate::errors::AtomicResult<PeerSyncOutcome> {
+    let local_agent_generation = store.agent_generation();
     let remote_key = normalize_node_id(remote_node_id);
     let node_id: NodeId = remote_key
         .parse()
@@ -1995,7 +2482,10 @@ pub async fn sync_drive_with_peer_using_outcome(
     // side does the same in `handle_stream`. Either side's HELLO can arrive
     // at any time (TCP is ordered but we don't block on it here) — the
     // read loop below captures it whenever it lands.
-    let hello_frame = super::protocol::encode_hello(&effective_device_name(store));
+    let hello_frame = super::protocol::encode_hello_with_caps(
+        &effective_device_name(store),
+        &receipt_capabilities(store, drive),
+    );
     send.write_u32(hello_frame.len() as u32)
         .await
         .map_err(io_err)?;
@@ -2457,6 +2947,9 @@ pub async fn sync_drive_with_peer_using_outcome(
         true,
         Some(conn),
         peer_caps.clone(),
+        Some(drive.to_owned()),
+        Some(crate::identifiers::canonicalize_scheme(drive)),
+        local_agent_generation,
     );
 
     // Remember which drive this node syncs, so it can rebuild this link on its
@@ -2768,7 +3261,7 @@ fn auth_required_error(tag: u8) -> Vec<u8> {
 }
 
 /// Prefix a frame with the u32 length the Iroh stream framing expects.
-fn frame_with_len(frame: &[u8]) -> Vec<u8> {
+pub(super) fn frame_with_len(frame: &[u8]) -> Vec<u8> {
     let mut framed = Vec::with_capacity(4 + frame.len());
     framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
     framed.extend_from_slice(frame);
@@ -2828,6 +3321,8 @@ async fn handle_stream(
     remote_id: String,
     my_node_id: String,
 ) -> anyhow::Result<usize> {
+    let local_agent_generation = store.agent_generation();
+    let mut receipt_auth_bound = false;
     let remote_key = normalize_node_id(&remote_id);
     let my_node_key = normalize_node_id(&my_node_id);
     let mut agent = ForAgent::Public;
@@ -2840,6 +3335,7 @@ async fn handle_stream(
     let mut sent_sync_ok = false;
     let mut hello_sent = false;
     let mut auth_sent = false;
+    let mut receipt_auth_sent = false;
     let mut peer_display_name: Option<String> = None;
     // What the dialer listed in its HELLO, which precedes its SYNC. A dialer
     // that sends none predates the rename and is answered in `did:ad:`.
@@ -2947,7 +3443,7 @@ async fn handle_stream(
             continue;
         }
 
-        let responses = if tag == super::protocol::tag::AUTH {
+        let mut responses = if tag == super::protocol::tag::AUTH {
             // The proof must be minted for THIS node: the dialer signs
             // `drive#nodeId` (see `auth_subject_for`). Without that binding a
             // peer we dial could forward our AUTH to any other node hosting
@@ -3019,9 +3515,21 @@ async fn handle_stream(
             && responses
                 .iter()
                 .any(|r| !r.is_empty() && r[0] == super::protocol::tag::AUTH_OK);
+        if just_authed {
+            for response in &mut responses {
+                if response.first() == Some(&super::protocol::tag::AUTH_OK) {
+                    *response = super::protocol::encode_auth_ok_with_caps(
+                        &super::peer_full_sync::peer_capabilities(),
+                    );
+                }
+            }
+        }
 
         if tag == super::protocol::tag::AUTH {
             if just_authed {
+                receipt_auth_bound = !auth_sent
+                    && auth_requested_subject(&buf[1..])
+                        .is_some_and(|s| super::protocol::split_challenge_fragment(&s).1.is_some());
                 if bound_drive.is_none() {
                     bound_drive = auth_requested_subject(&buf[1..]).map(|s| {
                         // `drive#nodeId`: the drive is the part before the
@@ -3083,7 +3591,15 @@ async fn handle_stream(
                     .is_some_and(|diff| diff.pull.is_empty())
         });
 
-        for response in responses {
+        for mut response in responses {
+            if response.first() == Some(&super::protocol::tag::AUTH_OK) && receipt_auth_bound {
+                if let Some(drive) = &bound_drive {
+                    response = super::protocol::encode_auth_ok_with_caps(&receipt_capabilities(
+                        &store,
+                        &drive.pure_id(),
+                    ));
+                }
+            }
             if let Err(e) = send.write_u32(response.len() as u32).await {
                 tracing::warn!(
                     "[accept] failed to write response header to {}: {e}",
@@ -3102,7 +3618,13 @@ async fn handle_stream(
 
         if just_authed && !hello_sent {
             hello_sent = true;
-            let hello = super::protocol::encode_hello(&effective_device_name(&store));
+            let caps = bound_drive
+                .as_ref()
+                .filter(|_| receipt_auth_bound)
+                .map(|d| receipt_capabilities(&store, &d.pure_id()))
+                .unwrap_or_else(super::peer_full_sync::peer_capabilities);
+            let hello =
+                super::protocol::encode_hello_with_caps(&effective_device_name(&store), &caps);
             // Two-step write so the ? in either step doesn't have to convert
             // between io::Error (write_u32) and WriteError (write_all).
             let header_ok = send.write_u32(hello.len() as u32).await;
@@ -3139,6 +3661,8 @@ async fn handle_stream(
                             "[accept] failed to write auth-back body to {}: {e}",
                             &remote_key[..remote_key.len().min(12)]
                         );
+                    } else {
+                        receipt_auth_sent = true;
                     }
                 }
             }
@@ -3176,6 +3700,12 @@ async fn handle_stream(
                 false,
                 None,
                 peer_caps.clone(),
+                bound_drive.as_ref().map(crate::Subject::pure_id),
+                bound_drive
+                    .as_ref()
+                    .filter(|_| receipt_auth_bound && receipt_auth_sent)
+                    .map(|d| d.pure_id()),
+                local_agent_generation,
             );
             return Ok(total_imported);
         }
@@ -3196,6 +3726,12 @@ async fn handle_stream(
             false,
             None,
             peer_caps.clone(),
+            bound_drive.as_ref().map(crate::Subject::pure_id),
+            bound_drive
+                .as_ref()
+                .filter(|_| receipt_auth_bound && receipt_auth_sent)
+                .map(|d| d.pure_id()),
+            local_agent_generation,
         );
     }
 
@@ -4125,6 +4661,59 @@ mod accept_gate_tests {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
+    #[tokio::test]
+    async fn iroh_receipts_require_successful_auth_back_even_for_capable_peer() {
+        let db = Db::init_temp("iroh_receipt_no_signing_key").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Receipt owner")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, _) = private_drive_with_child(&db, &alice).await;
+        let mut unsigned = alice.clone();
+        unsigned.private_key = None;
+        db.set_default_agent(unsigned);
+        let (node, router) = start(db.clone()).await.unwrap();
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node).await;
+        write_frame(
+            &mut send,
+            &protocol::encode_auth(&alice, &auth_subject_for(&drive, &node.to_string())).unwrap(),
+        )
+        .await;
+        assert_eq!(read_frame(&mut recv).await.unwrap()[0], tag::AUTH_OK);
+        write_frame(
+            &mut send,
+            &protocol::encode_hello_with_caps(
+                "Capable requester",
+                &[protocol::CAP_IROH_STORAGE_RECEIPTS_V1],
+            ),
+        )
+        .await;
+        write_frame(
+            &mut send,
+            &protocol::encode_sync(&drive, "", &[], &HashMap::new()),
+        )
+        .await;
+        loop {
+            let frame = read_frame(&mut recv).await.unwrap();
+            match frame[0] {
+                tag::SYNC_OK => break,
+                tag::SYNC_PUSH if protocol::decode_sync_push(&frame[1..]).unwrap().last => break,
+                tag::SYNC_PUSH | tag::SYNC_DIFF => {}
+                tag => panic!("ordinary sync failed with tag {tag:02x}"),
+            }
+        }
+        let snapshot = db.get_loro_snapshot_bytes(&drive).unwrap();
+        let doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        let request = protocol::StorageReceiptRequest {
+            nonce: "c".repeat(64),
+            drive: drive.clone(),
+            subject: drive,
+            version: crate::agents::encode_base64(&doc.doc().state_vv().encode()),
+        };
+        write_frame(&mut send, &request.encode_frame().unwrap()).await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(1), read_frame(&mut recv)).await;
+        assert!(result.is_err(), "no automatic probe or positive receipt without successful mutual authentication: {result:?}");
+    }
+
     /// A naked `DESTROY` frame carries no signature, so it authorises
     /// nothing — not even from the drive's owner, on an authenticated live
     /// link. The resource survives. (planning/serverless-p2p.md, principle 3.)
@@ -4257,6 +4846,7 @@ mod live_peer_registry_tests {
                 canonical_scheme: true,
                 agent: ForAgent::Public,
                 _connection: None,
+                receipt_session: None,
             },
         );
 
@@ -4391,6 +4981,7 @@ mod live_push_read_filter_tests {
                 canonical_scheme: true,
                 agent,
                 _connection: None,
+                receipt_session: None,
             },
         );
 
@@ -4399,6 +4990,57 @@ mod live_push_read_filter_tests {
 
     fn allowed(set: &std::collections::HashSet<(String, u64)>, key: &str, g: u64) -> bool {
         set.contains(&(normalize_node_id(key), g))
+    }
+
+    #[tokio::test]
+    async fn missing_file_requests_only_reach_readable_live_peers() {
+        let db = Db::init_temp("request_live_drive_files").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let hash = *blake3::hash(b"missing private file").as_bytes();
+        db.create_resource(
+            crate::urls::FILE,
+            &drive,
+            "Private file",
+            Some(vec![(
+                crate::urls::BLOB,
+                crate::Value::AtomicUrl(
+                    crate::identifiers::blob_subject(&hex::encode(hash)).into(),
+                ),
+            )]),
+        )
+        .await
+        .unwrap();
+        let reader = "2222aaaa00000000000000000000000000000000000000000000000000000001";
+        let incoming = "2222aaaa00000000000000000000000000000000000000000000000000000002";
+        let denied = "2222aaaa00000000000000000000000000000000000000000000000000000003";
+        let (g_reader, mut rx_reader) =
+            register_as(reader, ForAgent::AgentSubject(alice.subject.clone()));
+        let (g_incoming, mut rx_incoming) =
+            register_as(incoming, ForAgent::AgentSubject(alice.subject.clone()));
+        let (g_denied, mut rx_denied) = register_as(denied, ForAgent::Public);
+        add_known_peer_for_drive(&db, reader, "Reader", &drive);
+        add_known_peer_for_drive(&db, denied, "Denied", &drive);
+        assert!(!is_paired_peer(&db, incoming));
+
+        request_drive_blobs(&db, &drive, &[hex::encode(hash), "00".repeat(32)])
+            .await
+            .unwrap();
+        assert_eq!(
+            rx_reader.try_recv().unwrap(),
+            frame_with_len(&super::super::protocol::encode_blob_request(&hash))
+        );
+        assert!(rx_reader.try_recv().is_err());
+        assert_eq!(
+            rx_incoming.try_recv().unwrap(),
+            frame_with_len(&super::super::protocol::encode_blob_request(&hash))
+        );
+        assert!(rx_incoming.try_recv().is_err());
+        assert!(rx_denied.try_recv().is_err());
+        assert!(db.take_pending_blob_request(&[0; 32]).is_none());
+        assert_eq!(db.take_pending_blob_request(&hash), Some(drive));
+        remove_live_peer(reader, g_reader);
+        remove_live_peer(incoming, g_incoming);
+        remove_live_peer(denied, g_denied);
     }
 
     /// A live peer without read rights gets nothing for a private subject,

@@ -8,7 +8,7 @@ vi.mock('./api', () => ({
   managedFetch: fetchMock,
   setManagedDeviceToken: setTokenMock,
   hasManagedApi: () => true,
-  getManagedApiBase: () => 'https://atomic.place/api',
+  getManagedApiBase: () => '/api',
   getManagedDeviceToken: () => null,
 }));
 vi.mock('./recovery', () => ({ forgetCachedRecoverySecret: vi.fn() }));

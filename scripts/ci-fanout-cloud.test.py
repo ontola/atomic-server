@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -150,6 +151,75 @@ class CloudTests(unittest.TestCase):
         self.metadata = {'droplet_id': 99, 'hostname': 'fixture-cloud-control', 'region': 'mem1'}
         self.api = FakeAPI(self.config)
 
+    def test_cache_maintenance_is_absent_by_default_and_rejects_unverified_mount(self):
+        with mock.patch.object(cloud, 'verify_mount') as mount:
+            self.assertIsNone(cloud.maintain_build_cache(self.config))
+        mount.assert_not_called()
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path('/foreign-volume')):
+            with self.assertRaisesRegex(ValueError, 'verified fixed mount'):
+                cloud.maintain_build_cache(config)
+        self.assertFalse((Path(config['root'])/'cache-maintenance.json').exists())
+
+    def test_cache_maintenance_uses_pinned_archive_validator_deadline_and_retains_receipt(self):
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        receipt = {'version':1,'source_commit':SHA,'status':'enough-space','evictions':[]}
+        paths = []
+        sentinel = object()
+        def execute_module(module):
+            if paths[-1].endswith('ci-cache-prune.py'):
+                module.prune_cache = prune
+            else:
+                module.validate_archive = sentinel
+        def prune(root, source, reserve, validator, check):
+            self.assertEqual(root, Path('/mnt/atomic-ci/browser-bundles'))
+            self.assertEqual(source, SHA)
+            self.assertEqual(reserve, 4*1024**3)
+            self.assertIs(validator, sentinel)
+            check()
+            return receipt
+        def spec(name, path):
+            paths.append(str(path))
+            value = mock.Mock()
+            value.loader.exec_module.side_effect = execute_module
+            return value
+        import importlib.util
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path('/mnt/atomic-ci')), \
+                mock.patch.object(importlib.util, 'spec_from_file_location', side_effect=spec), \
+                mock.patch.object(importlib.util, 'module_from_spec', side_effect=lambda value: mock.Mock()), \
+                mock.patch.object(cloud, 'guard_deadline') as guard:
+            self.assertEqual(cloud.maintain_build_cache(config), receipt)
+        self.assertEqual(paths, [str(Path(config['repo'])/'scripts/ci-cache-prune.py'),
+                                 str(Path(config['repo'])/'scripts/ci-fanout.py')])
+        self.assertGreaterEqual(guard.call_count,3)
+        self.assertEqual(cloud.read_json(Path(config['root'])/'cache-maintenance.json'), receipt)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'validate_cached_bundles', return_value=[]):
+            cloud.persist_evidence(self.config)
+        retained = Path(config['volume']['mount_path'])/'runs'/config['batch_key']/'cache-maintenance.json'
+        self.assertEqual(cloud.read_json(retained),receipt)
+
+    def test_remote_cache_maintenance_is_strict_and_fixed_mount_only(self):
+        for value in (False,0,3,4.0,'4',None):
+            config = copy.deepcopy(self.config)
+            config.update(cloud_cache_min_free_gib=value)
+            config['fanout_config']['cloud_cache_min_free_gib'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                cloud.validate_config(config)
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        config['fanout_config']['cloud_cache_min_free_gib'] = 4
+        with self.assertRaisesRegex(ValueError,'verified fixed mount'):
+            cloud.validate_config(config)
+        config['volume']['mount_path'] = '/mnt/atomic-ci'
+        config['fanout_config']['artifact_archive_dir'] = '/mnt/atomic-ci/browser-bundles'
+        self.assertEqual(cloud.validate_config(config)['cloud_cache_min_free_gib'],4)
+        config['fanout_config'].pop('cloud_cache_min_free_gib')
+        with self.assertRaises(ValueError):
+            cloud.validate_config(config)
+
     def test_selected_check_scope_is_projected_without_claiming_browser_or_full_ci(self):
         self.config['fanout_config']['check_only'] = 'flutter-test'
         state = {'source_commit': SHA, 'status': 'passed',
@@ -174,6 +244,18 @@ class CloudTests(unittest.TestCase):
         self.assertIsNone(summary['validation_passed_at'])
         self.config['fanout_config'].pop('check_only')
         self.assertNotIn('validation_scope', cloud.status_snapshot(self.config))
+
+    def test_observed_worker_budget_survives_status_and_retained_summary(self):
+        budget = {'profile': '64-core', 'profile_vcpus': 64,
+                  'playwright_workers_per_host': 24, 'http_workers_requested': 32}
+        path = Path(self.config['fanout_config']['runtime_dir']) / 'state.json'
+        cloud.write_json(path, {'source_commit': SHA, 'status': 'passed', 'plan': {'worker_budget': budget}, 'nodes': {}})
+        self.assertEqual(cloud.status_snapshot(self.config)['worker_budget'], budget)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'validate_cached_bundles', return_value=[]):
+            cloud.persist_evidence(self.config, final=True)
+        summary = cloud.read_json(Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key'] / 'cloud-summary.json')
+        self.assertEqual(summary['worker_budget'], budget)
 
     def test_valid_configuration_retains_original_deadline_and_three_worker_scope(self):
         result = cloud.validate_config(copy.deepcopy(self.config))
@@ -324,6 +406,21 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(self.api.deleted, [('droplet', 201), ('key', 123), ('droplet', 99)])
         self.assertEqual(self.api.volume_record['id'], VOLUME)
 
+    def test_independent_reaper_retains_controller_when_scratch_cleanup_is_incomplete(self):
+        self.config['fanout_config'].update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                                           authorization='bounded scratch test')
+        self.config['expected_scratch_volume_hourly_rate'] = .03
+        self.write_state({})
+        result = {'errors': ['lost volume response is still reconciling'], 'all_deleted': False,
+                  'scratch_volume_ids_deleted': [], 'estimated_storage_usd': .01}
+        with mock.patch.object(cloud, 'reap_scratch_volumes', return_value=result) as cleanup:
+            proof = self.reap()
+        cleanup.assert_called_once()
+        self.assertFalse(proof['cleanup_complete'])
+        self.assertFalse(proof['self_delete_requested'])
+        self.assertNotIn(('droplet', 99), self.api.deleted)
+        self.assertEqual(proof['estimated_scratch_storage_usd'], .01)
+
     def test_no_deadline_or_finalize_means_no_provider_deletion(self):
         self.write_state({'node-001': self.worker()})
         result = self.reap(now=NOW)
@@ -463,6 +560,128 @@ class CloudTests(unittest.TestCase):
         self.assertEqual((runtime / 'node-001/results/browser/report.json').read_text(), files['node-001/results/browser/report.json'])
         self.assertNotIn('dop_v1_FIXTURE_SECRET', json.dumps(receipt))
 
+    def attachment_sources(self):
+        runtime = Path(self.config['fanout_config']['runtime_dir'])
+        paths = [runtime/'node-001/results/browser/browser/playwright-report/data/trace.zip',
+                 runtime/'node-001/results/browser/browser/test-results/case/trace.zip']
+        data = b'PK immutable public browser trace' * 4096
+        for path in paths:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        retained = Path(self.config['volume']['mount_path'])/'runs'/self.config['batch_key']/'runtime'
+        return paths, [retained/path.relative_to(runtime) for path in paths], data
+
+    def test_duplicate_attachments_keep_all_paths_and_next_pass_does_not_recopy_or_rehash(self):
+        sources, targets, data = self.attachment_sources()
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+            self.assertEqual([path.read_bytes() for path in targets],[data,data])
+            self.assertEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+            with mock.patch.object(cloud,'scan_evidence',side_effect=AssertionError('unchanged aliases must not be scanned')), \
+                    mock.patch.object(cloud.os,'link',side_effect=AssertionError('unchanged aliases must not be rewritten')):
+                cloud.persist_evidence(self.config)
+        state=cloud.read_json(Path(self.config['root'])/'evidence-copy-state.json')
+        self.assertEqual(len(state),2)
+        self.assertEqual([path.read_bytes() for path in sources],[data,data])
+        self.assertTrue(all(record['destination']==cloud.evidence_signature(path)
+                            for record,path in zip(state.values(),targets)))
+
+    def test_changed_source_breaks_sharing_without_mutating_its_old_alias(self):
+        sources,targets,data=self.attachment_sources()
+        changed=b'changed source trace bytes' * 5000
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+            sources[0].write_bytes(changed)
+            cloud.persist_evidence(self.config)
+            cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].read_bytes(),changed)
+        self.assertEqual(targets[1].read_bytes(),data)
+        self.assertNotEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        self.assertEqual(sources[1].read_bytes(),data)
+
+    def test_existing_separate_report_copies_are_repaired_without_losing_logical_paths(self):
+        sources,targets,data=self.attachment_sources()
+        for path in targets:
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_bytes(data)
+        runtime=Path(self.config['fanout_config']['runtime_dir'])
+        cloud.write_json(Path(self.config['root'])/'evidence-copy-state.json', {
+            'runtime/'+str(source.relative_to(runtime)): {
+                'source':cloud.evidence_signature(source),
+                'destination':cloud.evidence_signature(target)}
+            for source,target in zip(sources,targets)})
+        self.assertNotEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].stat().st_ino,targets[1].stat().st_ino)
+        self.assertEqual([path.read_bytes() for path in targets],[data,data])
+
+    def test_large_private_attachment_is_never_shared_or_preserved_even_across_chunk_boundary(self):
+        sources,targets,data=self.attachment_sources()
+        marker=b'dop_v1_FIXTURE_SECRET'
+        sources[1].write_bytes(b'x' * (1024*1024-5)+marker+b'end')
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])):
+            receipt=cloud.persist_evidence(self.config)
+        self.assertEqual(targets[0].read_bytes(),data)
+        self.assertFalse(targets[1].exists())
+        self.assertEqual(len(receipt['excluded_private_files']),1)
+        self.assertNotIn(marker.decode(),json.dumps(receipt))
+
+    def test_symlinked_retained_candidate_or_copy_lock_is_rejected(self):
+        _,targets,data=self.attachment_sources()
+        outside=self.root/'outside-trace.zip';outside.write_bytes(data)
+        targets[0].parent.mkdir(parents=True,exist_ok=True)
+        targets[0].symlink_to(outside)
+        with mock.patch.object(cloud,'verify_mount',return_value=Path(self.config['volume']['mount_path'])), \
+                self.assertRaises(ValueError):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(outside.read_bytes(),data)
+        targets[0].unlink()
+        lock=Path(self.config['root'])/'evidence-copy.lock'
+        lock.unlink();lock.symlink_to(outside)
+        with mock.patch.object(cloud,'_persist_evidence_locked') as body, self.assertRaises(OSError):
+            cloud.persist_evidence(self.config)
+        body.assert_not_called()
+        self.assertEqual(outside.read_bytes(),data)
+
+    def test_concurrent_preservation_passes_serialize_under_the_owned_root_lock(self):
+        first_entered, second_attempted, release = (threading.Event() for _ in range(3))
+        calls, errors = [], []
+        original_flock = cloud.fcntl.flock
+        def flock(fd, operation):
+            if threading.current_thread().name == 'evidence-second':
+                second_attempted.set()
+            return original_flock(fd, operation)
+        def body(config, final):
+            calls.append(threading.current_thread().name)
+            if len(calls) == 1:
+                first_entered.set()
+                if not release.wait(3):
+                    raise AssertionError('test release timed out')
+            return {}
+        def run():
+            try:
+                cloud.persist_evidence(self.config)
+            except BaseException as error:
+                errors.append(error)
+        first=threading.Thread(target=run,name='evidence-first')
+        second=threading.Thread(target=run,name='evidence-second')
+        with mock.patch.object(cloud,'_persist_evidence_locked',side_effect=body), \
+                mock.patch.object(cloud.fcntl,'flock',side_effect=flock):
+            try:
+                first.start()
+                self.assertTrue(first_entered.wait(2))
+                second.start()
+                self.assertTrue(second_attempted.wait(2))
+                self.assertEqual(calls,['evidence-first'])
+            finally:
+                release.set()
+                first.join(3)
+                if second.ident is not None:second.join(3)
+        self.assertFalse(first.is_alive() or second.is_alive())
+        self.assertEqual(errors,[])
+        self.assertEqual(calls,['evidence-first','evidence-second'])
+
     def test_nonfinite_prices_and_budget_are_rejected(self):
         for value in (float('nan'), float('inf'), -float('inf')):
             for field in ('controller_rate', 'worker_rate', 'volume_rate', 'budget', 'egress'):
@@ -560,7 +779,7 @@ class CloudTests(unittest.TestCase):
         trace.write_bytes(b'x' * (1024 * 1024))
         original_open, writes = Path.open, []
         def observe_open(path, mode='r', *args, **kwargs):
-            if path.name == 'failure.zip.tmp' and mode == 'wb':
+            if path.name == 'failure.zip.tmp' and mode in ('wb', 'xb'):
                 writes.append(path)
             return original_open(path, mode, *args, **kwargs)
         with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
@@ -1021,6 +1240,42 @@ class LauncherTests(unittest.TestCase):
     def source_plan(self):
         return mock.patch.object(launch, 'checked_source', return_value=self.scripts)
 
+    def test_cache_maintenance_opt_in_is_strict_and_projected_before_launch(self):
+        for value in (False,0,3,4.0,'4',None):
+            with self.subTest(value=value), mock.patch.object(self.api,'identity') as identity:
+                with self.assertRaises(ValueError):
+                    launch.CloudLauncher(dict(self.config, cloud_cache_min_free_gib=value), api=self.api)
+                identity.assert_not_called()
+        self.config['cloud_cache_min_free_gib'] = 4
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda:self.clock)
+        captured = []
+        remote = self.controller.remote_config
+        def record(state):
+            value=remote(state);captured.append(value);return value
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan), \
+                mock.patch.object(self.controller,'remote_config',side_effect=record):
+            plan=self.controller.plan()
+        self.assertEqual(plan['cloud_cache_min_free_gib'],4)
+        self.assertEqual(captured[0]['cloud_cache_min_free_gib'],4)
+        self.assertEqual(captured[0]['fanout_config']['cloud_cache_min_free_gib'],4)
+        self.assertEqual(self.api.creates,[])
+
+    def test_cache_maintenance_helper_must_be_committed_at_pin_before_provider_access(self):
+        config=dict(self.config,cloud_cache_min_free_gib=4,worktree=str(Path(launch.__file__).parent.parent))
+        controller=launch.CloudLauncher(config,api=self.api,run=self.run_command,now=lambda:self.clock)
+        def git(args,**kwargs):
+            if 'rev-parse' in args:return (SHA+'\n').encode()
+            if 'status' in args:return b''
+            path=args[-1].split(':',1)[1]
+            if path=='scripts/ci-cache-prune.py':raise RuntimeError('missing at pin')
+            return (Path(config['worktree'])/path).read_bytes()
+        with mock.patch.object(launch.BASE,'execute',side_effect=git), \
+                mock.patch.object(self.api,'identity') as identity:
+            with self.assertRaisesRegex(ValueError,'committed'):
+                controller.plan()
+            identity.assert_not_called()
+        self.assertEqual(self.api.creates,[])
+
     def test_readonly_plan_includes_control_storage_cleanup_and_egress(self):
         with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan):
             plan = self.controller.plan()
@@ -1055,6 +1310,78 @@ class LauncherTests(unittest.TestCase):
         self.assertAlmostEqual(plan['hourly_usd'], 4.5415)
         self.assertEqual(remote_configs[0]['fanout_config']['check_only'], 'flutter-test')
         self.assertEqual(remote_configs[0]['fanout_config']['accounts'][0]['nodes'], 3)
+        self.assertEqual(self.api.creates, [])
+
+    def test_core_profile_is_frozen_into_remote_config_and_public_plan(self):
+        self.config['worker_profile'] = '64-core'
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        remote_configs = []
+        remote = self.controller.remote_config
+        def record(state=None):
+            value = remote(state)
+            remote_configs.append(value)
+            return value
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
+                mock.patch.object(self.controller, 'remote_config', side_effect=record):
+            plan = self.controller.plan()
+        self.assertEqual(plan['worker_budget'], {'profile': '64-core', 'profile_vcpus': 64,
+                         'playwright_workers_per_host': 24, 'http_workers_requested': 32})
+        self.assertEqual((remote_configs[0]['fanout_config']['workers'], remote_configs[0]['fanout_config']['server_workers']), (24, 32))
+        self.assertAlmostEqual(plan['hourly_usd'], 4.5415)
+        self.assertEqual(self.api.creates, [])
+        self.config['worker_profile'] = '32-core'
+        controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
+                self.assertRaisesRegex(ValueError, 'machine size'):
+            controller.plan()
+        self.assertEqual(self.api.creates, [])
+
+    def test_cold_scratch_plan_prices_three_disposable_disks_without_creating_them(self):
+        self.config.update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                           authorization='Run this bounded cold scratch fixture')
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        worker = dict(self.worker_plan, nodes=3)
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=worker):
+            plan = self.controller.plan()
+        self.assertEqual(plan['scratch_volume_gib'], 200)
+        self.assertAlmostEqual(plan['scratch_storage_hourly_usd_estimate'], .09)
+        self.assertAlmostEqual(plan['hourly_usd'], 4.6315)
+        self.assertEqual(self.api.creates, [])
+        self.assertFalse(Path(self.config['runtime_dir']).exists())
+
+    def test_invalid_scratch_combination_is_rejected_before_provider_access(self):
+        for changed in ({'cold_scratch_gib': True}, {'cold_scratch_gib': 201},
+                        {'cold_scratch_gib': 200, 'expected_scratch_volume_hourly_rate': -1}):
+            with self.subTest(changed=changed), mock.patch.object(self.api, 'identity') as identity:
+                with self.assertRaises(ValueError):
+                    launch.CloudLauncher(dict(self.config, **changed), api=self.api)
+                identity.assert_not_called()
+
+    def test_supplemental_plan_validates_native_defaults_and_private_capsule_before_provisioning(self):
+        self.config.update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                           authorization='bounded native fixture', supplemental_profile='pr2621-native-private-v1',
+                           private_input={'source_commit':'b'*40, 'archive_sha256':'c'*64, 'manifest_sha256':'d'*64,
+                                          'archive_path':'/private/source.tar', 'manifest_path':'/private/manifest.json'})
+        native = launch.native_module()
+        helper = mock.Mock()
+        helper.remote_descriptor.side_effect = lambda desc, root: dict(desc, archive_path=root+'/private-input/source.tar', manifest_path=root+'/private-input/manifest.json')
+        with mock.patch.object(launch, 'private_input_helper', return_value=helper), \
+                mock.patch.object(launch, 'native_module', return_value=native), \
+                mock.patch.object(native, 'load', return_value=helper):
+            self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda:self.clock)
+            self.assertEqual(self.controller.config['supplemental_jobs'], 16)
+            with self.source_plan(), mock.patch.object(native, 'source_capabilities', return_value={'fixture':'e'*64}), \
+                    mock.patch.object(launch.BASE.Controller, 'plan', return_value=dict(self.worker_plan, nodes=3)):
+                plan = self.controller.plan()
+            self.assertEqual(plan['supplemental']['profile'], 'pr2621-native-private-v1')
+            self.assertEqual(plan['supplemental']['private_source_commit'], 'b'*40)
+            self.assertTrue(helper.verify_capsule.called)
+            self.assertTrue(helper.remote_descriptor.called)
+            for fields in ({'supplemental_jobs':0}, {'check_only':'flutter-test'}):
+                with self.subTest(fields=fields), mock.patch.object(self.api, 'identity') as identity:
+                    with self.assertRaises(ValueError):
+                        launch.CloudLauncher(dict(self.config, **fields), api=self.api)
+                    identity.assert_not_called()
         self.assertEqual(self.api.creates, [])
 
     def test_one_hour_plan_accepts_a_realistically_ticking_clock(self):

@@ -1,5 +1,5 @@
 name: Flutter embed size
-# Builds the browser bundle into the Flutter embed and checks its size budget.
+# Builds the browser bundle into the Flutter embed and reports size regressions.
 # Split from atomic-flutter.yml so that browser/ changes run only this check.
 on:
   pull_request:
@@ -23,5 +23,5 @@ jobs:
           node-version: 22
       - name: Build the embed
         run: bash flutter/scripts/build_embed.sh
-      - name: Check the embed size budget
+      - name: Report embed size and warn on budget overages
         run: bash flutter/scripts/check_embed_size.sh

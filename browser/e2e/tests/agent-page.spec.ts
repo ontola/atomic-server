@@ -176,7 +176,7 @@ test.describe('agent page', () => {
     );
     await editor.click();
     await page.keyboard.type('Real name: Robert');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     // A reload before the note is on the server and on disk loses it.
     await waitForSynced(page);
     await page.reload();

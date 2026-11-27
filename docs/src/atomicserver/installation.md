@@ -129,6 +129,22 @@ sudo apt-get install -y build-essential pkg-config libssl-dev --fix-missing
 - A directory is made: `~/.config/atomic`, which stores your newly created Agent keys, the HTTPS certificates other configuration. Depending on your OS, the actual data is stored in different locations. See use the `show-config` command to find out where, if you need the files.
 - Visit `http://localhost:9883/setup` to **register your first (admin) user**. You can use an existing Agent, or create a new one. Note that if you create a `localhost` agent, it cannot be used on the web (since, well, it's local). More info and steps in [getting started with the GUI](gui.md).
 
+## HTTP worker threads
+
+The server uses the available CPU count, capped at eight HTTP worker threads.
+On a larger machine you can explicitly request 1–128 threads with
+`atomic-server --http-workers 32` or `ATOMIC_HTTP_WORKERS=32`. A command-line
+value takes precedence over the environment. Zero and invalid values are
+rejected; leave the option unset to retain the automatic default.
+
+The process file-descriptor budget still limits workers and connections, so
+startup can reduce the requested thread count. The `HTTP connection budget`
+log records the available CPUs, requested and effective workers, descriptor
+limit and maximum connections per worker. Connection limits apply per worker,
+not to the whole server. More threads can help independent requests, but do
+not remove contention in shared storage; measure the workload before changing
+production settings.
+
 ## Serving one Drive as your front page (opt-in)
 
 By default, opening `/` sends visitors who aren't signed in to the welcome /

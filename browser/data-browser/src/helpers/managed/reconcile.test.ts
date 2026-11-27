@@ -9,6 +9,12 @@ import { AtomicError, ErrorType } from '@tomic/react';
 import { setManagedDeviceToken } from './api';
 import type { ManagedEnrollmentSummary } from './enrollmentApi';
 
+// These reconciliation cases model an account cookie in its provider's app.
+beforeEach(() => {
+  vi.stubGlobal('window', { location: { href: 'https://portal.example/app' } });
+});
+afterEach(() => vi.unstubAllGlobals());
+
 /**
  * `evaluateServerReconciliation` calls `getManagedAccount()` /
  * `getManagedEnrollments()` internally (both plain `fetch` wrappers against

@@ -537,8 +537,6 @@ msgstr "Niet ingesteld"
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/SideBar/syncStatus.tsx
-#: ../data-browser/src/components/SideBar/syncStatus.tsx
 #: ../data-browser/src/routes/ConnectAgentRoute.tsx
 msgid "Connected"
 msgstr "Verbonden"
@@ -556,6 +554,11 @@ msgstr "Reageert niet"
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
 msgid "Read more"
+msgstr "Meer lezen "
+
+#: ../data-browser/src/components/Share/ShareDialog.tsx
+#: src/components/datatypes/Markdown.tsx
+msgid "Read more "
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -1285,6 +1288,7 @@ msgstr "Synchroniseren"
 msgid "Offline"
 msgstr "Offline"
 
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
 #: ../data-browser/src/components/SideBar/syncStatus.tsx
 msgid "Changes could not sync"
 msgstr "Wijzigingen konden niet worden gesynchroniseerd"
@@ -1330,25 +1334,25 @@ msgstr "Voeg een bijschrift toe..."
 msgid "Alt text"
 msgstr "Alternatieve tekst"
 
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/RTE/ImagePicker.tsx
-#: ../table-page/src/TablePage/BreakdownDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
-#: ../table-page/src/TablePage/QuickAddDialog.tsx
-#: ../table-page/src/TablePage/RowActionDialog.tsx
-#: src/components/AvatarCropper.tsx
-#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-#: src/components/forms/EditFormDialog.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: ../data-browser/src/routes/Share/ShareRoute.tsx
 #: ../data-browser/src/views/Article/ArticleDescription.tsx
 #: ../data-browser/src/views/Installation/InstallationPage.tsx
 #: ../data-browser/src/views/OntologyPage/NewClassButton.tsx
 #: ../data-browser/src/views/OntologyPage/NewPropertyButton.tsx
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../table-page/src/TablePage/BreakdownDialog.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
+#: ../table-page/src/TablePage/PropertyForm/EditPropertyDialog.tsx
+#: ../table-page/src/TablePage/QuickAddDialog.tsx
+#: ../table-page/src/TablePage/RowActionDialog.tsx
+#: src/chunks/RTE/ImagePicker.tsx
+#: src/components/AvatarCropper.tsx
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 msgid "Save"
 msgstr "Opslaan"
 
@@ -1499,6 +1503,7 @@ msgstr "Gesynchroniseerd"
 msgid "Error: Expected atomic:node:<node-id>"
 msgstr "Fout: atomic:node:<node-id> verwacht"
 
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 #: ../data-browser/src/helpers/managed/deviceLink.ts
@@ -1640,9 +1645,9 @@ msgid "Set a title"
 msgstr "Stel een titel in"
 
 #: ../data-browser/src/chunks/FormBuilder/useFormQuestions.ts
-#: src/components/EditableTitle.tsx
 #: ../data-browser/src/components/NavBar.tsx
 #: ../data-browser/src/helpers/storageMap.ts
+#: src/components/EditableTitle.tsx
 msgid "Untitled"
 msgstr "Naamloos"
 
@@ -4016,9 +4021,6 @@ msgstr "Apparaat koppelen"
 #: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
 #: ../data-browser/src/routes/NewDriveRoute.tsx
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/SyncProblemBanner.tsx
-#: ../data-browser/src/components/Vault/VaultRestoreAction.tsx
-#: ../data-browser/src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr "Opnieuw proberen"
 
@@ -5329,6 +5331,7 @@ msgstr "Kan {0}-hosting niet inschakelen (HTTP {1})."
 msgid "Manage account →"
 msgstr "Account beheren →"
 
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
 #: ../data-browser/src/components/Vault/VaultPanel.tsx
@@ -5394,19 +5397,6 @@ msgstr "{0} resources"
 msgid "{0} of {1}"
 msgstr "{0} van {1}"
 
-#. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-msgid "Synced {0}"
-msgstr "Gesynchroniseerd {0}"
-
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-msgid "Synced just now"
-msgstr "Zojuist gesynchroniseerd"
-
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "This server"
 msgstr "Deze server"
@@ -5437,11 +5427,6 @@ msgstr "Gekoppeld"
 #: ../data-browser/src/components/Settings/SyncSettings.tsx
 msgid "Paired device"
 msgstr "Gekoppeld apparaat"
-
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-msgid "Not synced yet"
-msgstr "Nog niet gesynchroniseerd"
 
 #. 0: label; 1: detail
 #: ../data-browser/src/actions/runAction.ts
@@ -5800,6 +5785,8 @@ msgstr "Cloudstatus onbekend"
 msgid "Checking cloud…"
 msgstr "Cloud controleren…"
 
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
 #: ../data-browser/src/helpers/managed/driveHostingState.ts
 #: ../data-browser/src/views/DriveUnavailable.tsx
 msgid "Server"
@@ -8994,6 +8981,7 @@ msgid "Click or drag to open"
 msgstr "Klik of sleep om te openen"
 
 #: ../data-browser/src/actions/appMenuItems.tsx
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
 msgid "Open sync settings"
 msgstr "Synchronisatie-instellingen openen"
 
@@ -11640,6 +11628,7 @@ msgstr "Code of serveradres"
 msgid "Add a device"
 msgstr "Een apparaat toevoegen"
 
+#: ../data-browser/src/components/ResourceSync/ResourceSyncIndicator.tsx
 #: src/components/Spinner.tsx
 msgid "Loading"
 msgstr "Laden"
@@ -13936,3 +13925,396 @@ msgstr "Update beschikbaar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Herstart om versie {0} te gebruiken"
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "The first Cloud Vault backup failed."
+msgstr "De eerste Cloud Vault-back-up is mislukt."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "Cloud Vault hasn’t completed the first backup yet."
+msgstr "Cloud Vault heeft de eerste back-up nog niet voltooid."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "This workspace has no confirmed Cloud Vault copy."
+msgstr "Van deze werkruimte is geen bevestigde kopie in Cloud Vault beschikbaar."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "Retry backup"
+msgstr "Back-up opnieuw proberen"
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "No copy of this drive could be verified in Cloud Vault or on an external server."
+msgstr "Er kon geen kopie van deze schijf worden geverifieerd in Cloud Vault of op een externe server."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was more than 24 hours ago."
+msgstr "De laatste geverifieerde volledige synchronisatie met de server was meer dan 24 uur geleden."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "The last verified full sync with the server was at least 7 days ago."
+msgstr "De laatste geverifieerde volledige synchronisatie met de server was minstens 7 dagen geleden."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "A full sync with the server could not be verified."
+msgstr "Een volledige synchronisatie met de server kon niet worden geverifieerd."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is more than 24 hours old."
+msgstr "De laatste geverifieerde back-up is meer dan 24 uur oud."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "The latest verified backup is at least 7 days old."
+msgstr "De laatste geverifieerde back-up is minstens 7 dagen oud."
+
+#: ../data-browser/src/components/CloudVaultWatcher.tsx
+msgid "No backup from the last 7 days could be verified."
+msgstr "Er kon geen back-up van de afgelopen 7 dagen worden geverifieerd."
+
+#: ../data-browser/src/helpers/managed/useVaultBackup.ts
+msgid "File recovery cancelled."
+msgstr "Bestandsherstel geannuleerd."
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Close copies and sync"
+msgstr "Kopieën en synchronisatie sluiten"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Copies & sync"
+msgstr "Kopieën en synchronisatie"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently connected"
+msgstr "Momenteel verbonden"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Currently offline"
+msgstr "Momenteel offline"
+
+#. 0: confirmedTime
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed backup: {0}"
+msgstr "Laatste bevestigde back-up: {0}"
+
+#. 0: formatTime(context.lastBackupAt)
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last workspace backup: {0}"
+msgstr "Laatste back-up van de werkruimte: {0}"
+
+#. 0: peers.confirmedCount
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource-details copies: {0}"
+msgstr "Kopieën van resourcegegevens: {0}"
+
+#. 0: index + 1
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer {0}"
+msgstr "Peer {0}"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peer resource copies"
+msgstr "Resourcekopieën op peers"
+
+#. 0: completePeers
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Confirmed peer copies: {0}"
+msgstr "Bevestigde kopieën op peers: {0}"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers may become unavailable when browser tabs or apps close."
+msgstr "Peers kunnen onbereikbaar worden als browsertabbladen of apps worden gesloten."
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Peers"
+msgstr "Peers"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource copies"
+msgstr "Resourcekopieën"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "A complete copy needs both resource details and file contents at the same destination."
+msgstr "Voor een volledige kopie moeten zowel de resourcegegevens als de bestandsinhoud op dezelfde bestemming staan."
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Manage sync and backup"
+msgstr "Synchronisatie en back-up beheren"
+
+#. 0: description
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Resource details: {0}"
+msgstr "Resourcegegevens: {0}"
+
+#. 0: time
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Last confirmed: {0}"
+msgstr "Laatst bevestigd: {0}"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup enabled"
+msgstr "Back-up van de werkruimte ingeschakeld"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup paused"
+msgstr "Back-up van de werkruimte gepauzeerd"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup is off"
+msgstr "Back-up van de werkruimte is uitgeschakeld"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Checking workspace backup…"
+msgstr "Back-up van de werkruimte controleren…"
+
+#: ../data-browser/src/components/ResourceSync/ResourceSyncPanel.tsx
+msgid "Workspace backup status unavailable"
+msgstr "Back-upstatus van de werkruimte niet beschikbaar"
+
+#. 0: title; 1: presentation.label
+#: ../data-browser/src/components/ResourceSync/ResourceSyncIndicator.tsx
+msgid "Copies and sync for {0}: {1}"
+msgstr "Kopieën en synchronisatie voor {0}: {1}"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Latest changes received"
+msgstr "Laatste wijzigingen ontvangen"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for peers"
+msgstr "Wijzigingen wachten op peers"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Resource copies not confirmed"
+msgstr "Resourcekopieën niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Latest changes backed up"
+msgstr "Laatste wijzigingen geback-upt"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting for backup"
+msgstr "Wijzigingen wachten op back-up"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Resource backup not confirmed"
+msgstr "Resourceback-up niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saved on this device"
+msgstr "Opgeslagen op dit apparaat"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Saving on this device…"
+msgstr "Opslaan op dit apparaat…"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not save on this device"
+msgstr "Opslaan op dit apparaat mislukt"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local storage unavailable"
+msgstr "Lokale opslag niet beschikbaar"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Local copy not confirmed"
+msgstr "Lokale kopie niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "No server configured"
+msgstr "Geen server ingesteld"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to save"
+msgstr "Wijzigingen wachten om opgeslagen te worden"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Saving changes…"
+msgstr "Wijzigingen opslaan…"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes waiting to sync"
+msgstr "Wijzigingen wachten op synchronisatie"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Latest changes saved"
+msgstr "Laatste wijzigingen opgeslagen"
+
+#: ../data-browser/src/components/ResourceSync/resourceCopyLabels.ts
+msgid "Copy not confirmed"
+msgstr "Kopie niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File contents confirmed"
+msgstr "Bestandsinhoud bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Checking file contents…"
+msgstr "Bestandsinhoud controleren…"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not confirm file contents"
+msgstr "Bestandsinhoud kon niet worden bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File storage unavailable"
+msgstr "Bestandsopslag niet beschikbaar"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "File contents not confirmed"
+msgstr "Bestandsinhoud niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Could not confirm file contents on this device"
+msgstr "Bestandsinhoud op dit apparaat kon niet worden bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Changes could not be saved"
+msgstr "Wijzigingen konden niet worden opgeslagen"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents saved to server"
+msgstr "Resource en bestandsinhoud opgeslagen op server"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes saved to server"
+msgstr "Laatste wijzigingen opgeslagen op server"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents backed up to Cloud Vault"
+msgstr "Resource en bestandsinhoud geback-upt in Cloud Vault"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes backed up to Cloud Vault"
+msgstr "Laatste wijzigingen geback-upt in Cloud Vault"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents received by peers"
+msgstr "Resource en bestandsinhoud ontvangen door peers"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Latest changes received by peers"
+msgstr "Laatste wijzigingen ontvangen door peers"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Server file contents not confirmed"
+msgstr "Bestandsinhoud op server niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Cloud Vault file contents not confirmed"
+msgstr "Bestandsinhoud in Cloud Vault niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Peer file copies not confirmed"
+msgstr "Bestandskopieën op peers niet bevestigd"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Resource and file contents saved on this device"
+msgstr "Resource en bestandsinhoud opgeslagen op dit apparaat"
+
+#: ../data-browser/src/components/ResourceSync/resourceSyncPresentation.ts
+msgid "Server copy not confirmed"
+msgstr "Serverkopie niet bevestigd"
+
+#. 0: ago
+#. 0: syncedAgo
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+msgid "Last full sync {0}"
+msgstr "Laatste volledige synchronisatie {0}"
+
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+msgid "Last full sync just now"
+msgstr "Laatste volledige synchronisatie zojuist"
+
+#. 0: formatTimeAgo(new Date(lastActivity)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+msgid "Last sync activity {0}"
+msgstr "Laatste synchronisatieactiviteit {0}"
+
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+msgid "Saved locally"
+msgstr "Lokaal opgeslagen"
+
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+msgid "Not syncing with a server"
+msgstr "Niet aan het synchroniseren met een server"
+
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+msgid "Sync not confirmed"
+msgstr "Synchronisatie niet bevestigd"
+
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+msgid "Synced with server"
+msgstr "Gesynchroniseerd met server"
+
+#: ../data-browser/src/components/SideBar/syncStatus.tsx
+msgid "Changes not yet synced"
+msgstr "Wijzigingen nog niet gesynchroniseerd"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Retry file recovery"
+msgstr "Bestandsherstel opnieuw proberen"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Recover missing files"
+msgstr "Ontbrekende bestanden herstellen"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Cancel file recovery"
+msgstr "Bestandsherstel annuleren"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Scanning for missing files…"
+msgstr "Zoeken naar ontbrekende bestanden…"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Looking for file contents on connected devices…"
+msgstr "Zoeken naar bestandsinhoud op verbonden apparaten…"
+
+#. 0: progress.done; 1: progress.total
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Recovering files from Cloud Vault… {0} of {1}"
+msgstr "Bestanden herstellen vanuit Cloud Vault… {0} van {1}"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "Checking recovered files…"
+msgstr "Herstelde bestanden controleren…"
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "All referenced file contents are available on this device."
+msgstr "De inhoud van alle bestanden waarnaar wordt verwezen is beschikbaar op dit apparaat."
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "# file recovered."
+msgid_plural "# files recovered."
+msgstr[0] "# bestand hersteld."
+msgstr[1] "# bestanden hersteld."
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "# file is still unavailable."
+msgid_plural "# files are still unavailable."
+msgstr[0] "# bestand is nog steeds niet beschikbaar."
+msgstr[1] "# bestanden zijn nog steeds niet beschikbaar."
+
+#: ../data-browser/src/components/Vault/VaultPanel.tsx
+msgid "# backup file could not be read."
+msgid_plural "# backup files could not be read."
+msgstr[0] "# back-upbestand kon niet worden gelezen."
+msgstr[1] "# back-upbestanden konden niet worden gelezen."

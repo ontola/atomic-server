@@ -49,11 +49,13 @@ class TestWorker {
       () => {
         if (this.terminated) return;
         const data =
-          message.type === 'blake3Hash'
-            ? new Uint8Array([1, 2, 3])
-            : message.type === 'getBlob'
-              ? blobs.get(String(message.hash))
-              : undefined;
+          message.type === 'putResourceVaultReceipts'
+            ? true
+            : message.type === 'blake3Hash'
+              ? new Uint8Array([1, 2, 3])
+              : message.type === 'getBlob'
+                ? blobs.get(String(message.hash))
+                : undefined;
         this.onmessage?.({ data: { id: message.id, type: 'result', data } });
       },
       message.type === 'init' ? 25 : 1,
@@ -296,3 +298,90 @@ it('takes the database over from a leader that holds the lock but answers nothin
   expect(error).toBeUndefined();
   expect(result).toEqual(new Uint8Array([1, 2, 3]));
 });
+
+it.each(['getResourceSyncEvidence', 'putResourceSyncReceipts'] as const)(
+  'replays %s safely when the database-owning tab closes',
+  async operation => {
+    const leader = await openTab();
+    const follower = await openTab();
+    workers[0].heldType = operation;
+    const scope = { agent: 'atomic:alice', serverUrl: 'https://example.com' };
+    const receipts = [
+      { subject: 'atomic:resource', version: { '1': 7 }, confirmedAt: 10 },
+    ];
+    const pending =
+      operation === 'getResourceSyncEvidence'
+        ? follower.getResourceSyncEvidence(['atomic:resource'], scope)
+        : follower.putResourceSyncReceipts(scope, receipts);
+    const completed = expect(pending).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(10);
+    leader.destroy();
+    await vi.advanceTimersByTimeAsync(100);
+    await completed;
+    const original = workers[0].messages.find(
+      message => message.type === operation,
+    )!;
+    const replay = workers[1].messages.filter(
+      message => message.type === operation,
+    );
+    expect(replay).toHaveLength(1);
+    expect(replay[0]).toMatchObject(
+      operation === 'getResourceSyncEvidence'
+        ? { type: operation, subjects: original.subjects, scope }
+        : {
+            type: operation,
+            receipts: original.receipts,
+            scope,
+          },
+    );
+  },
+);
+
+it.each(['getResourceVaultEvidence', 'putResourceVaultReceipts'] as const)(
+  'replays %s safely when the database-owning tab closes',
+  async operation => {
+    const leader = await openTab();
+    const follower = await openTab();
+    workers[0].heldType = operation;
+    const scope = {
+      managedAccount: 'alice@example.test',
+      agent: 'atomic:alice',
+      portalUrl: 'https://portal.example/api',
+      drive: 'atomic:drive',
+      drivePseudonym: 'vault',
+      keyEpoch: 1,
+    };
+    const receipts = [
+      { subject: 'atomic:resource', version: { '1': 7 }, confirmedAt: 10 },
+    ];
+    const pending =
+      operation === 'getResourceVaultEvidence'
+        ? follower.getResourceVaultEvidence(['atomic:resource'], scope)
+        : follower.putResourceVaultReceipts(scope, receipts, 0);
+    const completed =
+      operation === 'putResourceVaultReceipts'
+        ? expect(pending).resolves.toBe(true)
+        : expect(pending).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(10);
+    leader.destroy();
+    await vi.advanceTimersByTimeAsync(100);
+    await completed;
+    const original = workers[0].messages.find(
+      message => message.type === operation,
+    )!;
+    const replay = workers[1].messages.filter(
+      message => message.type === operation,
+    );
+    expect(replay).toHaveLength(1);
+    expect(replay[0]).toMatchObject(
+      operation === 'getResourceVaultEvidence'
+        ? { type: operation, subjects: original.subjects, scope }
+        : {
+            type: operation,
+            receipts: original.receipts,
+            scope,
+            generation: 0,
+          },
+    );
+  },
+);

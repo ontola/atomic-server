@@ -5,7 +5,7 @@ import { JSCryptoProvider } from './CryptoProvider.js';
 import type { Commit } from './commit.js';
 
 /** Opt-in worker-boundary stub for tests that need successful local writes.
- * This is an in-memory acknowledgement, not evidence of durable storage.
+ * This simulates a durable database acknowledgement.
  * The default testStore intentionally has no client database. */
 export function mockLocalPersistence(
   store: Store,
@@ -27,6 +27,7 @@ export function mockLocalPersistence(
   ) => putResourceWithSnapshot(subject, undefined as never, snapshot, outbox);
   vi.spyOn(store, 'getClientDb').mockReturnValue({
     unsupportedEnvironment,
+    supportsDurablePersistence: true,
     putResourceWithSnapshot,
     putLoroSnapshot,
   } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);

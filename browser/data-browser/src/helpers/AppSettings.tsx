@@ -26,6 +26,7 @@ import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
 import { rememberManagedPortalUrl } from './managed/api';
 import { isTouchPrimary } from './pointer';
+import { isEmbedded } from './embedMode';
 import {
   reportSidebarIcons,
   SHOW_SIDEBAR_ICONS_KEY,
@@ -140,6 +141,10 @@ export const AppSettingsContextProvider = (
   // wrongly-removed node (transient fetch failure) re-adds itself on the next
   // load that reaches it.
   useEffect(() => {
+    // The native renderer's origin serves static assets; its node is reached
+    // through NativeClientDb, so this origin cannot answer a /server probe.
+    if (isEmbedded()) return;
+
     // In dev the server runs on its own port, which is configured — not a
     // constant. Hardcoding one meant this probe re-added that origin to the
     // known-servers list on *every* mount, so removing it from the sync page

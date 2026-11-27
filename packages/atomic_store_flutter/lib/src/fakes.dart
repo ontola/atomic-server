@@ -6,6 +6,7 @@ import 'atomic_flutter.dart' show AtomicParts;
 import 'identity.dart' show driveAfterSignIn;
 import 'sharing.dart';
 import 'src_exports.dart';
+import 'replica_receipts.dart';
 
 /// [value] now, then again after every event of [changes]. (Not `async*`: such
 /// a stream cannot be cancelled while it waits for the next event.)
@@ -213,6 +214,7 @@ class FakeServerSync implements ServerSync {
 
   SyncStatus _status = const SyncStatus();
   final _changes = StreamController<SyncStatus>.broadcast();
+  final _receipts = StreamController<ServerReplicaReceipt>.broadcast();
   int pushes = 0;
 
   @override
@@ -228,6 +230,16 @@ class FakeServerSync implements ServerSync {
 
   @override
   Stream<SyncStatus> watchStatus() => _current(() => _status, _changes.stream);
+
+  @override
+  Stream<ServerReplicaReceipt> watchReplicaReceipts() => _receipts.stream;
+
+  /// Simulate correlated evidence from the currently connected server.
+  void emitReplicaReceipt(ServerReplicaReceipt receipt) {
+    if (_status.connected && receipt.serverOrigin == _status.origin) {
+      _receipts.add(receipt);
+    }
+  }
 
   @override
   Future<void> connect(String origin) async {

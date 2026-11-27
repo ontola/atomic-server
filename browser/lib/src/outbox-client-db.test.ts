@@ -6,7 +6,9 @@ import type { Commit } from './commit.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
+import { Resource } from './resource.js';
 import { Store } from './store.js';
+import { LoroLoader } from './loro-loader.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -21,6 +23,7 @@ afterEach(() => {
  */
 class FakeClientDb {
   isReady = true;
+  supportsDurablePersistence = true;
   /** False while the database is still opening: writes reject until
    *  {@link finishOpening}, as the real one does once it is parked. */
   isOpen = true;
@@ -107,7 +110,7 @@ class FakeClientDb {
 
 /** A tab: a Store signed in as `agent`, its commits posted to a spy. */
 async function tab(agent: Agent, db: FakeClientDb, connected: boolean) {
-  const store = new Store({ serverUrl: 'https://example.com' });
+  const store = new Store({ serverUrl: 'https://example.com', connect: false });
   store.setServerConnected(connected);
   store.setAgent(agent);
 
@@ -147,6 +150,389 @@ async function newAgent(): Promise<Agent> {
 }
 
 describe('the outbox in the client database', () => {
+  it.each([false, true])(
+    'keeps private drafts across reload (local-only: %s)',
+    async localOnly => {
+      const agent = await newAgent();
+      const db = new FakeClientDb();
+      const first = await tab(agent, db, true);
+      const parent = await first.store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        deferGenesis: true,
+        propVals: { [core.properties.name]: 'Unsaved parent' },
+      });
+      if (localOnly) first.store.registerLocalOnlyDrive(parent.subject);
+      const child = await first.store.newResource({
+        parent: parent.subject,
+        deferGenesis: true,
+        propVals: { [core.properties.name]: 'Saved child' },
+      });
+      const receipt = await child.saveWithReceipt();
+      expect(receipt.status).toBe('queued');
+      expect(receipt.local?.version).toBeTruthy();
+      const privateRow = db
+        .queued(agent.subject!)
+        .find(
+          row =>
+            (row.privateDraftV1 as { subject?: string } | undefined)
+              ?.subject === child.subject,
+        );
+      expect(privateRow?.subject).toBeUndefined();
+      expect(
+        (privateRow?.privateDraftV1 as { draft?: unknown })?.draft,
+      ).toBeDefined();
+      expect(db.rows.has(child.subject)).toBe(false);
+      await first.store.syncDirtyResources();
+      expect(first.posted).toHaveLength(0);
+      first.store.setServerConnected(false);
+      const second = await tab(agent, db, false);
+      if (localOnly) second.store.registerLocalOnlyDrive(parent.subject);
+      const restored = await second.store.getResource(parent.subject);
+      expect(restored.get(core.properties.name)).toBe('Unsaved parent');
+      second.store.setServerConnected(true);
+      await second.store.syncDirtyResources();
+      expect(second.posted).toHaveLength(0);
+      await restored.save();
+      if (localOnly) {
+        expect(second.posted).toHaveLength(0);
+        expect(db.rows.has(child.subject)).toBe(true);
+      } else
+        expect(
+          second.posted.some(commit => commit.subject === child.subject),
+        ).toBe(true);
+      expect(second.store.outbox.hasPending(child.subject)).toBe(false);
+      second.store.setServerConnected(false);
+    },
+  );
+
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])(
+    'recovers nested drafts (local-only: %s, parent already saved: %s)',
+    async (localOnly, saveParentFirst) => {
+      const agent = await newAgent();
+      const db = new FakeClientDb();
+      const first = await tab(agent, db, false);
+      const grandparent = await first.store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        deferGenesis: true,
+        propVals: { [core.properties.name]: 'Grandparent draft' },
+      });
+      if (localOnly) first.store.registerLocalOnlyDrive(grandparent.subject);
+      const parent = await first.store.newResource({
+        parent: grandparent.subject,
+        deferGenesis: true,
+      });
+      if (saveParentFirst) await parent.save();
+      const child = await first.store.newResource({
+        parent: parent.subject,
+        deferGenesis: true,
+      });
+      await child.save();
+      expect(
+        first.store.outbox.getEntry(parent.subject)?.draft?.waitingForParent,
+      ).toBe(grandparent.subject);
+      expect(
+        first.store.outbox.getEntry(grandparent.subject)?.draft?.held,
+      ).toBe(true);
+      expect(first.posted).toHaveLength(0);
+      const second = await tab(agent, db, false);
+      if (localOnly) second.store.registerLocalOnlyDrive(grandparent.subject);
+      const restored = await second.store.getResource(grandparent.subject);
+      expect(restored.get(core.properties.name)).toBe('Grandparent draft');
+      second.store.setServerConnected(true);
+      await second.store.syncDirtyResources();
+      expect(second.posted).toHaveLength(0);
+      await restored.save();
+
+      for (const subject of [parent.subject, child.subject]) {
+        expect(second.store.outbox.hasPending(subject)).toBe(false);
+        if (localOnly) expect(db.rows.has(subject)).toBe(true);
+        else
+          expect(second.posted.some(commit => commit.subject === subject)).toBe(
+            true,
+          );
+      }
+
+      second.store.setServerConnected(false);
+    },
+  );
+
+  it('does not confirm a child when its ancestor checkpoint fails', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store } = await tab(agent, db, false);
+    const parent = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      deferGenesis: true,
+    });
+    const child = await store.newResource({
+      parent: parent.subject,
+      deferGenesis: true,
+    });
+    const write = vi
+      .spyOn(db, 'outboxWrite')
+      .mockRejectedValue(new Error('Disk full'));
+    await expect(child.saveWithReceipt()).rejects.toThrow('Disk full');
+    expect(store.outbox.getEntry(child.subject)).toBeUndefined();
+    write.mockRestore();
+    const receipt = await child.saveWithReceipt();
+    expect(receipt.local?.version).toBeTruthy();
+    expect(receipt.status).toBe('queued');
+  });
+
+  it('rejects cyclic draft ancestry without writing or publishing it', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store, posted } = await tab(agent, db, false);
+    const parent = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      deferGenesis: true,
+    });
+    const child = await store.newResource({
+      parent: parent.subject,
+      deferGenesis: true,
+    });
+    await parent.set(core.properties.parent, child.subject, false);
+    await expect(child.save()).rejects.toThrow('cyclic draft parent chain');
+    expect(db.queued(agent.subject!)).toEqual([]);
+    expect(posted).toEqual([]);
+  });
+
+  it('recovers an offline edit before overwriting its checkpoint on reconnect', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const first = await tab(agent, db, true);
+    const resource = await first.store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Server title' },
+    });
+    await resource.save();
+    const subject = resource.subject;
+    const serverSnapshot = resource.getLoroDoc()!.export({ mode: 'snapshot' });
+    const lastCommit = resource.getLastCommitForChain();
+    first.store.setServerConnected(false);
+    await resource.set(core.properties.name, 'Offline title', false);
+    await resource.save();
+    expect(JSON.parse(db.rows.get(subject)!.jsonAd)[core.properties.name]).toBe(
+      'Offline title',
+    );
+
+    const second = await tab(agent, db, false);
+    const stale = new Resource(subject);
+    stale.setStore(second.store);
+    stale.importLoroUpdate(serverSnapshot, true);
+    if (lastCommit) stale.setLastCommitValue(lastCommit);
+    stale.loading = false;
+    second.store.addResource(stale);
+    expect(second.store.outbox.hasPending(subject)).toBe(true);
+    expect(JSON.parse(db.rows.get(subject)!.jsonAd)[core.properties.name]).toBe(
+      'Offline title',
+    );
+    second.store.setServerConnected(true);
+    await second.store.syncDirtyResources();
+    second.store.setServerConnected(false);
+
+    expect({
+      title: JSON.parse(db.rows.get(subject)!.jsonAd)[core.properties.name],
+      posted: second.posted.length,
+      pending: second.store.outbox.hasPending(subject),
+    }).toEqual({ title: 'Offline title', posted: 1, pending: false });
+  });
+
+  it('merges an offline checkpoint without discarding edits made during the read', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store } = await tab(agent, db, true);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Initial title' },
+    });
+    await resource.save();
+    store.setServerConnected(false);
+    await resource.set(core.properties.name, 'Offline edit', false);
+    await resource.save();
+
+    let enter!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => {
+      enter = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const original = db.getResourceWithSnapshot.bind(db);
+    vi.spyOn(db, 'getResourceWithSnapshot').mockImplementationOnce(
+      async subject => {
+        const row = await original(subject);
+        enter();
+        await gate;
+
+        return row;
+      },
+    );
+    store.setServerConnected(true);
+    const syncing = store.syncDirtyResources();
+    await entered;
+
+    try {
+      await resource.set(
+        core.properties.name,
+        'Edit made during recovery',
+        false,
+      );
+      resource.getLoroDoc()!.commit();
+    } finally {
+      release();
+    }
+
+    await syncing;
+    store.setServerConnected(false);
+    expect(resource.get(core.properties.name)).toBe(
+      'Edit made during recovery',
+    );
+    expect(
+      JSON.parse(db.rows.get(resource.subject)!.jsonAd)[core.properties.name],
+    ).toBe('Edit made during recovery');
+  });
+
+  it('keeps a newer online edit that arrives during the pre-delivery write', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store } = await tab(agent, db, true);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Initial title' },
+    });
+    await resource.save();
+
+    let enter!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => {
+      enter = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const write = db.putLoroSnapshot.bind(db);
+    vi.spyOn(db, 'putLoroSnapshot').mockImplementationOnce(async (...args) => {
+      enter();
+      await gate;
+      await write(...args);
+    });
+
+    await resource.set(core.properties.name, 'First edit', false);
+    const saving = resource.save();
+    await entered;
+
+    try {
+      await resource.set(core.properties.name, 'Later edit', false);
+      resource.getLoroDoc()!.commit();
+    } finally {
+      release();
+    }
+
+    await saving;
+    await store.syncDirtyResources();
+    store.setServerConnected(false);
+    expect(resource.get(core.properties.name)).toBe('Later edit');
+    expect(
+      JSON.parse(db.rows.get(resource.subject)!.jsonAd)[core.properties.name],
+    ).toBe('Later edit');
+  });
+
+  it('stores the snapshot and replay cursor before the first online POST', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store, postCommitSpy } = await tab(agent, db, true);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Online edit' },
+    });
+    postCommitSpy.mockImplementation(async commit => {
+      expect(db.rows.get(resource.subject)?.snapshot).toBeDefined();
+      expect(
+        db.queued(agent.subject!).find(row => row.subject === resource.subject)
+          ?.baseVersion,
+      ).toBeDefined();
+
+      return commit;
+    });
+    await resource.save();
+    expect(postCommitSpy).toHaveBeenCalled();
+    store.setServerConnected(false);
+  });
+
+  it('automatically keeps an existing offline edit without publishing it', async () => {
+    const agent = await newAgent();
+    const db = new FakeClientDb();
+    const { store, posted } = await tab(agent, db, false);
+    const resource = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+    });
+    await resource.save();
+    await resource.set(core.properties.name, 'Automatic local edit', false);
+    resource.sealPendingEdits();
+    await vi.waitFor(() => {
+      const bytes = db.rows.get(resource.subject)?.snapshot;
+      const doc = new LoroLoader.Loro.LoroDoc();
+      if (bytes) doc.import(bytes);
+      expect(doc.getMap('properties').get(core.properties.name)).toBe(
+        'Automatic local edit',
+      );
+      doc.free();
+    });
+    expect(posted).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    'replays edits after an offline genesis on a cold reload (legacy queue: %s)',
+    async legacy => {
+      const agent = await newAgent();
+      const db = new FakeClientDb();
+      const first = await tab(agent, db, false);
+      const doc = await first.store.newResource({
+        isA: server.classes.drive,
+        noParent: true,
+        propVals: { [core.properties.name]: 'Genesis' },
+      });
+      await doc.save();
+      await doc.set(core.properties.name, 'Later offline edit');
+      await doc.save();
+
+      if (legacy) {
+        const rows = db.outbox.get(agent.subject!)!;
+        const row = JSON.parse(rows.get(doc.subject)!);
+        delete row.baseVersion;
+        rows.set(doc.subject, JSON.stringify(row));
+      }
+
+      const second = await tab(agent, db, false);
+      expect(second.store.resources.has(doc.subject)).toBe(false);
+      second.store.setServerConnected(true);
+      await second.store.syncDirtyResources();
+      second.store.setServerConnected(false);
+      const remote = new LoroLoader.Loro.LoroDoc();
+      for (const commit of second.posted) remote.import(commit.loroUpdate!);
+      expect(remote.getMap('properties').get(core.properties.name)).toBe(
+        'Later offline edit',
+      );
+      expect(second.store.outbox.hasPending(doc.subject)).toBe(false);
+    },
+  );
+
   it('an offline edit survives a reload and drains on reconnect', async () => {
     const agent = await newAgent();
     const db = new FakeClientDb();
@@ -315,7 +701,10 @@ describe('the outbox in the client database', () => {
 
   it('keeps using localStorage with a database that has no outbox', async () => {
     const agent = await newAgent();
-    const store = new Store({ serverUrl: 'https://example.com' });
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
     store.setAgent(agent);
     store.setClientDb({
       isReady: true,

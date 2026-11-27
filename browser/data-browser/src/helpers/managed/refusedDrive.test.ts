@@ -43,6 +43,9 @@ describe('a drive the node refuses as not enrolled', () => {
   // The session answer is cached; a signed-out answer from one test must not
   // stand in for the next test's control plane.
   beforeEach(() => {
+    vi.stubGlobal('window', {
+      location: { href: 'https://portal.example/app' },
+    });
     noteManagedSessionChanged();
     // Linked to an account, unless a test says it never was.
     vi.mocked(readManagedAccountBinding).mockReturnValue({
@@ -53,6 +56,7 @@ describe('a drive the node refuses as not enrolled', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

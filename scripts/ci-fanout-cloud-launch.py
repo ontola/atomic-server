@@ -20,9 +20,11 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import uuid
 
 sys.dont_write_bytecode = True
@@ -32,12 +34,29 @@ SPEC.loader.exec_module(BASE)
 WARM_SPEC = importlib.util.spec_from_file_location('cloud_launch_warm', Path(__file__).with_name('ci-fanout-warm.py'))
 WARM = importlib.util.module_from_spec(WARM_SPEC)
 WARM_SPEC.loader.exec_module(WARM)
+SCRATCH_SPEC = importlib.util.spec_from_file_location('cloud_launch_scratch', Path(__file__).with_name('ci-fanout-scratch.py'))
+SCRATCH = importlib.util.module_from_spec(SCRATCH_SPEC)
+SCRATCH_SPEC.loader.exec_module(SCRATCH)
 ROOT = '/root/atomic-ci-control'
 MOUNT = '/mnt/atomic-ci'
 CLEANUP_SECONDS = 120
 FORBIDDEN = {'browser-bundles','doctl.yaml','doctl.json','doctl-selected.json','operator-key',
              'operator-key.pub','controller-key','controller-key.pub','id_ed25519','id_ed25519.pub',
              'id_rsa','id_rsa.pub','user-data.txt','user-data.yaml','launch-config.json','credentials','secrets'}
+
+
+def native_module():
+    spec = importlib.util.spec_from_file_location('native_ci', Path(__file__).with_name('ci-fanout-native.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def private_input_helper():
+    spec = importlib.util.spec_from_file_location('private_input', Path(__file__).with_name('ci-fanout-private-input.py'))
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
 
 
 def validate_config(config):
@@ -60,6 +79,8 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
     if not config['expected_controller_hourly_rate'] or not config['expected_volume_hourly_rate'] or not 0 < config['max_total_usd'] <= 7.5:
         raise ValueError('positive prices and a total ceiling at most $7.50 are required')
+    if 'cloud_cache_min_free_gib' in config and (type(config['cloud_cache_min_free_gib']) is not int or config['cloud_cache_min_free_gib'] != 4):
+        raise ValueError('cloud_cache_min_free_gib must be the explicit 4 GiB reserve')
     mode = config.setdefault('cloud_worker_mode', 'cold')
     if mode not in ('cold', 'warm'):
         raise ValueError('cloud_worker_mode must be cold or warm')
@@ -85,6 +106,16 @@ def validate_config(config):
                     or companion.get('architecture') != 'linux/amd64'
                     or companion.get('docker_data_root') != '/mnt/atomic-ci/docker'):
                 raise ValueError('warm snapshot companion namespace, engine, architecture or Docker layout differs')
+    if 'supplemental_profile' in config:
+        if config['supplemental_profile'] != 'pr2621-native-private-v1' or config.get('cold_scratch_gib') != 200:
+            raise ValueError('unsupported supplemental profile')
+        private_input_helper().validate_descriptor(config.get('private_input'))
+        private_input_helper().verify_capsule(config['private_input'])
+        config = native_module().validate_config(config, BASE)
+    if 'cold_scratch_gib' in config:
+        config = SCRATCH.validate_config(config, BASE)
+    elif 'expected_scratch_volume_hourly_rate' in config:
+        raise ValueError('scratch price requires cold scratch mode')
     if config.get('cloud_volume_id') and not re.fullmatch(r'[0-9a-f-]{36}', config['cloud_volume_id']):
         raise ValueError('cloud_volume_id must be an explicit UUID')
     return config
@@ -106,8 +137,14 @@ def checked_source(config):
         raise ValueError('cloud launch requires the exact clean configured source')
     result = {}
     names = ['ci-fanout-cloud-launch.py', 'ci-fanout-cloud.py']
+    if 'cloud_cache_min_free_gib' in config:
+        names.append('ci-cache-prune.py')
     if config.get('cloud_worker_mode') == 'warm':
         names.append('ci-fanout-warm.py')
+    if config.get('cold_scratch_gib'):
+        names.append('ci-fanout-scratch.py')
+    if config.get('supplemental_profile'):
+        names.extend(['ci-fanout-native.py', 'ci-supplemental.py', 'ci-fanout-private-input.py'])
     for name in names:
         path = 'scripts/' + name
         try:
@@ -246,6 +283,11 @@ class CloudLauncher:
         credentials = selected_credentials(self.config['doctl_config'], self.account['context'])
         if self.config['cloud_worker_mode'] == 'warm':
             worker = WARM.controller_class(BASE, api_factory=lambda _: self.api)(worker_config(self.config)).plan()
+        elif self.config.get('supplemental_profile'):
+            parent = SCRATCH.controller_class(BASE, api_factory=lambda _: self.api)
+            worker = native_module().controller_class(BASE, parent)(self.config).plan()
+        elif self.config.get('cold_scratch_gib'):
+            worker = SCRATCH.controller_class(BASE, api_factory=lambda _: self.api)(self.config).plan()
         else:
             worker = BASE.Controller(self.config, api=self.api).plan()
         info = self.api.identity(self.account)
@@ -255,7 +297,9 @@ class CloudLauncher:
         if any(item['name'] == self.config['batch_key'] + '-controller' for item in droplets):
             raise ValueError('controller name already exists; refusing a second fleet')
         sizes = self.api.call(self.account, ['compute', 'size', 'list'])
-        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'], 64, self.config['region']),
+        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'],
+                                      BASE.WORKER_PROFILES.get(self.config['worker_profile'], {}).get('vcpus', 64),
+                                      self.config['region']),
                                       (self.config['cloud_controller_size'], self.config['expected_controller_hourly_rate'], None, self.config['cloud_controller_region'])):
             item = next((value for value in sizes if value['slug'] == slug), None)
             if (not item or not item.get('available') or region not in item.get('regions', [])
@@ -272,7 +316,8 @@ class CloudLauncher:
             raise ValueError('controller SSH key name already exists')
         hourly = 3 * self.config['expected_hourly_rate'] + self.config['expected_controller_hourly_rate'] + self.config['expected_volume_hourly_rate']
         cache_hourly = 3 * self.config['expected_cache_volume_hourly_rate'] if self.config['cloud_worker_mode'] == 'warm' else 0
-        hourly += cache_hourly
+        scratch_hourly = 3 * self.config['expected_scratch_volume_hourly_rate'] if self.config.get('cold_scratch_gib') else 0
+        hourly += cache_hourly + scratch_hourly
         ceiling = hourly * (self.config['max_hours'] + CLEANUP_SECONDS / 3600) + self.config['cloud_egress_reserve_usd']
         if ceiling > self.config['max_total_usd']:
             raise ValueError('controller, test machines, storage, cleanup and egress exceed the authorized budget')
@@ -292,10 +337,19 @@ class CloudLauncher:
         scope = ({'validation_scope': 'selected-check', 'configured_test_nodes': 3,
                   'initial_nodes': 1, 'browser_shards': 0, 'check_jobs': ['flutter-test']}
                  if self.config.get('check_only') else {})
+        if 'cloud_cache_min_free_gib' in self.config:
+            scope['cloud_cache_min_free_gib'] = self.config['cloud_cache_min_free_gib']
+        if self.config.get('cold_scratch_gib'):
+            scope['storage_mode'] = 'cold-scratch'
+        if self.config.get('supplemental_profile'):
+            scope['supplemental'] = worker['supplemental']
         return {**scope, 'source_commit': self.config['source_commit'],
                 'test_nodes': 1 if self.config.get('check_only') else 3,
+                'worker_budget': BASE.worker_budget(self.config),
                 'controller_size': self.config['cloud_controller_size'], 'region': self.config['region'],
                 'controller_region': self.config['cloud_controller_region'], 'cloud_worker_mode': self.config['cloud_worker_mode'],
+                'scratch_volume_gib': self.config.get('cold_scratch_gib', 0),
+                'scratch_storage_hourly_usd_estimate': scratch_hourly,
                 'cache_volume_gib': WARM.VOLUME_GIB if cache_hourly else 0,
                 'cache_storage_hourly_usd_estimate': cache_hourly,
                 'source_snapshots': worker.get('source_snapshots', {}),
@@ -445,6 +499,8 @@ class CloudLauncher:
                 raise
             finally:
                 userdata.unlink(missing_ok=True)
+            if self.config.get('supplemental_profile'):
+                private_input_helper().stage_controller_input(self)
             self.update(lambda value: value.update(status='launched'))
             return self.summary()
         except BaseException:
@@ -482,7 +538,11 @@ class CloudLauncher:
                       doctl_config=ROOT + '/doctl.json', absolute_deadline=state['deadline'], host_bundle_backup=True,
                       oci_probe_dir='/opt/atomic-ci-control/repo/scripts/ci-fanout/oci-smoke',
                       artifact_archive_dir=MOUNT + '/browser-bundles')
-        return {'account': {key:self.account[key] for key in ('context','expected_uuid')}, 'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
+        if self.config.get('supplemental_profile'):
+            fanout['private_input'] = private_input_helper().remote_descriptor(self.config['private_input'], ROOT)
+        maintenance = ({'cloud_cache_min_free_gib': self.config['cloud_cache_min_free_gib']}
+                       if 'cloud_cache_min_free_gib' in self.config else {})
+        return {**maintenance, 'account': {key:self.account[key] for key in ('context','expected_uuid')}, 'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
                 'deadline': state['deadline'], 'campaign_started_at': state['campaign_started_at'],
                 'root': ROOT, 'repo': '/opt/atomic-ci-control/repo', 'credentials': ROOT + '/doctl.json',
                 'controller': dict(state['controller'], size=self.config['cloud_controller_size'],
@@ -492,6 +552,7 @@ class CloudLauncher:
                 'volume': dict(state['volume'], size_gigabytes=10, region=self.config['cloud_controller_region'], mount_path=MOUNT),
                 'fanout_config': fanout, 'cloud_worker_mode': self.config['cloud_worker_mode'],
                 'cloud_controller_region': self.config['cloud_controller_region'],
+                'expected_scratch_volume_hourly_rate': self.config.get('expected_scratch_volume_hourly_rate', 0),
                 'expected_cache_volume_hourly_rate': self.config.get('expected_cache_volume_hourly_rate', 0),
                 'max_total_usd': self.config['max_total_usd'],
                 'expected_volume_hourly_rate': self.config['expected_volume_hourly_rate'],
@@ -525,25 +586,104 @@ class CloudLauncher:
                 summary['remote'] = {'status': 'not reachable; bootstrap may still be in progress'}
         return summary
 
-    def collect(self):
+    def collect(self, metadata_only=False):
+        if type(metadata_only) is not bool:
+            raise ValueError('metadata_only must be a boolean')
+        fd = os.open(self.root / 'collection.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'r+') as lock:
+            info = os.fstat(lock.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+                raise ValueError('collection lock must be an owned unshared regular file')
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return self._collect_locked(metadata_only)
+
+    def _collect_locked(self, metadata_only):
         self.api.identity(self.account)
         if not self.reconcile_controller():
             raise RuntimeError('controller is absent; reports remain on the retained volume for a future authorized mount')
         batch = self.config['batch_key']
         # The supervisor only preserves an allowlist in this one run directory.
         source = MOUNT + '/runs/' + batch
-        command = "python3 - <<'PYREMOTE'\nimport pathlib,tarfile\np=pathlib.Path(" + repr(source) + ")\nif not p.is_dir() or p.is_symlink(): raise ValueError('run reports are not available')\nwith tarfile.open('/tmp/atomic-ci-reports.tgz','w:gz') as a:\n for f in p.rglob('*'):\n  if f.is_file() and not f.is_symlink() and not any(q in " + repr(sorted(FORBIDDEN)) + " for q in f.relative_to(p).parts):\n   a.add(f,arcname='reports/'+str(f.relative_to(p)),recursive=False)\nPYREMOTE"
-        self.ssh(command, timeout=120)
+        collection_id = uuid.uuid4().hex
+        remote_archive = '/tmp/atomic-ci-reports-' + collection_id + '.tgz'
+        script = '''import fcntl,io,json,os,pathlib,stat,tarfile
+os.umask(0o077)
+p=pathlib.Path(SOURCE)
+if not p.is_dir() or p.is_symlink(): raise ValueError('run reports are not available')
+lock=pathlib.Path(LOCK)
+if any(parent.is_symlink() for parent in lock.parents): raise ValueError('report lock cannot traverse symlinks')
+fd=os.open(lock,os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
+with os.fdopen(fd,'r+') as lease:
+ info=os.fstat(lease.fileno())
+ if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid() or info.st_nlink!=1: raise ValueError('report lock must be owned and unshared')
+ fcntl.flock(lease,fcntl.LOCK_SH)
+ if (p/'COLLECTION-SCOPE.json').exists(): raise ValueError('reserved report collection metadata already exists')
+ scope={'version':1,'source_commit':COMMIT,'scope':'metadata-only' if METADATA_ONLY else 'full',
+        'retained_raw_reports':str(p),'selected_files':0,'selected_bytes':0,'omitted_files':0,'omitted_bytes':0}
+ with tarfile.open(ARCHIVE,'x:gz',dereference=True) as archive:
+  for f in p.rglob('*'):
+   relative=f.relative_to(p)
+   if not f.is_file() or f.is_symlink() or any(q in FORBIDDEN for q in relative.parts): continue
+   if any(parent.is_symlink() for parent in f.parents): raise ValueError('report path traverses a symlink')
+   size=f.stat().st_size
+   if METADATA_ONLY and (f.suffix.lower() not in ('.json','.jsonl','.log','.md','.txt') or size>32*1024*1024):
+    scope['omitted_files']+=1; scope['omitted_bytes']+=size; continue
+   scope['selected_files']+=1; scope['selected_bytes']+=size
+   if METADATA_ONLY and scope['selected_bytes']>512*1024*1024: raise ValueError('metadata collection exceeds its bounded size')
+   archive.add(f,arcname='reports/'+str(relative),recursive=False)
+  payload=json.dumps(scope,sort_keys=True).encode();entry=tarfile.TarInfo('reports/COLLECTION-SCOPE.json');entry.size=len(payload);entry.mode=0o600
+  archive.addfile(entry,io.BytesIO(payload))
+'''
+        substitutions = {'SOURCE': repr(source), 'LOCK': repr(ROOT + '/evidence-copy.lock'),
+                         'COMMIT': repr(self.config['source_commit']), 'METADATA_ONLY': repr(metadata_only),
+                         'FORBIDDEN': repr(sorted(FORBIDDEN)), 'ARCHIVE': repr(remote_archive)}
+        # Substitute whole identifier tokens, never text inside paths or data.
+        script = re.sub(r'\b(?:SOURCE|LOCK|COMMIT|METADATA_ONLY|FORBIDDEN|ARCHIVE)\b',
+                        lambda match: substitutions[match.group()], script)
+        command = "python3 - <<'PYREMOTE'\n" + script + '\nPYREMOTE'
+        try:
+            self.ssh(command, timeout=120)
+        except Exception:
+            with contextlib.suppress(RuntimeError, subprocess.TimeoutExpired):
+                self.ssh('rm -f -- ' + shlex.quote(remote_archive), timeout=15)
+            raise
         node = self.read()['controller']
         archive = self.root / 'reports.tgz'
         options = ['-i', str(self.root / 'controller-key'), '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
                    '-o', 'IdentityAgent=none', '-o', 'StrictHostKeyChecking=yes',
                    '-o', 'UserKnownHostsFile=' + str(self.root / 'controller.known-hosts')]
-        self.run(['scp', *options, 'root@' + node['ip'] + ':/tmp/atomic-ci-reports.tgz', str(archive)], timeout=180)
-        extract_reports(archive, self.root)
+        with tempfile.TemporaryDirectory(prefix='.collection-', dir=self.root) as staging:
+            staging = Path(staging)
+            candidate = staging / 'reports.tgz'
+            try:
+                self.run(['scp', *options, 'root@' + node['ip'] + ':' + remote_archive, str(candidate)], timeout=180)
+                extract_reports(candidate, staging)
+                reports = staging / 'reports'
+                scope = json.loads((reports / 'COLLECTION-SCOPE.json').read_text())
+                expected_scope = 'metadata-only' if metadata_only else 'full'
+                selected = [p for p in reports.rglob('*') if p.is_file() and p != reports / 'COLLECTION-SCOPE.json']
+                if (scope.get('version') != 1 or scope.get('source_commit') != self.config['source_commit']
+                        or scope.get('scope') != expected_scope or scope.get('retained_raw_reports') != source
+                        or scope.get('selected_files') != len(selected)
+                        or scope.get('selected_bytes') != sum(p.stat().st_size for p in selected)
+                        or any(type(scope.get(key)) is not int or scope[key] < 0 for key in ('omitted_files', 'omitted_bytes'))
+                        or (not metadata_only and (scope['omitted_files'] or scope['omitted_bytes']))):
+                    raise ValueError('collected report scope or source does not match the request')
+                previous = self.root / 'reports'
+                if previous.is_symlink():
+                    raise ValueError('report destination cannot be a symlink')
+                if previous.exists():
+                    previous.rename(self.root / ('reports-previous-' + collection_id))
+                reports.rename(previous)
+                candidate.replace(archive)
+            finally:
+                with contextlib.suppress(RuntimeError, subprocess.TimeoutExpired):
+                    self.ssh('rm -f -- ' + shlex.quote(remote_archive), timeout=15)
         self.update(lambda state: state.update(reports_collected_at=self.now().isoformat(),
-                    reports_sha256=BASE.file_sha256(archive)))
-        return {'reports': str(self.root / 'reports'), 'archive_sha256': self.read()['reports_sha256']}
+                    reports_sha256=BASE.file_sha256(archive),
+                    reports_collection_scope='metadata-only' if metadata_only else 'full'))
+        return {'reports': str(self.root / 'reports'), 'archive_sha256': self.read()['reports_sha256'],
+                'collection_scope': self.read()['reports_collection_scope'], 'retained_raw_reports': source}
 
     def finalize(self):
         if not self.read().get('reports_collected_at'):
@@ -559,10 +699,14 @@ class CloudLauncher:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
+    parser.add_argument('--metadata-only', action='store_true', help='collect small reports; retain raw traces on DO')
     parser.add_argument('command', choices=('plan', 'launch', 'status', 'collect', 'finalize'))
     args = parser.parse_args()
+    if args.metadata_only and args.command != 'collect':
+        parser.error('--metadata-only applies only to collect')
     launcher = CloudLauncher(json.loads(args.config.read_text()))
-    print(json.dumps(getattr(launcher, args.command)(), indent=2))
+    result = launcher.collect(metadata_only=args.metadata_only) if args.command == 'collect' else getattr(launcher, args.command)()
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == '__main__':
