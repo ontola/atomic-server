@@ -2989,6 +2989,54 @@ export class AtomicServer {
         `ssh-keyscan -H ${remoteHost} >> /root/.ssh/known_hosts`,
       ]);
 
+    // Make room and check it BEFORE anything on the host changes. Every deploy
+    // leaves a timestamped binary and a copy of the store (~4 GB on staging),
+    // and on 2026-11-27 that filled staging's disk: the deploy installed a
+    // truncated binary and the host crash-looped until it was fixed by hand.
+    // Old copies are pruned first (the store copy this deploy takes plus one
+    // older one stay, and three binaries for the rollback step), then the
+    // deploy refuses to start unless the new binary, its backup and the store
+    // copy fit with 1 GB to spare. Failing here leaves the old server serving.
+    const binarySize = (
+      await deployContainer
+        .withExec(['sh', '-c', 'wc -c < /atomic-server-binary'])
+        .stdout()
+    ).trim();
+    const binarySha = (
+      await deployContainer
+        .withExec([
+          'sh',
+          '-c',
+          'sha256sum /atomic-server-binary | cut -d" " -f1',
+        ])
+        .stdout()
+    ).trim();
+
+    await sshContainer
+      .withSecretVariable('REMOTE_USER', remoteUser)
+      .withExec([
+        'sh',
+        '-c',
+        `ssh -i /root/.ssh/id_rsa $REMOTE_USER@${remoteHost} '
+          set -e
+          rm -f ~/atomic-server-x86_64-unknown-linux-musl
+          ls -1t ~/atomic-server-2* 2>/dev/null | tail -n +4 | xargs -r rm -f
+          ls -1t ~/atomic-store-2*.redb 2>/dev/null | tail -n +2 | xargs -r rm -f
+          data_dir=$(sed -n "s/^ATOMIC_DATA_DIR=//p" ~/.env 2>/dev/null | tail -1 | tr -d "\\"\\047")
+          store=\${data_dir:-\$HOME/.local/share/atomic-data}/store/atomic.redb
+          store_kb=0
+          if [ -f "$store" ]; then store_kb=$(du -k "$store" | cut -f1); fi
+          need_kb=$(( store_kb + 2 * ${binarySize} / 1024 + 1048576 ))
+          avail_kb=$(df -Pk "$HOME" | awk "NR==2 {print \\$4}")
+          df -h "$HOME"
+          if [ "$avail_kb" -lt "$need_kb" ]; then
+            echo "Not enough disk on ${remoteHost}: $avail_kb KB free, $need_kb KB needed. Nothing was changed." >&2
+            exit 1
+          fi
+        '`,
+      ])
+      .stdout();
+
     // Transfer binary using rsync
     const transferResult = await sshContainer
       .withSecretVariable('REMOTE_USER', remoteUser)
@@ -3006,6 +3054,7 @@ export class AtomicServer {
         'sh',
         '-c',
         `ssh -i /root/.ssh/id_rsa $REMOTE_USER@${remoteHost} '
+          echo "${binarySha}  $HOME/atomic-server-x86_64-unknown-linux-musl" | sha256sum -c - &&
           mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
           systemctl stop atomic &&
@@ -3013,7 +3062,7 @@ export class AtomicServer {
           store=\${data_dir:-\$HOME/.local/share/atomic-data}/store/atomic.redb &&
           test -f "$store" &&
           cp "$store" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
-          ls -1t ~/atomic-store-2*.redb | tail -n +4 | xargs -r rm -f &&
+          ls -1t ~/atomic-store-2*.redb | tail -n +3 | xargs -r rm -f &&
           systemctl start atomic &&
           systemctl status atomic
         '`,
