@@ -352,7 +352,8 @@ class FakeController(fanout.Controller):
         (root / 'browser/test-results/.last-run.json').write_text(json.dumps({'status': 'failed' if ids or value.get('errors') else 'passed', 'failedTests': ids}))
         receipt = {'version': 1, 'kind': 'browser-first-pass' if phase == 'browser' else 'browser-deferred-retry',
                    'sourceCommit': SHA, 'manifestSha256': 'b' * 64, 'shardIndex': node['shard_index'],
-                   'shardCount': self.plan()['nodes'], 'playwrightRetries': 0}
+                   'shardCount': self.plan()['nodes'], 'playwrightRetries': 0,
+                   'httpWorkersRequested': self.config['server_workers'], 'playwrightWorkers': self.config['workers']}
         for field, name in [('reportSha256', 'test-results.json'),
                             ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
             receipt[field] = fanout.file_sha256(root / 'browser' / name)
@@ -750,7 +751,9 @@ class RunnerResourceTests(unittest.TestCase):
                   'cache_namespace': 'warm-seed', 'test_run_key': 'clone-one'},
                   ['--cache-namespace', 'warm-seed', '--max-build-jobs', '64', '--build-jobs', '64',
                    '--test-run-key', 'clone-one', 'rust-test', '--test-threads', '48']),
-                 ('probe', '/fixture/probe', ['build'], {'build_jobs': 64, 'test_run_key': 'clone-one', 'cache_namespace': 'warm-seed'}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
+                 ('check', None, ['js-test-integration'], {'server_workers': 32},
+                  ['--http-workers', '32', 'js-test-integration']),
+                 ('probe', '/fixture/probe', ['build'], {'server_workers': 0, 'build_jobs': 64, 'test_run_key': 'clone-one', 'cache_namespace': 'warm-seed'}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
         for kind, module, args, widths, expected in cases:
             with self.subTest(kind=kind, args=args, widths=widths), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -762,6 +765,24 @@ class RunnerResourceTests(unittest.TestCase):
                      mock.patch.object(runner, 'run', side_effect=lambda command, directory, log: calls.append(command) or 0):
                     self.assertEqual(runner.main(config_path), 0)
                 self.assertEqual(calls[0][-len(expected):], expected)
+                receipt = json.loads((root / 'results/command/result.json').read_text())
+                if not module:
+                    self.assertEqual(receipt['worker_budget']['http_workers_requested'], widths.get('server_workers', 0))
+                else:
+                    self.assertNotIn('--http-workers', calls[0])
+
+    def test_custom_module_rejects_an_unsupported_http_worker_argument_before_work(self):
+        spec = importlib.util.spec_from_file_location('runner_custom_module', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'config.json'
+            path.write_text(json.dumps({'module': '/fixture/probe', 'server_workers': 32}))
+            with mock.patch.object(runner, 'run') as run, mock.patch.object(runner, 'check_identity') as identity, \
+                    self.assertRaisesRegex(ValueError, 'custom modules'):
+                runner.main(path)
+            run.assert_not_called()
+            identity.assert_not_called()
 
     def test_builder_receives_both_compile_width_flags(self):
         spec = importlib.util.spec_from_file_location('runner_builder_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
@@ -790,11 +811,58 @@ class RunnerResourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'config.json'
             for field, value in [('build_jobs', 0), ('build_jobs', True), ('rust_test_threads', 129),
+                                 ('server_workers', -1), ('server_workers', True), ('server_workers', 129),
+                                 ('server_workers', 1.5), ('server_workers', '32'),
                                  ('test_run_key', 'two words'), ('cache_namespace', '../foreign')]:
                 path.write_text(json.dumps({field: value}))
                 with self.subTest(field=field), mock.patch.object(runner, 'run') as run, self.assertRaises(ValueError):
                     runner.main(path)
                 run.assert_not_called()
+
+
+class CoreWorkerProfileTests(unittest.TestCase):
+    def test_profiles_are_opt_in_and_independent_explicit_overrides_win(self):
+        with tempfile.TemporaryDirectory() as temp:
+            original = config(Path(temp), 4)
+            self.assertEqual(original['server_workers'], 0)
+            self.assertEqual(original['worker_profile'], '')
+            for profile, expected in [('64-core', (24, 32)), ('32-core', (12, 16))]:
+                raw = {key: value for key, value in original.items()
+                       if key not in ('workers', 'server_workers', 'worker_profile')}
+                settings = fanout.validate_config(dict(raw, worker_profile=profile))
+                self.assertEqual((settings['workers'], settings['server_workers']), expected)
+                self.assertEqual(fanout.validate_config(dict(settings)), settings)
+                for overrides, values in [({'workers': 1}, (1, expected[1])),
+                                          ({'server_workers': 3}, (expected[0], 3)),
+                                          ({'workers': 2, 'server_workers': 0}, (2, 0))]:
+                    settings = fanout.validate_config(dict(raw, worker_profile=profile, **overrides))
+                    self.assertEqual((settings['workers'], settings['server_workers']), values)
+            for value in ('128-core', None, True, 64, [], {}):
+                with self.subTest(profile=value), self.assertRaises(ValueError):
+                    fanout.validate_config(dict(original, worker_profile=value))
+            for value in (-1, 129, True, 1.5, '32', None):
+                with self.subTest(server_workers=value), self.assertRaises(ValueError):
+                    fanout.validate_config(dict(original, server_workers=value))
+
+    def test_profile_requires_matching_provider_hardware_before_any_mutation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = config(Path(temp), 4)
+            settings.update(worker_profile='64-core', workers=24, server_workers=32)
+            for vcpus in (32, 64):
+                api = mock.Mock()
+                api.identity.return_value = {'droplet_limit': 100}
+                api.call.side_effect = lambda account, args: ([] if args[1] == 'droplet' else [{
+                    'slug': settings['size'], 'available': True, 'regions': [settings['region']],
+                    'price_hourly': settings['expected_hourly_rate'], 'vcpus': vcpus}])
+                with mock.patch.object(fanout, 'execute', side_effect=[SHA, '', json.dumps({'engineVersion': '0.21.7'})]):
+                    if vcpus == 64:
+                        plan = fanout.Controller(settings, api).plan()
+                        self.assertEqual(plan['worker_budget'], {'profile': '64-core', 'profile_vcpus': 64,
+                            'playwright_workers_per_host': 24, 'http_workers_requested': 32})
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'vCPUs'):
+                            fanout.Controller(settings, api).plan()
+                self.assertFalse(Path(settings['runtime_dir']).exists())
 
 
 class ResourceConfigTests(unittest.TestCase):
@@ -1401,8 +1469,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(ssh.call_count, 1)
         self.assertNotIn('restored_bundle_archive', self.controller.read()['nodes']['node-001'])
 
+    def test_browser_receipt_checks_requested_worker_budget(self):
+        self.controller.config.update(workers=24, server_workers=32)
+        self.initialize()
+        self.controller.read_bundle('node-001')
+        self.controller.phase('node-001', 'browser', 'browser', [])
+        receipt = self.controller.write_browser_export('node-001', 'browser', report([1], 1, self.controller.plan()['nodes']))
+        path = self.controller.root / 'node-001/results/browser/browser/browser-run.json'
+        self.assertEqual(self.controller.verify_browser_receipt('node-001', 'browser', 'browser-first-pass'), receipt)
+        for key, value in [('httpWorkersRequested', 8), ('playwrightWorkers', 8), ('httpWorkersRequested', '32')]:
+            path.write_text(json.dumps(dict(receipt, **{key: value})))
+            with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, 'receipt'):
+                self.controller.verify_browser_receipt('node-001', 'browser', 'browser-first-pass')
+
     def test_phase_transport_preserves_explicit_resource_widths(self):
-        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16,
+        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16, server_workers=32,
                                       test_run_key='clone-one', cache_namespace='warm-seed')
         self.initialize()
         self.controller.node_update('node-001', status='ready')
@@ -1415,6 +1496,12 @@ class LifecycleTests(unittest.TestCase):
         phase = actual.read()['nodes']['node-001']['phase_config']
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
+        self.assertEqual((phase['server_workers'], phase['playwright_workers']), (32, 16))
+        with mock.patch.object(actual, 'scp'), mock.patch.object(actual, 'ssh'), mock.patch.object(actual, 'event'):
+            actual.node_update('node-001', status='ready')
+            actual.phase('node-001', 'probe-import', 'probe', ['verify'], module='/fixture/probe')
+        probe = actual.read()['nodes']['node-001']['phase_config']
+        self.assertEqual(probe['server_workers'], 0)
         self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
 
     def test_shared_check_generator_remains_lazy_and_finite_queues_prioritize_independent_checks(self):

@@ -598,3 +598,41 @@ test('sequential CI propagates a failed lane before starting the next one', asyn
   );
   assert.deepEqual(calls, ['rustTest']);
 });
+
+test('HTTP runtime width is opt-in and reaches native service and JS integration', async () => {
+  for (const width of [0, 32]) {
+    const pipeline = new AtomicServer(source(), '', 0, 0, '', width);
+    pipeline.rustBuild = () => makeChain('binary-build');
+    pipeline.rustBuildSlim = () => makeChain('slim-binary');
+    pipeline.wasmBuild = () => makeChain('wasm');
+    for (const run of [
+      () => pipeline.atomicService(true, 'width-test'),
+      () =>
+        pipeline.atomicServiceFromBinary(
+          makeChain('verified-binary'),
+          true,
+          'width-test',
+        ),
+      () => pipeline.jsTestIntegration(),
+    ]) {
+      resetCalls();
+      await run();
+      const overrides = recordedCalls().filter(
+        ([name, key]) =>
+          name === 'withEnvVariable' && key === 'ATOMIC_HTTP_WORKERS',
+      );
+      assert.deepEqual(
+        overrides,
+        width ? [['withEnvVariable', 'ATOMIC_HTTP_WORKERS', '32']] : [],
+      );
+    }
+  }
+  for (const width of [-1, 129, 1.5, NaN, Infinity]) {
+    resetCalls();
+    assert.throws(
+      () => new AtomicServer(source(), '', 0, 0, '', width),
+      /http-workers/,
+    );
+    assert.deepEqual(recordedCalls(), []);
+  }
+});

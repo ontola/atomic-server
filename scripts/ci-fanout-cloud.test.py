@@ -175,6 +175,18 @@ class CloudTests(unittest.TestCase):
         self.config['fanout_config'].pop('check_only')
         self.assertNotIn('validation_scope', cloud.status_snapshot(self.config))
 
+    def test_observed_worker_budget_survives_status_and_retained_summary(self):
+        budget = {'profile': '64-core', 'profile_vcpus': 64,
+                  'playwright_workers_per_host': 24, 'http_workers_requested': 32}
+        path = Path(self.config['fanout_config']['runtime_dir']) / 'state.json'
+        cloud.write_json(path, {'source_commit': SHA, 'status': 'passed', 'plan': {'worker_budget': budget}, 'nodes': {}})
+        self.assertEqual(cloud.status_snapshot(self.config)['worker_budget'], budget)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'validate_cached_bundles', return_value=[]):
+            cloud.persist_evidence(self.config, final=True)
+        summary = cloud.read_json(Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key'] / 'cloud-summary.json')
+        self.assertEqual(summary['worker_budget'], budget)
+
     def test_valid_configuration_retains_original_deadline_and_three_worker_scope(self):
         result = cloud.validate_config(copy.deepcopy(self.config))
         self.assertEqual(result['deadline'], self.config['deadline'])
@@ -1055,6 +1067,30 @@ class LauncherTests(unittest.TestCase):
         self.assertAlmostEqual(plan['hourly_usd'], 4.5415)
         self.assertEqual(remote_configs[0]['fanout_config']['check_only'], 'flutter-test')
         self.assertEqual(remote_configs[0]['fanout_config']['accounts'][0]['nodes'], 3)
+        self.assertEqual(self.api.creates, [])
+
+    def test_core_profile_is_frozen_into_remote_config_and_public_plan(self):
+        self.config['worker_profile'] = '64-core'
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        remote_configs = []
+        remote = self.controller.remote_config
+        def record(state=None):
+            value = remote(state)
+            remote_configs.append(value)
+            return value
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
+                mock.patch.object(self.controller, 'remote_config', side_effect=record):
+            plan = self.controller.plan()
+        self.assertEqual(plan['worker_budget'], {'profile': '64-core', 'profile_vcpus': 64,
+                         'playwright_workers_per_host': 24, 'http_workers_requested': 32})
+        self.assertEqual((remote_configs[0]['fanout_config']['workers'], remote_configs[0]['fanout_config']['server_workers']), (24, 32))
+        self.assertAlmostEqual(plan['hourly_usd'], 4.5415)
+        self.assertEqual(self.api.creates, [])
+        self.config['worker_profile'] = '32-core'
+        controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
+                self.assertRaisesRegex(ValueError, 'machine size'):
+            controller.plan()
         self.assertEqual(self.api.creates, [])
 
     def test_one_hour_plan_accepts_a_realistically_ticking_clock(self):
