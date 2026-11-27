@@ -497,6 +497,9 @@ export default defineConfig(({ mode }) => {
             // just park ~6MB per generation that nothing ever reads. The
             // runtimeCaching rule below still caches them (keyed by the full
             // versioned url), so offline use is unaffected after first load.
+            // webfontDownload emits local hashed font files. Keep Workbox's
+            // default asset types and cache these too for offline reloads.
+            globPatterns: ['**/*.{js,wasm,css,html,woff,woff2}'],
             globIgnores: ['**/index.html', '**/wasm/**'],
             // Purge precache entries from prior builds on SW activation, so a
             // stale worker/wasm can never linger after the hashed names change.

@@ -597,6 +597,16 @@ independence, power-loss survival, current retention, blobs or complete recovery
 The Node/WASM outbox integration suite also checks that the real memory backend
 returns no persistent replica identity.
 
+The required-local-write integration cases use `tests/file-client-db.ts`, a
+test-only filesystem checkpoint around the actual WASM memory engine. Snapshot,
+projection and complete observed-agent outbox mutations acknowledge only after
+file fsync, atomic rename and directory fsync. Actual-WASM controls reopen an
+independent engine, retain the previous checkpoint after failed fsync, reject a
+required genesis before POST, and cover deletes, clears, blobs, imports, envelopes,
+receipt acceptance and isolated reader spies. Unknown mutation APIs reject.
+This fixture does not change production NodeClientDb's memory-only capability,
+issue a durable replica identity, or persist raw Vault-internal test setup.
+
 `browser/lib/src/webrtc-transport.test.ts` covers frame fragmentation/order,
 backpressure and cancellation, bounded queues, caller buffer ownership, malformed
 input and close behavior. `browser/e2e/scripts/verify-webrtc.mjs` establishes real
@@ -747,6 +757,15 @@ and identical normalized scheduler/watchdog configuration. These are fake-host
 and pure protocol tests: actual Docker/WebKitGTK/MinIO/Vault execution and native
 renderer acceptance are still required before claiming the supplemental matrix
 passed. Public `CHECKS` retains all ten lanes.
+
+`desktop/scripts/native-recovery/minio-bootstrap.test.py` executes the actual
+MinIO Dockerfile bootstrap command with isolated fake Go/Git executors. It
+checks dependency download before a single build, recovery after two download
+failures, stopping after three persistent failures, and rejecting changed
+module checksums. Only dependency downloads are retried; the pinned source,
+Go checksum validation, build and test failures retain their normal gates.
+This controls shell behavior without performing a network download or Docker
+build; a real native environment build remains required acceptance evidence.
 
 Core-aware worker regressions exercise opt-in 64-core (32 HTTP/24 Playwright)
 and 32-core (16/12) profiles, independent explicit overrides, invalid widths,
@@ -1975,6 +1994,16 @@ revision-cache tests require fresh presence/revision checks and rehash changed
 content. The browser attachment journey deliberately acknowledges a blob PUT
 without storing its bytes, requires red with the real confirmation endpoint,
 then uploads the bytes and waits for a confirmed copy.
+
+Concurrent confirmation controls use actual KV mutations during the flush:
+`lib/src/sync/confirmation.rs` and the real Actix route test require no proof
+for a changed storage token, while authentication and storage failures retain
+their error statuses. `confirmDriveCopy.test.ts` checks an empty 204 cannot
+become a receipt and a later stable exact-hash proof can. A focused real-browser
+stress run also overlaps signed confirmations with acknowledged unrelated writes;
+that targeted pass does not substitute for the complete browser inventory.
+`driveProtection.test.ts` checks explicit browser offline state suppresses usage
+requests, preserves historical evidence and performs fresh verification online.
 
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
@@ -3748,6 +3777,13 @@ the persisted replay baseline is rewound, the resend imports without missing
 Loro dependencies, both old and new edits survive, and the pending entry clears.
 This controls the worker persistence boundary; it does not prove crash survival
 of a real OPFS database or reproduce the separate first-Share Agent flake #2688.
+
+`browser/lib/src/online-durable-seed.test.ts` uses the actual ClientDbWorker
+opening/seeding boundary with controlled backend completion. Genesis and later
+queued writes must checkpoint before delivery while unrelated seeding remains
+pending; a failed opening must preserve queued state and send no commit. This
+complements the broader Store/outbox regressions rather than proving filesystem
+or OPFS crash survival.
 
 Bundled defaults startup: `lib/tests/defaults_offline.rs` imports the production
 bundled JSON into a fresh base-model Store whose missing-resource fetches are

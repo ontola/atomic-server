@@ -17,7 +17,7 @@ import { LoroDoc } from 'loro-crdt';
 import { Agent } from '../src/agent.js';
 import { JSCryptoProvider } from '../src/CryptoProvider.js';
 import { Store } from '../src/store.js';
-import { NodeClientDb } from '../src/client-db.node.js';
+import { fileClientDb, disposeFileClientDbs } from './file-client-db.js';
 import type { ClientDbWorker } from '../src/client-db.js';
 import { core } from '../src/ontologies/core.js';
 import { agentPublicKey, agentSubject } from '../src/subject.js';
@@ -75,13 +75,17 @@ describe('agent profile and a hosted drive', () => {
       await new JSCryptoProvider(keys.privateKey).getPublicKey(),
     );
     const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
-    const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+    const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
     await clientDb.init();
     const store = new Store({ serverUrl: node.serverUrl, agent });
     store.setClientDb(clientDb as unknown as ClientDbWorker);
     openStores.push(store);
     await store.waitForServerConnected(10_000);
-    for (let i = 0; i < 50 && store.getDefaultWebSocket()?.readyState !== 1; i++)
+    for (
+      let i = 0;
+      i < 50 && store.getDefaultWebSocket()?.readyState !== 1;
+      i++
+    )
       await delay(100);
 
     // Onboarding on an origin without a node: everything stays local.
@@ -98,7 +102,7 @@ describe('agent profile and a hosted drive', () => {
     return { store, did, agent, drive };
   }
 
-  it('never replaces a local profile with the node\'s bare agent document', async () => {
+  it("never replaces a local profile with the node's bare agent document", async () => {
     const keys = await Agent.generateKeyPair();
     const did = agentSubject(
       await new JSCryptoProvider(keys.privateKey).getPublicKey(),
@@ -132,7 +136,7 @@ describe('agent profile and a hosted drive', () => {
     );
 
     // Device one holds the real profile locally and then talks to the node.
-    const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+    const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
     await clientDb.init();
     const store = new Store({ serverUrl: node.serverUrl, agent });
     store.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -178,7 +182,7 @@ describe('agent profile and a hosted drive', () => {
       await new JSCryptoProvider(keys.privateKey).getPublicKey(),
     );
     const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
-    const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+    const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
     await clientDb.init();
     const store = new Store({ serverUrl: node.serverUrl, agent });
     store.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -201,7 +205,10 @@ describe('agent profile and a hosted drive', () => {
     const stub = new LoroDoc();
     const props = stub.getMap('properties');
     props.set(core.properties.publicKey, agentPublicKey(did) ?? '');
-    props.set(core.properties.read, 'https://atomicdata.dev/agents/publicAgent');
+    props.set(
+      core.properties.read,
+      'https://atomicdata.dev/agents/publicAgent',
+    );
     stub.commit();
     store.applyIncoming({
       subject: did,
@@ -252,7 +259,7 @@ describe('agent profile and a hosted drive', () => {
 
       // Device one, next session: its drive is already hosted, its agent is
       // still registered local-only, and it now talks to that node.
-      const clientDb = new NodeClientDb({
+      const clientDb = fileClientDb({
         wasmPath,
         baseUrl: other.serverUrl,
       });
@@ -271,7 +278,11 @@ describe('agent profile and a hosted drive', () => {
       await rejoin.publishAgentProfile();
 
       const otherViewer = await Agent.fromSecret(other.agentSecret);
-      const otherStore = new Store({ serverUrl: other.serverUrl, agent: otherViewer, connect: false });
+      const otherStore = new Store({
+        serverUrl: other.serverUrl,
+        agent: otherViewer,
+        connect: false,
+      });
       openStores.push(otherStore);
       expect(
         await nameOnServer(other.serverUrl, otherViewer, did, 'Jo Healed'),
@@ -286,3 +297,5 @@ describe('agent profile and a hosted drive', () => {
     }
   }, 180_000);
 });
+
+afterAll(disposeFileClientDbs);

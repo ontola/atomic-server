@@ -55,8 +55,16 @@ test.describe('sidebar drive sync', () => {
     );
     await syncButton.click();
     await expect(
-      page.getByRole('heading', { name: 'Sync', exact: true }),
+      page.getByRole('heading', { name: 'Settings', exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText('Sync & devices', { exact: true }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(
+      url =>
+        url.pathname === '/app/settings' &&
+        url.searchParams.get('section') === 'sync',
+    );
     await expect(
       page.getByText('Only on this device', { exact: true }),
     ).toBeVisible();

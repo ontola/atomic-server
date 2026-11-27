@@ -223,6 +223,15 @@ test('resource confirmations survive offline reloads without confirming a newer 
   }, subject);
   expect(serverConfirmedAt).toEqual(expect.any(Number));
 
+  // Finish requesting each real font face before cutting the network. A
+  // delayed optional weight must not first be downloaded during offline reload.
+  await page.evaluate(async () => {
+    const downloads: Promise<FontFace>[] = [];
+    document.fonts.forEach(face => downloads.push(face.load()));
+    await Promise.all(downloads);
+    await document.fonts.ready;
+  });
+
   await page.evaluate(() => window.store.disconnect());
   await expect
     .poll(() =>

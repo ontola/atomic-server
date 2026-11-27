@@ -1,9 +1,10 @@
 # Unified persistence and copy evidence
 
-Status: draft PR #2621, rebased on develop
-`fb640fb54657ef826db8ec7ca55e24587faab1da` on 26 November 2026. The PR includes
-the unmerged persistence prerequisites and unified evidence refactor. Source
-PR branches remain intact; final acceptance and merge belong to trekmeester.
+Status: draft PR #2621, integrated with develop
+`2d096d0bdd62df28741a15092dec8efb6704d66d` on 27 November 2026 and the CI runner
+from #2685. The PR includes the persistence prerequisites and unified evidence
+refactor. Source PR branches remain intact. The merger has user authorization
+to merge only after complete validation and an unchanged develop tip.
 
 ## Contract
 
@@ -210,3 +211,51 @@ embed.
 
 [#2628](https://github.com/ontola/atomic-server/pull/2628) already brought
 #2561, #2567 and #2568 into develop.
+
+
+## Integration repairs, 27 November 2026
+
+The DO attempt on `61f6c4039a558e2195574cf6bc70f967fac959cb` did not pass.
+Seven public checks passed; Rust, Flutter and JavaScript integration failed.
+The first browser round had 147 passes, 251 unexpected failures and 13 skips;
+the final failed-only retry did not complete. Native/private gates were not
+completed. These results are diagnostic evidence, not merge acceptance.
+
+- [x] Preserve completed independent failures and run nextest without fail-fast.
+- [x] Correct the two Flutter fixture calls for the encrypted-store API and the
+  stale optional-replica capability expectation without relaxing production
+  receipt eligibility.
+- [x] Reproduce open/seed initialization races using the actual client worker;
+  wait for database opening before required snapshot/outbox persistence.
+- [x] Reproduce healthy concurrent writes during confirmation. Return an empty
+  no-store 204 with no receipt for an unstable token; preserve real auth and
+  storage errors. Actual signed-route and busy-browser controls pass.
+- [x] Repair the native workspace dependency closure and bound transient MinIO
+  module downloads without retrying builds or acceptance tests.
+- [x] Preserve complete trace paths while deduplicating immutable attachments;
+  stream archive hashes and independently validate scoped metadata collection.
+- [x] Integrate develop's default vocabulary ordering and container fixture
+  mount, removing only identical vocabulary duplicates introduced by Git's
+  automatic merge.
+- [x] Finish independent review and actual reopen/failure controls for the
+  test-only filesystem-backed Node integration fixture. The production
+  in-memory Node database must remain non-durable.
+- [x] Validate the narrow offline usage guard and canonical settings fixtures
+  against a matching rebuilt frontend, keeping strict browser diagnostics.
+- [ ] Complete clean-source native/private acceptance and full DO CI; verify
+  develop again before merging. No changed-source pass is inferred from caches
+  or earlier test receipts.
+
+All temporary resources from the failed attempt were independently verified
+deleted. The previously authorized regional build/report volume remains
+detached. Costs, private pins and raw operator receipts stay outside Git.
+
+Current working-tree preflight: all 27 formerly affected integration cases pass;
+the complete JavaScript integration suite passes 50 cases with one unchanged
+existing skip. Five focused browser journeys pass without retries/skips and
+with strict diagnostics; a busy confirmation journey observes 96 HTTP 200 and
+32 empty 204 responses, no 503s, and eventual confirmation. Actual offline
+reload exposed missing local-font precaching; the cache now includes the
+already-shipped fonts and the former failure passes without raising its warning
+allowance. Release embed remains within the 1,000,000-byte first-use gzip budget.
+These are source-bound local repairs, not a full clean-commit DO result.

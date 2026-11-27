@@ -1,9 +1,8 @@
 /**
- * The browser outbox stored in the real WASM client database (`Tree::Outbox`
- * in redb, in memory here), with no server: an offline edit, create and
- * delete survive a "reload" (a second Store on the same database), drain on
- * reconnect, and a queue an older build left in localStorage moves into the
- * database.
+ * Real WASM resource/outbox rows with a test-owned fsync+rename checkpoint.
+ * Reload cases destroy the first WASM database and restore an independent one
+ * from that file. Separate memory-only negatives preserve the production
+ * NodeClientDb contract: required local saves must reject without durability.
  */
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -12,11 +11,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Agent } from '../src/agent.js';
 import type { ClientDbWorker } from '../src/client-db.js';
 import { NodeClientDb } from '../src/client-db.node.js';
-import type { Commit } from '../src/commit.js';
+import { parseCommitJSON, type Commit } from '../src/commit.js';
 import { JSCryptoProvider } from '../src/CryptoProvider.js';
 import { core } from '../src/ontologies/core.js';
 import { server } from '../src/ontologies/server.js';
-import { Store } from '../src/store.js';
+import { Store, StoreEvents } from '../src/store.js';
+import {
+  fileClientDb,
+  closeFileClientDb,
+  disposeFileClientDbs,
+  readFileCheckpoint,
+} from './file-client-db.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const wasmPath = path.resolve(here, '../../../wasm/pkg/atomic_wasm_bg.wasm');
@@ -27,11 +32,11 @@ let db: NodeClientDb;
 beforeAll(async () => {
   // No server in these tests: keep the Store from opening a socket.
   localStorage.setItem('ws-disconnected', '1');
-  db = new NodeClientDb({ wasmPath });
+  db = fileClientDb({ wasmPath });
   await db.init(SERVER);
 });
 
-afterAll(() => db.destroy());
+afterAll(disposeFileClientDbs);
 
 it('does not advertise a persistent replica identity from the real WASM memory backend', async () => {
   expect(await db.getReplicaIdentity('atomic:memory-replica')).toBeUndefined();
@@ -47,7 +52,7 @@ async function newAgent(): Promise<Agent> {
 }
 
 /** A tab signed in as `agent` on the shared database; commits go to a spy. */
-async function tab(agent: Agent, connected: boolean) {
+async function tab(agent: Agent, connected: boolean, database = db) {
   const store = new Store({ serverUrl: SERVER });
   store.setServerConnected(connected);
   store.setAgent(agent);
@@ -74,7 +79,7 @@ async function tab(agent: Agent, connected: boolean) {
   store.injectFetch(async () => {
     throw new Error('network disabled');
   });
-  store.setClientDb(db as unknown as ClientDbWorker);
+  store.setClientDb(database as unknown as ClientDbWorker);
   await store.outbox.whenHydrated();
 
   return { store, posted };
@@ -90,27 +95,34 @@ describe('outbox in the WASM client database', () => {
   it.each([false, true])(
     'does not claim durable local storage for a memory-backed save (local-only: %s)',
     async localOnly => {
-      const { store, posted } = await tab(await newAgent(), false);
-      const doc = await store.newResource({
-        isA: server.classes.drive,
-        noParent: true,
-        propVals: { [core.properties.name]: 'Memory-backed edit' },
-      });
-      if (localOnly) store.registerLocalOnlyDrive(doc.subject);
+      const memory = new NodeClientDb({ wasmPath });
+      await memory.init(SERVER);
+      const { store, posted } = await tab(await newAgent(), false, memory);
+      const receipts: unknown[] = [];
+      store.on(StoreEvents.SaveReceipt, receipt => receipts.push(receipt));
 
-      const receipt = await doc.saveWithReceipt();
-      await db.flush();
-      const stored = await db.getResourceWithSnapshot(doc.subject);
-
-      expect(receipt.status).toBe(localOnly ? 'persisted' : 'offline');
-      expect(receipt.subject).toBe(doc.subject);
-      expect(receipt.local).toBeUndefined();
-      expect(receipt.server).toBeUndefined();
-      expect(JSON.parse(stored.jsonAd!)[core.properties.name]).toBe(
-        'Memory-backed edit',
-      );
-      expect(stored.snapshot?.length).toBeGreaterThan(0);
-      expect(posted).toHaveLength(0);
+      try {
+        const doc = await store.newResource({
+          isA: server.classes.drive,
+          noParent: true,
+          propVals: { [core.properties.name]: 'Memory-backed edit' },
+        });
+        if (localOnly) store.registerLocalOnlyDrive(doc.subject);
+        await expect(doc.saveWithReceipt()).rejects.toThrow(
+          'Changes could not be saved on this device',
+        );
+        expect(memory.supportsDurablePersistence).toBe(false);
+        expect(receipts).toEqual([]);
+        expect(posted).toHaveLength(0);
+        if (!localOnly)
+          expect(
+            store.outbox.getEntry(doc.subject)?.signedGenesis,
+          ).toBeDefined();
+      } finally {
+        store.setServerConnected(false);
+        await store.outbox.flush();
+        memory.destroy();
+      }
     },
   );
 
@@ -136,6 +148,9 @@ describe('outbox in the WASM client database', () => {
     expect(rows.map(r => r.subject)).toEqual([doc.subject]);
     expect(typeof rows[0].baseVersion).toBe('string');
 
+    await closeFileClientDb(db);
+    db = fileClientDb({ wasmPath }, db);
+    await db.init(SERVER);
     const second = await tab(agent, false);
     expect(second.store.outbox.getEntry(doc.subject)?.baseVersion).toBe(
       rows[0].baseVersion,
@@ -178,12 +193,28 @@ describe('outbox in the WASM client database', () => {
     const bySubject = new Map(rows.map(r => [r.subject, r]));
     expect(bySubject.get(created.subject)?.signedGenesis).toBeTruthy();
     expect(bySubject.get(doomed.subject)?.signedDestroy).toBeTruthy();
+    expect(
+      parseCommitJSON(
+        JSON.stringify(bySubject.get(doomed.subject)!.signedDestroy),
+      ).destroy,
+    ).toBe(true);
 
-    const second = await tab(agent, true);
+    const checkpoint = await readFileCheckpoint(db);
+    expect(
+      checkpoint.outboxes.flatMap(([, values]) =>
+        values.map(value => JSON.parse(value)),
+      ),
+    ).toContainEqual(bySubject.get(doomed.subject));
+    await closeFileClientDb(db);
+    db = fileClientDb({ wasmPath }, db);
+    await db.init(SERVER);
+    expect(await queued(agent)).toEqual(rows);
+    const second = await tab(agent, false);
     expect(
       second.store.outbox.getEntry(created.subject)?.signedGenesis,
     ).toBeTruthy();
     expect(second.store.hasPendingDestroy(doomed.subject)).toBe(true);
+    second.store.setServerConnected(true);
     await second.store.syncDirtyResources();
 
     const sent = second.posted.map(c => ({

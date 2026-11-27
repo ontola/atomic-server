@@ -4,8 +4,8 @@
  * Device 1 signs up, types a name, and gets a private drive. The profile lives
  * on the agent resource, which is nobody's child, so the vault export only
  * carries it because the drive grants the agent `read`/`write`. This runs the
- * browser's real order of events with a real (in-memory) wasm ClientDb on both
- * devices and no server: it is exactly the hosted, node-less case, where the
+ * browser's real order of events with real WASM ClientDbs and test-owned resource/outbox filesystem
+ * checkpoints on both devices and no server: it is exactly the hosted, node-less case, where the
  * backup is the only way the profile can reach device 2.
  */
 
@@ -18,7 +18,8 @@ import { startServer, type ServerHandle } from './server-fixture.js';
 import { Agent } from '../src/agent.js';
 import { JSCryptoProvider } from '../src/CryptoProvider.js';
 import { Store } from '../src/store.js';
-import { NodeClientDb } from '../src/client-db.node.js';
+import type { NodeClientDb } from '../src/client-db.node.js';
+import { fileClientDb, disposeFileClientDbs } from './file-client-db.js';
 import type { ClientDbWorker } from '../src/client-db.js';
 import { core } from '../src/ontologies/core.js';
 import { conversations } from '../src/ontologies/conversations.js';
@@ -33,7 +34,7 @@ const DEVICE = '03'.repeat(32);
 const openStores: Store[] = [];
 
 async function deviceFor(agent: Agent) {
-  const clientDb = new NodeClientDb({ wasmPath, baseUrl: SERVER });
+  const clientDb = fileClientDb({ wasmPath, baseUrl: SERVER });
   await clientDb.init();
   const store = new Store({ serverUrl: SERVER, agent, connect: false });
   store.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -123,37 +124,53 @@ describe('Cloud Vault restore and the agent profile', () => {
   it.each([
     ['the current spelling', (pk: string) => `atomic:agent:${pk}`],
     ['the legacy spelling', (pk: string) => `did:ad:agent:${pk}`],
-  ])('reads the restored profile under %s of the agent subject', async (_n, spell) => {
-    const keys = await Agent.generateKeyPair();
-    const pk = await new JSCryptoProvider(keys.privateKey).getPublicKey();
-    const did = agentSubject(pk);
-    const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
+  ])(
+    'reads the restored profile under %s of the agent subject',
+    async (_n, spell) => {
+      const keys = await Agent.generateKeyPair();
+      const pk = await new JSCryptoProvider(keys.privateKey).getPublicKey();
+      const did = agentSubject(pk);
+      const agent = new Agent(new JSCryptoProvider(keys.privateKey), did);
 
-    const one = await deviceFor(agent);
-    one.store.registerLocalOnlyDrive(did);
-    const profile = one.store.getResourceLoading(did, { newResource: true });
-    await profile.set(core.properties.publicKey, agentPublicKey(did) ?? '');
-    await profile.set(core.properties.isA, [core.classes.agent]);
-    await profile.set(core.properties.name, 'Dana Returning');
-    await profile.save();
-    const drive = await one.store.createDrive("Dana's Drive");
-    await delay(300);
-    await one.clientDb.flush();
-    const key = new Uint8Array(32).fill(5);
-    const out = await raw(one.clientDb).vaultExport(
-      drive.subject, key, 1, PSEUDONYM, DEVICE, 1, 1n, false, undefined, undefined,
-    );
+      const one = await deviceFor(agent);
+      one.store.registerLocalOnlyDrive(did);
+      const profile = one.store.getResourceLoading(did, { newResource: true });
+      await profile.set(core.properties.publicKey, agentPublicKey(did) ?? '');
+      await profile.set(core.properties.isA, [core.classes.agent]);
+      await profile.set(core.properties.name, 'Dana Returning');
+      await profile.save();
+      const drive = await one.store.createDrive("Dana's Drive");
+      await delay(300);
+      await one.clientDb.flush();
+      const key = new Uint8Array(32).fill(5);
+      const out = await raw(one.clientDb).vaultExport(
+        drive.subject,
+        key,
+        1,
+        PSEUDONYM,
+        DEVICE,
+        1,
+        1n,
+        false,
+        undefined,
+        undefined,
+      );
 
-    const signedIn = new Agent(new JSCryptoProvider(keys.privateKey), spell(pk));
-    const two = await deviceFor(signedIn);
-    await two.store.getResource(spell(pk));
-    await raw(two.clientDb).vaultImport(key, 1, PSEUDONYM, DEVICE, [
-      { objectKey: out.objectKey, sealed: out.sealed },
-    ]);
-    await two.store.reloadResource(spell(pk));
-    const after = await two.store.getResource(spell(pk));
-    expect(after.get(core.properties.name)).toBe('Dana Returning');
-  }, 60_000);
+      const signedIn = new Agent(
+        new JSCryptoProvider(keys.privateKey),
+        spell(pk),
+      );
+      const two = await deviceFor(signedIn);
+      await two.store.getResource(spell(pk));
+      await raw(two.clientDb).vaultImport(key, 1, PSEUDONYM, DEVICE, [
+        { objectKey: out.objectKey, sealed: out.sealed },
+      ]);
+      await two.store.reloadResource(spell(pk));
+      const after = await two.store.getResource(spell(pk));
+      expect(after.get(core.properties.name)).toBe('Dana Returning');
+    },
+    60_000,
+  );
 
   it('merges the restored profile into one this device already created', async () => {
     const keys = await Agent.generateKeyPair();
@@ -174,7 +191,16 @@ describe('Cloud Vault restore and the agent profile', () => {
     await one.clientDb.flush();
     const key = new Uint8Array(32).fill(4);
     const out = await raw(one.clientDb).vaultExport(
-      drive.subject, key, 1, PSEUDONYM, DEVICE, 1, 1n, false, undefined, undefined,
+      drive.subject,
+      key,
+      1,
+      PSEUDONYM,
+      DEVICE,
+      1,
+      1n,
+      false,
+      undefined,
+      undefined,
     );
 
     // Device 2 already wrote the agent resource itself, like a first sign-in
@@ -242,7 +268,7 @@ describe('Cloud Vault restore and the agent profile', () => {
       );
 
       // Device 2 is connected to a node that holds nothing of this account.
-      const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+      const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
       await clientDb.init();
       const two = new Store({ serverUrl: node.serverUrl, agent });
       two.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -286,11 +312,20 @@ describe('Cloud Vault restore and the agent profile', () => {
       await one.clientDb.flush();
       const key = new Uint8Array(32).fill(2);
       const out = await raw(one.clientDb).vaultExport(
-        drive.subject, key, 1, PSEUDONYM, DEVICE, 1, 1n, false, undefined, undefined,
+        drive.subject,
+        key,
+        1,
+        PSEUDONYM,
+        DEVICE,
+        1,
+        1n,
+        false,
+        undefined,
+        undefined,
       );
 
       // Hosting the drive on the node makes the node create the bare agent.
-      const hostClientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+      const hostClientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
       await hostClientDb.init();
       const host = new Store({ serverUrl: node.serverUrl, agent });
       host.setClientDb(hostClientDb as unknown as ClientDbWorker);
@@ -309,7 +344,7 @@ describe('Cloud Vault restore and the agent profile', () => {
       await delay(500);
 
       // Device 2 is fresh, restores, then the app relinks the personal drive.
-      const clientDb = new NodeClientDb({ wasmPath, baseUrl: node.serverUrl });
+      const clientDb = fileClientDb({ wasmPath, baseUrl: node.serverUrl });
       await clientDb.init();
       const two = new Store({ serverUrl: node.serverUrl, agent });
       two.setClientDb(clientDb as unknown as ClientDbWorker);
@@ -318,7 +353,11 @@ describe('Cloud Vault restore and the agent profile', () => {
       // EncryptionKeyPublisher, two seconds after the agent is set and before
       // the person has unlocked anything: it writes onto what the node has.
       const early = await two.getResource(did);
-      await early.set(conversations.properties.encryptionKey, 'pubkey-2', false);
+      await early.set(
+        conversations.properties.encryptionKey,
+        'pubkey-2',
+        false,
+      );
       await early.save().catch(() => undefined);
       await raw(clientDb).vaultImport(key, 1, PSEUDONYM, DEVICE, [
         { objectKey: out.objectKey, sealed: out.sealed },
@@ -359,10 +398,19 @@ describe('Cloud Vault restore and the agent profile', () => {
         await one.clientDb.flush();
         const key = new Uint8Array(32).fill(3);
         const out = await raw(one.clientDb).vaultExport(
-          drive.subject, key, 1, PSEUDONYM, DEVICE, 1, 1n, false, undefined, undefined,
+          drive.subject,
+          key,
+          1,
+          PSEUDONYM,
+          DEVICE,
+          1,
+          1n,
+          false,
+          undefined,
+          undefined,
         );
 
-        const clientDb = new NodeClientDb({
+        const clientDb = fileClientDb({
           wasmPath,
           baseUrl: node.serverUrl,
         });
@@ -374,9 +422,14 @@ describe('Cloud Vault restore and the agent profile', () => {
 
         const publish = async () => {
           const resource = await two.getResource(did);
-          await resource.set(conversations.properties.encryptionKey, 'pubkey-1', false);
+          await resource.set(
+            conversations.properties.encryptionKey,
+            'pubkey-1',
+            false,
+          );
           await resource.save().catch(() => undefined);
         };
+
         const restore = async () => {
           await raw(clientDb).vaultImport(key, 1, PSEUDONYM, DEVICE, [
             { objectKey: out.objectKey, sealed: out.sealed },
@@ -406,3 +459,5 @@ describe('Cloud Vault restore and the agent profile', () => {
     );
   });
 });
+
+afterAll(disposeFileClientDbs);

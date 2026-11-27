@@ -7,7 +7,11 @@ import { Agent } from '../src/agent.js';
 import { Store, StoreEvents } from '../src/store.js';
 import { core } from '../src/ontologies/core.js';
 import type { ServerReplicaReceipt } from '../src/server-receipts.js';
-import { NodeClientDb } from '../src/client-db.node.js';
+import {
+  fileClientDb,
+  closeFileClientDb,
+  disposeFileClientDbs,
+} from './file-client-db.js';
 import type { ClientDbWorker } from '../src/client-db.js';
 import { decodeB64 } from '../src/base64.js';
 import { LoroLoader } from '../src/loro-loader.js';
@@ -136,7 +140,7 @@ describe('automatic storage receipts against a real server', () => {
         path.dirname(fileURLToPath(import.meta.url)),
         '../../../wasm/pkg/atomic_wasm_bg.wasm',
       );
-      const db = new NodeClientDb({ wasmPath, baseUrl: server.serverUrl });
+      let db = fileClientDb({ wasmPath, baseUrl: server.serverUrl });
       await db.init();
       const agent = await Agent.fromSecret(server.agentSecret);
       const first = new Store({ serverUrl: server.serverUrl, agent });
@@ -166,6 +170,10 @@ describe('automatic storage receipts against a real server', () => {
         const queuedVersion = queuedDoc.version().toJSON();
         queuedDoc.free();
         first.disconnect();
+        first.setServerConnected(false);
+        await closeFileClientDb(db);
+        db = fileClientDb({ wasmPath, baseUrl: server.serverUrl }, db);
+        await db.init();
 
         second = new Store({ serverUrl: server.serverUrl, agent });
         second.setClientDb(db as unknown as ClientDbWorker);
@@ -247,7 +255,7 @@ describe('automatic storage receipts against a real server', () => {
       path.dirname(fileURLToPath(import.meta.url)),
       '../../../wasm/pkg/atomic_wasm_bg.wasm',
     );
-    const db = new NodeClientDb({ wasmPath, baseUrl: server.serverUrl });
+    const db = fileClientDb({ wasmPath, baseUrl: server.serverUrl });
     await db.init();
     const agent = await Agent.fromSecret(server.agentSecret);
     const observer = new Store({ serverUrl: server.serverUrl, agent });
@@ -325,7 +333,7 @@ describe('automatic storage receipts against a real server', () => {
       path.dirname(fileURLToPath(import.meta.url)),
       '../../../wasm/pkg/atomic_wasm_bg.wasm',
     );
-    const db = new NodeClientDb({ wasmPath, baseUrl: server.serverUrl });
+    const db = fileClientDb({ wasmPath, baseUrl: server.serverUrl });
     await db.init();
     const agent = await Agent.fromSecret(server.agentSecret);
     const store = new Store({ serverUrl: server.serverUrl, agent });
@@ -416,3 +424,5 @@ describe('automatic storage receipts against a real server', () => {
     }
   });
 });
+
+afterAll(disposeFileClientDbs);
