@@ -840,6 +840,8 @@ test.describe('data-browser', async () => {
   test('import', async ({ page }) => {
     await newResource('folder', page);
     await contextMenuClick('import', page);
+    // The importer opens on "Web page or text" since #2695.
+    await page.getByRole('tab', { name: 'JSON-AD' }).click();
 
     const parentSubject = await page.getByLabel('Target Parent').inputValue();
 
