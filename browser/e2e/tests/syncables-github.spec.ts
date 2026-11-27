@@ -991,13 +991,18 @@ async function sync(page: Page, rule?: string) {
   await selectFilter(page, rule);
   await selectView(page, 'Sync');
   const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
-  await expect(
-    iframe.getByRole('button', { name: 'Sync now', exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
-  await iframe.getByRole('button', { name: 'Sync now', exact: true }).click();
-  await expect(
-    iframe.getByRole('button', { name: 'Sync now', exact: true }),
-  ).toBeEnabled({ timeout: 60_000 });
+  const lastSync = iframe.getByText(
+    /^(Last completed sync for this filter:|This filter has not completed a sync yet\.)/,
+  );
+  await expect(lastSync).toBeVisible({ timeout: 30_000 });
+  const previousSync = await lastSync.textContent();
+  const syncNow = iframe.getByRole('button', { name: 'Sync now', exact: true });
+  await syncNow.click();
+  // Starting a worker and updating this frame are asynchronous. The same
+  // button can still be enabled before the worker enters its running state.
+  await expect(lastSync).not.toHaveText(previousSync!, { timeout: 60_000 });
+  await expect(lastSync).toHaveText(/^Last completed sync for this filter:/);
+  await expect(syncNow).toBeEnabled({ timeout: 60_000 });
   await expect(iframe.getByRole('alert')).toHaveCount(0);
 
   return iframe;
@@ -2892,27 +2897,16 @@ test.describe('catalog-driven built-in Syncables', () => {
 
     await contextMenuClick('trash', page);
     await waitForSynced(page);
-    browserDiagnostics.expect(
-      'error',
-      /Failed to load resource:.*404/,
-      'Trash displays the App class list as a single class URL.',
-      1,
-      /^https:\/\/atomicdata\.dev\/classes\/Table,atomic:/,
-      { optional: true },
-    );
-    browserDiagnostics.expect(
-      'error',
-      /^https:\/\/atomicdata\.dev\/classes\/Table,atomic:.*Resource not found/,
-      'The SDK reports the same Trash class lookup.',
-      1,
-      undefined,
-      { optional: true },
-    );
     await clickAccountMenuItem(page, 'Trash');
-    await page
+    const trashedAppName = { name: 'GitHub · Public', exact: true };
+    const trashedRow = page
       .getByRole('main')
-      .getByRole('link', { name: 'GitHub · Public', exact: true })
-      .click();
+      .getByRole('row')
+      .filter({ has: page.getByRole('link', trashedAppName) });
+    await expect(
+      trashedRow.getByRole('link', { name: /^table$/i }),
+    ).toBeVisible();
+    await trashedRow.getByRole('link', trashedAppName).click();
     await expect(page.getByRole('main')).toHaveAttribute(
       'about',
       original[0].subject,

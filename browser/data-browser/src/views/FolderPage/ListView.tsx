@@ -1,10 +1,10 @@
 import {
   core,
   Resource,
+  useArray,
   useCreatedBy,
   useCreatedAt,
   useResource,
-  useString,
   useTitle,
 } from '@tomic/react';
 
@@ -95,11 +95,11 @@ function Created({ resource }: CellProps): JSX.Element {
 }
 
 function ClassType({ resource }: CellProps): JSX.Element {
-  const [classType] = useString(resource, core.properties.isA);
+  const [[classType]] = useArray(resource, core.properties.isA);
   const classTypeResource = useResource(classType);
   const [title] = useTitle(classTypeResource);
 
-  if (resource.loading) {
+  if (resource.loading || !classType) {
     return <LinkWrapper></LinkWrapper>;
   }
 

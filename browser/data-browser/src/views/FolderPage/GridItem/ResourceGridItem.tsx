@@ -2,8 +2,8 @@ import {
   core,
   dataBrowser,
   server,
+  useArray,
   useResource,
-  useString,
   useTitle,
 } from '@tomic/react';
 import { useCallback, useMemo, type JSX } from 'react';
@@ -52,7 +52,7 @@ export function ResourceGridItem({
   const resource = useResource(subject);
   const [title] = useTitle(resource);
 
-  const [classTypeSubject] = useString(resource, core.properties.isA);
+  const [[classTypeSubject]] = useArray(resource, core.properties.isA);
   const classType = useResource(classTypeSubject);
   const [classTypeName] = useTitle(classType);
 
@@ -69,7 +69,7 @@ export function ResourceGridItem({
     return getResourceRenderer(classTypeSubject ?? '');
   }, [classTypeSubject]);
 
-  if (classTypeSubject === undefined) {
+  if (resource.loading && classTypeSubject === undefined) {
     return <Loader />;
   }
 
@@ -87,7 +87,7 @@ export function ResourceGridItem({
         <GridCard subject={transitionSubject}>
           <ClassBanner>
             <ResourceGlyph resource={resource} />
-            <span>{classTypeName}</span>
+            {classTypeSubject && <span>{classTypeName}</span>}
           </ClassBanner>
           <ErrorBoundary FallBackComponent={GridItemError}>
             <Resource resource={resource} />
