@@ -23,41 +23,55 @@ const createOllamaProvider = (ollamaUrl: string) => {
   });
 };
 
-export function useGetModel(): (
+export interface ModelSettings {
+  openRouterApiKey: string | undefined;
+  ollamaEndpoint: string | undefined;
+  openRouterZdr: boolean;
+  isProviderAvailable: (provider: AIProvider) => boolean;
+}
+
+/** Builds the model for an identifier from the AI settings. Not a hook. */
+export function resolveModel(
   identifier: AIModelIdentifier,
-) => LanguageModel | undefined {
-  const {
+  {
     openRouterApiKey,
     ollamaEndpoint,
     isProviderAvailable,
     openRouterZdr,
-  } = useAISettings();
+  }: ModelSettings,
+): LanguageModel | undefined {
+  if (!isProviderAvailable(identifier.provider)) {
+    return undefined;
+  }
 
-  return (identifier: AIModelIdentifier): LanguageModel | undefined => {
-    if (!isProviderAvailable(identifier.provider)) {
+  if (identifier.provider === AIProvider.Hosted)
+    return createHostedModel(identifier.id);
+
+  if (identifier.provider === AIProvider.OpenRouter) {
+    if (!openRouterApiKey) {
       return undefined;
     }
 
-    if (identifier.provider === AIProvider.Hosted)
-      return createHostedModel(identifier.id);
+    return createOpenRouterProvider(
+      openRouterApiKey,
+      openRouterZdr,
+    )(identifier.id);
+  }
 
-    if (identifier.provider === AIProvider.OpenRouter) {
-      if (!openRouterApiKey) {
-        return undefined;
-      }
-
-      return createOpenRouterProvider(
-        openRouterApiKey,
-        openRouterZdr,
-      )(identifier.id);
+  if (identifier.provider === AIProvider.Ollama) {
+    if (!ollamaEndpoint) {
+      return undefined;
     }
 
-    if (identifier.provider === AIProvider.Ollama) {
-      if (!ollamaEndpoint) {
-        return undefined;
-      }
+    return createOllamaProvider(ollamaEndpoint)(identifier.id);
+  }
+}
 
-      return createOllamaProvider(ollamaEndpoint)(identifier.id);
-    }
-  };
+export function useGetModel(): (
+  identifier: AIModelIdentifier,
+) => LanguageModel | undefined {
+  const settings = useAISettings();
+
+  return (identifier: AIModelIdentifier): LanguageModel | undefined =>
+    resolveModel(identifier, settings);
 }

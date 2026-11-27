@@ -26,10 +26,27 @@ export interface ImportProposal {
   sourceUrl?: string;
   /** Why this proposal looks the way it does, for the UI to say out loud. */
   detected: {
-    source: 'json-ld' | 'opengraph' | 'page' | 'text' | 'url';
+    source: 'json-ld' | 'opengraph' | 'page' | 'text' | 'url' | 'ai';
     /** The schema.org type that was found, whether or not a class fits it. */
     schemaType?: string;
   };
+  /** Set when a model filled the proposal; see `extractWithModel`. */
+  ai?: {
+    /** The model's one-line reason for the class. */
+    reason: string;
+    /** Values the model gave that failed validation, and why. */
+    dropped: Array<{ property: string; reason: string }>;
+    /** Required properties still empty. */
+    missing: string[];
+  };
+}
+
+/** Whether the deterministic result is weak enough to offer AI extraction. */
+export function offersAiExtraction(proposal: ImportProposal): boolean {
+  return (
+    proposal.class === dataBrowser.classes.bookmark ||
+    proposal.detected.source === 'text'
+  );
 }
 
 const ARTICLE_TYPES = new Set([
@@ -300,7 +317,7 @@ function bookmark(
   };
 }
 
-function withIdentity(
+export function withIdentity(
   propvals: Record<string, JSONValue>,
   sourceUrl: string | undefined,
 ): Record<string, JSONValue> {
