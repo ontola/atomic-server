@@ -43,9 +43,13 @@ export function CommitDetail({
 
   return (
     <Detail>
-      {createdBy && <ResourceInline subject={createdBy} />}
-      {'-'}
-      {dateElement}{' '}
+      {createdBy && (
+        <>
+          <ResourceInline subject={createdBy} />
+          {'-'}
+        </>
+      )}
+      {dateElement}
     </Detail>
   );
 }

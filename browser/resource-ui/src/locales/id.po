@@ -1442,16 +1442,8 @@ msgid "Data for"
 msgstr "Data untuk"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "subjek:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "URL sumber daya"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "genesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1891,6 +1883,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} bukan subjek yang valid."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "subjek"
 
@@ -2769,9 +2762,11 @@ msgstr "Sumber daya ini memiliki <0/> turunan"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "Sunting {0}"
 
@@ -12207,10 +12202,12 @@ msgid "Activity will show up here"
 msgstr "Aktivitas akan muncul di sini"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Tampilkan lebih sedikit"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Tampilkan semua"
 
@@ -13917,6 +13914,10 @@ msgstr "Pembaruan tersedia"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Mulai ulang untuk memakai versi {0}"
+
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
 
 #: ../data-browser/src/views/ImporterPage.tsx
 msgid "Import source"

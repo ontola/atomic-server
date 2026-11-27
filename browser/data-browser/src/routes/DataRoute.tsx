@@ -11,6 +11,7 @@ import {
 } from '@tomic/react';
 
 import AllProps from '@tomic/resource-ui/components/AllProps';
+import { OneLine } from '@tomic/resource-ui/components/ValueComp';
 import { ContainerNarrow } from '../components/Containers';
 import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
@@ -121,21 +122,26 @@ function Data(): JSX.Element {
             </IconButton>
             <Title resource={resource} prefix='Data for' link />
           </Row>
-          <PropValRow columns>
-            <PropertyLabel title='The URL of the resource'>
-              subject:
-            </PropertyLabel>
-            <AtomicLink subject={subject}>{subject}</AtomicLink>
-          </PropValRow>
-          {(createdBy || createdAt) && (
-            <PropValRow columns>
-              <PropertyLabel title='Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature.'>
-                genesis:
+          <AllProps resource={resource} editable columns>
+            <PropValRow>
+              <PropertyLabel title='The URL of the resource'>
+                subject
               </PropertyLabel>
-              <CommitDetail createdAt={createdAt} createdBy={createdBy} />
+              <OneLine title={subject}>
+                <AtomicLink subject={subject}>{subject}</AtomicLink>
+              </OneLine>
             </PropValRow>
-          )}
-          <AllProps resource={resource} editable columns />
+            {(createdBy || createdAt) && (
+              <PropValRow>
+                <PropertyLabel title='Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature.'>
+                  genesis
+                </PropertyLabel>
+                <OneLine>
+                  <CommitDetail createdAt={createdAt} createdBy={createdBy} />
+                </OneLine>
+              </PropValRow>
+            )}
+          </AllProps>
           {saveState.kind !== 'idle' ? (
             <>
               <h2>⚠️ contains uncommitted changes</h2>
