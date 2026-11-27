@@ -33,6 +33,18 @@ class SearchResult {
   final double score;
 }
 
+/// What [StoreBackend.installOntology] did, by subject.
+class OntologyInstall {
+  const OntologyInstall({
+    this.created = const [],
+    this.updated = const [],
+    this.unchanged = const [],
+  });
+  final List<String> created;
+  final List<String> updated;
+  final List<String> unchanged;
+}
+
 /// What happened to a resource a backend was asked to wait for.
 enum ResourceEventKind { changed, destroyed, timeout }
 
@@ -82,6 +94,13 @@ abstract interface class StoreBackend {
   /// Destroy [subject] and, recursively, its children, as one signed destroy
   /// commit. [StoreErrorKind.notFound] when the store does not have it.
   Future<void> destroyResource(String subject);
+
+  /// Store an ontology bundle (a JSON-AD array: one Ontology plus its Classes
+  /// and Properties, at fixed `https://` subjects) in the local store as if
+  /// each term had been fetched. No network, no commit, nothing syncs.
+  /// Idempotent. Throws [StoreErrorKind.invalid] and writes nothing when the
+  /// bundle is malformed or would change what a stored term means.
+  Future<OntologyInstall> installOntology(String bundleJson);
 
   /// Wait until any resource changes or is destroyed, or [timeout] passes.
   /// What [Store.watchChildren] is built on.

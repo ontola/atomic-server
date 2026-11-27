@@ -19,6 +19,7 @@ abstract interface class BridgeResourceApi {
       String subject, int timeoutMs);
   Future<void> destroyResource(String subject);
   Future<bridge.StoreEvent> waitForStoreEvent(int timeoutMs);
+  Future<bridge.OntologyInstall> installOntologyBundle(String bundle);
 }
 
 /// The default store: the one `openDb` opened, signing as the agent
@@ -65,6 +66,10 @@ class _DefaultStoreApi implements BridgeResourceApi {
   @override
   Future<bridge.StoreEvent> waitForStoreEvent(int timeoutMs) =>
       bridge.waitForStoreEvent(timeoutMs: timeoutMs);
+
+  @override
+  Future<bridge.OntologyInstall> installOntologyBundle(String bundle) =>
+      bridge.installOntologyBundle(bundle: bundle);
 }
 
 /// One [bridge.AtomicStore] handle: its store, agent and drive.
@@ -112,6 +117,10 @@ class _HandleApi implements BridgeResourceApi {
   @override
   Future<bridge.StoreEvent> waitForStoreEvent(int timeoutMs) =>
       _store.waitForStoreEvent(timeoutMs: timeoutMs);
+
+  @override
+  Future<bridge.OntologyInstall> installOntologyBundle(String bundle) =>
+      _store.installOntologyBundle(bundle: bundle);
 }
 
 /// The [StoreBackend] of `package:atomic_store` over the Rust bridge: the
@@ -186,6 +195,16 @@ class BridgeStoreBackend implements StoreBackend {
   @override
   Future<void> destroyResource(String subject) =>
       _guard(() => _api.destroyResource(subject), subject);
+
+  @override
+  Future<OntologyInstall> installOntology(String bundleJson) =>
+      _guard(() async {
+        final done = await _api.installOntologyBundle(bundleJson);
+        return OntologyInstall(
+            created: done.created,
+            updated: done.updated,
+            unchanged: done.unchanged);
+      });
 
   @override
   Future<StoreEvent> waitForStoreEvent(Duration timeout) => _guard(() async {
