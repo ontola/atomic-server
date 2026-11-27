@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { beforeAll, afterEach, expect, it, vi } from 'vitest';
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
@@ -23,10 +24,6 @@ import { defaultUITheme } from '@tomic/ui';
 import { NumberPropertyForm } from './NumberPropertyForm.js';
 import { TextPropertyForm } from './TextPropertyForm.js';
 
-vi.mock('./Inputs/TableRangeInput', () => ({ TableRangeInput: () => null }));
-vi.mock('./Inputs/DecimalPlacesInput', () => ({
-  DecimalPlacesInput: () => null,
-}));
 afterEach(cleanup);
 beforeAll(async () => {
   const wasm = await readFile(
@@ -37,13 +34,20 @@ beforeAll(async () => {
   await LoroLoader.initializeLoro();
 });
 
-async function setup(kind: 'number' | 'text' = 'number', format?: string) {
+async function setup(
+  kind: 'number' | 'text' = 'number',
+  format?: string,
+  precision?: number,
+) {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
 
   for (const [subject, datatype] of [
     [core.properties.isA, Datatype.RESOURCEARRAY],
     [core.properties.datatype, Datatype.ATOMIC_URL],
     [dataBrowser.properties.numberFormatting, Datatype.ATOMIC_URL],
+    [dataBrowser.properties.min, Datatype.FLOAT],
+    [dataBrowser.properties.max, Datatype.FLOAT],
+    [dataBrowser.properties.decimalPlaces, Datatype.INTEGER],
   ]) {
     const property = await store.newResource({ subject, noParent: true });
     await property.set(core.properties.datatype, datatype, false);
@@ -57,6 +61,8 @@ async function setup(kind: 'number' | 'text' = 'number', format?: string) {
     noParent: true,
   });
   await draft.set(core.properties.datatype, Datatype.INTEGER, false);
+  if (precision !== undefined)
+    await draft.set(dataBrowser.properties.decimalPlaces, precision, false);
   if (format)
     await draft.set(dataBrowser.properties.numberFormatting, format, false);
   const save = vi.spyOn(draft, 'save').mockResolvedValue('persisted');
@@ -81,6 +87,29 @@ it('still defaults a new number draft to float without persisting it', async () 
     expect(draft.get(core.properties.datatype)).toBe(Datatype.FLOAT),
   );
   expect(save).not.toHaveBeenCalled();
+});
+
+it('preserves a fractional range boundary for an integer column', async () => {
+  const { draft, save } = await setup('number', undefined, 0);
+  fireEvent.change(screen.getByPlaceholderText('max'), {
+    target: { value: '2.5' },
+  });
+
+  await waitFor(() => expect(draft.get(dataBrowser.properties.max)).toBe(2.5));
+  expect(draft.get(core.properties.datatype)).toBe(Datatype.INTEGER);
+  expect(save).not.toHaveBeenCalled();
+});
+
+it('leaves fractional precision visible without changing saved precision or datatype', async () => {
+  const { draft } = await setup('number', undefined, 0);
+  const input = screen.getByLabelText<HTMLInputElement>('Decimal Places');
+  await act(async () => {
+    fireEvent.change(input, { target: { value: '1.5' } });
+  });
+
+  expect(input.value).toBe('1.5');
+  expect(draft.get(dataBrowser.properties.decimalPlaces)).toBe(0);
+  expect(draft.get(core.properties.datatype)).toBe(Datatype.INTEGER);
 });
 
 // The clean baseline saves text-format changes explicitly. The old legacy

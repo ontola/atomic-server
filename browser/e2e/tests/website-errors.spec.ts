@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { before, waitForSynced } from './test-utils';
+import {
+  installWebsiteReadFailure,
+  type WebsiteReadFailureControl,
+} from './website-read-failure';
 
 test('unreadable website content reports an error, stops loading and recovers', async ({
   page,
@@ -152,34 +156,7 @@ test('a preview that failed on a slow read comes back without being asked', asyn
   // Fail ONE subject rather than every read, so the app still boots and this
   // test measures the website page rather than the whole client. The message is
   // the one the store itself raises, so a reader of a failing run recognises it.
-  await page.addInitScript(
-    ({ subject, ms }: { subject: string; ms: number }) => {
-      const start = Date.now();
-      const timer = setInterval(() => {
-        const store = window.store as unknown as {
-          patchedForTest?: boolean;
-          getResource: (s: string, ...rest: unknown[]) => Promise<unknown>;
-        };
-
-        if (!store || store.patchedForTest) return;
-
-        store.patchedForTest = true;
-        clearInterval(timer);
-        const read = store.getResource.bind(store);
-
-        store.getResource = async (s: string, ...rest: unknown[]) => {
-          if (s === subject && Date.now() - start < ms) {
-            throw new Error(
-              `Async Request for subject "${s}" timed out after 10000ms.`,
-            );
-          }
-
-          return read(s, ...rest);
-        };
-      }, 5);
-    },
-    { subject: documentSubject, ms: 8000 },
-  );
+  await page.addInitScript(installWebsiteReadFailure, documentSubject);
 
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(site)}`,
@@ -189,8 +166,20 @@ test('a preview that failed on a slow read comes back without being asked', asyn
   await expect(
     page.getByText('Publishing is unavailable until the draft preview'),
   ).toBeVisible({ timeout: 30_000 });
-  // And the point: nobody clicks Retry preview. Measured at 5.9s here, against
-  // the whole 45s with the retry removed.
+  // Release only after the failed preview has actually been observed. A fixed
+  // time window can expire during app boot and never exercise recovery at all.
+  const failures = await page.evaluate(() => {
+    const control = (
+      window as unknown as {
+        __atomicWebsiteReadFailure: WebsiteReadFailureControl;
+      }
+    ).__atomicWebsiteReadFailure;
+    control.release();
+
+    return control.failures;
+  });
+  expect(failures).toBeGreaterThan(0);
+  // Nobody clicks Retry preview: the product must ask again by itself.
   await expect(
     page.getByRole('button', { name: 'Publish site', exact: true }),
   ).toBeEnabled({ timeout: 45_000 });

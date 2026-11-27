@@ -6,6 +6,14 @@ packed-consumer checks verify the grid uses the host's UI module instance.
 TableCell's local fixture seeds createdAt metadata to avoid external HTTP reads
 while asserting cell commits. These changes do not introduce new state policies.
 
+TablePage saved-view browser journeys capture actual computed-column identities
+and assert the same column/value after renaming and reloading, then removal
+without losing the other column or row. Row-action journeys use the accessible
+action label before and after reload. Date-format acceptance seeds explicit
+property names so a pre-existing missing-name fallback cannot obscure the format
+assertions. Onboarding E2E checks the four basic self-hosted steps and the exact
+Connect a device route; existing progress/panel unit tests cover AI in Next steps.
+
 Shared UI extraction: `browser/data-browser/src/components/sharedUI.test.tsx`
 checks that compatibility paths and the extracted package share keyboard locks,
 the dialog tree and generated background CSS variables. Existing spinner,
@@ -254,6 +262,14 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
+First saved-view drafts: `useTableView.debounce.test.tsx` holds initial view
+creation/table linking while later filter edits arrive, then verifies the latest
+owned draft is saved. It also covers coalesced creation, table/view navigation,
+empty-table hydration and rejected saves. The gated-commit browser case in
+`table-views-filters.spec.ts` checks the repaired value through a real save and
+reload. Initial link rejection is reported without claiming success; automatic
+link retry and broader SDK persistence recovery remain outside this repair.
+
 TablePage follow-ups: `useTableViewRename.test.tsx` exercises captured inactive
 tab identity, real asynchronous resource loading, membership/owner checks and
 permission/account changes during loading. `PropertyForm.test.tsx` checks unique
@@ -262,6 +278,23 @@ focus; the existing number-form regression retains explicit text-format saves.
 The application `table-page-derived-compiler.test.tsx` executes the actual hook
 through the production React 19 compiler and changes only engine readiness.
 The production readiness and seasonal-clock fixes already exist on develop.
+`TableHeadingMenu.test.tsx` opens the actual column menu and exercises schema
+detachment, explicit deletion, retained errors after the heading unmounts, and
+retry after a failed delete. It supplies SDK save results rather than exercising
+the network. `TablePage.test.tsx` exercises the close handler against newer
+search parameters, including another column editor.
+The TablePage row-selection and undo tests cover expired callbacks, read-only
+transitions and retrying only the unfinished steps of a partially applied undo.
+Quick-add tests cover binding queued commands to the callback that accepted them
+and suppressing success callbacks after navigation. Saved-view tests cover
+loading and ownership checks and one default view for concurrent first writes.
+Configuration-dialog and external-column tests cover pending saves, retained
+drafts after failure and retry. Number forms cover fractional range bounds and
+invalid precision input.
+View query tests cover unresolved computed filters, the implicit timer Duration
+column, and shared filter and aggregate clock values in tables and dashboards.
+Date format tests cover independent radio groups and the saved legacy value
+remaining selected until explicitly replaced.
 
 `TableFilterValueInput.test.tsx` retains incomplete numbers, unsafe integer
 strings, unknown choices, false/zero and incomplete JSON. Filter-bar/chip tests
@@ -288,7 +321,9 @@ formula execution still needs the real WASM evaluator.
 
 Filter-chip presentation: `browser/table/src/filters/FilterChip.test.tsx`
 covers host value/operator/removal callbacks and the existing numeric/date/now
-input policy. Actual-component Chromium checks cover edit/readback, operator
+input policy, including closing a filter's popover when removal is requested.
+`QuickAddFields.test.tsx` covers retaining additional stored presets on edit.
+Actual-component Chromium checks cover edit/readback, operator
 selection, Escape/reopen/removal and desktop/mobile layout; these are component
 fixtures, not a claim of full backend-integrated TablePage coverage.
 
@@ -679,11 +714,74 @@ configuration on independent Dagger engines. `scripts/browser-bundle.test.mjs`
 checks portable checkout fingerprints, manifest/source/tool/platform validation
 and imported shard graph behavior. `scripts/ci-fanout.test.py` exercises the
 temporary runner's resource ownership, deadlines, accounting and report gates
-without creating paid resources. These fixtures do not establish real OCI
+without creating paid resources. Resource-width fixtures verify default and
+explicit compilation/Rust execution/browser widths, invalid ranges, and exact
+remote runner/build-helper argument propagation without changing probe-module
+calls. Dagger regressions execute an explicit compile override through Cargo
+and nextest and verify that a smaller maximum cap still wins.
+Warm-clone regressions compare command sequences with default/two fresh keys,
+verify each nonce is inserted immediately before a test execution after reusable
+setup, and preserve stable namespace/nonce transport without adding either to
+the OCI probe. They establish graph-input differences, not a measured cache hit
+or proof that a specific cloud snapshot was quiescent.
+These fixtures do not establish real OCI
 transport, regional capacity or full browser acceptance; an actual frozen-commit
 Docker/Dagger fan-out run is required. Its full test inventory and all shard
 reports must reconcile before the controller can report success. Compiler and
 unit suites remain separate from the shared production E2E build.
+
+Bundle ABI 2 adds a complete production-mode Node checks image. Portable-bundle
+fixtures verify one shared WASM build graph, unchanged unit/type/doc commands,
+fresh execution after import, and integration reuse of only WASM while retaining
+the native debug server and original fixture layout. Controller/runner and host
+cache regressions require the checks image and all payload hashes, reject old
+or incomplete bundles without a rebuild fallback, and schedule all ten checks
+once with independent work overlapping preparation. These graph/fixture tests
+do not establish a real prepared application image's full-suite acceptance or
+the wall-time improvement; that needs a new frozen-candidate CI run.
+
+The DO-hosted wrapper has separate fake-provider regressions in
+`scripts/ci-fanout-cloud.test.py`: deadline/account/volume ownership, sanitized
+evidence preservation, verified bundle completion and independent reaper
+cleanup. The launcher plan includes its extra control machine and retained
+volume in the cost bound. A real disconnected-monitoring run remains necessary
+to establish end-to-end cloud-init/volume behavior; fake tests do not prove it.
+
+`scripts/ci-fanout-warm.test.py` checks the reusable warm wrapper with fake
+provider responses: read-only snapshot/budget planning, ledger-before-create,
+lost creation/deletion responses, account drift, foreign/attached volume
+preservation, immutable deadlines, mount configuration, parent-death watchdogs
+and cleanup despite key failures. It creates no paid resources. Real snapshot
+restore and full warm-fleet acceptance remain separate from those fixtures.
+
+The controller regressions also run scheduling through a failed first check
+and failed first browser shard: every remaining check and shard must finish,
+failed reports must retain their counts and inventory identities, and the
+final aggregate must fail. Missing or unfinished checks, cancelled phases,
+source/report mismatches and deadlines cannot become collected test failures.
+These fake-host tests do not measure real-machine CI completion time.
+
+Deferred browser retry regressions require all independent first-pass checks
+and browser shards to finish before one selective retry round. They check
+zero immediate retries, exact failed-test selection, preservation of the first
+failure and traces, recovered `flaky` classification, and final failure for a
+failed independent check or an incomplete/unsuccessful retry. Bundle and
+first-run receipts must match before retry execution. Missing or corrupt
+selection must not fall back to the full suite. Passing and intentionally
+skipped tests are never part of the retry selection. These checks validate
+the fan-out runner, not the separate Main CI retry policy.
+The portable-bundle regressions also execute pinned Playwright against a small
+process-only fixture: native listing and the retry select only the failed ID,
+leave both passing bodies untouched and preserve the original report bytes.
+
+`browser/e2e/tests/canvas-undo.spec.ts` covers tap undo/redo, scrubbing without
+losing redo history, restoring a discarded branch and undo after reload. Each
+case uses the shared hook's one fresh identity. The raw pointer gestures first
+wait for the Undo control to receive events, so the dev-drive toast cannot
+intercept their pointer-down. Strict browser diagnostics remain enabled to
+catch stale requests made under another identity.
+The pan and touch gesture specs also use that single fresh identity rather
+than navigating through a second dev-drive setup inside each case.
 
 `scripts/ci-browser-build.test.py` uses a recording builder to verify completed
 host-cache hits invoke no build, incomplete/corrupt/wrong-source/tool entries
@@ -955,9 +1053,46 @@ read-modify-write the same Loro snapshot and end in a replace — was fixed
 operations before the fix and now keeps all of them, with a sequential control
 that isolates concurrency as the cause.
 
-No known flaky tests. The one that was
-(`rbsr_reduced_matches_full_sync_vv`) turned out to be a genuine RBSR bug, not
-test noise — see below. (RBSR itself was removed in 2026-09.)
+Browser CI has six currently tracked flaky journeys (2026-11-27). Keep them
+enabled and distinguish a reproduced cause from a successful retry:
+
+- #2668, catalog app creation: the retained failing trace contains server
+  missing-Loro-base errors. `lib/src/resource-hydration-base.test.ts` reproduces
+  two first-edit failures with a real receiving Loro document. Hydration now
+  acknowledges only imported operations; locally seeded/healed operations remain
+  part of the next genuine edit without causing a write merely on read.
+  A fresh native reproduction also exposed missing `response-message`, `status`
+  and `resources` vocabulary: each external read could consume 30 seconds while
+  creation or ClientDb flush waited. Those Properties and the endpoint-response
+  Class now ship in shared defaults with exact embedded-subject routing.
+  `host-bootstrap-vocabulary.test.ts` and
+  `populate::tests::app_bootstrap_vocabulary_is_stored_locally` cover their
+  metadata and local availability; the same omission blocked the inline-editor
+  clear and controlled connection-acknowledgement browser journeys.
+- #2679, Getting started hover hint: a mounted `UiHint.test.tsx` reproduces a
+  visible target receiving an interaction before its passive registration.
+  Registration now happens before paint. Repeated execution of the original
+  browser journey is still needed before attributing the historical failure.
+- #2667, website version creation: direct model calls now wait for authenticated
+  server connection and a drained outbox. A controlled WebSocket-reply gate
+  demonstrates that the sidebar can appear before authentication completes.
+  The original offline/queued save reason is not available in the old trace.
+- Website slow-preview recovery: the injected fault remains active until its
+  error UI is observed, then the test releases it and requires automatic
+  recovery. The old eight-second wall-clock window could expire during boot.
+  Node regressions also check slow startup and propagation of genuine errors.
+- #2680, generated SvelteKit `/server` HTTP 408, and the separate inline rich-text
+  journey's `/app/dev-drive` HTTP 408: cause unresolved. The responses may occur
+  before handler tracing; worker starvation and connection timing need a
+  controlled reproduction. No diagnostic allowance or timeout increase is a fix.
+
+The historical umbrella #1095 includes scenarios from the 2025 harness. Current
+fixture paths are relative to the test file, and fresh-agent drives isolate
+normal runs; those old observations are not evidence that the same defects
+remain active. Its referenced save-acknowledgement issue #1388 is closed.
+
+The former `rbsr_reduced_matches_full_sync_vv` flake was a genuine RBSR bug — see
+below. RBSR itself was removed in 2026-09.
 
 ---
 
@@ -3120,3 +3255,36 @@ Rust and browser tests cover issuer-signed invitation origins (including `atomic
 Rust and TypeScript protocol tests cover the 100-entry SYNC_PUSH boundary and incomplete frames. Sync engine tests cover reversed parent chains and repeated subject deltas. Plugin archive tests check expanded sizes and ordinary package reads. Flutter sign-in link tests cover accepting the verified account, declining it, and a concurrent local account change.
 
 Notification tests in `lib/src/notify/tests.rs` cover direct and inherited grants, changes after queueing, independently shared unread items, and the delivery channels. The native client helper tests cover the exact private push origin, including port matching. Server-side push requests use the filtered DNS resolver and disable redirects and proxies.
+
+TablePage stack integration (#2666, #2672, #2673): `useTableView.debounce.test.tsx` now carries a rejected initial table-link save through another rejected retry and a successful later edit, without creating a second View; it also checks queued links and late failures after moving to another view/table. `browser/e2e/tests/tablepage-2673-review.spec.ts` exercises first-view filter persistence after reload, unchecked column deletion retaining the Property and row data, inferred timer Duration predicates shared by the table and dashboard, and preserving a saved date format until an explicit replacement. The review cases attach actual desktop/mobile PNGs to the browser report. They require a matching app/server build; static inventory and TypeScript checks alone are not browser acceptance.
+
+Autonomous warm-worker regressions (`ci-fanout-cloud.test.py` and
+`ci-fanout-warm.test.py`) cover separate controller/worker regions, all three
+clone prices, explicit snapshot companions/pinned Dagger, actual producer-ledger
+to independent-reaper compatibility, lost API responses, foreign attachments,
+retained/source storage protection, bootstrap failure and expired deadlines.
+Generated SSH collectors/shell setup are checked and verify pre-Docker nonempty
+cache state plus mounted Docker/engine provenance without claiming cache hits.
+These fixtures are not real-cloud warm-run acceptance.
+
+
+Browser route lifecycle: `pnpm --filter @tomic/e2e test:route-lifecycle` runs a
+controlled real-HTTP/Chromium regression. An unowned route reproduces the native
+Playwright teardown error; production fixtures drain page, context and extra
+owned-context callbacks before closing, while an upstream reset still fails.
+This explicit browser regression needs the pinned Playwright Chromium install;
+it is separate from the Node-only script unit suite.
+Global browser-export failures are covered separately from ordinary test failures:
+runner/controller regressions use the observed 129-pass, one intentional-skip,
+one blocked-case report. Verified global exports let unrelated checks and shards
+finish while preserving aggregate failure and explicit unrun identities; such
+shards never retry. Receipt/source/transport/malformed-export/deadline failures
+still abort. Coverage is recomputed from raw reports at the full-union barrier,
+and merged errors retain every shard's provenance.
+Warm startup observations are preserved before validation, with per-field
+diagnostics and strict evidence-path filtering when restoration is rejected.
+
+Nov27 focused native validation of the seven affected/current regression journeys:
+7/7 passed, then 35/35 passed across five repetitions with four workers and no
+retries, skips, or global errors. This is targeted evidence, not a full CI result;
+the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.

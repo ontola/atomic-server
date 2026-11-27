@@ -18,32 +18,34 @@ export function DateFormatPicker({
   onChange: (value: string) => void;
   withTime?: boolean;
 }): JSX.Element {
+  const options = [
+    {
+      value: dateFormats.localNumeric,
+      label: 'Numeric',
+      example: formatDate(dateFormats.localNumeric, EXAMPLE_DATE, withTime),
+    },
+    {
+      value: dateFormats.localLong,
+      label: 'Long',
+      example: formatDate(dateFormats.localLong, EXAMPLE_DATE, withTime),
+    },
+    {
+      value: dateFormats.localRelative,
+      label: 'Relative',
+      example: formatDate(dateFormats.localRelative, EXAMPLE_DATE, withTime),
+    },
+  ];
+
+  if (value && !options.some(option => option.value === value)) {
+    options.unshift({ value, label: 'Saved format', example: value });
+  }
+
   return (
     <PropertyDateFormatField
       value={value}
       onChange={onChange}
       Radio={RadioInput}
-      options={[
-        {
-          value: dateFormats.localNumeric,
-          label: 'Numeric',
-          example: formatDate(dateFormats.localNumeric, EXAMPLE_DATE, withTime),
-        },
-        {
-          value: dateFormats.localLong,
-          label: 'Long',
-          example: formatDate(dateFormats.localLong, EXAMPLE_DATE, withTime),
-        },
-        {
-          value: dateFormats.localRelative,
-          label: 'Relative',
-          example: formatDate(
-            dateFormats.localRelative,
-            EXAMPLE_DATE,
-            withTime,
-          ),
-        },
-      ]}
+      options={options}
     />
   );
 }

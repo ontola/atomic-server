@@ -3,6 +3,8 @@
 /// cannot tell returns null and the card leaves the line out.
 library;
 
+import 'strings.dart';
+
 export 'server_info.dart' show formatBytes;
 
 /// A count as a person reads it, the same in every locale: `842`, `1.2k`,
@@ -28,8 +30,8 @@ String formatCount(int count) {
 }
 
 /// "1.2 MB · 842 resources", the line under a drive's name.
-String formatResources(int count) =>
-    '${formatCount(count)} ${count == 1 ? 'resource' : 'resources'}';
+String formatResources(int count, [AtomicStrings strings = AtomicStrings.en]) =>
+    strings.resources(formatCount(count), count);
 
 /// One drive's share of what the device stores.
 class DriveStats {
@@ -142,13 +144,13 @@ String shortId(String id) => id.length <= 22
 
 /// Coarse "2m ago" / "3h ago" / "5d ago" for a unix-millis timestamp — enough
 /// to tell "just now" from "days back" without a date library.
-String relativeTime(int millis) {
+String relativeTime(int millis, [AtomicStrings strings = AtomicStrings.en]) {
   final delta =
       DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
 
-  if (delta.inSeconds < 60) return 'just now';
-  if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
-  if (delta.inHours < 24) return '${delta.inHours}h ago';
+  if (delta.inSeconds < 60) return strings.justNow;
+  if (delta.inMinutes < 60) return strings.minutesAgo(delta.inMinutes);
+  if (delta.inHours < 24) return strings.hoursAgo(delta.inHours);
 
-  return '${delta.inDays}d ago';
+  return strings.daysAgo(delta.inDays);
 }

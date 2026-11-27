@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'paired_device.dart';
+import 'strings.dart';
 import 'sync_widgets.dart';
 
 class PeerDetailsSheet extends StatefulWidget {
@@ -56,9 +57,10 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     final c = syncColors(context);
+    final s = AtomicStrings.of(context);
     final device = widget.device;
     final lastSynced = device.lastSynced;
-    final counts = device.lastSyncCounts;
+    final counts = device.lastSyncCountsText(s);
     final owner = device.agentName ?? device.agent;
 
     return SafeArea(
@@ -71,44 +73,43 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
             Text(device.label, style: SyncText.title(c)),
             const SizedBox(height: SyncGap.s),
             Wrap(spacing: SyncGap.s, runSpacing: SyncGap.s, children: [
-              StatusChip(widget.live ? 'Connected' : 'Offline',
+              StatusChip(widget.live ? s.connected : s.offline,
                   tone: widget.live ? SyncTone.success : SyncTone.neutral),
-              if (device.relationLabel != null)
-                StatusChip(device.relationLabel!),
+              if (device.relationText(s) != null)
+                StatusChip(device.relationText(s)!),
             ]),
             const SizedBox(height: SyncGap.m),
             if (device.isOtherPerson)
               Padding(
                 padding: const EdgeInsets.only(bottom: SyncGap.s),
                 child: Text(
-                  'Someone else\'s device. It gets only what they may read: '
-                  'the workspaces shared with them.',
+                  s.someoneElsesDevice,
                   style: SyncText.caption(c),
                 ),
               ),
             if (owner != null)
               KeyValueRow(
-                label: 'Signed in as',
+                label: s.signedInAs,
                 value: owner,
                 copy: device.agent,
-                copyLabel: 'Agent',
+                copyLabel: s.agent,
               ),
             KeyValueRow(
-              label: 'Device ID',
+              label: s.deviceId,
               value:
                   '${device.nodeId.substring(0, device.nodeId.length.clamp(0, 16))}…',
               copy: device.nodeId,
-              copyLabel: 'ID',
+              copyLabel: s.id,
               mono: true,
             ),
             KeyValueRow(
-              label: 'Last synced',
-              value: lastSynced == null ? 'Not yet' : _when(lastSynced),
+              label: s.lastSynced,
+              value: lastSynced == null ? s.notYet : _when(lastSynced, s),
               subtitle: counts,
             ),
             if (device.drives > 0)
               KeyValueRow(
-                label: 'Workspaces',
+                label: s.drives,
                 value: '${device.drives}',
               ),
             if (_result != null)
@@ -124,13 +125,13 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
             Wrap(spacing: SyncGap.s, runSpacing: SyncGap.s, children: [
               if (widget.syncPeer != null)
                 SyncActionButton(
-                  label: _syncing ? 'Syncing…' : 'Sync now',
+                  label: _syncing ? s.syncing : s.syncNow,
                   icon: Icons.sync,
                   kind: SyncButtonKind.primary,
                   onPressed: _syncing ? null : _syncNow,
                 ),
               SyncActionButton(
-                label: 'Forget this device',
+                label: s.forgetDevice,
                 icon: Icons.link_off,
                 kind: SyncButtonKind.destructive,
                 onPressed: () => Navigator.of(context).pop(true),
@@ -142,12 +143,12 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
     );
   }
 
-  static String _when(int millis) {
+  static String _when(int millis, AtomicStrings s) {
     final delta =
         DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
-    if (delta.inSeconds < 60) return 'Just now';
-    if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
-    if (delta.inHours < 24) return '${delta.inHours}h ago';
-    return '${delta.inDays}d ago';
+    if (delta.inSeconds < 60) return s.justNowCap;
+    if (delta.inMinutes < 60) return s.minutesAgo(delta.inMinutes);
+    if (delta.inHours < 24) return s.hoursAgo(delta.inHours);
+    return s.daysAgo(delta.inDays);
   }
 }

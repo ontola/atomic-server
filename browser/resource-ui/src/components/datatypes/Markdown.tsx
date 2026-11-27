@@ -109,7 +109,7 @@ const Markdown: FC<Props> = ({
       </ReactMarkdown>
       {text.length > maxLength && collapsed && (
         <Button subtle onClick={() => setCollapsed(false)}>
-          {'Read more '}
+          {'Read more'}
         </Button>
       )}
     </MarkdownWrapper>

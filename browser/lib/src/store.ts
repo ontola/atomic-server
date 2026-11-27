@@ -58,6 +58,7 @@ import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
 import * as trashOps from './trash.js';
 import { server, type Server } from './ontologies/server.js';
 import { notifications } from './ontologies/notifications.js';
@@ -613,6 +614,13 @@ const embeddedVocabulary = new Set<string>([
   server.properties.homepage,
   server.properties.openUrlTemplate,
   server.properties.handlesClasses,
+  // Endpoint responses and issued app keys use these fixed terms during
+  // bootstrap. They ship in default_store.json; a catalog outage must not
+  // stall creating an app or flushing the local database.
+  server.classes.endpointResponse,
+  server.properties.responseMessage,
+  server.properties.status,
+  dataBrowser.properties.resources,
   core.properties.importBaseline,
   core.properties.importResolution,
   core.properties.importReferenceReview,

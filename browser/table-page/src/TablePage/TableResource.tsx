@@ -36,7 +36,7 @@ import {
 } from './tablePageContext.js';
 import { TableNewRow, TableRow } from './TableRow.js';
 import { hasUserContent, isSavedDraft, isUnsavedDraft } from './draftRow.js';
-import { useTableColumns, type TableColumn } from './useTableColumns.js';
+import type { TableColumn } from './useTableColumns.js';
 import { useTableData } from './useTableData.js';
 import {
   useId,
@@ -49,9 +49,11 @@ import {
 import { FancyTable } from '@tomic/resource-ui/chunks/TableEditor/TableEditor';
 import { DEFAULT_SIZE_PX } from '@tomic/table';
 import { NewColumnButton } from './NewColumnButton.js';
+import { ColumnRemovalDialog } from './ColumnRemovalDialog.js';
 import { TableHeading } from './TableHeading.js';
 import { TableFilterBar } from './TableFilterBar.js';
 import { RowSelectCheckbox } from './RowSelectCheckbox.js';
+import { useTableRowSelection } from './useTableRowSelection.js';
 import { CellSelectionMenu } from './CellSelectionMenu.js';
 import { useResourceContextMenu } from '@tomic/resource-ui/components/ResourceContextMenu/ResourceContextMenuContext';
 import { TableViewTabs } from './TableViewTabs.js';
@@ -75,7 +77,6 @@ import { QuickAddBar } from './QuickAddBar.js';
 import { useTableAggregates } from './useTableAggregates.js';
 import { getTableDrive } from './tableDrive.js';
 import { TableTotalsFooter } from './TableTotalsFooter.js';
-import { toAggregation } from './tableAggregates.js';
 import { stringToSlug } from '@tomic/resource-ui/helpers/stringToSlug';
 import { orderColumns, reorderColumnKeys } from './columnOrder.js';
 import { TableSummaryBar } from './TableSummaryBar.js';
@@ -133,7 +134,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   viewSubject,
   embedded,
 }) => {
-  const { AppFrame } = useResourceUIHost();
+  const { AppFrame, reportError } = useResourceUIHost();
   const store = useStore();
   const titleId = useId();
   const canWrite = useCanWrite(resource);
@@ -147,7 +148,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setFilterValue,
     setFilterOperator,
     removeFilter,
-    viewColumns,
     setViewColumns,
     viewName,
     renameView,
@@ -173,8 +173,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewTimerExclusive,
     viewSplitLanguages,
     setViewSplitLanguages,
-    viewDerivedColumns,
-    viewDerivedColumnsSet,
+    derivedSpecs,
     setViewDerivedColumns,
     viewColumnOrder,
     setViewColumnOrder,
@@ -190,14 +189,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    queryValue,
+    queryAggregation,
+    unresolvedFilters,
+    unresolvedAggregates,
+    columns,
+    allColumns,
+    hideColumn,
+    showColumn,
   } = useTableData(resource, viewSubject, embedded);
 
-  const { columns, allColumns, hideColumn, showColumn } = useTableColumns(
-    tableClass,
-    viewColumns,
-    setViewColumns,
-    viewSplitLanguages,
-  );
   const calendarRow = useTableCalendarRow(tableClass, allColumns);
 
   // The toolbar's quick filter. Session state, not View configuration: it is
@@ -235,7 +236,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const quickFilter = useQuickFilter(
     collection,
     quickFilterSources,
-    showsRows ? quickFilterText : '',
+    showsRows && !unresolvedFilters ? quickFilterText : '',
   );
   const rowCollection = quickFilter.collection;
   const quickFilterQuery = quickFilterText.trim();
@@ -298,53 +299,29 @@ export const TableResource: React.FC<TableResourceProps> = ({
     notifyEntryCreated,
   );
 
-  // Computed columns are configuration on the View, not a feature of one view
-  // kind — a table can show a days-since just as a timer shows a duration. A
-  // timer view that has never had a derived-column list falls back to timing
-  // its start/end pair, so a view added from the view menu still has a
-  // Duration; once the user edits or removes it the stored list takes over
-  // (which is why "has a list" and "the list is empty" must stay distinct).
-  const effectiveDerivedSpecs =
-    isTimer && !viewDerivedColumnsSet
-      ? [...viewDerivedColumns, ...timer.derivedColumns]
-      : viewDerivedColumns;
-
-  // Keyed on their shape, not their identity: the timer's contribution is
-  // rebuilt whenever its props resolve, and these specs feed both the grid and
-  // the page context — an unstable array there re-renders every cell.
-  const derivedSpecsKey = JSON.stringify(effectiveDerivedSpecs);
-  const derivedSpecs = useMemo(
-    () => JSON.parse(derivedSpecsKey) as DerivedColumnSpec[],
-    [derivedSpecsKey],
-  );
-
   const derivedColumns = useDerivedColumns(derivedSpecs);
 
   // Every edit writes the *effective* list, so acting on a timer's implicit
   // Duration materializes it instead of silently dropping it.
   const addDerivedColumn = useCallback(
-    (spec: DerivedColumnSpec) => {
-      // Ids are the column's identity in the grid; keep them unique.
-      const taken = new Set(derivedSpecs.map(s => s.id));
-      let id = spec.id || 'computed';
-
-      for (let n = 2; taken.has(id); n++) {
-        id = `${spec.id}-${n}`;
-      }
-
-      setViewDerivedColumns([...derivedSpecs, { ...spec, id }]);
-    },
+    (spec: DerivedColumnSpec) =>
+      setViewDerivedColumns(
+        derivedSpecs.some(existing => existing.id === spec.id)
+          ? derivedSpecs.map(existing =>
+              existing.id === spec.id ? spec : existing,
+            )
+          : [...derivedSpecs, spec],
+      ),
     [derivedSpecs, setViewDerivedColumns],
   );
 
   const updateDerivedColumn = useCallback(
-    (spec: DerivedColumnSpec) => {
+    (spec: DerivedColumnSpec) =>
       setViewDerivedColumns(
         derivedSpecs.map(existing =>
           existing.id === spec.id ? spec : existing,
         ),
-      );
-    },
+      ),
     [derivedSpecs, setViewDerivedColumns],
   );
 
@@ -432,9 +409,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const removeDerivedColumn = useCallback(
     (id: string) => {
-      setViewDerivedColumns(derivedSpecs.filter(spec => spec.id !== id));
+      void setViewDerivedColumns(
+        derivedSpecs.filter(spec => spec.id !== id),
+      ).catch(reportError);
     },
-    [derivedSpecs, setViewDerivedColumns],
+    [derivedSpecs, setViewDerivedColumns, reportError],
   );
 
   // Configured row-action buttons. Hidden entirely from a viewer who cannot
@@ -442,44 +421,37 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
 
   const addRowAction = useCallback(
-    (spec: RowActionSpec) => {
-      // Same id minting as a computed column: derived from the label, and
-      // suffixed until it is unique within the view.
-      const base = stringToSlug(spec.label) || 'action';
-      const taken = new Set(viewRowActions.map(existing => existing.id));
-      let id = base;
-      let n = 2;
-
-      while (taken.has(id)) {
-        id = `${base}-${n++}`;
-      }
-
-      setViewRowActions([...viewRowActions, { ...spec, id }]);
-    },
+    (spec: RowActionSpec) =>
+      setViewRowActions(
+        viewRowActions.some(existing => existing.id === spec.id)
+          ? viewRowActions.map(existing =>
+              existing.id === spec.id ? spec : existing,
+            )
+          : [...viewRowActions, spec],
+      ),
     [viewRowActions, setViewRowActions],
   );
 
   const updateRowAction = useCallback(
-    (spec: RowActionSpec) => {
+    (spec: RowActionSpec) =>
       setViewRowActions(
         viewRowActions.map(existing =>
           existing.id === spec.id ? spec : existing,
         ),
-      );
-    },
+      ),
     [viewRowActions, setViewRowActions],
   );
 
   const removeRowAction = useCallback(
     (id: string) => {
-      setViewRowActions(viewRowActions.filter(spec => spec.id !== id));
       // Its placement in the column order would otherwise linger as dead config
       // that a later drag writes back forever.
-      setViewColumnOrder(
+      void setViewRowActions(
+        viewRowActions.filter(spec => spec.id !== id),
         viewColumnOrder.filter(key => key !== rowActionKey(id)),
-      );
+      ).catch(reportError);
     },
-    [viewRowActions, setViewRowActions, viewColumnOrder, setViewColumnOrder],
+    [viewRowActions, setViewRowActions, viewColumnOrder, reportError],
   );
 
   // Computed columns, then configured buttons, then the timer's Start/Stop — so
@@ -539,14 +511,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   // Rebuilt every render (it carries a quantized `now`), so keyed on content.
-  const aggregationKey = JSON.stringify(
-    toAggregation(
-      viewAggregates,
-      viewGroupByColumn,
-      viewGroupGranularity,
-      derivedSpecs,
-    ) ?? null,
-  );
+  const aggregationKey = JSON.stringify(queryAggregation ?? null);
   const aggregation = useMemo(
     () => (JSON.parse(aggregationKey) as Aggregation | null) ?? undefined,
     [aggregationKey],
@@ -556,7 +521,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // clearing the grid's pages. See `useTableAggregates`.
   const viewAggregateOutcomes = useTableAggregates({
     property: core.properties.parent,
-    value: resource.subject,
+    value: queryValue,
     filters: queryFilters,
     expressionFilters: queryExpressionFilters,
     aggregation,
@@ -637,6 +602,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   const { undoLastItem, addItemsToHistoryStack } =
     useTableHistory(invalidateCollection);
+  const handleUndo = useCallback(() => {
+    if (canWrite) void undoLastItem().catch(reportError);
+  }, [canWrite, undoLastItem, reportError]);
 
   const handlePaste = useHandlePaste(
     resource,
@@ -1118,41 +1086,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [rowCollection],
   );
 
-  // Rows ticked in the row header, by subject. A change of view, filter or
-  // sorting changes which rows are visible, so the ticks would point at rows
-  // the person can no longer see: they only count for the query they were made
-  // under.
-  const [selection, setSelection] = useState<{
-    queryKey: string;
-    rows: ReadonlySet<string>;
-  }>({ queryKey, rows: new Set() });
-  const selectedRows = useMemo<ReadonlySet<string>>(
-    () => (selection.queryKey === queryKey ? selection.rows : new Set()),
-    [selection, queryKey],
-  );
-
-  const toggleRowSelected = useCallback(
-    (subject: string) => {
-      setSelection(prev => {
-        const next = new Set(prev.queryKey === queryKey ? prev.rows : []);
-
-        if (!next.delete(subject)) {
-          next.add(subject);
-        }
-
-        return { queryKey, rows: next };
-      });
-    },
-    [queryKey],
-  );
-
-  const clearRowSelection = useCallback(
-    () => setSelection({ queryKey, rows: new Set() }),
-    [queryKey],
-  );
+  const { selectedRows, toggleRowSelected, clearRowSelection, canActOnRows } =
+    useTableRowSelection({
+      table: resource.subject,
+      rowClass: tableClass.subject,
+      queryKey: JSON.stringify([activeView, viewKind, requestedQuery]),
+      quickQuery: quickFilterQuery,
+      writable: canWrite,
+    });
 
   const deleteRowSubjects = useCallback(
     async (subjects: string[]) => {
+      if (!canActOnRows()) return;
+
       const resources = subjects
         .map(subject => store.getResourceLoading(subject))
         .filter(row => !isUnsavedDraft(row));
@@ -1185,7 +1131,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       for (const row of resources) {
         await row.destroy();
 
-        if (!sessionSubjects.has(row.subject)) {
+        if (canActOnRows() && !sessionSubjects.has(row.subject)) {
           decrementMemberCount();
         }
       }
@@ -1194,6 +1140,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       newRowSubjects,
       store,
       clearRowSelection,
+      canActOnRows,
       addItemsToHistoryStack,
       decrementMemberCount,
     ],
@@ -1208,10 +1155,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // added this session.
   const subjectAtRow = useCallback(
     async (index: number): Promise<string | undefined> =>
-      index < memberCount
-        ? await collection.getMemberWithIndex(index)
-        : newRowSubjects[index - memberCount],
-    [collection, memberCount, newRowSubjects],
+      index < gridMemberCount
+        ? await rowCollection.getMemberWithIndex(index)
+        : gridNewRowSubjects[index - gridMemberCount],
+    [rowCollection, gridMemberCount, gridNewRowSubjects],
   );
 
   const { openResourceMenu } = useResourceContextMenu();
@@ -1256,22 +1203,50 @@ export const TableResource: React.FC<TableResourceProps> = ({
         return null;
       }
 
-      if (index < memberCount) {
-        return <RowSelectCheckbox collection={collection} index={index} />;
+      if (index < gridMemberCount) {
+        return <RowSelectCheckbox collection={rowCollection} index={index} />;
       }
 
       // The trailing empty row is the entry placeholder, not a row yet.
-      const newRowIndex = index - memberCount;
-      const subject = newRowSubjects[newRowIndex];
+      const newRowIndex = index - gridMemberCount;
+      const subject = gridNewRowSubjects[newRowIndex];
 
-      if (!subject || newRowIndex === newRowSubjects.length - 1) {
+      if (!subject || newRowIndex === gridNewRowSubjects.length - 1) {
         return null;
       }
 
       return <RowSelectCheckbox subject={subject} index={index} />;
     },
-    [canWrite, collection, memberCount, newRowSubjects],
+    [canWrite, rowCollection, gridMemberCount, gridNewRowSubjects],
   );
+
+  const [columnRemoval, setColumnRemoval] = useState<{
+    table: string;
+    tableClass: Resource;
+    property: Resource;
+  }>();
+
+  if (
+    columnRemoval &&
+    (columnRemoval.table !== resource.subject ||
+      columnRemoval.tableClass.subject !== tableClass.subject)
+  ) {
+    setColumnRemoval(undefined);
+  }
+
+  const requestColumnRemoval = useCallback(
+    (property: Resource) => {
+      setColumnRemoval(
+        current => current ?? { table: resource.subject, tableClass, property },
+      );
+    },
+    [resource.subject, tableClass],
+  );
+  const closeColumnRemoval = useCallback(() => {
+    setColumnRemoval(current =>
+      current === columnRemoval ? undefined : current,
+    );
+  }, [columnRemoval]);
 
   const tablePageContext: TablePageContextType = useMemo(
     () => ({
@@ -1289,6 +1264,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       splitLanguageSubjects: viewSplitLanguages,
       toggleSplitLanguages,
@@ -1330,10 +1306,15 @@ export const TableResource: React.FC<TableResourceProps> = ({
       setFilterOperator,
       removeFilter,
       hideColumn,
+      requestColumnRemoval,
       showColumn,
       viewSplitLanguages,
       toggleSplitLanguages,
       allColumns,
+      viewRowActions,
+      addRowAction,
+      updateRowAction,
+      removeRowAction,
       viewAggregates,
       aggregateOutcomes,
       rowCollection.totalMembers,
@@ -1365,7 +1346,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
         ? await rowCollection.getMemberWithIndex(index)
         : gridNewRowSubjects[index - gridMemberCount];
 
-      if (!subject) {
+      if (!subject || !canActOnRows()) {
         return;
       }
 
@@ -1390,7 +1371,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
       await rowResource.destroy();
 
-      if (isMember) {
+      if (isMember && canActOnRows()) {
         decrementMemberCount();
       }
 
@@ -1409,6 +1390,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       gridMemberCount,
       gridNewRowSubjects,
       decrementMemberCount,
+      canActOnRows,
     ],
   );
 
@@ -1513,6 +1495,13 @@ export const TableResource: React.FC<TableResourceProps> = ({
 
   return (
     <TablePageContext value={tablePageContext}>
+      {columnRemoval && (
+        <ColumnRemovalDialog
+          tableClass={columnRemoval.tableClass}
+          property={columnRemoval.property}
+          onClose={closeColumnRemoval}
+        />
+      )}
       <TablePresenceContext value={presenceValue}>
         <TableCalendarRowContext value={calendarRow}>
           {!embedded && (
@@ -1568,6 +1557,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
            *  will be rejected is worse than none. */}
           {viewQuickAdd && canWrite && (
             <QuickAddBar
+              viewSubject={activeView}
               spec={viewQuickAdd}
               tableSubject={resource.subject}
               tableClass={tableClass}
@@ -1575,7 +1565,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowCreated={notifyEntryCreated}
             />
           )}
-          {appView !== undefined ? (
+          {showsRows && unresolvedAggregates && (
+            <NoMatches role='status'>
+              A total is unavailable. Check its column.
+            </NoMatches>
+          )}
+          {showsRows && unresolvedFilters ? (
+            <NoMatches role='status'>
+              A filter is unavailable. Edit or remove it to see rows.
+            </NoMatches>
+          ) : appView !== undefined ? (
             // An app rendering this table's rows. It sits beside the Table tab
             // rather than in place of it: adding a way to look at rows never
             // takes one away, and the table is always one tab over.
@@ -1666,7 +1665,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 onClearCells={handleClearCells}
                 onCopyCommand={handleCopyCommand}
                 onPasteCommand={handlePaste}
-                onUndoCommand={undoLastItem}
+                onUndoCommand={handleUndo}
                 onColumnReorder={handleColumnReorder}
                 onRowExpand={handleRowExpand}
                 RowHeaderExtra={RowHeaderExtra}

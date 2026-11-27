@@ -214,31 +214,48 @@ export function derivedFilterUnit(spec: DerivedColumnSpec): DerivedFilterUnit {
  * value)` constraints the index can answer, and constraints on computed values
  * the store has to evaluate per row.
  *
- * A filter with no value yet is skipped (its chip stays visible while you edit
- * it), as is one naming a computed column that is gone or still incomplete —
- * asking anyway would silently return an empty table.
+ * An empty draft has no predicate yet. A valued filter that cannot be
+ * compiled is different: callers must wait for its metadata or ask for repair.
  */
 export function splitFilters(
   filters: TableFilter[],
   derivedColumns: DerivedColumnSpec[],
   now: number,
-): { propVals: PropVal[]; expressionFilters: ExpressionFilter[] } {
+): {
+  propVals: PropVal[];
+  expressionFilters: ExpressionFilter[];
+  hasUnresolved: boolean;
+} {
   const specById = new Map(derivedColumns.map(spec => [spec.id, spec]));
   const propVals: PropVal[] = [];
   const expressionFilters: ExpressionFilter[] = [];
+  let hasUnresolved = false;
 
   for (const filter of filters) {
+    if (!filter || typeof filter.value !== 'string') {
+      hasUnresolved = true;
+      continue;
+    }
+
     if (filter.value === '') {
       continue;
     }
 
     if (filter.derived === undefined) {
-      if (filter.property) {
+      const operator = filter.operator ?? 'eq';
+      const supported =
+        DERIVED_FILTER_OPERATORS.includes(operator) ||
+        operator === 'contains' ||
+        operator === 'starts_with';
+
+      if (filter.property && supported) {
         propVals.push({
           property: filter.property,
           value: filter.value,
           operator: filter.operator,
         });
+      } else {
+        hasUnresolved = true;
       }
 
       continue;
@@ -247,13 +264,19 @@ export function splitFilters(
     const spec = specById.get(filter.derived);
     const expression = spec && toExpression(spec);
 
-    if (!spec || !expression) {
+    if (
+      !spec ||
+      !expression ||
+      !DERIVED_FILTER_OPERATORS.includes(filter.operator)
+    ) {
+      hasUnresolved = true;
       continue;
     }
 
     const value = derivedFilterUnit(spec).toNumber(filter.value, now);
 
     if (value === undefined) {
+      hasUnresolved = true;
       continue;
     }
 
@@ -270,7 +293,7 @@ export function splitFilters(
     });
   }
 
-  return { propVals, expressionFilters };
+  return { propVals, expressionFilters, hasUnresolved };
 }
 
 /** How coarsely `now` is passed to the store, so a query has a stable identity. */

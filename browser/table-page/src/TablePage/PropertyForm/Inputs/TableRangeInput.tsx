@@ -11,12 +11,14 @@ interface TableRangeInputProps {
   resource: Resource;
   minProp: string;
   maxProp: string;
+  allowFractions?: boolean;
 }
 
 export function TableRangeInput({
   resource,
   minProp,
   maxProp,
+  allowFractions = false,
 }: TableRangeInputProps): JSX.Element {
   const [minLength, setMinLength] = useNumber(resource, minProp);
   const [maxLength, setMaxLength] = useNumber(resource, maxProp);
@@ -30,15 +32,15 @@ export function TableRangeInput({
 
       // Form state only: the range is written to the table class's
       // constraints when the dialog is confirmed.
-      setError(validateRange(min, max, true));
+      setError(validateRange(min, max, !allowFractions));
     },
-    [setMinLength, setMaxLength, setError],
+    [allowFractions, setMinLength, setMaxLength, setError],
   );
 
   return (
     <div>
       <MinMaxInput
-        round
+        round={!allowFractions}
         maxValue={maxLength}
         minValue={minLength}
         invalid={!!error}

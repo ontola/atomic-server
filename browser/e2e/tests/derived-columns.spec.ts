@@ -82,9 +82,18 @@ test.describe('computed columns', () => {
     await expect(
       page.getByRole('button', { name: 'Edit computed column' }),
     ).toBeVisible();
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-logged'),
-    ).toHaveText(/^\d+:\d{2}:\d{2}$/);
+    // New specs have independent stable IDs, rather than IDs derived from
+    // their labels. Capture the rendered identity and keep checking that same
+    // column through renaming, reload and removal.
+    const derivedCells = row(page, 'Write docs').getByTestId(/^derived-/);
+    await expect(derivedCells).toHaveCount(1);
+    const loggedId = await derivedCells.getAttribute('data-testid');
+
+    if (!loggedId) throw new Error('The computed column has no identity.');
+
+    await expect(row(page, 'Write docs').getByTestId(loggedId)).toHaveText(
+      /^\d+:\d{2}:\d{2}$/,
+    );
 
     // And one with a number typed into the formula rather than read off a
     // column.
@@ -93,13 +102,25 @@ test.describe('computed columns', () => {
       formula: 'addDays(start, 14)',
     });
 
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-next-due'),
-    ).toHaveText(/\d{2}\/\d{2}\/\d{4}/);
+    await expect(derivedCells).toHaveCount(2);
+    const nextDueId = await derivedCells.evaluateAll(
+      (cells, existingId) =>
+        cells
+          .map(cell => cell.getAttribute('data-testid'))
+          .find(id => id !== null && id !== existingId),
+      loggedId,
+    );
+
+    if (!nextDueId)
+      throw new Error('The second computed column has no identity.');
+
+    await expect(row(page, 'Write docs').getByTestId(nextDueId)).toHaveText(
+      /\d{2}\/\d{2}\/\d{4}/,
+    );
 
     // Renaming keeps the column (and its value): it is the same spec, edited.
     const logged = await row(page, 'Write docs')
-      .getByTestId('derived-logged')
+      .getByTestId(loggedId)
       .textContent();
     await page
       .getByRole('button', { name: 'Edit computed column' })
@@ -112,17 +133,18 @@ test.describe('computed columns', () => {
     });
 
     await expect(page.getByText('Time spent')).toBeVisible();
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-logged'),
-    ).toHaveText(logged ?? '');
+    await expect(row(page, 'Write docs').getByTestId(loggedId)).toHaveText(
+      logged ?? '',
+    );
 
     // Both live on the View, so they survive a reload.
     await page.reload();
     await expect(page.getByRole('grid')).toBeVisible();
     await expect(page.getByText('Time spent')).toBeVisible();
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-next-due'),
-    ).toBeVisible();
+    await expect(row(page, 'Write docs').getByTestId(loggedId)).toHaveText(
+      logged ?? '',
+    );
+    await expect(row(page, 'Write docs').getByTestId(nextDueId)).toBeVisible();
 
     // Removing one leaves the other alone — and removes no data.
     await page
@@ -134,12 +156,8 @@ test.describe('computed columns', () => {
       await closeDialogWith('Remove');
     });
 
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-logged'),
-    ).toHaveCount(0);
-    await expect(
-      row(page, 'Write docs').getByTestId('derived-next-due'),
-    ).toBeVisible();
+    await expect(row(page, 'Write docs').getByTestId(loggedId)).toHaveCount(0);
+    await expect(row(page, 'Write docs').getByTestId(nextDueId)).toBeVisible();
     await expect(
       page.getByRole('gridcell', { name: 'Write docs' }),
     ).toBeVisible();

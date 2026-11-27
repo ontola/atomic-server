@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'click_cursor.dart';
 import 'theme.dart';
+import 'strings.dart';
 
 /// One choice of a [HoldFan]: a short label, optionally led by an emoji (or,
 /// in the menu card of [HoldFan.tapOpensMenu], by an [icon]).
@@ -107,7 +108,7 @@ class HoldFan<T> extends StatefulWidget {
   final VoidCallback? onOpen;
 
   /// The accessible long-press action and the menu's title.
-  final String menuLabel;
+  final String? menuLabel;
 
   /// Shown as the current page: drawn as is, and marked selected.
   final bool selected;
@@ -138,7 +139,7 @@ class HoldFan<T> extends StatefulWidget {
     this.layout = HoldFanLayout.list,
     this.holdDuration = HoldMenuStyle.holdDelay,
     this.onOpen,
-    this.menuLabel = 'More options',
+    this.menuLabel,
     this.selected = false,
     this.size = 48,
     this.width,
@@ -558,6 +559,9 @@ class _HoldFanState<T> extends State<HoldFan<T>>
   }
 
   /// The same choices as a plain menu, for assistive technology.
+  String get _menuLabel =>
+      widget.menuLabel ?? AtomicStrings.of(context).moreOptions;
+
   Future<void> _openMenu() async {
     final items = widget.items;
     if (items.isEmpty) return;
@@ -571,8 +575,8 @@ class _HoldFanState<T> extends State<HoldFan<T>>
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
                 widget.tooltip == null
-                    ? widget.menuLabel
-                    : '${widget.tooltip}: ${widget.menuLabel.toLowerCase()}',
+                    ? _menuLabel
+                    : '${widget.tooltip}: ${_menuLabel.toLowerCase()}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -719,7 +723,7 @@ class _HoldFanState<T> extends State<HoldFan<T>>
         // A label: the wash hugs it, rounded, and no ripple spreads from the
         // finger.
         ? InkWell(
-          mouseCursor: WidgetStateMouseCursor.clickable,
+            mouseCursor: WidgetStateMouseCursor.clickable,
             onTap: onTap,
             onTapDown: onDown ? (_) {} : null,
             borderRadius: rounded,
@@ -731,7 +735,7 @@ class _HoldFanState<T> extends State<HoldFan<T>>
             ),
           )
         : InkResponse(
-          mouseCursor: WidgetStateMouseCursor.clickable,
+            mouseCursor: WidgetStateMouseCursor.clickable,
             onTap: onTap,
             splashFactory: NoSplash.splashFactory,
             // The tap itself is the Listener's; this only shows the press.
@@ -813,10 +817,9 @@ class _HoldFanState<T> extends State<HoldFan<T>>
       label: widget.tooltip,
       onTap: onDown ? (widget.tapOpensMenu ? _tapOpen : widget.onTap) : null,
       onLongPress: hold ? _openMenu : null,
-      onLongPressHint: hold ? widget.menuLabel : null,
-      customSemanticsActions: hold
-          ? {CustomSemanticsAction(label: widget.menuLabel): _openMenu}
-          : null,
+      onLongPressHint: hold ? _menuLabel : null,
+      customSemanticsActions:
+          hold ? {CustomSemanticsAction(label: _menuLabel): _openMenu} : null,
       child: target,
     );
   }
