@@ -1,14 +1,21 @@
 name: Atomic Flutter package
 on:
   pull_request:
-    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', '.github/workflows/atomic-flutter.yml']
+    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', 'tools/flutter-i18n.mjs', '.github/workflows/atomic-flutter.yml']
   push:
     branches: [develop]
-    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', '.github/workflows/atomic-flutter.yml']
+    paths: ['packages/atomic_flutter/**', 'packages/atomic_chat/**', 'packages/atomic_store/**', 'packages/atomic_store_flutter/**', 'flutter/**', 'lib/**', 'tools/flutter-i18n.mjs', '.github/workflows/atomic-flutter.yml']
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  translations:
+    # locales/*.po and lib/src/translations.g.dart must be what
+    # `node tools/flutter-i18n.mjs` produces from the t('...') calls.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tools/flutter-i18n.mjs --check
   package:
     runs-on: ubuntu-latest
     strategy:

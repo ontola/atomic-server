@@ -43,10 +43,10 @@ class AtomicUserInfo {
   /// Asks for a new device name.
   final VoidCallback rename;
 
-  String driveLabel(String drive, [AtomicStrings strings = AtomicStrings.en]) =>
+  String driveLabel(String drive, [Translate t = tEn]) =>
       (driveNames[drive]?.isNotEmpty ?? false)
-          ? strings.driveLabel(driveNames[drive]!)
-          : strings.drive;
+          ? shownDriveName(t, driveNames[drive]!)
+          : t('Drive');
 }
 
 /// Who you are and everything that syncs, after the web app's Sync page: your
@@ -103,7 +103,7 @@ class AtomicUserPanel extends StatefulWidget {
 
 class _AtomicUserPanelState extends State<AtomicUserPanel> {
   AtomicSettingsBackend get _backend => widget.backend;
-  AtomicStrings get _s => AtomicStrings.of(context);
+  Translate get t => tOf(context);
 
   final _secretField = TextEditingController();
   bool _loading = true;
@@ -133,7 +133,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     super.didChangeDependencies();
     // The notes the backend writes (after a sign-in, an invite) use the
     // language of the panel.
-    _backend.strings = AtomicStrings.of(context);
+    _backend.t = tOf(context);
   }
 
   @override
@@ -207,9 +207,9 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
   void _copy(String text, String what) {
     Clipboard.setData(ClipboardData(text: text));
     final onCopied = widget.onCopied;
-    if (onCopied != null) return onCopied(context, _s.copied(what));
+    if (onCopied != null) return onCopied(context, t('{what} copied', {'what': what}));
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(_s.copied(what))));
+        .showSnackBar(SnackBar(content: Text(t('{what} copied', {'what': what}))));
   }
 
   void _fail(String what, Object e) => showErrorSnack(context, '$what: $e');
@@ -228,10 +228,10 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(_s.cancel)),
+              onPressed: () => Navigator.pop(ctx), child: Text(t('Cancel'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: Text(_s.save)),
+              child: Text(t('Save'))),
         ],
       ),
     );
@@ -239,13 +239,13 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
 
   Future<void> _rename() async {
     final name =
-        await _ask(_s.deviceNameTitle, _s.onlyThisDevice, initial: _deviceName);
+        await _ask(t('Device name'), t('Only on this device'), initial: _deviceName);
     if (name == null || name.isEmpty) return;
     try {
       await _backend.setDeviceName(name);
       if (mounted) setState(() => _deviceName = name);
     } catch (e) {
-      if (mounted) _fail(_s.couldNotRename, e);
+      if (mounted) _fail(t('Could not rename the device'), e);
     }
   }
 
@@ -260,26 +260,26 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       await open(context, agent);
     } else {
       final name =
-          await _ask(_s.yourName, _s.nameHint, initial: agent.name ?? '');
+          await _ask(t('Your name'), t('Name, seen on all your devices'), initial: agent.name ?? '');
       if (name == null || name.isEmpty) return;
       try {
         await _backend.saveProfile!(
             name: name, description: agent.description ?? '');
       } catch (e) {
-        if (mounted) _fail(_s.couldNotSaveName, e);
+        if (mounted) _fail(t('Could not save the name'), e);
       }
     }
     if (mounted) await _load();
   }
 
   Future<void> _newWorkspace() async {
-    final name = await _ask(_s.newDrive, _s.name);
+    final name = await _ask(t('New drive'), t('Name'));
     if (name == null || name.isEmpty) return;
     try {
       await _backend.createDrive(name);
       await _load();
     } catch (e) {
-      if (mounted) _fail(_s.couldNotCreateDrive, e);
+      if (mounted) _fail(t('Could not create the drive'), e);
     }
   }
 
@@ -288,15 +288,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       await _backend.switchDrive(drive);
       await _load();
     } catch (e) {
-      if (mounted) _fail(_s.couldNotSwitchDrive, e);
+      if (mounted) _fail(t('Could not switch drive'), e);
     }
   }
 
   Future<void> _copySecret() async {
     try {
-      _copy(await _backend.exportSecret(), _s.secretKey);
+      _copy(await _backend.exportSecret(), t('Secret key'));
     } catch (e) {
-      if (mounted) _fail(_s.couldNotCopySecret, e);
+      if (mounted) _fail(t('Could not copy the secret key'), e);
     }
   }
 
@@ -306,7 +306,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       final secret = await _backend.exportSecret();
       if (mounted) setState(() => _revealed = secret);
     } catch (e) {
-      if (mounted) _fail(_s.couldNotShowSecret, e);
+      if (mounted) _fail(t('Could not show the secret key'), e);
     }
   }
 
@@ -356,15 +356,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(_s.signOutTitle),
-        content: Text(_s.signOutBody),
+        title: Text(t('Sign out?')),
+        content: Text(t("Your data stays on this device, but you'll need your secret key to sign back in.")),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(_s.cancel)),
+              child: Text(t('Cancel'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(_s.signOut)),
+              child: Text(t('Sign out'))),
         ],
       ),
     );
@@ -376,12 +376,12 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       _revealed = null;
       if (mounted) await _load();
     } catch (e) {
-      if (mounted) _fail(_s.couldNotSignOut, e);
+      if (mounted) _fail(t('Could not sign out'), e);
     }
   }
 
   Future<void> _openInvite() async {
-    final link = await _ask(_s.openInvite, _s.pasteInvite);
+    final link = await _ask(t('Open an invite'), t('Paste the invite link'));
     if (link == null || link.isEmpty) return;
     try {
       final line = await _backend.openInvite!(link);
@@ -389,13 +389,12 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(line)));
       await _load();
     } catch (e) {
-      if (mounted) _fail(_s.couldNotOpenInvite, e);
+      if (mounted) _fail(t('Could not open the invite'), e);
     }
   }
 
   Future<void> _invite() async {
     final link = _backend.inviteLink!;
-    final s = _s;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -404,15 +403,15 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
         String? failed;
         return StatefulBuilder(
           builder: (ctx, setInner) => AlertDialog(
-            title: Text(s.inviteTitle),
+            title: Text(t('Invite to this drive')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SegmentedButton<bool>(
                   segments: [
-                    ButtonSegment(value: false, label: Text(s.canRead)),
-                    ButtonSegment(value: true, label: Text(s.canEdit)),
+                    ButtonSegment(value: false, label: Text(t('Can read'))),
+                    ButtonSegment(value: true, label: Text(t('Can edit'))),
                   ],
                   selected: {canEdit},
                   onSelectionChanged: (s) => setInner(() {
@@ -426,19 +425,19 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                   const SizedBox(height: SyncGap.s),
                   Text(copied!.startsWith('atomic:')
                       // No server: the invite is redeemed by this device.
-                      ? s.inviteCopiedPeer
-                      : s.inviteCopiedAnyone),
+                      ? t('Link copied. Whoever has it can open this drive in their Atomic app, while this device is online.')
+                      : t('Link copied. Anyone with it can open this drive.')),
                 ],
                 // Inline: this dialog sits above the panel's own messenger.
                 if (failed != null) ...[
                   const SizedBox(height: SyncGap.m),
-                  ErrorText(s.couldNotMakeLink(failed!)),
+                  ErrorText(t('Could not make the link: {why}', {'why': failed!})),
                 ],
               ],
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(ctx), child: Text(s.close)),
+                  onPressed: () => Navigator.pop(ctx), child: Text(t('Close'))),
               TextButton(
                 onPressed: () async {
                   try {
@@ -453,7 +452,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                     if (ctx.mounted) setInner(() => failed = '$e');
                   }
                 },
-                child: Text(s.copyInviteLink),
+                child: Text(t('Copy invite link')),
               ),
             ],
           ),
@@ -463,8 +462,8 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
   }
 
   String _driveLabel(String drive) => (_drives[drive]?.isNotEmpty ?? false)
-      ? _s.driveLabel(_drives[drive]!)
-      : _s.drive;
+      ? shownDriveName(t, _drives[drive]!)
+      : t('Drive');
 
   AtomicUserInfo get _info => AtomicUserInfo(
       agent: _agent,
@@ -516,7 +515,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
     final custom = widget.avatarBuilder;
     if (custom != null) return custom(agent, radius);
     final bytes = agent?.imageBytes;
-    final name = _s.agentLabel(agent?.name ?? '');
+    final name = shownAgentName(t, agent?.name ?? '');
     return CircleAvatar(
       radius: radius,
       backgroundImage: bytes == null ? null : MemoryImage(bytes),
@@ -546,19 +545,19 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 children: [
                   Text(
                     (agent?.name?.isNotEmpty ?? false)
-                        ? _s.agentLabel(agent!.name!)
-                        : _s.you,
+                        ? shownAgentName(t, agent!.name!)
+                        : t('You'),
                     style: SyncText.title(c),
                   ),
                   if (agent != null)
                     // The ID with a copy mark: a bare line of grey text gave
                     // no hint that a tap copies it.
                     Tooltip(
-                      message: _s.copyId,
+                      message: t('Copy ID'),
                       child: InkWell(
                         mouseCursor: WidgetStateMouseCursor.clickable,
                         key: const Key('copy-agent-id'),
-                        onTap: () => _copy(agent.subject, _s.agentId),
+                        onTap: () => _copy(agent.subject, t('Agent ID')),
                         borderRadius: BorderRadius.circular(6),
                         child: Padding(
                           padding:
@@ -588,25 +587,25 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
             SyncActionButton(
               icon: Icons.edit_outlined,
               label:
-                  widget.openProfile != null ? _s.editProfile : _s.editYourName,
+                  widget.openProfile != null ? t('Edit profile') : t('Edit your name'),
               onPressed: _openProfile,
             ),
           if (agent != null)
             SyncActionButton(
               icon: Icons.key,
-              label: _s.copySecretKey,
+              label: t('Copy secret key'),
               onPressed: _copySecret,
             ),
           if (_backend.signOut != null && widget.signInAsOther != null)
             SyncActionButton(
               icon: Icons.swap_horiz,
-              label: _s.signInToAnother,
+              label: t('Sign in to another account'),
               onPressed: _signInAsOther,
             ),
           if (_backend.signOut != null && agent != null)
             SyncActionButton(
               icon: Icons.logout,
-              label: _s.signOut,
+              label: t('Sign out'),
               onPressed: _signOut,
             ),
         ]),
@@ -623,7 +622,7 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
             if (_agent != null)
               SyncRow(
                 icon: Icons.visibility_outlined,
-                title: _revealed == null ? _s.showSecretKey : _s.hideSecretKey,
+                title: _revealed == null ? t('Show secret key') : t('Hide secret key'),
                 onTap: _toggleSecret,
               ),
             if (_revealed != null)
@@ -636,15 +635,17 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                 key: const ValueKey('user-signin-account'),
                 icon: Icons.cloud_outlined,
                 title: _linked == null
-                    ? _s.signInWith(_backend.accountProviderName!)
-                    : _s.linkedTo(_backend.accountProviderName!),
+                    ? t('Sign in with {provider}',
+                        {'provider': _backend.accountProviderName!})
+                    : t('Linked to {provider}',
+                        {'provider': _backend.accountProviderName!}),
                 subtitle: _linked,
                 onTap: _signInWithAccount,
               ),
             if (_backend.signInWithSecret != null)
               SyncRow(
                 icon: Icons.login,
-                title: _s.signInWithSecret,
+                title: t('Sign in with a secret key'),
                 trailing: Icon(
                     _signInOpen ? Icons.expand_less : Icons.expand_more,
                     size: 24,
@@ -660,12 +661,12 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
                     controller: _secretField,
                     obscureText: true,
                     decoration: InputDecoration(
-                        labelText: _s.secretKey, helperText: _s.signInHelper),
+                        labelText: t('Secret key'), helperText: t('What you made on this device is added to it.')),
                   ),
                   const SizedBox(height: SyncGap.m),
                   SyncActionButton(
                     kind: SyncButtonKind.primary,
-                    label: _s.signIn,
+                    label: t('Sign in'),
                     onPressed: _signInWithSecret,
                   ),
                 ]),
@@ -689,21 +690,21 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       child: SyncCard(divided: true, children: [
         SyncRow(
           icon: Icons.folder_outlined,
-          title: active == null ? _s.noDrive : _driveLabel(active),
-          subtitle: _s.drive,
+          title: active == null ? t('No drive') : _driveLabel(active),
+          subtitle: t('Drive'),
           trailing: Icon(Icons.expand_more, size: 24, color: c.textSecondary),
           onTap: _pickWorkspace,
         ),
         if (_backend.inviteLink != null && active != null)
           SyncRow(
             icon: Icons.person_add_alt_outlined,
-            title: _s.inviteSomeone,
+            title: t('Invite someone'),
             onTap: _invite,
           ),
         if (_backend.openInvite != null)
           SyncRow(
             icon: Icons.link,
-            title: _s.openInvite,
+            title: t('Open an invite'),
             onTap: _openInvite,
           ),
       ]),
@@ -728,7 +729,6 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
       }
     }
     final c = syncColors(context);
-    final s = _s;
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -751,11 +751,14 @@ class _AtomicUserPanelState extends State<AtomicUserPanel> {
               SyncRow(
                 icon: Icons.cloud_download_outlined,
                 iconColor: c.textSecondary,
-                title: s.driveNotHereYet(elsewhere),
+                title: elsewhere == 1
+                    ? t('1 more drive not on this device yet')
+                    : t('{n} more drives not on this device yet',
+                        {'n': elsewhere}),
               ),
             SyncRow(
               icon: Icons.add,
-              title: s.newDrive,
+              title: t('New drive'),
               onTap: () => Navigator.pop(ctx, ''),
             ),
           ],
@@ -786,7 +789,7 @@ Future<void> showAtomicUserDialog(
         child: Scaffold(
           backgroundColor: syncColors(ctx).bgBody,
           appBar: AppBar(
-            title: Text(AtomicStrings.of(ctx).userTitle),
+            title: Text(tOf(ctx)('User')),
             backgroundColor: syncColors(ctx).bgBody,
           ),
           body: AtomicUserPanel(

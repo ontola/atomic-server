@@ -33,6 +33,16 @@ theme. The assistant screens built on this package live in
 
 Run `flutter analyze` and `flutter test` in this directory.
 
+## Translations
+
+Like the web app, the English sentence in the code is the key: `t('Cancel')`,
+`t('{what} copied', {'what': label})`, with `final t = tOf(context)` (the locale
+of the context; nl, de, fr, es and id, English for the rest, or
+`AtomicLocale.override = 'nl'`). The sentences live in `locales/*.po` and are
+compiled into the committed `lib/src/translations.g.dart`; after adding or
+changing one, run `node tools/flutter-i18n.mjs` from the repository root
+(`--check` in CI). Missing translations stay English; Dutch never uses dashes.
+
 ## Hosted accounts
 
 `AtomicAccountClient` implements the provider device-code flow, origin-bound

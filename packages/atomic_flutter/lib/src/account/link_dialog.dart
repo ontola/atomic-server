@@ -44,6 +44,8 @@ class AtomicAccountLinkDialog extends StatefulWidget {
 }
 
 class _LinkState extends State<AtomicAccountLinkDialog> {
+  Translate get t => tOf(context);
+
   AtomicDeviceLink? _request;
   String? _error;
   Timer? _timer;
@@ -90,7 +92,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
         case AtomicLinkProgress.pending:
           _timer = Timer(_every(request), () => _poll(request, generation));
         case AtomicLinkProgress.expired:
-          setState(() => _error = AtomicStrings.of(context).codeExpired);
+          setState(() => _error = t('That code expired. Start again.'));
         case AtomicLinkProgress.approved:
           await widget.save(widget.client.exportSession());
           if (mounted) Navigator.pop(context, true);
@@ -123,16 +125,15 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
       '$e'.toLowerCase().contains('too many attempts');
 
   String _friendly(Object e) => _isRateLimit(e)
-      ? AtomicStrings.of(context).tooManyAttempts
+      ? t('Too many attempts. Wait a minute, then try again.')
       : '$e'.replaceFirst('Bad state: ', '');
 
   @override
   Widget build(BuildContext context) {
     final request = _request;
-    final s = AtomicStrings.of(context);
     final theme = Theme.of(context);
     return AlertDialog(
-      title: Text(s.connectTo(widget.client.origin.host)),
+      title: Text(t('Connect to {host}', {'host': widget.client.origin.host})),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -143,13 +144,13 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
               if (request == null && _error == null)
                 const LinearProgressIndicator()
               else if (request != null) ...[
-                Text(s.goToOnAnyDevice),
+                Text(t('On any device, go to')),
                 const SizedBox(height: 4),
                 SelectableText('${widget.client.origin.host}/link',
                     style: theme.textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text(s.andEnterCode),
+                Text(t('and enter this code:')),
                 const SizedBox(height: 16),
                 Center(
                   child: ClickCursor(
@@ -184,19 +185,19 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
                 ),
                 const SizedBox(height: 4),
                 Center(
-                  child: Text(s.orScan, style: theme.textTheme.bodySmall),
+                  child: Text(t('Or scan it with a phone that is signed in.'), style: theme.textTheme.bodySmall),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
                   const SizedBox(width: 14, height: 14, child: AtomicSpinner()),
                   const SizedBox(width: 8),
-                  Text(s.waitingForApproval, style: theme.textTheme.bodySmall),
+                  Text(t('Waiting for approval…'), style: theme.textTheme.bodySmall),
                 ]),
                 if (_error == null && widget.openInBrowser != null) ...[
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.open_in_browser, size: 18),
-                    label: Text(s.openInBrowser),
+                    label: Text(t('Open in your browser')),
                     onPressed: () => widget.openInBrowser!(_url(request)),
                   ),
                 ],
@@ -204,7 +205,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 ErrorText(_error!),
-                TextButton(onPressed: _start, child: Text(s.tryAgain)),
+                TextButton(onPressed: _start, child: Text(t('Try again'))),
               ],
             ],
           ),
@@ -213,7 +214,7 @@ class _LinkState extends State<AtomicAccountLinkDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(s.cancel)),
+            child: Text(t('Cancel'))),
       ],
     );
   }

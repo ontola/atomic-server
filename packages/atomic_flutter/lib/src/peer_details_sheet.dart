@@ -57,10 +57,10 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     final c = syncColors(context);
-    final s = AtomicStrings.of(context);
+    final t = tOf(context);
     final device = widget.device;
     final lastSynced = device.lastSynced;
-    final counts = device.lastSyncCountsText(s);
+    final counts = device.lastSyncCountsText(t);
     final owner = device.agentName ?? device.agent;
 
     return SafeArea(
@@ -73,43 +73,43 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
             Text(device.label, style: SyncText.title(c)),
             const SizedBox(height: SyncGap.s),
             Wrap(spacing: SyncGap.s, runSpacing: SyncGap.s, children: [
-              StatusChip(widget.live ? s.connected : s.offline,
+              StatusChip(widget.live ? t('Connected') : t('Offline'),
                   tone: widget.live ? SyncTone.success : SyncTone.neutral),
-              if (device.relationText(s) != null)
-                StatusChip(device.relationText(s)!),
+              if (device.relationText(t) != null)
+                StatusChip(device.relationText(t)!),
             ]),
             const SizedBox(height: SyncGap.m),
             if (device.isOtherPerson)
               Padding(
                 padding: const EdgeInsets.only(bottom: SyncGap.s),
                 child: Text(
-                  s.someoneElsesDevice,
+                  t("Someone else's device. It gets only what they may read: the drives shared with them."),
                   style: SyncText.caption(c),
                 ),
               ),
             if (owner != null)
               KeyValueRow(
-                label: s.signedInAs,
+                label: t('Signed in as'),
                 value: owner,
                 copy: device.agent,
-                copyLabel: s.agent,
+                copyLabel: t('Agent'),
               ),
             KeyValueRow(
-              label: s.deviceId,
+              label: t('Device ID'),
               value:
                   '${device.nodeId.substring(0, device.nodeId.length.clamp(0, 16))}…',
               copy: device.nodeId,
-              copyLabel: s.id,
+              copyLabel: t('ID'),
               mono: true,
             ),
             KeyValueRow(
-              label: s.lastSynced,
-              value: lastSynced == null ? s.notYet : _when(lastSynced, s),
+              label: t('Last synced'),
+              value: lastSynced == null ? t('Not yet') : _when(lastSynced, t),
               subtitle: counts,
             ),
             if (device.drives > 0)
               KeyValueRow(
-                label: s.drives,
+                label: t('Drives'),
                 value: '${device.drives}',
               ),
             if (_result != null)
@@ -125,13 +125,13 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
             Wrap(spacing: SyncGap.s, runSpacing: SyncGap.s, children: [
               if (widget.syncPeer != null)
                 SyncActionButton(
-                  label: _syncing ? s.syncing : s.syncNow,
+                  label: _syncing ? t('Syncing…') : t('Sync now'),
                   icon: Icons.sync,
                   kind: SyncButtonKind.primary,
                   onPressed: _syncing ? null : _syncNow,
                 ),
               SyncActionButton(
-                label: s.forgetDevice,
+                label: t('Forget this device'),
                 icon: Icons.link_off,
                 kind: SyncButtonKind.destructive,
                 onPressed: () => Navigator.of(context).pop(true),
@@ -143,12 +143,12 @@ class _PeerDetailsSheetState extends State<PeerDetailsSheet> {
     );
   }
 
-  static String _when(int millis, AtomicStrings s) {
+  static String _when(int millis, Translate t) {
     final delta =
         DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
-    if (delta.inSeconds < 60) return s.justNowCap;
-    if (delta.inMinutes < 60) return s.minutesAgo(delta.inMinutes);
-    if (delta.inHours < 24) return s.hoursAgo(delta.inHours);
-    return s.daysAgo(delta.inDays);
+    if (delta.inSeconds < 60) return t('Just now');
+    if (delta.inMinutes < 60) return t('{n}m ago', {'n': delta.inMinutes});
+    if (delta.inHours < 24) return t('{n}h ago', {'n': delta.inHours});
+    return t('{n}d ago', {'n': delta.inDays});
   }
 }

@@ -1,0 +1,678 @@
+msgid ""
+msgstr ""
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Source-Language: en\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../lib/src/account/link_dialog.dart
+msgid "That code expired. Start again."
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Too many attempts. Wait a minute, then try again."
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Connect to {host}"
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "On any device, go to"
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "and enter this code:"
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Or scan it with a phone that is signed in."
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Waiting for approval…"
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Open in your browser"
+msgstr ""
+
+#: ../lib/src/account/link_dialog.dart
+msgid "Try again"
+msgstr "Volver a intentarlo"
+
+#: ../lib/src/account/link_dialog.dart
+#: ../lib/src/server_settings_section.dart
+#: ../lib/src/user_panel.dart
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: ../lib/src/atomic_spinner.dart
+msgid "Loading"
+msgstr "Cargando"
+
+#: ../lib/src/copyable_error.dart
+msgid "Show less"
+msgstr "Mostrar menos"
+
+#: ../lib/src/copyable_error.dart
+msgid "Show more"
+msgstr ""
+
+#: ../lib/src/copyable_error.dart
+msgid "Copied"
+msgstr "Copiado"
+
+#: ../lib/src/copyable_error.dart
+#: ../lib/src/error_snack.dart
+msgid "Copy"
+msgstr "Copiar"
+
+#: ../lib/src/device_stats.dart
+msgid "{count} resource"
+msgstr ""
+
+#: ../lib/src/device_stats.dart
+msgid "{count} resources"
+msgstr ""
+
+#: ../lib/src/device_stats.dart
+msgid "just now"
+msgstr ""
+
+#: ../lib/src/device_stats.dart
+#: ../lib/src/peer_details_sheet.dart
+msgid "{n}m ago"
+msgstr ""
+
+#: ../lib/src/device_stats.dart
+#: ../lib/src/peer_details_sheet.dart
+msgid "{n}h ago"
+msgstr ""
+
+#: ../lib/src/device_stats.dart
+#: ../lib/src/peer_details_sheet.dart
+msgid "{n}d ago"
+msgstr ""
+
+#: ../lib/src/hold_fan.dart
+msgid "More options"
+msgstr ""
+
+#: ../lib/src/paired_device.dart
+msgid "Your device"
+msgstr ""
+
+#: ../lib/src/paired_device.dart
+msgid "Shared with you"
+msgstr ""
+
+#: ../lib/src/paired_device.dart
+msgid "Holds your data"
+msgstr ""
+
+#: ../lib/src/paired_device.dart
+msgid "received {n}"
+msgstr ""
+
+#: ../lib/src/paired_device.dart
+msgid "sent {n}"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+#: ../lib/src/server_settings_section.dart
+msgid "Connected"
+msgstr "Conectado"
+
+#: ../lib/src/peer_details_sheet.dart
+#: ../lib/src/this_device_card.dart
+msgid "Offline"
+msgstr "Sin conexión"
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Someone else's device. It gets only what they may read: the drives shared with them."
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Signed in as"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Agent"
+msgstr "Agente"
+
+#: ../lib/src/peer_details_sheet.dart
+#: ../lib/src/server_settings_section.dart
+#: ../lib/src/this_device_card.dart
+msgid "Device ID"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+#: ../lib/src/server_settings_section.dart
+msgid "ID"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+#: ../lib/src/server_settings_section.dart
+msgid "Last synced"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Not yet"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Drives"
+msgstr "Unidades"
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Syncing…"
+msgstr "Sincronizando…"
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Sync now"
+msgstr "Sincronizar ahora"
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Forget this device"
+msgstr ""
+
+#: ../lib/src/peer_details_sheet.dart
+msgid "Just now"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Could not connect: {why}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Already up to date"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Synced 1 resource to {server}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Synced {n} resources to {server}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+#: ../lib/src/sync_widgets.dart
+#: ../lib/src/user_panel.dart
+msgid "{what} copied"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+#: ../lib/src/user_panel.dart
+msgid "Copy ID"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Devices"
+msgstr "Dispositivos"
+
+#: ../lib/src/server_settings_section.dart
+msgid "No other devices yet. Pair one below."
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "No other devices yet. Pair one below, or add an always-on device by address."
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+#: ../lib/src/this_device_card.dart
+msgid "Connected now"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "trying again in"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Search again"
+msgstr "Buscar de nuevo"
+
+#: ../lib/src/server_settings_section.dart
+msgid "In use"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Paired"
+msgstr "Vinculado"
+
+#: ../lib/src/server_settings_section.dart
+msgid "last synced {ago}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Sync drive here"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Switch to this"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Remove"
+msgstr "Eliminar"
+
+#: ../lib/src/server_settings_section.dart
+msgid "Not reachable"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "{n} resources"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "files {files} · edits {edits}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Connected to you · not saved"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Server, address unknown"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Up to date, syncing live"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Not synced yet"
+msgstr "Aún no se ha sincronizado"
+
+#: ../lib/src/server_settings_section.dart
+msgid "via {relay}"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Data size unknown"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Pair with QR code"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Connect by address"
+msgstr ""
+
+#: ../lib/src/server_settings_section.dart
+msgid "Add"
+msgstr "Añadir"
+
+#: ../lib/src/strings.dart
+msgid "Me"
+msgstr ""
+
+#: ../lib/src/strings.dart
+msgid "Me's Drive"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "This device"
+msgstr "Este dispositivo"
+
+#: ../lib/src/this_device_card.dart
+msgid "Device name, only on this device. Tap to rename."
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "Status"
+msgstr "Estado"
+
+#: ../lib/src/this_device_card.dart
+msgid "Online"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "Version"
+msgstr "Versión"
+
+#: ../lib/src/this_device_card.dart
+msgid "Identity"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "Synced with"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "No device yet"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "1 device"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "{n} devices"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "Last sync"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "None"
+msgstr "Ninguno"
+
+#: ../lib/src/this_device_card.dart
+msgid "Storage"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "{size} files"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "{size} · 1 drive"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "{size} · {n} drives"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "Count again"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+msgid "On disk"
+msgstr ""
+
+#: ../lib/src/this_device_card.dart
+#: ../lib/src/user_panel.dart
+msgid "Drive"
+msgstr "Unidad"
+
+#: ../lib/src/this_device_card.dart
+msgid "Storage of {name}"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Save"
+msgstr "Guardar"
+
+#: ../lib/src/user_panel.dart
+msgid "Device name"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Only on this device"
+msgstr "Solo en este dispositivo"
+
+#: ../lib/src/user_panel.dart
+msgid "Could not rename the device"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Your name"
+msgstr "Tu nombre"
+
+#: ../lib/src/user_panel.dart
+msgid "Name, seen on all your devices"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not save the name"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "New drive"
+msgstr "Nueva unidad"
+
+#: ../lib/src/user_panel.dart
+msgid "Name"
+msgstr "Nombre"
+
+#: ../lib/src/user_panel.dart
+msgid "Could not create the drive"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not switch drive"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not copy the secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not show the secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign out?"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Your data stays on this device, but you'll need your secret key to sign back in."
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign out"
+msgstr "Cerrar sesión"
+
+#: ../lib/src/user_panel.dart
+msgid "Could not sign out"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Open an invite"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Paste the invite link"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not open the invite"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Invite to this drive"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Can read"
+msgstr "Puede leer"
+
+#: ../lib/src/user_panel.dart
+msgid "Can edit"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Link copied. Whoever has it can open this drive in their Atomic app, while this device is online."
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Link copied. Anyone with it can open this drive."
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Could not make the link: {why}"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+#: ../lib/src/user_panel.dart
+msgid "Close"
+msgstr "Cerrar"
+
+#: ../lib/src/user_panel.dart
+msgid "Copy invite link"
+msgstr "Copiar enlace de invitación"
+
+#: ../lib/src/user_panel.dart
+msgid "You"
+msgstr "Tú"
+
+#: ../lib/src/user_panel.dart
+msgid "Agent ID"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Edit profile"
+msgstr "Editar perfil"
+
+#: ../lib/src/user_panel.dart
+msgid "Edit your name"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Copy secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign in to another account"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Show secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Hide secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign in with {provider}"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Linked to {provider}"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign in with a secret key"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "What you made on this device is added to it."
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Sign in"
+msgstr "Iniciar sesión"
+
+#: ../lib/src/user_panel.dart
+msgid "No drive"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "Invite someone"
+msgstr "Invitar a alguien"
+
+#: ../lib/src/user_panel.dart
+msgid "1 more drive not on this device yet"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "{n} more drives not on this device yet"
+msgstr ""
+
+#: ../lib/src/user_panel.dart
+msgid "User"
+msgstr "Usuario"
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Account"
+msgstr "Cuenta"
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "You are signed out."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Could not open the browser."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "and"
+msgstr "y"
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Untitled drive"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "You are signed in."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Added to your account: {names}."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Your drive is not on this device yet. Connect to a server or add a device to get it."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "There is no drive to invite to."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "This device cannot be reached by others right now. {why}"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "the drive"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "You can now edit {what}, and it is open."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "You can now read {what}, and it is open."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "It is still loading from the other device."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Everything was already in sync."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Received {received} and sent {sent} items."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "That is not a code from another device."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Device added. {detail}"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Add a device"
+msgstr "Añadir un dispositivo"
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Type this code on your other device, or scan it, to sync without a server."
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Copy code"
+msgstr "Copiar código"
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Code from another device"
+msgstr ""
+
+#: ../../atomic_store_flutter/lib/src/settings_backend.dart
+msgid "Add device"
+msgstr ""

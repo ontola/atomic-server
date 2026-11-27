@@ -560,7 +560,7 @@ class _HoldFanState<T> extends State<HoldFan<T>>
 
   /// The same choices as a plain menu, for assistive technology.
   String get _menuLabel =>
-      widget.menuLabel ?? AtomicStrings.of(context).moreOptions;
+      widget.menuLabel ?? tOf(context)('More options');
 
   Future<void> _openMenu() async {
     final items = widget.items;

@@ -272,7 +272,7 @@ class KeyValueRow extends StatelessWidget {
             Clipboard.setData(ClipboardData(text: copy!));
             ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
                 content:
-                    Text(AtomicStrings.of(context).copied(copyLabel ?? label)),
+                    Text(tOf(context)('{what} copied', {'what': copyLabel ?? label})),
                 duration: const Duration(seconds: 2)));
           }
         : onTap;
