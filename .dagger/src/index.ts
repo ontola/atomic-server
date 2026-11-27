@@ -3295,10 +3295,15 @@ export class AtomicServer {
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
           systemctl stop atomic &&
           data_dir=$(sed -n "s/^ATOMIC_DATA_DIR=//p" ~/.env 2>/dev/null | tail -1 | tr -d "\\"\\047") &&
-          store=\${data_dir:-\$HOME/.local/share/atomic-data}/store/atomic.redb &&
-          test -f "$store" &&
-          cp "$store" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
-          ls -1t ~/atomic-store-2*.redb | tail -n +4 | xargs -r rm -f &&
+          store_dir=\${data_dir:-\$HOME/.local/share/atomic-data}/store &&
+          if [ -f "$store_dir/atomic.redb" ]; then
+            cp "$store_dir/atomic.redb" ~/atomic-store-$(date +"%Y-%m-%dT%H:%M:%S").redb &&
+            ls -1t ~/atomic-store-2*.redb | tail -n +4 | xargs -r rm -f;
+          elif [ -d "$store_dir" ]; then
+            cp -a "$store_dir" ~/atomic-store-sled-$(date +"%Y-%m-%dT%H:%M:%S");
+          else
+            echo "No store found in $store_dir" >&2; false;
+          fi &&
           systemctl start atomic &&
           systemctl status atomic
         '`,
