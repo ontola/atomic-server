@@ -84,8 +84,10 @@ Canonical controls skip whole-integration legacy and adoption scans; actual
 workers and setup retain their full evidence checks. Running status shows the
 page being read and includes a total when declared for a single walk. Progress
 is held in the active host execution and status updates retain the same controls.
-Choose source opens the catalog form inside the item's Sync tab. Its host can
-resolve entrypoints for that table's entity type before a saved filter exists.
+An unconfigured item's Sync tab shows its catalog inputs directly and hides
+the saved-filter picker until it has rules. Its host can resolve entrypoints
+for that table's entity type before a saved filter exists. The GitHub catalog
+requires a repository scope for Issues and pull requests.
 Completed status belongs to the selected saved filter. Cached rows do not imply
 that a new filter has completed a sync or contains those rows. Column label
 changes retain stable Property IDs; API-owned cell values can change on the next
@@ -113,6 +115,11 @@ cold rows hydrate before ownership validation. Canonical `github` replaces
 is retained rather than deleted or merged automatically.
 
 ## Dependency and verification
+
+- Inline sync scope passed 96 focused tests, both typechecks, and ten Chromium
+  journeys. The authenticated GitHub Issues test verifies the initial scope
+  fields and the absence of provider reads. The Public test also saves and runs
+  a repository filter and verifies the form at mobile width.
 
 - In-place collection source setup and the Syncable Collections label passed
   112 focused tests, both typechecks, all six translation catalog checks, and

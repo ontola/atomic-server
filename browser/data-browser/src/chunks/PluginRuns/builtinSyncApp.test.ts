@@ -1885,19 +1885,20 @@ describe('shared entity tables and independent saved filters', () => {
     }
   });
 
-  it('asks for a filter in Sync instead of opening its stored data through a second filter list', async () => {
+  it('shows filter setup in Sync before a filter has been saved', async () => {
     const set = setup();
     Object.assign(set.context, { rule: undefined });
     const element = document.createElement('div');
     await view({ root: element, store: set.store });
-    expect(element.textContent).toContain('Select a saved filter above');
+    expect(element.textContent).toContain('Save filter');
+    expect(element.textContent).not.toContain('Choose source');
     expect(element.textContent).not.toContain('My saved filter');
     expect(element.textContent).not.toContain('Never');
     expect(set.request).not.toHaveBeenCalled();
     expect(set.store.ui.openResource).not.toHaveBeenCalled();
   });
 
-  it('chooses a Public source in place and saves the bound filter on this collection', async () => {
+  it('shows Public scope fields immediately and saves the bound filter on this collection', async () => {
     const document = withPublicEntrypoint();
     const set = setup('collection', {
       document,
@@ -1923,31 +1924,35 @@ describe('shared entity tables and independent saved filters', () => {
     const button = (text: string) =>
       [...element.querySelectorAll('button')].find(b => b.textContent === text);
     await view({ root: element, store: set.store });
-    button('Choose source')!.click();
-    await vi.waitFor(() => expect(button('Save filter')).toBeDefined());
+    expect(button('Choose source')).toBeUndefined();
+    expect(button('Save filter')?.closest('[hidden]')).toBeNull();
     expect(set.store.ui.openResource).not.toHaveBeenCalled();
     expect(set.request).not.toHaveBeenCalled();
 
     const collection = element.querySelector<HTMLSelectElement>(
       'select[aria-label="Source collection"]',
-    )!;
-    expect([...collection.options].map(option => option.value)).toEqual([
-      'tasks',
-    ]);
+    );
+
+    if (collection) {
+      expect(collection.closest('[hidden]')).not.toBeNull();
+      expect(collection.value).toBe('tasks');
+    }
+
     const source = element.querySelector<HTMLSelectElement>(
       'select[aria-label="Source"]',
     )!;
-    source.value = '/public/{team}/{space}';
-    source.dispatchEvent(new Event('change'));
+    expect(source.closest('details:not([open])')).not.toBeNull();
+    expect(source.value).toBe('/public/{team}/{space}');
 
     for (const [label, value] of [
-      ['Filter name', 'Public tasks'],
       ['Team reference', 'one'],
       ['Workspace reference', 'two'],
     ]) {
-      element.querySelector<HTMLInputElement>(
+      const input = element.querySelector<HTMLInputElement>(
         `input[aria-label="${label}"]`,
-      )!.value = value;
+      )!;
+      expect(input.closest('[hidden], details:not([open])')).toBeNull();
+      input.value = value;
     }
 
     button('Save filter')!.click();
@@ -1958,7 +1963,7 @@ describe('shared entity tables and independent saved filters', () => {
     expect(set.store.ui.openResource).toHaveBeenCalledWith(saved);
     expect(table[P + 'table-views']).toContain(saved);
     expect(nodes(set.data, 'collection')).toEqual([[root, table]]);
-    expect(set.data.get(saved)?.[P + 'name']).toBe('Public tasks');
+    expect(set.data.get(saved)?.[P + 'name']).toBe('one / two');
     expect(config(set.data.get(saved)!).definition).toMatchObject({
       source: {
         kind: 'bound',

@@ -1389,8 +1389,10 @@ This does not yet prove restoration of the user's private staging workspace.
   target, failed signed read, pending delete, or competing source. The Chromium
   reinstall journey uses the Trash and Apps menus and checks that a second
   chooser visit reuses the new App.
-- The Public Issues Chromium journey opens Choose source on the collection's
-  Sync tab, saves a repository filter within that table, and syncs an issue.
+- The Public Issues Chromium journey fills repository owner and name directly
+  on the collection's Sync tab, saves a filter within that table, and syncs an
+  issue. The authenticated journey also checks the initial repository inputs
+  and the absent saved-filter selector.
   Frame and transport tests verify that opening setup does no provider read and
   that catalog entrypoint reads cannot reach unrelated collections or fetch rows
   before the filter exists. Tab tests cover Syncable Collections labels for

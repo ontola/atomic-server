@@ -1564,6 +1564,26 @@ test.describe('catalog-driven built-in Syncables', () => {
     ).toBeVisible();
     expect(requests.providerRequests).toHaveLength(setupReads);
     expect(requests.documentRequests).toHaveLength(setupDocuments);
+    await openRow(page, 'Issues and pull requests');
+    await browse(page);
+    expect(requests.issueConnections).toEqual([]);
+    await selectView(page, 'Sync');
+    await expect(
+      iframe.getByLabel('Repository owner', { exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(
+      iframe.getByLabel('Repository name', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('combobox', { name: 'Saved filter', exact: true }),
+    ).toHaveCount(0);
+    expect(requests.issueConnections).toEqual([]);
+    expect(requests.providerRequests).toHaveLength(setupReads);
+    await testInfo.attach('github-issues-sync-repository-scope', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.goto(principalUrl);
     await openRow(page, 'Organizations');
     const organizationsSubject = await getCurrentSubject(page),
       organizationsUrl = page.url();
@@ -2891,7 +2911,7 @@ test.describe('catalog-driven built-in Syncables', () => {
     expect(await principalApps(page)).toEqual(replacement);
   });
 
-  test('chooses a Public Issues source inside the current collection', async ({
+  test('sets a repository scope directly in the Public Issues Sync tab', async ({
     page,
   }, testInfo) => {
     test.setTimeout(150_000);
@@ -2942,23 +2962,20 @@ test.describe('catalog-driven built-in Syncables', () => {
     await openRow(page, 'Issues and pull requests');
     const table = await getCurrentSubject(page);
     await selectView(page, 'Sync');
-    const button = iframe.getByRole('button', {
-      name: 'Choose source',
-      exact: true,
-    });
-    await expect(button).toBeVisible({ timeout: 30_000 });
     const syncUrl = page.url();
-    await button.click();
-    const sourceCollection = iframe.getByLabel('Source collection', {
-      exact: true,
-    });
-    await expect(sourceCollection).toBeVisible();
+    await expect(
+      iframe.getByLabel('Repository owner', { exact: true }),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveURL(syncUrl);
-    await expect(sourceCollection.locator('option')).toHaveCount(1);
-    await expect(sourceCollection).toHaveValue('repositoryIssues');
-    await iframe
-      .getByLabel('Source', { exact: true })
-      .selectOption('/repos/{owner}/{repo}');
+    await expect(
+      iframe.getByRole('button', { name: 'Choose source', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      iframe.getByLabel('Source collection', { exact: true }),
+    ).toBeHidden();
+    await expect(
+      page.getByRole('combobox', { name: 'Saved filter', exact: true }),
+    ).toHaveCount(0);
     await iframe.getByLabel('Repository owner', { exact: true }).fill('ontola');
     await iframe
       .getByLabel('Repository name', { exact: true })
@@ -2967,10 +2984,26 @@ test.describe('catalog-driven built-in Syncables', () => {
       .getByLabel('Filter name', { exact: true })
       .fill('Atomic Server');
     expect(providerReads).toEqual([]);
-    await testInfo.attach('choose-source-in-collection', {
+    await testInfo.attach('public-issues-sync-repository-scope', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
+    const desktopViewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    const sidebar = page.getByTestId('sidebar');
+    if (
+      (await sidebar.isVisible()) &&
+      (await sidebar.evaluate(node => getComputedStyle(node).opacity !== '0'))
+    )
+      await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+    await expect(
+      iframe.getByRole('button', { name: 'Save filter', exact: true }),
+    ).toBeInViewport();
+    await testInfo.attach('public-issues-sync-repository-scope-mobile', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize(desktopViewport);
     await iframe
       .getByRole('button', { name: 'Save filter', exact: true })
       .click();

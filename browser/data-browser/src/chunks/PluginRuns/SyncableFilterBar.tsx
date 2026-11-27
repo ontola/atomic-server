@@ -220,6 +220,11 @@ export function SyncableFilterBar({
     state.error ??
     automaticError ??
     (!selected && typeof status?.error === 'string' ? status.error : undefined);
+  const showFilter = !syncView || state.rules.length > 0;
+  const showStatus =
+    !!selected || queued || running || !!status?.error || status?.incomplete;
+
+  if (!showFilter && !showStatus && !alert) return null;
 
   const choose = (subject: string) => {
     setRenaming(false);
@@ -261,32 +266,33 @@ export function SyncableFilterBar({
 
   return (
     <Bar aria-label='Saved collection filters'>
-      <label htmlFor={filterId}>Filter</label>
-      <select
-        id={filterId}
-        aria-label='Saved filter'
-        value={selected?.resource.subject ?? ''}
-        onChange={event => choose(event.target.value)}
-      >
-        {!syncView && <option value=''>All cached rows</option>}
-        {syncView && !selected && (
-          <option disabled value=''>
-            Select a saved filter
-          </option>
-        )}
-        {state.rules.map(rule => (
-          <option key={rule.resource.subject} value={rule.resource.subject}>
-            {String(
-              rule.resource.get(core.properties.name) ?? rule.config.resource,
+      {showFilter && (
+        <>
+          <label htmlFor={filterId}>Filter</label>
+          <select
+            id={filterId}
+            aria-label='Saved filter'
+            value={selected?.resource.subject ?? ''}
+            onChange={event => choose(event.target.value)}
+          >
+            {!syncView && <option value=''>All cached rows</option>}
+            {syncView && !selected && (
+              <option disabled value=''>
+                Select a saved filter
+              </option>
             )}
-          </option>
-        ))}
-      </select>
-      {(selected ||
-        queued ||
-        running ||
-        status?.error ||
-        status?.incomplete) && (
+            {state.rules.map(rule => (
+              <option key={rule.resource.subject} value={rule.resource.subject}>
+                {String(
+                  rule.resource.get(core.properties.name) ??
+                    rule.config.resource,
+                )}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+      {showStatus && (
         <span role='status'>
           {status?.paused
             ? 'Paused'
@@ -320,7 +326,7 @@ export function SyncableFilterBar({
           Rename filter
         </Button>
       )}
-      {renaming && (
+      {selected && renaming && (
         <form
           onSubmit={event => {
             event.preventDefault();

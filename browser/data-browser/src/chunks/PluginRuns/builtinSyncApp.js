@@ -1794,11 +1794,16 @@ export async function view({ root, store }) {
       return;
     }
 
+    const collectionView = context.kind === 'collection';
     const picker = el('div');
-    picker.append(el('h3', 'Save a filter'));
+    picker.append(
+      el('h3', collectionView ? 'Set sync scope' : 'Save a filter'),
+    );
     const filterName = el('input');
     filterName.setAttribute('aria-label', 'Filter name');
-    filterName.placeholder = 'Filter name';
+    filterName.placeholder = collectionView
+      ? 'Filter name (optional)'
+      : 'Filter name';
     const select = el('select');
     select.setAttribute('aria-label', 'Source collection');
     const inputs = el('div');
@@ -1807,24 +1812,9 @@ export async function view({ root, store }) {
       .filter(item => !context.resource || item.resource === context.resource);
     const entrypoint = el('select');
     entrypoint.setAttribute('aria-label', 'Source');
-
-    if (context.kind === 'collection') {
-      root.append(
-        el('h3', 'Saved filter sync'),
-        el(
-          'p',
-          'Select a saved filter above for its sync controls, or choose a source to create one.',
-          'muted',
-        ),
-      );
-      picker.hidden = true;
-      const choose = button('Choose source', () => {
-        picker.hidden = false;
-        choose.hidden = true;
-        select.focus();
-      });
-      root.append(choose);
-    }
+    const sourceControls = el('div');
+    const advanced = el('details');
+    advanced.append(el('summary', 'Advanced source options'));
 
     if (!definitions.length) {
       picker.append(
@@ -1837,6 +1827,13 @@ export async function view({ root, store }) {
       root.append(picker, ...warnings());
 
       return;
+    }
+
+    if (collectionView) {
+      picker.append(
+        el('p', 'Save a filter to set what this table syncs.', 'muted'),
+      );
+      select.hidden = definitions.length === 1;
     }
 
     for (const collection of definitions) {
@@ -1889,32 +1886,51 @@ export async function view({ root, store }) {
       const direct = el('option', 'Collection parameters');
       direct.value = '';
       entrypoint.append(direct);
-      entrypoint.hidden = !sources.length;
+      sourceControls.hidden = !sources.length;
+      const advancedOnly = collectionView && sources.length === 1;
+
+      if (advancedOnly) {
+        advanced.open = false;
+        advanced.append(entrypoint);
+      }
+
+      sourceControls.replaceChildren(advancedOnly ? advanced : entrypoint);
       renderInputs();
     };
 
     select.addEventListener('change', renderEntrypoints);
     entrypoint.addEventListener('change', renderInputs);
     renderEntrypoints();
-    controls.append(
-      filterName,
-      select,
-      entrypoint,
-      button('Save filter', () =>
-        app.createCollection(
-          select.value,
-          Object.fromEntries(
-            [...inputs.querySelectorAll('input')].map(input => [
-              input.name,
-              input.value,
-            ]),
-          ),
-          entrypoint.value || undefined,
-          filterName.value.trim() || undefined,
-        ),
-      ),
-    );
-    picker.append(controls, inputs);
+    const save = button('Save filter', () => {
+      const parameters = [...inputs.querySelectorAll('input')];
+
+      for (const input of parameters) {
+        if (!input.reportValidity()) return;
+      }
+
+      const values = Object.fromEntries(
+        parameters.map(input => [input.name, input.value.trim()]),
+      );
+      const name =
+        filterName.value.trim() ||
+        (collectionView ? Object.values(values).join(' / ') : undefined);
+
+      return app.createCollection(
+        select.value,
+        values,
+        entrypoint.value || undefined,
+        name || undefined,
+      );
+    });
+
+    if (collectionView) {
+      controls.append(filterName, save);
+      picker.append(select, inputs, controls, sourceControls);
+    } else {
+      controls.append(filterName, select, sourceControls, save);
+      picker.append(controls, inputs);
+    }
+
     root.append(picker, ...warnings());
 
     return;

@@ -75,18 +75,18 @@ total when the provider supplies one for a single collection read.
 Each filter has its own sync state and **Pause**/**Resume** controls. Pausing one
 filter retains its rows and does not pause another. Runs continue while you
 browse other views or resources in the app. Closing the app stops them. Paused
-status survives a reload. Use **Choose source** on an unconfigured collection's
-Sync tab to create a saved filter for that table. Catalog inputs and
-relationships determine the sources shown there.
+status survives a reload. An unconfigured collection's **Sync** tab shows the
+catalog inputs for its first filter. The saved-filter selector appears once
+there is a filter to select.
 Sync history describes the selected filter, rather than every row in its table.
 The entry count shown in Sync belongs to its last read attempt. Existing rows
 alone do not imply that this particular filter has completed a successful read.
 
-To link a public repository, open **GitHub · Public**. In its Sync view,
-select the Issues collection and the catalog's repository source, enter its
-owner/name, give the filter a name and choose **Save filter**. The source resolves
-to the repository's canonical identity. This branch uses GitHub's public API
-without a GitHub account. GitHub's Issues endpoint includes pull requests.
+The GitHub catalog reads **Issues and pull requests** per repository. To
+create a repository filter, open **Sync**, enter the owner and name, and choose
+**Save filter**. Open **Sync** again and choose **Sync now** to start that scope.
+The catalog resolves the name to the repository's canonical identity. Use
+**GitHub · Public** to sync public repositories without signing in to GitHub.
 
 **Table** follows the schema derived from the API description and provides
 **Open** for catalog-declared collection navigation. Item tables use Table and
