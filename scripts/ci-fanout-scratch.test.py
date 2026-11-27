@@ -193,4 +193,29 @@ class ContainerdConfigTests(unittest.TestCase):
                      'root = "/var/lib/containerd"\n# root = "/mnt/atomic-ci/containerd"\n'):
             with self.subTest(text=text), self.assertRaises(AssertionError): self.validate_dump(text)
 
+
+class InitializerOutputTests(unittest.TestCase):
+    def run_setup(self, child_code):
+        functions = [node for node in ast.parse(scratch.INITIALIZE).body
+                     if isinstance(node, ast.FunctionDef) and node.name == 'run']
+        self.assertEqual(len(functions), 1)
+        source = 'import json,subprocess,sys\n' + ast.unparse(functions[0])
+        source += '\nrun([sys.executable,"-c",' + repr(child_code) + '])'
+        source += '\nprint(json.dumps({"mount_target":"/mnt/atomic-ci"}))\n'
+        return subprocess.run([sys.executable, '-c', source], capture_output=True, text=True, timeout=10)
+
+    def test_actual_setup_helper_keeps_progress_on_stderr_and_stdout_json_only(self):
+        result = self.run_setup('import sys;print("format progress");print("device diagnostic",file=sys.stderr)')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {'mount_target': '/mnt/atomic-ci'})
+        self.assertIn('format progress', result.stderr)
+        self.assertIn('device diagnostic', result.stderr)
+
+    def test_actual_setup_helper_still_fails_closed_and_preserves_diagnostics(self):
+        result = self.run_setup('import sys;print("setup failed",file=sys.stderr);sys.exit(7)')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
+        self.assertIn('setup failed', result.stderr)
+        self.assertIn('CalledProcessError', result.stderr)
+
 if __name__=='__main__': unittest.main()

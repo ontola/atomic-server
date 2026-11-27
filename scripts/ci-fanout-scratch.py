@@ -87,7 +87,8 @@ assert cfg['storage_kind']=='cold-scratch' and cfg['attachment_verified'] is Tru
 assert re.fullmatch(r'[a-f0-9]{32}',cfg['nonce']) and re.fullmatch(r'[a-f0-9-]{36}',cfg['filesystem_uuid'])
 assert datetime.datetime.fromisoformat(cfg['format_intent_at']).utcoffset() is not None
 def out(args): return subprocess.check_output(args,text=True).strip()
-def run(args): subprocess.run(args,check=True)
+# Setup tools may print progress; stdout is reserved for the proof JSON.
+def run(args): subprocess.run(args,check=True,stdout=sys.stderr)
 assert out(['curl','-fsS','http://169.254.169.254/metadata/v1/id'])==str(cfg['droplet_id'])
 assert not root.is_symlink() and root.resolve()==root
 dev='/dev/disk/by-id/scsi-0DO_Volume_'+cfg['name']; real=os.path.realpath(dev)
