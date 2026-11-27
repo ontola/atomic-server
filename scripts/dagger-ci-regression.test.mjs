@@ -406,6 +406,7 @@ test('focused Rust tests apply the constructor cap to Cargo and nextest compilat
   );
   assert.match(nextest?.[1][2], /--build-jobs 1 /);
   assert.match(nextest?.[1][2], /--test-threads 2 /);
+  assert.match(nextest?.[1][2], /cargo nextest run --no-fail-fast /);
 });
 
 function nextestCommand() {

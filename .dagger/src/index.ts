@@ -2100,7 +2100,7 @@ export class AtomicServer {
           'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$STAGE" && ' +
           'mv -f "$STAGE/cargo-nextest" "$BIN_DIR/cargo-nextest" && ' +
           'rm -rf "$STAGE"; fi && ' +
-          'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
+          'cargo nextest run --no-fail-fast --locked --workspace --exclude atomic-server-tauri ' +
           '--no-default-features --features light,wasm-plugins ' +
           `--build-jobs ${this.cappedBuildJobs(this.hostKnobs.nextestBuildJobs)} ` +
           `--test-threads ${threads} ` +
