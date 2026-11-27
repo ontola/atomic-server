@@ -2146,7 +2146,6 @@ msgstr "<0/> Note"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nouveau"
@@ -7411,10 +7410,6 @@ msgstr "Erreur de configuration inconnue"
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr "Publier dans la boutique d’intégrations"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Intégration"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
@@ -12814,6 +12809,7 @@ msgstr "Chargement des applications…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Découvrir des applications"
 
@@ -13337,10 +13333,6 @@ msgid "Models, providers and voice."
 msgstr "Modèles, fournisseurs et voix."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Paramètres d'intégration"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalogue et plugins expérimentaux."
 
@@ -13401,15 +13393,9 @@ msgstr "Pour plus de personnes, utilise un Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Seul ce navigateur peut ouvrir ton travail. Connecte-toi ou inscris-toi avec ton e-mail, ou connecte un autre appareil, pour pouvoir l’ouvrir ailleurs et ne pas perdre l’accès."
 
-#~ msgid "Save your work"
-#~ msgstr "Enregistre ton travail"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Enregistre ton e-mail ou connecte un appareil pour l’ouvrir ailleurs"
-
-#~ msgid "Save your work here"
-#~ msgstr "Enregistre ton travail ici"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13445,18 +13431,6 @@ msgstr "Guide : publier une app"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Il manque une app ? Créez-la vous-même avec l'IA"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Décrivez ce que vous voulez et l'assistant crée l'app dans votre drive. Partagez-la ensuite avec votre drive, hébergez votre propre marketplace ou soumettez-la au marketplace de la communauté."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Il s'agit d'une nouvelle fonctionnalité. Vous voyez des apps expérimentales à essayer."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Il s'agit d'une nouvelle fonctionnalité. Des apps apparaîtront bientôt ici pour que vous puissiez les essayer."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13930,3 +13904,16 @@ msgstr "Mise à jour disponible"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Redémarrez pour utiliser la version {0}"
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr ""

@@ -2146,7 +2146,6 @@ msgstr "<0/> Hinweis"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Neu"
@@ -7414,10 +7413,6 @@ msgstr "Unbekannter Einrichtungsfehler"
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr "Im Integrationsstore veröffentlichen"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integration"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
@@ -12817,6 +12812,7 @@ msgstr "Apps werden geladen …"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Apps entdecken"
 
@@ -13340,10 +13336,6 @@ msgid "Models, providers and voice."
 msgstr "Modelle, Anbieter und Sprache."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Integrationseinstellungen"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, Katalog und experimentelle Plugins."
 
@@ -13404,15 +13396,9 @@ msgstr "Für mehr Personen nutze einen Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Nur dieser Browser kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
 
-#~ msgid "Save your work"
-#~ msgstr "Speichere deine Arbeit"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registriere deine E-Mail oder verbinde ein Gerät, um sie anderswo zu öffnen"
-
-#~ msgid "Save your work here"
-#~ msgstr "Speichere deine Arbeit hier"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13448,18 +13434,6 @@ msgstr "Anleitung: App veröffentlichen"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Eine App fehlt? Erstelle sie selbst mit KI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Beschreibe, was du möchtest, und der Assistent erstellt die App in deinem Drive. Teile sie anschließend mit deinem Drive, betreibe deinen eigenen Marktplatz oder reiche sie beim Community-Marktplatz ein."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Dies ist eine neue Funktion. Du siehst experimentelle Apps zum Ausprobieren."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Dies ist eine neue Funktion. Bald erscheinen hier Apps zum Ausprobieren."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13933,3 +13907,16 @@ msgstr "Update verfügbar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Neu starten, um Version {0} zu verwenden"
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr ""

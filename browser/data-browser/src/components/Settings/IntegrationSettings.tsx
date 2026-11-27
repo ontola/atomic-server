@@ -32,9 +32,9 @@ export function IntegrationSettings() {
 
   return (
     <SettingsSection
-      label='Integration'
-      id='integration'
-      childSearchKeywords={settingsKeywords.integration}
+      label='App settings'
+      id='apps'
+      childSearchKeywords={settingsKeywords.apps}
     >
       <Column
         gap='1rem'

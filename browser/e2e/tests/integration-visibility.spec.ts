@@ -59,9 +59,6 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   const experimentalToggle = page.getByRole('checkbox', {
     name: 'Show experimental apps',
   });
-  await expect(
-    page.getByRole('note').filter({ hasText: 'This is a new feature.' }),
-  ).toBeVisible();
   await expect(experimentalToggle).toBeVisible();
   await expect(apiToggle).toHaveCount(0);
   await expect(experimentalToggle).not.toBeChecked();

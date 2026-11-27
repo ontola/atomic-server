@@ -2146,7 +2146,6 @@ msgstr "<0/> Nota"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nuevo"
@@ -7411,10 +7410,6 @@ msgstr "Error de configuración desconocido"
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr "Publicar en la tienda de integraciones"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integración"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
@@ -12814,6 +12809,7 @@ msgstr "Cargando aplicaciones…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Descubrir aplicaciones"
 
@@ -13337,10 +13333,6 @@ msgid "Models, providers and voice."
 msgstr "Modelos, proveedores y voz."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Ajustes de integración"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catálogo y plugins experimentales."
 
@@ -13401,15 +13393,9 @@ msgstr "Para más personas, usa un Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Solo este navegador puede abrir tu trabajo. Inicia sesión o regístrate con tu correo, o conecta otro dispositivo, para poder abrirlo en otro lugar y no perder el acceso."
 
-#~ msgid "Save your work"
-#~ msgstr "Guarda tu trabajo"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registra tu correo o conecta un dispositivo para abrirlo en otro lugar"
-
-#~ msgid "Save your work here"
-#~ msgstr "Guarda tu trabajo aquí"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13445,18 +13431,6 @@ msgstr "Guía: publicar una app"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "¿Te falta una app? Créala tú mismo con IA"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Describe lo que quieres y el asistente crea la app en tu unidad. Después compártela con tu unidad, aloja tu propio marketplace o envíala al marketplace de la comunidad."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Esta es una función nueva. Estás viendo apps experimentales para probar."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Esta es una función nueva. Pronto aparecerán aquí apps para que las pruebes."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13930,3 +13904,16 @@ msgstr "Actualización disponible"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Reinicia para usar la versión {0}"
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr ""
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr ""
