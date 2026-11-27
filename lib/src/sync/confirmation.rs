@@ -216,10 +216,21 @@ pub async fn confirm_drive(
     agent: &ForAgent,
     expected: &str,
 ) -> AtomicResult<(String, bool, u64)> {
-    let before = db
-        .write_log()
-        .confirmation_token()
-        .ok_or("Write in progress")?;
+    try_confirm_drive(db, drive, agent, expected)
+        .await?
+        .ok_or_else(|| "Concurrent write during confirmation".into())
+}
+
+/// Try a fresh local proof. An overlapping KV mutation yields no proof;
+/// authentication, inventory and storage errors remain errors. No cached hash
+/// or partly checked attachment set can become a confirmation.
+pub async fn try_confirm_drive(
+    db: &Db,
+    drive: &Subject,
+    agent: &ForAgent,
+    expected: &str,
+) -> AtomicResult<Option<(String, bool, u64)>> {
+    let before = db.write_log().confirmation_token();
     let canonical = WireScheme::CANONICAL;
     let drive_key = canonical.subject(&db.normalize_subject(drive).pure_id());
     let view = LocalView {
@@ -232,6 +243,10 @@ pub async fn confirm_drive(
     if view.failed.load(Ordering::Relaxed) {
         return Err("Incomplete rights walk".into());
     }
+    // Check the caller's rights even when an active writer prevents a proof.
+    let Some(before) = before else {
+        return Ok(None);
+    };
     let mut members = HashSet::from([drive_key.clone()]);
     if drive.is_did() {
         let mut queue = vec![drive_key.clone()];
@@ -302,7 +317,7 @@ pub async fn confirm_drive(
     }
     let hash = compute_drive_hash_v2(&vectors);
     if hash != expected {
-        return Ok((hash, false, 0));
+        return Ok(Some((hash, false, 0)));
     }
     let mut complete = true;
     for blob in &blobs {
@@ -312,18 +327,119 @@ pub async fn confirm_drive(
     }
     db.flush()?;
     if db.write_log().confirmation_token() != Some(before) {
-        return Err("Concurrent write during confirmation".into());
+        return Ok(None);
     }
-    Ok((
+    Ok(Some((
         hash.clone(),
         complete && hash == expected,
         blobs.len() as u64,
-    ))
+    )))
 }
 
 #[cfg(test)]
 mod proof_tests {
     use super::*;
+    use crate::db::kv_store::{KvIter, KvStore, ReplicaIdentity};
+
+    struct InterleavedFlush(std::sync::Arc<dyn KvStore>, bool);
+
+    impl KvStore for InterleavedFlush {
+        fn replica_identity(&self, scope: &str) -> AtomicResult<Option<ReplicaIdentity>> {
+            self.0.replica_identity(scope)
+        }
+        fn get(&self, tree: Tree, key: &[u8]) -> AtomicResult<Option<Vec<u8>>> {
+            self.0.get(tree, key)
+        }
+        fn insert(&self, tree: Tree, key: &[u8], val: &[u8]) -> AtomicResult<()> {
+            self.0.insert(tree, key, val)
+        }
+        fn remove(&self, tree: Tree, key: &[u8]) -> AtomicResult<()> {
+            self.0.remove(tree, key)
+        }
+        fn contains_key(&self, tree: Tree, key: &[u8]) -> AtomicResult<bool> {
+            self.0.contains_key(tree, key)
+        }
+        fn scan_prefix(&self, tree: Tree, prefix: &[u8]) -> KvIter {
+            self.0.scan_prefix(tree, prefix)
+        }
+        fn range(&self, tree: Tree, start: Vec<u8>, end: Vec<u8>, reverse: bool) -> KvIter {
+            self.0.range(tree, start, end, reverse)
+        }
+        fn iter_tree(&self, tree: Tree) -> KvIter {
+            self.0.iter_tree(tree)
+        }
+        fn clear_tree(&self, tree: Tree) -> AtomicResult<()> {
+            self.0.clear_tree(tree)
+        }
+        fn apply_batch(&self, operations: &[crate::db::trees::Operation]) -> AtomicResult<()> {
+            self.0.apply_batch(operations)
+        }
+        fn flush(&self) -> AtomicResult<()> {
+            if self.1 {
+                return Err("injected confirmation flush failure".into());
+            }
+            // A successful write to unrelated private receipt metadata is still
+            // a real global KV epoch change, without changing this drive.
+            self.0
+                .insert(Tree::SyncReceipts, b"other-drive", b"healthy-write")?;
+            self.0.flush()
+        }
+        fn len(&self, tree: Tree) -> AtomicResult<usize> {
+            self.0.len(tree)
+        }
+    }
+
+    #[tokio::test]
+    async fn unrelated_write_during_flush_defers_without_issuing_a_receipt() {
+        let mut db = Db::init_temp("confirmation_unrelated_write").await.unwrap();
+        let (_, drive) = db.setup("Alice").await.unwrap();
+        let drive: Subject = drive.as_str().into();
+        let (hash, _, _) = confirm_drive(&db, &drive, &ForAgent::Sudo, "")
+            .await
+            .unwrap();
+        let before = db.write_log().confirmation_token();
+        let original = db.kv.clone();
+        db.kv = std::sync::Arc::new(InterleavedFlush(original.clone(), false));
+        assert!(try_confirm_drive(&db, &drive, &ForAgent::Sudo, &hash)
+            .await
+            .unwrap()
+            .is_none());
+        assert_ne!(db.write_log().confirmation_token(), before);
+        assert!(confirm_drive(&db, &drive, &ForAgent::Sudo, &hash)
+            .await
+            .is_err());
+        db.kv = original;
+        assert!(
+            try_confirm_drive(&db, &drive, &ForAgent::Sudo, &hash)
+                .await
+                .unwrap()
+                .unwrap()
+                .1
+        );
+    }
+
+    #[tokio::test]
+    async fn storage_failure_and_unauthorized_access_are_not_deferred() {
+        let mut db = Db::init_temp("confirmation_storage_failure").await.unwrap();
+        let (_, drive) = db.setup("Alice").await.unwrap();
+        let drive: Subject = drive.as_str().into();
+        let (hash, _, _) = confirm_drive(&db, &drive, &ForAgent::Sudo, "")
+            .await
+            .unwrap();
+        db.kv = std::sync::Arc::new(InterleavedFlush(db.kv.clone(), true));
+        assert!(try_confirm_drive(&db, &drive, &ForAgent::Sudo, &hash)
+            .await
+            .unwrap_err()
+            .message
+            .contains("injected confirmation flush failure"));
+        assert_eq!(
+            try_confirm_drive(&db, &drive, &ForAgent::Public, &hash)
+                .await
+                .unwrap_err()
+                .error_type,
+            crate::errors::AtomicErrorType::UnauthorizedError
+        );
+    }
 
     #[tokio::test]
     async fn private_drive_cannot_be_proved_for_public_caller() {

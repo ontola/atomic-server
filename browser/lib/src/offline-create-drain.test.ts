@@ -120,6 +120,7 @@ describe('offline create drain', () => {
         .mockResolvedValue({ snapshot: available ? snapshot : undefined });
       (store as unknown as { clientDb: ClientDbWorker }).clientDb = {
         isReady: true,
+        waitForInit: async () => true,
         supportsDurablePersistence: true,
         getResourceWithSnapshot,
       } as unknown as ClientDbWorker;

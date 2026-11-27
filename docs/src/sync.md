@@ -37,6 +37,12 @@ signed, read-only request. The caller must be able to read a Drive stored on
 that server. `hash` is the canonical v2 resource-state hash used by Atomic Sync.
 The request neither uploads data nor turns on synchronization.
 
+A stable check returns HTTP 200 with the result below. If an overlapping
+mutation prevents a consistent proof, HTTP 204 has no body and supplies no
+receipt; the client may try again after the writes settle. Both responses use
+`Cache-Control: no-store`. Authorization failures and actual storage failures
+retain their error statuses rather than becoming empty successful responses.
+
 ```json
 {
   "version": 1,

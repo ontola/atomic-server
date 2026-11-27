@@ -298,7 +298,14 @@ export async function readDriveProtection(
   const checkedOrigins = new Set<string>();
 
   const checkServer = async (url: URL | undefined) => {
-    if (!url || !isExternalServer(url) || checkedOrigins.has(url.origin)) {
+    // A disconnected browser cannot verify a fresh remote copy. Keep any
+    // earlier proof below; the watcher's online event starts a new verification.
+    if (
+      (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      !url ||
+      !isExternalServer(url) ||
+      checkedOrigins.has(url.origin)
+    ) {
       return undefined;
     }
 

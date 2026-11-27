@@ -50,7 +50,8 @@ export async function confirmDriveCopy(
     redirect: 'error',
     signal,
   });
-  if (!response.ok || !current()) return;
+  // A concurrent server mutation deliberately provides no proof or JSON body.
+  if (response.status === 204 || !response.ok || !current()) return;
   const data: unknown = await response.json();
   if (!current() || !data || typeof data !== 'object') return;
   const result = data as Record<string, unknown>;

@@ -318,6 +318,58 @@ describe('reading drive protection evidence', () => {
     expect(fetchNodeDriveUsage).toHaveBeenCalledWith(SERVER, DRIVE, AGENT);
   });
 
+  it('keeps cached evidence offline without usage probes and verifies again after reconnect', async () => {
+    vi.useFakeTimers().setSystemTime(NOW);
+    const previousNavigator = globalThis.navigator;
+    const online = { onLine: true };
+    vi.stubGlobal('navigator', online);
+    vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);
+    const { activeStore, status, fetchCopy } = connectedStore();
+
+    try {
+      const confirmed = await readDriveProtection(
+        activeStore,
+        DRIVE,
+        AGENT,
+        SERVER,
+      );
+      expect(confirmed.lastFullSyncAt).toBe(NOW);
+      status.serverConnected = false;
+      online.onLine = false;
+      vi.mocked(fetchNodeDriveUsage).mockClear();
+      fetchCopy.mockClear();
+      vi.setSystemTime(NOW + BACKUP_DAY_MS + 1);
+
+      expect(
+        await readDriveProtection(activeStore, DRIVE, AGENT, SERVER),
+      ).toEqual(confirmed);
+      expect(fetchNodeDriveUsage).not.toHaveBeenCalled();
+      expect(fetchCopy).not.toHaveBeenCalled();
+      expect(await readDriveProtection(store(), DRIVE, AGENT, SERVER)).toEqual(
+        inaccessible,
+      );
+      expect(fetchNodeDriveUsage).not.toHaveBeenCalled();
+
+      status.serverConnected = true;
+      online.onLine = true;
+      const reconnected = await readDriveProtection(
+        activeStore,
+        DRIVE,
+        AGENT,
+        SERVER,
+      );
+      expect(fetchNodeDriveUsage).toHaveBeenCalledExactlyOnceWith(
+        SERVER,
+        DRIVE,
+        AGENT,
+      );
+      expect(fetchCopy).toHaveBeenCalledOnce();
+      expect(reconnected.lastFullSyncAt).toBe(NOW + BACKUP_DAY_MS + 1);
+    } finally {
+      vi.stubGlobal('navigator', previousNavigator);
+    }
+  });
+
   it('confirms a full sync with a server holding every local version and file while Vault is off', async () => {
     vi.useFakeTimers().setSystemTime(NOW);
     vi.mocked(fetchNodeDriveUsage).mockResolvedValue(usage);

@@ -329,9 +329,14 @@ mod tests {
             "server readiness; inspect {}",
             root.join("server.log").display()
         );
-        let handle = AtomicStore::open(root.join("client").to_string_lossy().into(), None, None)
-            .await
-            .unwrap();
+        let handle = AtomicStore::open(
+            root.join("client").to_string_lossy().into(),
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         let setup = handle.setup("Bridge receipt owner".into()).await.unwrap();
         let drive = setup.drive;
         let subject = handle
@@ -371,6 +376,7 @@ mod tests {
             root.join("client").to_string_lossy().into(),
             Some(agent.build_secret().unwrap()),
             Some(drive),
+            None,
         )
         .await
         .unwrap();

@@ -701,13 +701,47 @@ mod tests {
 
     #[tokio::test]
     async fn peer_identity_failure_does_not_reject_authenticated_sync() {
-        let (mut db, agent, _, mut session) = fixture().await;
+        let (mut db, agent, drive, mut session) = fixture().await;
         db.kv = std::sync::Arc::new(FailingStorage(db.kv.clone(), true));
+        assert!(db.kv.replica_identity(&drive).is_err());
         let auth = protocol::encode_auth(&agent, &session.proof_subject).unwrap();
         let output = session.handle(&db, &auth).await.unwrap();
+        assert_eq!(output.frames.len(), 1);
         assert_eq!(output.frames[0][0], protocol::tag::AUTH_OK);
-        assert!(protocol::decode_auth_ok(&output.frames[0][1..]).is_empty());
+        // Receipt identity is optional; its failure must remove only receipt
+        // capabilities, retaining the ordinary authenticated sync protocol.
+        let capabilities = protocol::decode_auth_ok(&output.frames[0][1..]);
+        assert_eq!(capabilities, protocol::CAPABILITIES);
+        for optional in [
+            protocol::CAP_BROWSER_STORAGE_RECEIPTS_V1,
+            protocol::CAP_ATTACHMENT_STORAGE_RECEIPTS_V1,
+        ] {
+            assert!(!capabilities.iter().any(|capability| capability == optional));
+        }
         assert_eq!(output.peer_agent, Some(agent.subject.to_string()));
+        assert!(!session.closed);
+
+        // Exercise a real reconcile, not merely a successful AUTH response.
+        let sync = protocol::encode_sync(&drive, "", &[], &Default::default());
+        let output = session.handle(&db, &sync).await.unwrap();
+        let diff = output
+            .frames
+            .iter()
+            .find(|frame| frame.first() == Some(&protocol::tag::SYNC_DIFF))
+            .and_then(|frame| protocol::decode_sync_diff(&frame[1..]))
+            .expect("authenticated sync still returns its resource inventory");
+        assert_eq!(diff.drive, drive);
+        assert!(diff.push.contains(&drive));
+        assert!(output.frames.iter().any(|frame| {
+            frame.first() == Some(&protocol::tag::SYNC_PUSH)
+                && protocol::decode_sync_push(&frame[1..]).is_some_and(|push| {
+                    push.drive == drive
+                        && push
+                            .entries
+                            .iter()
+                            .any(|entry| entry.subject == drive && !entry.loro_bytes.is_empty())
+                })
+        }));
         assert!(!session.closed);
     }
 

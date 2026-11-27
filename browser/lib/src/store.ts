@@ -2418,7 +2418,14 @@ export class Store {
     // Older queued genesis entries can also have a snapshot with later edits
     // but no saved replay cursor. A fresh genesis need not have a row yet.
     if (durable && (entry.baseVersion || entry.signedGenesis)) {
-      if (!db.isReady) return;
+      // Queued user snapshots only need the database to be open. isReady also
+      // waits for unrelated bootstrap seeding, so returning early here made a
+      // fresh explicit genesis fail as queued and spin zero-delay drain passes.
+      const open = await db.waitForInit();
+      assertCurrent();
+      if (!currentEntry()) return;
+      if (!open)
+        throw db.initError ?? new Error('Queued local storage is unavailable');
       const { snapshot } = await db.getResourceWithSnapshot(subject);
       assertCurrent();
       if (!currentEntry()) return;
