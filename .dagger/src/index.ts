@@ -1613,6 +1613,11 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/vocabularies.json',
         this.source.file('lib/defaults/vocabularies.json'),
+      )
+      // host-bootstrap-vocabulary.test.ts reads the bundled default store.
+      .withFile(
+        '/lib/defaults/default_store.json',
+        this.source.file('lib/defaults/default_store.json'),
       );
 
     return sourceContainer;
