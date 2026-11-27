@@ -150,6 +150,75 @@ class CloudTests(unittest.TestCase):
         self.metadata = {'droplet_id': 99, 'hostname': 'fixture-cloud-control', 'region': 'mem1'}
         self.api = FakeAPI(self.config)
 
+    def test_cache_maintenance_is_absent_by_default_and_rejects_unverified_mount(self):
+        with mock.patch.object(cloud, 'verify_mount') as mount:
+            self.assertIsNone(cloud.maintain_build_cache(self.config))
+        mount.assert_not_called()
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path('/foreign-volume')):
+            with self.assertRaisesRegex(ValueError, 'verified fixed mount'):
+                cloud.maintain_build_cache(config)
+        self.assertFalse((Path(config['root'])/'cache-maintenance.json').exists())
+
+    def test_cache_maintenance_uses_pinned_archive_validator_deadline_and_retains_receipt(self):
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        receipt = {'version':1,'source_commit':SHA,'status':'enough-space','evictions':[]}
+        paths = []
+        sentinel = object()
+        def execute_module(module):
+            if paths[-1].endswith('ci-cache-prune.py'):
+                module.prune_cache = prune
+            else:
+                module.validate_archive = sentinel
+        def prune(root, source, reserve, validator, check):
+            self.assertEqual(root, Path('/mnt/atomic-ci/browser-bundles'))
+            self.assertEqual(source, SHA)
+            self.assertEqual(reserve, 4*1024**3)
+            self.assertIs(validator, sentinel)
+            check()
+            return receipt
+        def spec(name, path):
+            paths.append(str(path))
+            value = mock.Mock()
+            value.loader.exec_module.side_effect = execute_module
+            return value
+        import importlib.util
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path('/mnt/atomic-ci')), \
+                mock.patch.object(importlib.util, 'spec_from_file_location', side_effect=spec), \
+                mock.patch.object(importlib.util, 'module_from_spec', side_effect=lambda value: mock.Mock()), \
+                mock.patch.object(cloud, 'guard_deadline') as guard:
+            self.assertEqual(cloud.maintain_build_cache(config), receipt)
+        self.assertEqual(paths, [str(Path(config['repo'])/'scripts/ci-cache-prune.py'),
+                                 str(Path(config['repo'])/'scripts/ci-fanout.py')])
+        self.assertGreaterEqual(guard.call_count,3)
+        self.assertEqual(cloud.read_json(Path(config['root'])/'cache-maintenance.json'), receipt)
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'validate_cached_bundles', return_value=[]):
+            cloud.persist_evidence(self.config)
+        retained = Path(config['volume']['mount_path'])/'runs'/config['batch_key']/'cache-maintenance.json'
+        self.assertEqual(cloud.read_json(retained),receipt)
+
+    def test_remote_cache_maintenance_is_strict_and_fixed_mount_only(self):
+        for value in (False,0,3,4.0,'4',None):
+            config = copy.deepcopy(self.config)
+            config.update(cloud_cache_min_free_gib=value)
+            config['fanout_config']['cloud_cache_min_free_gib'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                cloud.validate_config(config)
+        config = copy.deepcopy(self.config)
+        config['cloud_cache_min_free_gib'] = 4
+        config['fanout_config']['cloud_cache_min_free_gib'] = 4
+        with self.assertRaisesRegex(ValueError,'verified fixed mount'):
+            cloud.validate_config(config)
+        config['volume']['mount_path'] = '/mnt/atomic-ci'
+        config['fanout_config']['artifact_archive_dir'] = '/mnt/atomic-ci/browser-bundles'
+        self.assertEqual(cloud.validate_config(config)['cloud_cache_min_free_gib'],4)
+        config['fanout_config'].pop('cloud_cache_min_free_gib')
+        with self.assertRaises(ValueError):
+            cloud.validate_config(config)
+
     def test_selected_check_scope_is_projected_without_claiming_browser_or_full_ci(self):
         self.config['fanout_config']['check_only'] = 'flutter-test'
         state = {'source_commit': SHA, 'status': 'passed',
@@ -335,6 +404,21 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(result['worker_ids_deleted'], [201])
         self.assertEqual(self.api.deleted, [('droplet', 201), ('key', 123), ('droplet', 99)])
         self.assertEqual(self.api.volume_record['id'], VOLUME)
+
+    def test_independent_reaper_retains_controller_when_scratch_cleanup_is_incomplete(self):
+        self.config['fanout_config'].update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                                           authorization='bounded scratch test')
+        self.config['expected_scratch_volume_hourly_rate'] = .03
+        self.write_state({})
+        result = {'errors': ['lost volume response is still reconciling'], 'all_deleted': False,
+                  'scratch_volume_ids_deleted': [], 'estimated_storage_usd': .01}
+        with mock.patch.object(cloud, 'reap_scratch_volumes', return_value=result) as cleanup:
+            proof = self.reap()
+        cleanup.assert_called_once()
+        self.assertFalse(proof['cleanup_complete'])
+        self.assertFalse(proof['self_delete_requested'])
+        self.assertNotIn(('droplet', 99), self.api.deleted)
+        self.assertEqual(proof['estimated_scratch_storage_usd'], .01)
 
     def test_no_deadline_or_finalize_means_no_provider_deletion(self):
         self.write_state({'node-001': self.worker()})
@@ -1033,6 +1117,42 @@ class LauncherTests(unittest.TestCase):
     def source_plan(self):
         return mock.patch.object(launch, 'checked_source', return_value=self.scripts)
 
+    def test_cache_maintenance_opt_in_is_strict_and_projected_before_launch(self):
+        for value in (False,0,3,4.0,'4',None):
+            with self.subTest(value=value), mock.patch.object(self.api,'identity') as identity:
+                with self.assertRaises(ValueError):
+                    launch.CloudLauncher(dict(self.config, cloud_cache_min_free_gib=value), api=self.api)
+                identity.assert_not_called()
+        self.config['cloud_cache_min_free_gib'] = 4
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda:self.clock)
+        captured = []
+        remote = self.controller.remote_config
+        def record(state):
+            value=remote(state);captured.append(value);return value
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller,'plan',return_value=self.worker_plan), \
+                mock.patch.object(self.controller,'remote_config',side_effect=record):
+            plan=self.controller.plan()
+        self.assertEqual(plan['cloud_cache_min_free_gib'],4)
+        self.assertEqual(captured[0]['cloud_cache_min_free_gib'],4)
+        self.assertEqual(captured[0]['fanout_config']['cloud_cache_min_free_gib'],4)
+        self.assertEqual(self.api.creates,[])
+
+    def test_cache_maintenance_helper_must_be_committed_at_pin_before_provider_access(self):
+        config=dict(self.config,cloud_cache_min_free_gib=4,worktree=str(Path(launch.__file__).parent.parent))
+        controller=launch.CloudLauncher(config,api=self.api,run=self.run_command,now=lambda:self.clock)
+        def git(args,**kwargs):
+            if 'rev-parse' in args:return (SHA+'\n').encode()
+            if 'status' in args:return b''
+            path=args[-1].split(':',1)[1]
+            if path=='scripts/ci-cache-prune.py':raise RuntimeError('missing at pin')
+            return (Path(config['worktree'])/path).read_bytes()
+        with mock.patch.object(launch.BASE,'execute',side_effect=git), \
+                mock.patch.object(self.api,'identity') as identity:
+            with self.assertRaisesRegex(ValueError,'committed'):
+                controller.plan()
+            identity.assert_not_called()
+        self.assertEqual(self.api.creates,[])
+
     def test_readonly_plan_includes_control_storage_cleanup_and_egress(self):
         with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan):
             plan = self.controller.plan()
@@ -1091,6 +1211,54 @@ class LauncherTests(unittest.TestCase):
         with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=self.worker_plan), \
                 self.assertRaisesRegex(ValueError, 'machine size'):
             controller.plan()
+        self.assertEqual(self.api.creates, [])
+
+    def test_cold_scratch_plan_prices_three_disposable_disks_without_creating_them(self):
+        self.config.update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                           authorization='Run this bounded cold scratch fixture')
+        self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda: self.clock)
+        worker = dict(self.worker_plan, nodes=3)
+        with self.source_plan(), mock.patch.object(launch.BASE.Controller, 'plan', return_value=worker):
+            plan = self.controller.plan()
+        self.assertEqual(plan['scratch_volume_gib'], 200)
+        self.assertAlmostEqual(plan['scratch_storage_hourly_usd_estimate'], .09)
+        self.assertAlmostEqual(plan['hourly_usd'], 4.6315)
+        self.assertEqual(self.api.creates, [])
+        self.assertFalse(Path(self.config['runtime_dir']).exists())
+
+    def test_invalid_scratch_combination_is_rejected_before_provider_access(self):
+        for changed in ({'cold_scratch_gib': True}, {'cold_scratch_gib': 201},
+                        {'cold_scratch_gib': 200, 'expected_scratch_volume_hourly_rate': -1}):
+            with self.subTest(changed=changed), mock.patch.object(self.api, 'identity') as identity:
+                with self.assertRaises(ValueError):
+                    launch.CloudLauncher(dict(self.config, **changed), api=self.api)
+                identity.assert_not_called()
+
+    def test_supplemental_plan_validates_native_defaults_and_private_capsule_before_provisioning(self):
+        self.config.update(cold_scratch_gib=200, expected_scratch_volume_hourly_rate=.03,
+                           authorization='bounded native fixture', supplemental_profile='pr2621-native-private-v1',
+                           private_input={'source_commit':'b'*40, 'archive_sha256':'c'*64, 'manifest_sha256':'d'*64,
+                                          'archive_path':'/private/source.tar', 'manifest_path':'/private/manifest.json'})
+        native = launch.native_module()
+        helper = mock.Mock()
+        helper.remote_descriptor.side_effect = lambda desc, root: dict(desc, archive_path=root+'/private-input/source.tar', manifest_path=root+'/private-input/manifest.json')
+        with mock.patch.object(launch, 'private_input_helper', return_value=helper), \
+                mock.patch.object(launch, 'native_module', return_value=native), \
+                mock.patch.object(native, 'load', return_value=helper):
+            self.controller = launch.CloudLauncher(self.config, api=self.api, run=self.run_command, now=lambda:self.clock)
+            self.assertEqual(self.controller.config['supplemental_jobs'], 16)
+            with self.source_plan(), mock.patch.object(native, 'source_capabilities', return_value={'fixture':'e'*64}), \
+                    mock.patch.object(launch.BASE.Controller, 'plan', return_value=dict(self.worker_plan, nodes=3)):
+                plan = self.controller.plan()
+            self.assertEqual(plan['supplemental']['profile'], 'pr2621-native-private-v1')
+            self.assertEqual(plan['supplemental']['private_source_commit'], 'b'*40)
+            self.assertTrue(helper.verify_capsule.called)
+            self.assertTrue(helper.remote_descriptor.called)
+            for fields in ({'supplemental_jobs':0}, {'check_only':'flutter-test'}):
+                with self.subTest(fields=fields), mock.patch.object(self.api, 'identity') as identity:
+                    with self.assertRaises(ValueError):
+                        launch.CloudLauncher(dict(self.config, **fields), api=self.api)
+                    identity.assert_not_called()
         self.assertEqual(self.api.creates, [])
 
     def test_one_hour_plan_accepts_a_realistically_ticking_clock(self):

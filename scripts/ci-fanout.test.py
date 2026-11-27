@@ -887,6 +887,20 @@ class ResourceConfigTests(unittest.TestCase):
                     with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                         fanout.validate_config(dict(settings, **{field: value}))
 
+    def test_resource_sampling_is_explicit_boolean_and_pinned_before_provider_calls(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings=config(Path(temp),4)
+            self.assertIs(settings['sample_resources'],False)
+            for value in (None,0,1,'true',[],{}):
+                with self.subTest(value=value),self.assertRaisesRegex(ValueError,'sample_resources'):
+                    fanout.validate_config(dict(settings,sample_resources=value))
+            settings['sample_resources']=True
+            api=mock.Mock()
+            with mock.patch.object(fanout,'execute',side_effect=[SHA,'',json.dumps({'engineVersion':'0.21.7'}),RuntimeError('missing pinned sampler')]):
+                with self.assertRaisesRegex(RuntimeError,'pinned sampler'):
+                    fanout.Controller(settings,api).plan()
+            api.identity.assert_not_called()
+
     def test_host_bundle_backup_is_boolean_and_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as temp:
             settings = config(Path(temp), 4)

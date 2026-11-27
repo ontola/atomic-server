@@ -109,6 +109,24 @@ def validate_config(config):
                 or fanout.get('expected_volume_hourly_rate') != clone_rate
                 or fanout.get('artifact_cache_dir') != '/var/cache/atomic-ci/browser-bundles'):
             raise ValueError('warm snapshot companion, namespace, fresh run or clone price differs')
+    reserve = config.get('cloud_cache_min_free_gib')
+    if ('cloud_cache_min_free_gib' in config or 'cloud_cache_min_free_gib' in fanout):
+        if (type(reserve) is not int or reserve != 4 or fanout.get('cloud_cache_min_free_gib') != reserve
+                or mount != Path('/mnt/atomic-ci')):
+            raise ValueError('cache maintenance requires the explicit 4 GiB reserve on the verified fixed mount')
+    profile = fanout.get('supplemental_profile')
+    if profile is not None and (profile != 'pr2621-native-private-v1' or fanout.get('cold_scratch_gib') != 200 or not isinstance(fanout.get('private_input'), dict)):
+        raise ValueError('invalid supplemental native/private profile')
+    scratch = fanout.get('cold_scratch_gib')
+    rate = config.setdefault('expected_scratch_volume_hourly_rate', 0)
+    if scratch is not None:
+        if (type(scratch) is not int or scratch != 200 or mode != 'cold'
+                or isinstance(rate, bool) or not isinstance(rate, (int, float)) or not math.isfinite(rate) or rate <= 0
+                or fanout.get('expected_scratch_volume_hourly_rate') != rate
+                or not isinstance(fanout.get('authorization'), str) or not fanout['authorization'].strip()):
+            raise ValueError('invalid cold scratch storage contract')
+    elif rate != 0:
+        raise ValueError('scratch price requires cold scratch mode')
     if timestamp(fanout.get('absolute_deadline')) != deadline or not 0 < fanout.get('max_hours', 0) <= 1:
         raise ValueError('fanout cannot extend the original deadline')
     if (fanout.get('worktree') != config['repo'] or fanout.get('runtime_dir') != str(Path(config['root']) / 'runtime')
@@ -124,7 +142,7 @@ def validate_config(config):
     rates = (controller.get('expected_hourly_rate'), fanout.get('expected_hourly_rate'), config['expected_volume_hourly_rate'], config['max_total_usd'])
     if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0 for value in rates):
         raise ValueError('explicit positive prices and budget are required')
-    hourly = rates[0] + 3 * rates[1] + rates[2] + 3 * clone_rate
+    hourly = rates[0] + 3 * rates[1] + rates[2] + (3 * rate if scratch is not None else 0) + 3 * clone_rate
     # Reserve two minutes of cleanup at the full rate, without extending work.
     if hourly * ((deadline - began).total_seconds() + config['cleanup_reserve_seconds']) / 3600 + config['cloud_egress_reserve_usd'] > config['max_total_usd'] or config['max_total_usd'] > 7.50:
         raise ValueError('controller, fleet, volume and cleanup reserve exceed the authorized budget')
@@ -268,6 +286,10 @@ def verify_cache_snapshot(config, api):
 
 
 def fanout_driver(config):
+    if config.get('fanout_config', {}).get('supplemental_profile') == 'pr2621-native-private-v1':
+        return 'ci-fanout-native.py'
+    if config.get('fanout_config', {}).get('cold_scratch_gib'):
+        return 'ci-fanout-scratch.py'
     return 'ci-fanout-warm.py' if config.get('cloud_worker_mode', 'cold') == 'warm' else 'ci-fanout.py'
 
 
@@ -378,15 +400,37 @@ def validate_cached_bundles(config, force=True):
     return found
 
 
+def maintain_build_cache(config):
+    """Explicit opt-in, after source/volume proof and before any worker launch."""
+    if 'cloud_cache_min_free_gib' not in config:
+        return None
+    guard_deadline(config)
+    mount = verify_mount(config)
+    if mount != Path('/mnt/atomic-ci'):
+        raise ValueError('cache maintenance is restricted to the verified fixed mount')
+    import importlib.util
+    def load(name):
+        spec = importlib.util.spec_from_file_location(name.replace('-', '_'), Path(config['repo']) / 'scripts' / (name+'.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    helper, base = load('ci-cache-prune'), load('ci-fanout')
+    receipt = helper.prune_cache(mount / 'browser-bundles', config['source_commit'],
+        config['cloud_cache_min_free_gib'] * 1024**3, base.validate_archive, lambda: guard_deadline(config))
+    guard_deadline(config)
+    write_json(Path(config['root']) / 'cache-maintenance.json', receipt)
+    return receipt
+
+
 def evidence_allowed(relative):
     parts = relative.parts
     forbidden = {'doctl.json', 'doctl.yaml', 'operator-key', 'operator-key.pub', 'id_ed25519', 'id_rsa'}
     if any(part in forbidden for part in parts):
         return False
     if len(parts) == 1:
-        return parts[0] in {'state.json', 'config.json', 'browser-merged.json', 'source-input-reference.json', 'warm-volumes.json', 'warm-cleanup.json'} or parts[0].endswith('.log')
+        return parts[0] in {'state.json', 'config.json', 'browser-merged.json', 'source-input-reference.json', 'warm-volumes.json', 'warm-cleanup.json', 'scratch-volumes.json', 'scratch-cleanup.json'} or parts[0].endswith('.log')
     return bool(re.fullmatch(r'node-\d{3}', parts[0])) and (parts[1] == 'results' or
-        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json', 'cache-startup-observation.json'))))
+        (len(parts) == 2 and (parts[1].endswith('.log') or parts[1] in ('source-inputs.json', 'cache-startup.json', 'cache-startup-observation.json', 'scratch-startup.json'))))
 
 
 def persist_evidence(config, final=False):
@@ -412,7 +456,7 @@ def persist_evidence(config, final=False):
             relative = source.relative_to(runtime)
             if evidence_allowed(relative) and not source.is_symlink():
                 sources.append((source, Path('runtime') / relative))
-    for name in ('controller.log', 'supervisor.log', 'reaper.log'):
+    for name in ('controller.log', 'supervisor.log', 'reaper.log', 'cache-maintenance.json'):
         path = Path(config['root']) / name
         if path.is_file() and not path.is_symlink():
             sources.append((path, Path(name)))
@@ -483,6 +527,9 @@ def persist_evidence(config, final=False):
         summary.update(validation_scope='selected-check', selected_check=config['fanout_config']['check_only'],
                        selected_check_receipt=state.get('selected_check_receipt'),
                        validation_completed_at=state.get('validation_completed_at'))
+    if config['fanout_config'].get('cold_scratch_gib'):
+        summary.update(storage_mode='cold-scratch', scratch_storage_hourly_usd_estimate=config['expected_scratch_volume_hourly_rate'],
+                       scratch_cleanup=read_json(runtime / 'scratch-cleanup.json'))
     write_json(destination / 'cloud-summary.json', summary)
     return receipt
 
@@ -599,6 +646,90 @@ def reap_cache_volumes(config, api, state, now):
     return result
 
 
+def reap_scratch_volumes(config, api, state, now):
+    """Stdlib-only cleanup for blank cold disks; never adopts warm/retained disks."""
+    runtime = Path(config['fanout_config']['runtime_dir'])
+    runtime.mkdir(parents=True, exist_ok=True)
+    result = {'errors': [], 'scratch_volume_ids_deleted': [], 'all_deleted': False, 'estimated_storage_usd': 0}
+    expected = {config['batch_key'] + '-node-' + str(i).zfill(3) + '-scratch' for i in range(1, 4)}
+    path = runtime / 'scratch-volumes.json'
+    with (runtime / 'scratch-volumes.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            result['errors'].append('scratch volume ledger is still locked')
+            return result
+        ledger = read_json(path, {})
+        listed = api.volumes()
+        for volume in listed:
+            if volume.get('name') in expected and volume['name'] not in ledger:
+                result['errors'].append('unrecorded expected-name scratch disk is not owned')
+        for name, entry in ledger.items():
+            try:
+                node = state['nodes'][entry['node_id']]
+                account = config['account']
+                if (name not in expected or name != node['name'] + '-scratch' or entry.get('name') != name
+                        or entry.get('storage_kind') != 'cold-scratch' or entry.get('batch_key') != config['batch_key']
+                        or entry.get('source_commit') != config['source_commit'] or entry.get('absence_verified') is not True
+                        or node.get('account') != account['context'] or entry.get('account') != account['context']
+                        or entry.get('expected_uuid') != account['expected_uuid'] or entry.get('creation_identity_error')
+                        or not re.fullmatch(r'[a-f0-9]{32}', str(entry.get('nonce', '')))
+                        or entry.get('description') != 'Atomic CI scratch ' + config['batch_key'] + ' ' + entry['nonce']
+                        or not re.fullmatch(r'[a-f0-9-]{36}', str(entry.get('filesystem_uuid', '')))
+                        or (entry.get('id') and (not re.fullmatch(r'[a-f0-9-]{36}', str(entry['id'])) or entry['id'] == config['volume']['id']))):
+                    raise ValueError('scratch ledger ownership differs')
+                attempted = timestamp(entry['attempted_at'])
+                ident = entry.get('id')
+                matches = [v for v in listed if v.get('name') == name]
+                if len(matches) > 1 or (ident and any(v['id'] != ident for v in matches)):
+                    raise ValueError('ambiguous scratch volume identity')
+                volume = api.volume(ident) if ident else (matches[0] if matches else None)
+                if volume:
+                    if (not re.fullmatch(r'[a-f0-9-]{36}', str(volume.get('id', '')))
+                            or volume.get('id') == config['volume']['id'] or volume.get('name') != name
+                            or volume.get('description') != entry['description'] or volume.get('size_gigabytes') != 200
+                            or volume.get('region', {}).get('slug') != config['region']
+                            or volume.get('snapshot_id') not in (None, '')
+                            or (ident and volume['id'] != ident)
+                            or timestamp(volume['created_at']) < attempted - dt.timedelta(seconds=2)
+                            or timestamp(volume['created_at']) > now + dt.timedelta(seconds=2)
+                            or (entry.get('created_at') and entry['created_at'] != volume['created_at'])):
+                        raise ValueError('live scratch volume differs from exact create intent')
+                    entry.update(id=volume['id'], created_at=volume['created_at'])
+                    write_json(path, ledger)
+                    ident = volume['id']
+                    if volume.get('droplet_ids') or (node.get('droplet_id') and api.droplet(node['droplet_id'])):
+                        raise ValueError('scratch worker/attachment is still present')
+                    previous = entry.get('delete_attempted_at')
+                    if not previous or (now - timestamp(previous)).total_seconds() >= 30:
+                        entry['delete_attempted_at'] = now.isoformat()
+                        write_json(path, ledger)
+                        try:
+                            api.identity()
+                            api.delete_volume(ident)
+                            result['scratch_volume_ids_deleted'].append(ident)
+                        except (RuntimeError, OSError) as error:
+                            entry['delete_response_error'] = str(error)
+                    if api.volume(ident) is not None or any(v['id'] == ident for v in api.volumes()):
+                        raise ValueError('scratch deletion absence not verified')
+                elif not entry.get('delete_attempted_at') and (now - attempted).total_seconds() < 120:
+                    raise ValueError('scratch creation/absence is still reconciling')
+                entry.update(deletion_verified=True, deleted_at=entry.get('deleted_at') or now.isoformat())
+                if entry.get('created_at'):
+                    seconds = max(60, (timestamp(entry['deleted_at']) - timestamp(entry['created_at'])).total_seconds())
+                    entry.setdefault('estimated_storage_usd', seconds / 3600 * config['expected_scratch_volume_hourly_rate'])
+            except (KeyError, ValueError, TypeError, RuntimeError, OSError) as error:
+                result['errors'].append(name + ': ' + str(error))
+        ids = {entry.get('id') for entry in ledger.values() if entry.get('id')}
+        if any(v.get('name') in expected or v.get('id') in ids for v in api.volumes()):
+            result['errors'].append('scratch fleet absence is not verified')
+        result['all_deleted'] = not result['errors']
+        result['estimated_storage_usd'] = sum(entry.get('estimated_storage_usd', 0) for entry in ledger.values())
+        write_json(path, ledger)
+        write_json(runtime / 'scratch-cleanup.json', dict(result, at=now.isoformat()))
+    return result
+
+
 def reap_once(config, api=None, now=None, metadata=None):
     config = validate_config(config)
     api = api or CloudAPI(config)
@@ -672,6 +803,11 @@ def reap_once(config, api=None, now=None, metadata=None):
                 lifetime_seconds=node.get('lifetime_seconds', elapsed), compute_usd=node.get('compute_usd', max(.01, max(60, elapsed) / 3600 * rate))))
         except (ValueError, KeyError, TypeError, RuntimeError) as error:
             report['errors'].append(key + ': ' + str(error))
+    if config['fanout_config'].get('cold_scratch_gib'):
+        scratch_result = reap_scratch_volumes(config, api, read_json(Path(config['fanout_config']['runtime_dir']) / 'state.json', {}), now)
+        report.update(scratch_volume_ids_deleted=scratch_result['scratch_volume_ids_deleted'],
+                      scratch_volumes_all_deleted=scratch_result['all_deleted'], estimated_scratch_storage_usd=scratch_result['estimated_storage_usd'])
+        report['errors'].extend(scratch_result['errors'])
     if config['cloud_worker_mode'] == 'warm':
         clones = reap_cache_volumes(config, api, read_json(Path(config['fanout_config']['runtime_dir']) / 'state.json'), now)
         report.update(cache_volume_ids_deleted=clones['cache_volume_ids_deleted'], cache_volumes_all_deleted=clones['all_deleted'],
@@ -796,6 +932,13 @@ def bootstrap_run(config, api=None, metadata=None):
             if read_json(repo / 'dagger.json')['engineVersion'].lstrip('v') != profile['dagger_engine_version']:
                 raise ValueError('snapshot engine version differs from the pinned source')
         guard_deadline(config)
+        maintain_build_cache(config)
+        if config['fanout_config'].get('supplemental_profile'):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('private_input', repo / 'scripts/ci-fanout-private-input.py')
+            helper = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(helper)
+            helper.wait_controller_input(config, lambda: guard_deadline(config))
         path = root / 'fanout-config.json'
         write_json(path, config['fanout_config'])
         command(['systemd-run', '--unit=' + unit(config, 'fanout'), '--property=KillMode=control-group',
@@ -809,7 +952,9 @@ def bootstrap_run(config, api=None, metadata=None):
             guard_deadline(config)
             receipt = persist_evidence(config)
             state = read_json(Path(config['fanout_config']['runtime_dir']) / 'state.json', {})
-            if state.get('finished_at'):
+            scratch_done = (not config['fanout_config'].get('cold_scratch_gib') or
+                            read_json(Path(config['fanout_config']['runtime_dir']) / 'scratch-cleanup.json', {}).get('all_deleted') is True)
+            if state.get('finished_at') and scratch_done:
                 write_json(status_path, {'phase': 'complete', 'source_commit': config['source_commit'],
                     'ci_status': state.get('status'), 'cache_preserved_for_source': receipt['cache_preserved_for_source'],
                     'finished_at': utcnow().isoformat()})
