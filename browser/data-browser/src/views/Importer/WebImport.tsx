@@ -7,7 +7,7 @@ import {
   type ImportProposal,
   type JSONValue,
 } from '@tomic/react';
-import { useEffect, useId, useState, type JSX } from 'react';
+import { useEffect, useId, useRef, useState, type JSX } from 'react';
 import { Button } from '../../components/Button.jsx';
 import Field from '../../components/forms/Field.jsx';
 import {
@@ -129,11 +129,7 @@ export function WebImport({ parent }: { parent: string }): JSX.Element {
       </div>
       {error && <InlineErrMessage>{error}</InlineErrMessage>}
       {analysis && (
-        <Proposal
-          key={`${analysis.run}${target}`}
-          analysis={analysis}
-          parent={target}
-        />
+        <Proposal key={target} analysis={analysis} parent={target} />
       )}
     </Column>
   );
@@ -177,10 +173,19 @@ function Proposal({
           <UpdateForm subject={existing} proposal={proposal} />
         </>
       ) : (
-        <NewForm proposal={proposal} parent={parent} />
+        <NewForm key={proposal.class} proposal={proposal} parent={parent} />
       )}
     </Column>
   );
+}
+
+function splitIdentity(proposal: ImportProposal) {
+  const fields = { ...proposal.propvals };
+  const identity = fields[core.properties.localId];
+
+  delete fields[core.properties.localId];
+
+  return { identity, fields };
 }
 
 function NewForm({
@@ -191,16 +196,52 @@ function NewForm({
   parent: string;
 }): JSX.Element {
   const klass = useResource(proposal.class);
+  // The import identity is set at save time, so an unsaved draft is never
+  // mistaken for an earlier import.
+  const { identity, fields: initialProps } = splitIdentity(proposal);
   const { initialized, resource } = useNewForm({
     klass,
     setSubject: () => undefined,
     parent,
-    initialProps: proposal.propvals,
+    initialProps,
   });
+
+  const applied = useRef<string[]>([]);
+
+  // A second Preview reuses this draft: its values are replaced in place.
+  useEffect(() => {
+    if (!initialized) return;
+
+    const { fields } = splitIdentity(proposal);
+
+    (async () => {
+      for (const prop of applied.current) {
+        if (!(prop in fields)) await resource.remove(prop);
+      }
+
+      for (const [prop, value] of Object.entries(fields)) {
+        await resource.set(prop, value as JSONValue);
+      }
+
+      applied.current = Object.keys(fields);
+    })();
+  }, [initialized, resource, proposal]);
 
   if (!initialized) return <p>Preparing...</p>;
 
-  return <ResourceForm resource={resource} classSubject={proposal.class} />;
+  return (
+    // Without validation `set` writes synchronously, so this lands before the
+    // form's own submit handler signs the resource.
+    <div
+      onSubmitCapture={() => {
+        if (typeof identity === 'string') {
+          void resource.set(core.properties.localId, identity, false);
+        }
+      }}
+    >
+      <ResourceForm resource={resource} classSubject={proposal.class} />
+    </div>
+  );
 }
 
 function UpdateForm({
