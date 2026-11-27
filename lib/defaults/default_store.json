@@ -1,44 +1,5 @@
 [
   {
-    "@id": "https://atomicdata.dev/ontology/server/class/endpoint-response",
-    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-    "https://atomicdata.dev/properties/shortname": "endpoint-response",
-    "https://atomicdata.dev/properties/name": "Endpoint response",
-    "https://atomicdata.dev/properties/description": "The result of an endpoint request, with its status and response message.",
-    "https://atomicdata.dev/properties/requires": [
-      "https://atomicdata.dev/ontology/server/property/status",
-      "https://atomicdata.dev/ontology/server/property/response-message"
-    ]
-  },
-  {
-    "@id": "https://atomicdata.dev/ontology/server/property/response-message",
-    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "response-message",
-    "https://atomicdata.dev/properties/name": "Response message",
-    "https://atomicdata.dev/properties/description": "A human-readable message describing the endpoint response.",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
-  },
-  {
-    "@id": "https://atomicdata.dev/ontology/server/property/status",
-    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "status",
-    "https://atomicdata.dev/properties/name": "Status",
-    "https://atomicdata.dev/properties/description": "The numeric HTTP status code of an endpoint response.",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer"
-  },
-  {
-    "@id": "https://atomicdata.dev/ontology/data-browser/property/resources",
-    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "resources",
-    "https://atomicdata.dev/properties/name": "Resources",
-    "https://atomicdata.dev/properties/description": "A list of resource subjects.",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
-  },
-  {
     "@id": "https://atomicdata.dev/properties/importReferenceReview",
     "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
     "https://atomicdata.dev/properties/shortname": "import-reference-review",
@@ -122,6 +83,45 @@
       "https://atomicdata.dev/classes/Property"
     ],
     "https://atomicdata.dev/properties/shortname": "name"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/class/endpoint-response",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Class"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/shortname": "endpoint-response",
+    "https://atomicdata.dev/properties/name": "Endpoint response",
+    "https://atomicdata.dev/properties/description": "The result of an endpoint request, with its status and response message.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/ontology/server/property/status",
+      "https://atomicdata.dev/ontology/server/property/response-message"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/property/response-message",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "response-message",
+    "https://atomicdata.dev/properties/name": "Response message",
+    "https://atomicdata.dev/properties/description": "A human-readable message describing the endpoint response.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/server/property/status",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "status",
+    "https://atomicdata.dev/properties/name": "Status",
+    "https://atomicdata.dev/properties/description": "The numeric HTTP status code of an endpoint response.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer"
+  },
+  {
+    "@id": "https://atomicdata.dev/ontology/data-browser/property/resources",
+    "https://atomicdata.dev/properties/isA": ["https://atomicdata.dev/classes/Property"],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "resources",
+    "https://atomicdata.dev/properties/name": "Resources",
+    "https://atomicdata.dev/properties/description": "A list of resource subjects.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
   },
   {
     "@id": "https://atomicdata.dev/properties/search/query",
