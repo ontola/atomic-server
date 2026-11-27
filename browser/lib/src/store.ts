@@ -2502,6 +2502,11 @@ export class Store {
 
       if (subject !== drive && parent !== drive) continue;
 
+      // A draft nobody has saved (the new-resource form's) is not ours to
+      // announce: the server would ask for it and the drive would gain a
+      // resource the user never created. It joins the drive on `save()`.
+      if (resource.new) continue;
+
       const doc = resource.getLoroDoc?.();
 
       if (!doc) continue;
@@ -2531,7 +2536,7 @@ export class Store {
       // an empty VV so the server knows we have it (even if we can't diff).
       // This happens when Loro state was clobbered by a merge from server
       // JSON-AD that doesn't include the snapshot.
-      if (!allVVs[subject] && !resource.new) {
+      if (!allVVs[subject]) {
         allVVs[subject] = {};
       }
     }
