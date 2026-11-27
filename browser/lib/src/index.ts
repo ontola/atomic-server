@@ -88,6 +88,7 @@ export {
   type Lockfile,
 } from './schema-lockfile.js';
 export * from './safeHref.js';
+export * from './importer/index.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
 export * from './search.js';
