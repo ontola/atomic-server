@@ -107,6 +107,14 @@ pub struct ResourceData {
     pub props: Vec<PropValue>,
 }
 
+/// What [`AtomicStore::install_ontology_bundle`] did, by subject.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OntologyInstall {
+    pub created: Vec<String>,
+    pub updated: Vec<String>,
+    pub unchanged: Vec<String>,
+}
+
 /// One full-text search hit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchHit {
@@ -564,6 +572,25 @@ impl AtomicStore {
         Ok(subject)
     }
 
+    /// Store an app's ontology bundle (a JSON-AD array) in this device's store
+    /// under the subjects it names, as if each term had been fetched from its
+    /// address: no network, no commit, nothing synced. Idempotent; refused (and
+    /// nothing written) when a stored term would change meaning. See
+    /// [`atomic_lib::ontology_bundle::install_ontology_bundle`].
+    pub async fn install_ontology_bundle(
+        &self,
+        bundle: String,
+    ) -> Result<OntologyInstall, AtomicError> {
+        let report =
+            atomic_lib::ontology_bundle::install_ontology_bundle(self.db.as_ref(), &bundle)
+                .await?;
+        Ok(OntologyInstall {
+            created: report.created,
+            updated: report.updated,
+            unchanged: report.unchanged,
+        })
+    }
+
     /// Destroy `subject` and, recursively, its children: a signed destroy
     /// commit by this handle's agent, queued for the server like any write.
     /// [`AtomicError::NotFound`] when this device does not have it.
@@ -802,6 +829,11 @@ pub async fn create_resource_with_values(values: Vec<PropValue>) -> Result<Strin
 /// [`AtomicStore::new_drive`] on the default store.
 pub async fn new_drive(name: String) -> Result<String, AtomicError> {
     AtomicStore::global()?.new_drive(name).await
+}
+
+/// [`AtomicStore::install_ontology_bundle`] on the default store.
+pub async fn install_ontology_bundle(bundle: String) -> Result<OntologyInstall, AtomicError> {
+    AtomicStore::global()?.install_ontology_bundle(bundle).await
 }
 
 /// [`AtomicStore::wait_for_resource_event`] on the default store.

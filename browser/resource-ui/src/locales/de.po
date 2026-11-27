@@ -9245,6 +9245,7 @@ msgstr "Beim Öffnen des Formulars vorausgewählt. Wähle „Kein Standardwert�
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Vorschau"
 
@@ -11833,6 +11834,7 @@ msgstr "Wird eingerichtet"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Webadresse"
 
@@ -13404,15 +13406,9 @@ msgstr "Für mehr Personen nutze einen Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Nur dieser Browser kann deine Arbeit öffnen. Melde dich an oder registriere dich mit deiner E-Mail, oder verbinde ein anderes Gerät, damit du sie anderswo öffnen kannst und den Zugriff nicht verlierst."
 
-#~ msgid "Save your work"
-#~ msgstr "Speichere deine Arbeit"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registriere deine E-Mail oder verbinde ein Gerät, um sie anderswo zu öffnen"
-
-#~ msgid "Save your work here"
-#~ msgstr "Speichere deine Arbeit hier"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13933,3 +13929,69 @@ msgstr "Update verfügbar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Neu starten, um Version {0} zu verwenden"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Importquelle"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Webseite oder Text"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Füge eine Webadresse hinzu oder füge Text oder den Seitenquelltext ein."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Text oder den HTML-Code der Seite einfügen..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Text oder Seitenquelltext"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Speichern in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "Der Ordner oder das Laufwerk, dem das Ergebnis hinzugefügt wird."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Füge die Adresse einer Seite, ihren Text oder ihren Quelltext ein. Atomic Server ruft keine Seiten für dich ab: Öffne die Seite, kopiere, was du behalten möchtest, und füge es hier ein."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "{0}-Daten auf der Seite gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Titel und Beschreibung der Seite gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Keine strukturierten Daten gefunden, daher wird es ein einfacher Link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Nur Text gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Nur eine Adresse gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Wird vorbereitet..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Du kannst alles vor dem Speichern bearbeiten. Es wurde noch nichts gespeichert."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Diese Seite wurde schon früher importiert. Beim Speichern wird sie aktualisiert, statt eine Kopie anzulegen."

@@ -88,6 +88,7 @@ export {
   type Lockfile,
 } from './schema-lockfile.js';
 export * from './safeHref.js';
+export * from './importer/index.js';
 export { EventManager } from './EventManager.js';
 export * from './parse.js';
 export * from './search.js';
@@ -108,6 +109,10 @@ export * from './truncate.js';
 export * from './collection.js';
 export * from './collectionBuilder.js';
 export * from './ontology.js';
+export {
+  installOntologyBundle,
+  type InstallOntologyReport,
+} from './ontology-bundle.js';
 export * from './invites.js';
 export * from './pairing.js';
 export * from './loro-loader.js';
