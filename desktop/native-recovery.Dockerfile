@@ -7,7 +7,15 @@ RUN git init /src && cd /src \
     && git fetch --depth=1 origin 07c3a429bfed433e49018cb0f78a52145d4bedeb \
     && git checkout --detach FETCH_HEAD \
     && test "$(git rev-parse HEAD)" = 07c3a429bfed433e49018cb0f78a52145d4bedeb \
-    && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /minio .
+    && (attempt=1; until go mod download; do \
+        if [ "$attempt" -ge 3 ]; then exit 1; fi; \
+        sleep "$((attempt * 2))"; attempt=$((attempt + 1)); \
+    done) \
+    && test "$(git rev-parse HEAD)" = 07c3a429bfed433e49018cb0f78a52145d4bedeb \
+    && git diff --exit-code -- go.mod go.sum \
+    && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /minio . \
+    && test "$(git rev-parse HEAD)" = 07c3a429bfed433e49018cb0f78a52145d4bedeb \
+    && git diff --exit-code -- go.mod go.sum
 
 FROM node:22-bookworm AS node
 FROM rust:1.98.1-bookworm

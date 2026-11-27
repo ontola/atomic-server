@@ -94,7 +94,7 @@ def validate_phase(config):
 # These are fixed recipes, never operator-provided shell commands. The ordinary
 # public CI checkout is not mounted; each group owns a source-matching sibling pair.
 FRONTEND = '''pnpm -C browser install --frozen-lockfile
-pnpm -C browser --filter @tomic/lib --filter @tomic/react --filter @tomic/plugin --filter @tomic/service-ui --filter @tomic/form-renderer --filter @tomic/form-app --filter @tomic/edit-mode run build
+pnpm -C browser --recursive --workspace-concurrency=1 --filter '@tomic/data-browser^...' --filter '@tomic/form-app...' run build
 pnpm -C browser/data-browser build:wasm
 pnpm -C browser/data-browser exec vite build
 (cd ../atomic-saas/portal && npm ci && npm run build)
@@ -104,7 +104,7 @@ binary=$(python3 -c 'import json; a=[x["executable"] for l in open("/tmp/{target
 test -x "$binary"
 '''
 RECIPES = {
-    'native-build': '''node --experimental-vm-modules --test desktop/scripts/native-recovery/run.test.mjs
+    'native-build': '''node --experimental-vm-modules --test desktop/scripts/native-recovery/run.test.mjs desktop/scripts/native-recovery/runtime-closure.test.mjs
 rustup target add wasm32-wasip2
 NATIVE_RECOVERY_BUILD_ONLY=true bash desktop/scripts/native-recovery/build-and-test.sh
 cargo build --locked -p atomic-server

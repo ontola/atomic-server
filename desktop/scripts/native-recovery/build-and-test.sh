@@ -18,10 +18,10 @@ export VITE_MANAGED_API_BASE=http://localhost:3031/api
 export VITE_SENTRY_DSN=''
 
 pnpm -C browser install --frozen-lockfile
-# Build all runtime dependencies in workspace order, then the matching WASM.
-pnpm -C browser --filter @tomic/lib --filter @tomic/react \
-  --filter @tomic/plugin --filter @tomic/service-ui --filter @tomic/form-renderer \
-  --filter @tomic/form-app --filter @tomic/edit-mode run build
+# Build the app dependency closure plus the separately embedded form runtime.
+# One package at a time also serializes the shared localization writer.
+pnpm -C browser --recursive --workspace-concurrency=1 \
+  --filter '@tomic/data-browser^...' --filter '@tomic/form-app...' run build
 pnpm -C browser/data-browser build:wasm
 # The embedded HTTP server and the real WebView each need their own bundle.
 pnpm -C browser/data-browser exec vite build
