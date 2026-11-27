@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:atomic_store/atomic_store.dart';
 
 import 'atomic_flutter.dart' show AtomicParts;
+import 'identity.dart' show driveAfterSignIn;
 import 'sharing.dart';
 import 'src_exports.dart';
 
@@ -374,11 +375,14 @@ class FakeIdentity implements Identity {
     final different = previous != null && previous != secret;
     final brought = different ? List<String>.of(work) : <String>[];
     if (different) work = [];
+    final before = _store.drive;
     _secret = secret;
-    _store.drive = entry.drive;
+    final drive = driveAfterSignIn(
+        before: before, signedInDrive: entry.drive, broughtAlong: brought);
+    _store.drive = drive;
     return SignIn(
         agentSubject: subject!,
-        drive: entry.drive,
+        drive: drive,
         needsSync: entry.needsSync,
         broughtAlong: brought,
         previousSecret: different ? previous : null);

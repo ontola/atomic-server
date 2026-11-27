@@ -1,3 +1,4 @@
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicStrings;
 import 'package:atomic_store/atomic_store.dart';
 import 'package:atomic_store/testing.dart';
 import 'package:atomic_store_flutter/atomic_store_flutter.dart';
@@ -48,7 +49,7 @@ void main() {
     await tester.runAsync(() => node.identity.create('Alice'));
     await openPanel(tester, node);
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('Workspace'), findsWidgets);
+    expect(find.text('Drive'), findsWidgets);
     expect(find.text('Sign in with a secret key'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(find.text(node.identity.secret!), findsNothing);
@@ -116,6 +117,34 @@ void main() {
         find.text(
             'You are signed in. Added to your account: "Notes" and "Recipes".'),
         findsOneWidget);
+  });
+
+  testWidgets('signing in in Dutch says what was added and keeps the drive',
+      (tester) async {
+    AtomicStrings.override = AtomicStrings.nl;
+    addTearDown(() => AtomicStrings.override = null);
+    final node =
+        FakeNode(Store(backend: InMemoryBackend(), drive: drive), drives: [
+      const DriveInfo(subject: 'did:ad:test:n', name: 'Notities'),
+      const DriveInfo(subject: 'did:ad:test:r', name: 'Recepten'),
+    ]);
+    node.identity.known['other-secret'] = (drive: drive, needsSync: false);
+    await tester.runAsync(() => node.identity.create('Alice'));
+    // The drive the app works in is one of those that come along.
+    node.store.drive = 'did:ad:test:n';
+    node.identity.work = ['did:ad:test:n', 'did:ad:test:r'];
+    await openPanel(tester, node);
+    await tester.tap(find.text('Inloggen met een geheime sleutel'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'other-secret');
+    await tester.tap(find.widgetWithText(FilledButton, 'Inloggen'));
+    await real(tester, () async {});
+
+    expect(
+        find.text(
+            'Je bent ingelogd. Toegevoegd aan je account: "Notities" en "Recepten".'),
+        findsOneWidget);
+    expect(node.store.drive, 'did:ad:test:n');
   });
 
   testWidgets('a wrong secret says so', (tester) async {
@@ -307,15 +336,15 @@ void main() {
     await openPanel(tester, node);
     final workDrive = node.store.drive;
     expect(find.text('Work'), findsOneWidget);
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));
     await real(tester, () async {});
     expect(node.store.drive, isNot(workDrive));
 
-    await tester.tap(find.text('Workspace'));
+    await tester.tap(find.text('Drive'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('New workspace'));
+    await tester.tap(find.text('New drive'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Garden');
     await tester.tap(find.text('Save'));

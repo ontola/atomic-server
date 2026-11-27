@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'device_stats.dart';
 import 'settings_backend.dart';
+import 'strings.dart';
 import 'sync_widgets.dart';
 import 'theme.dart';
 
@@ -138,14 +139,15 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
   @override
   Widget build(BuildContext context) {
     final c = syncColors(context);
+    final s = AtomicStrings.of(context);
     final info = widget.backend.deviceInfo();
     final online = widget.peerId != null;
-    final name = widget.deviceName.isEmpty ? 'This device' : widget.deviceName;
+    final name = widget.deviceName.isEmpty ? s.thisDevice : widget.deviceName;
     final last = _lastSyncedMs;
     final stats = _stats;
 
     return SyncSection(
-      title: 'This device',
+      title: s.thisDevice,
       children: [
         InkWell(
           mouseCursor: WidgetStateMouseCursor.clickable,
@@ -177,7 +179,7 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
                             style: SyncText.caption(c)),
                       // Not the name in the account block: that one follows
                       // the person to every device, this one does not.
-                      Text('Device name, only on this device. Tap to rename.',
+                      Text(s.deviceNameHint,
                           key: const Key('this-device-name-hint'),
                           style: SyncText.caption(c)),
                     ],
@@ -195,54 +197,54 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
         ),
         KeyValueRow(
           key: const Key('this-device-status'),
-          label: 'Status',
+          label: s.status,
           icon: Icons.circle_outlined,
-          valueWidget: StatusChip(online ? 'Online' : 'Offline',
+          valueWidget: StatusChip(online ? s.online : s.offline,
               tone: online ? SyncTone.success : SyncTone.neutral),
         ),
         ...widget.extraRows,
         if (info?.appVersion != null)
           KeyValueRow(
-              label: 'Version',
+              label: s.version,
               value: info!.appVersion!,
               icon: Icons.info_outline),
         if (widget.peerId != null)
           KeyValueRow(
             key: const Key('copy-device-id'),
-            label: 'Device ID',
+            label: s.deviceId,
             value: shortId(widget.peerId!),
             copy: widget.peerId,
-            copyLabel: 'Device ID',
+            copyLabel: s.deviceId,
             icon: Icons.fingerprint,
             mono: true,
           ),
         if (widget.identity != null)
           KeyValueRow(
             key: const Key('copy-identity'),
-            label: 'Identity',
+            label: s.identity,
             value: shortId(widget.identity!),
             copy: widget.identity,
-            copyLabel: 'Identity',
+            copyLabel: s.identity,
             icon: Icons.badge_outlined,
             mono: true,
           ),
-        ..._storage(c, stats),
+        ..._storage(c, s, stats),
         if (_peers.isNotEmpty)
           KeyValueRow(
-            label: 'Synced with',
-            value: _syncedWith == 0
-                ? 'No device yet'
-                : '$_syncedWith ${_syncedWith == 1 ? 'device' : 'devices'}',
+            label: s.syncedWith,
+            value: _syncedWith == 0 ? s.noDeviceYet : s.devices(_syncedWith),
             icon: Icons.sync,
           ),
         if (last != null)
           KeyValueRow(
-              label: 'Last sync', value: relativeTime(last), icon: Icons.schedule),
+              label: s.lastSync,
+              value: relativeTime(last, s),
+              icon: Icons.schedule),
         if (_peers.isNotEmpty)
           KeyValueRow(
-            label: 'Connected now',
+            label: s.connectedNow,
             value: _peers.where((p) => _live.contains(p['node_id'])).isEmpty
-                ? 'None'
+                ? s.none
                 : '${_peers.where((p) => _live.contains(p['node_id'])).length}',
             icon: Icons.wifi_tethering,
           ),
@@ -250,15 +252,15 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
     );
   }
 
-  List<Widget> _storage(AppColors c, StoreStats? stats) {
+  List<Widget> _storage(AppColors c, AtomicStrings s, StoreStats? stats) {
     if (stats == null) {
       // Counting: a spinner. Failed or unsupported: nothing.
       return [
         if (_counting)
-          const KeyValueRow(
-            key: Key('stats-loading'),
-            label: 'Storage',
-            valueWidget: SyncSpinner(),
+          KeyValueRow(
+            key: const Key('stats-loading'),
+            label: s.storage,
+            valueWidget: const SyncSpinner(),
             icon: Icons.storage_outlined,
           ),
       ];
@@ -266,8 +268,8 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
     final total = stats.barTotal;
     final n = stats.drives.length;
     final caption = [
-      formatResources(stats.resources),
-      if (stats.fileBytes > 0) '${formatBytes(stats.fileBytes)} files',
+      formatResources(stats.resources, s),
+      if (stats.fileBytes > 0) s.filesSize(formatBytes(stats.fileBytes)),
     ].join(' · ');
     return [
       Column(
@@ -276,9 +278,8 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
         children: [
           KeyValueRow(
             key: const Key('stats-total'),
-            label: 'Storage',
-            value:
-                '${formatBytes(stats.dataBytes)} · $n ${n == 1 ? 'drive' : 'drives'}',
+            label: s.storage,
+            value: s.storageValue(formatBytes(stats.dataBytes), n),
             subtitle: caption,
             icon: Icons.storage_outlined,
             expanded: _expanded,
@@ -296,7 +297,7 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (final d in stats.drives)
-                        _driveRow(c, d, total == 0 ? 0 : d.bytes / total),
+                        _driveRow(c, s, d, total == 0 ? 0 : d.bytes / total),
                       Padding(
                         padding: const EdgeInsets.only(
                             left: SyncGap.m, bottom: SyncGap.xs),
@@ -304,8 +305,8 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
                             ? const SizedBox(
                                 height: 48,
                                 child: Padding(
-                                    padding: EdgeInsets.only(
-                                        left: 40 + SyncGap.m),
+                                    padding:
+                                        EdgeInsets.only(left: 40 + SyncGap.m),
                                     child: Align(
                                         alignment: Alignment.centerLeft,
                                         child: SyncSpinner())))
@@ -313,7 +314,7 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
                                 padding: const EdgeInsets.only(left: 40),
                                 child: SyncTextAction(
                                     key: const Key('stats-recount'),
-                                    label: 'Count again',
+                                    label: s.countAgain,
                                     icon: Icons.refresh,
                                     onPressed: () => _count(refresh: true)),
                               ),
@@ -327,7 +328,7 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
       if (stats.diskBytes != null)
         KeyValueRow(
           key: const Key('stats-disk'),
-          label: 'On disk',
+          label: s.onDisk,
           value: formatBytes(stats.diskBytes!),
           icon: Icons.sd_storage_outlined,
         ),
@@ -336,16 +337,15 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
 
   /// One drive: name and size on the label/value grid's left edge, the share
   /// bar below, a chevron in the trailing slot when the page can open.
-  Widget _driveRow(AppColors c, DriveStats d, double share) {
-    final name = d.name.isNotEmpty
+  Widget _driveRow(AppColors c, AtomicStrings s, DriveStats d, double share) {
+    final name = s.driveLabel(d.name.isNotEmpty
         ? d.name
         : (widget.driveNames[d.subject]?.isNotEmpty ?? false)
             ? widget.driveNames[d.subject]!
-            : 'Workspace';
+            : s.drive);
     final open = widget.onOpenStorage;
     final row = ConstrainedBox(
-      constraints:
-          const BoxConstraints(minHeight: KeyValueGrid.rowHeight),
+      constraints: const BoxConstraints(minHeight: KeyValueGrid.rowHeight),
       child: Padding(
         // Text starts at the label column (16 + 24 icon + 12 gap).
         padding: const EdgeInsets.only(
@@ -368,7 +368,7 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
                   Text(formatBytes(d.bytes),
                       maxLines: 1, style: SyncText.caption(c)),
                 ]),
-                Text(formatResources(d.resources),
+                Text(formatResources(d.resources, s),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: SyncText.caption(c)),
@@ -393,10 +393,10 @@ class _ThisDeviceCardState extends State<ThisDeviceCard> {
       child: open == null
           ? row
           : InkWell(
-            mouseCursor: WidgetStateMouseCursor.clickable,
+              mouseCursor: WidgetStateMouseCursor.clickable,
               onTap: () => open(d.subject, name),
               child: Semantics(
-                  button: true, label: 'Storage of $name', child: row)),
+                  button: true, label: s.storageOf(name), child: row)),
     );
   }
 }

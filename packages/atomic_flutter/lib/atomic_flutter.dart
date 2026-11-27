@@ -1,3 +1,4 @@
+export 'src/strings.dart';
 export 'src/settings_backend.dart';
 export 'src/user_panel.dart';
 export 'src/server_settings_section.dart';

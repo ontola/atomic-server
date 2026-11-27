@@ -18,7 +18,7 @@ import 'peers.dart';
 import 'sharing.dart';
 
 /// An icon button for an `AppBar` that opens the user panel of [node]: name,
-/// workspaces, secret, sign in, invite link, devices and sign out.
+/// drives, secret, sign in, invite link, devices and sign out.
 ///
 /// ```dart
 /// AppBar(title: Text('Notes'), actions: [AtomicAccountButton(node: node)])
@@ -42,7 +42,7 @@ class AtomicAccountButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
         icon: const Icon(Icons.account_circle_outlined),
-        tooltip: 'Account',
+        tooltip: ui.AtomicStrings.of(context).accountTooltip,
         onPressed: () => ui.showAtomicUserDialog(context,
             backend: AtomicNodeSettings(node,
                 accountProvider: accountProvider,
@@ -52,7 +52,7 @@ class AtomicAccountButton extends StatelessWidget {
 }
 
 /// The shared user panel (`package:atomic_flutter`) over a node: who you are,
-/// the workspaces, the paired devices, sign in with a secret, an invite link
+/// the drives, the paired devices, sign in with a secret, an invite link
 /// and sign out.
 ///
 /// The secret of the account you were signed in as before a sign-in is kept
@@ -120,7 +120,7 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
 
   @override
   Future<String> exportSecret() async =>
-      _identity.secret ?? (throw StateError('You are signed out.'));
+      _identity.secret ?? (throw StateError(strings.signedOut));
 
   @override
   Future<List<String>> listDrives() async {
@@ -218,7 +218,7 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
   @override
   Future<String> Function(String nodeId)? get syncPeer => (nodeId) async {
         final r = await node.peers.syncWith(nodeId);
-        return _synced(r);
+        return _synced(strings, r);
       };
 
   @override
@@ -252,7 +252,7 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
                       (url) async {
                         if (!await launchUrl(url,
                             mode: LaunchMode.externalApplication)) {
-                          throw StateError('Could not open the browser.');
+                          throw StateError(strings.couldNotOpenBrowser);
                         }
                       });
               if (found == null) return null;
@@ -272,17 +272,16 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
     final found = await _identity.signIn(secret);
     final previous = found.previousSecret;
     if (previous != null) onPreviousSecret?.call(previous);
+    final s = strings;
     final drives = await node.drives.list();
     final names = [
       for (final subject in found.broughtAlong)
-        '"${drives.where((d) => d.subject == subject).map((d) => d.name).firstOrNull ?? 'Untitled drive'}"'
+        '"${s.driveLabel(drives.where((d) => d.subject == subject && d.name.isNotEmpty).map((d) => d.name).firstOrNull ?? s.untitledDrive)}"'
     ];
     return [
-      'You are signed in.',
-      if (names.isNotEmpty)
-        'Added to your account: ${names.length < 2 ? names.join() : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}'}.',
-      if (found.needsSync)
-        'Your drive is not on this device yet. Connect to a server or add a device to get it.',
+      s.signedIn,
+      if (names.isNotEmpty) s.addedToAccount(names),
+      if (found.needsSync) s.driveNotOnDevice,
     ].join(' ');
   }
 
@@ -291,7 +290,7 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
       ({required canEdit}) async {
         final drive = node.store.drive;
         if (drive == null) {
-          throw StateError('There is no workspace to invite to.');
+          throw StateError(strings.noDriveToInvite);
         }
         final status = node.sync.status;
         final origin = status.connected ? status.origin : null;
@@ -301,8 +300,7 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
           try {
             await node.peers.start();
           } on StoreException catch (e) {
-            throw StateError(
-                'This device cannot be reached by others right now. ${e.message}');
+            throw StateError(strings.notReachable(e.message));
           }
         }
         return node.sharing.inviteLink(origin, drive,
@@ -320,19 +318,19 @@ class AtomicNodeSettings extends ui.AtomicSettingsBackend {
                   .where((d) => d.subject == joined.drive)
                   .map((d) => d.name)
                   .firstOrNull;
-              final what =
-                  name == null || name.isEmpty ? 'the workspace' : '"$name"';
+              final s = strings;
+              final what = name == null || name.isEmpty
+                  ? s.theDrive
+                  : '"${s.driveLabel(name)}"';
               return [
-                'You can now ${joined.write ? 'edit' : 'read'} $what, and it is open.',
-                if (joined.syncPending)
-                  'It is still loading from the other device.',
+                s.inviteOpened(what, write: joined.write),
+                if (joined.syncPending) s.stillLoading,
               ].join(' ');
             };
 }
 
-String _synced(PeerSyncResult r) => r.inSync
-    ? 'Everything was already in sync.'
-    : 'Received ${r.imported} and sent ${r.pushed} items.';
+String _synced(ui.AtomicStrings s, PeerSyncResult r) =>
+    r.inSync ? s.alreadyInSync : s.synced(r.imported, r.pushed);
 
 /// Adding a device: the code to type on the other one, or the other one's.
 class _PairDialog extends StatefulWidget {
@@ -365,12 +363,13 @@ class _PairDialogState extends State<_PairDialog> {
   }
 
   Future<void> _add() async {
+    final s = ui.AtomicStrings.of(context);
     String note;
     try {
       if (PairingCode.parse(_field.text) == null) {
-        throw const FormatException('That is not a code from another device.');
+        throw FormatException(s.notACode);
       }
-      note = 'Device added. ${_synced(await widget.peers.pair(_field.text))}';
+      note = s.deviceAdded(_synced(s, await widget.peers.pair(_field.text)));
       _field.clear();
     } on FormatException catch (e) {
       note = e.message;
@@ -383,26 +382,25 @@ class _PairDialogState extends State<_PairDialog> {
   @override
   Widget build(BuildContext context) {
     final code = widget.peers.pairingCode;
+    final s = ui.AtomicStrings.of(context);
     return AlertDialog(
-      title: const Text('Add a device'),
+      title: Text(s.addDeviceTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-                'Type this code on your other device, or scan it, to sync without a server.'),
+            Text(s.addDeviceBody),
             if (code != null) ...[
               const SizedBox(height: 8),
               SelectableText(code),
               TextButton(
                   onPressed: () => Clipboard.setData(ClipboardData(text: code)),
-                  child: const Text('Copy code')),
+                  child: Text(s.copyCode)),
             ],
             TextField(
               controller: _field,
-              decoration:
-                  const InputDecoration(labelText: 'Code from another device'),
+              decoration: InputDecoration(labelText: s.codeFromOther),
             ),
             if (_note != null)
               Padding(
@@ -414,9 +412,8 @@ class _PairDialogState extends State<_PairDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close')),
-        FilledButton(onPressed: _add, child: const Text('Add device')),
+            onPressed: () => Navigator.pop(context), child: Text(s.close)),
+        FilledButton(onPressed: _add, child: Text(s.addDevice)),
       ],
     );
   }
