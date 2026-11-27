@@ -6,6 +6,19 @@ use actix_web::{
 use atomic_lib::Storelike;
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
 
+/// An explicit width bypasses the default eight-thread cap, but every worker
+/// still needs descriptors for its runtime before accepting client sockets.
+fn http_worker_count(
+    available_cpus: usize,
+    soft_limit: usize,
+    requested: Option<std::num::NonZeroUsize>,
+) -> usize {
+    requested
+        .map_or(available_cpus.min(8), std::num::NonZeroUsize::get)
+        .max(1)
+        .min((soft_limit / 128).max(1))
+}
+
 /// Actix's connection limit is per worker (25,000 by default), while the OS
 /// descriptor limit is shared by the whole process. Leave at least a quarter
 /// of that limit, or 128 descriptors, for the database, Iroh, Sentry, and
@@ -521,16 +534,15 @@ where
         tracing::warn!("Could not read the process file-descriptor limit; budgeting HTTP connections against 1024 descriptors");
         1024
     });
-    // Match Actix's default worker calculation, then keep the worker count
-    // itself bounded. On a low-limit host, too many worker runtimes consume
-    // the reserve before any clients arrive.
-    let workers = std::thread::available_parallelism()
-        .map_or(2, std::num::NonZeroUsize::get)
-        .min((fd_soft_limit / 128).max(1))
-        .min(8);
+    let requested_workers = appstate.config.opts.http_workers;
+    let available_cpus =
+        std::thread::available_parallelism().map_or(2, std::num::NonZeroUsize::get);
+    let workers = http_worker_count(available_cpus, fd_soft_limit, requested_workers);
     let max_connections = http_connections_per_worker(fd_soft_limit, workers);
     tracing::info!(
         fd_soft_limit,
+        available_cpus,
+        requested_workers = ?requested_workers.map(std::num::NonZeroUsize::get),
         workers,
         max_connections_per_worker = max_connections,
         max_http_connections = workers * max_connections,
@@ -721,7 +733,35 @@ const BANNER: &str = r#"
 
 #[cfg(test)]
 mod connection_budget_tests {
-    use super::http_connections_per_worker;
+    use super::{http_connections_per_worker, http_worker_count};
+
+    #[test]
+    fn explicit_worker_width_retains_descriptor_headroom() {
+        let requested = std::num::NonZeroUsize::new(32);
+        for (limit, expected_workers, expected_connections) in [
+            (1_048_576, 32, 1024),
+            (1024, 8, 96),
+            (256, 2, 64),
+            (64, 1, 1),
+        ] {
+            let workers = http_worker_count(64, limit, requested);
+            assert_eq!(workers, expected_workers);
+            assert_eq!(
+                http_connections_per_worker(limit, workers),
+                expected_connections
+            );
+        }
+        // Explicit values can intentionally oversubscribe a CPU-limited host.
+        assert_eq!(http_worker_count(2, usize::MAX, requested), 32);
+    }
+
+    #[test]
+    fn automatic_workers_preserve_existing_cpu_and_fd_caps() {
+        for (cpus, limit, expected) in [(64, usize::MAX, 8), (2, 1024, 2), (64, 256, 2), (0, 0, 1)]
+        {
+            assert_eq!(http_worker_count(cpus, limit, None), expected);
+        }
+    }
 
     #[test]
     fn reserves_descriptors_across_all_workers() {

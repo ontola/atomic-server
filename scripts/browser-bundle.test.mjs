@@ -346,8 +346,15 @@ function importFixtureResponse({
   });
 }
 
-function pipelineWithoutBuilds() {
-  const pipeline = new AtomicServer(makeChain('checkout'));
+function pipelineWithoutBuilds(httpWorkers = 0) {
+  const pipeline = new AtomicServer(
+    makeChain('checkout'),
+    '',
+    0,
+    0,
+    '',
+    httpWorkers,
+  );
   for (const name of [
     'rustBuild',
     'rustBuildSlim',
@@ -1616,4 +1623,64 @@ test.skip('existing skip', () => {});
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
+});
+
+test('both browser rounds use the selected HTTP/PW width and retain requested budgets', async () => {
+  const fixture = retryFixture();
+  const pipeline = pipelineWithoutBuilds(32);
+  pipeline.browserSourceFingerprint = async () => HASH;
+  pipeline.browserArtifactHash = async file => sha256(file.bytes);
+  const receipts = [];
+  pipeline.exportBrowserRun = (run, identity) => {
+    receipts.push(identity);
+    return run;
+  };
+  for (const run of [
+    () =>
+      pipeline.browserShard(
+        fixture.bundle,
+        COMMIT,
+        fixture.bundle.manifestHash,
+        1,
+        3,
+        24,
+        0,
+      ),
+    () =>
+      pipeline.browserRetry(
+        fixture.bundle,
+        COMMIT,
+        fixture.bundle.manifestHash,
+        fixture.firstRun,
+        1,
+        3,
+        24,
+      ),
+  ]) {
+    resetCalls();
+    await run();
+    const calls = recordedCalls();
+    assert.deepEqual(
+      calls.filter(
+        ([name, key]) =>
+          name === 'withEnvVariable' && key === 'ATOMIC_HTTP_WORKERS',
+      ),
+      [['withEnvVariable', 'ATOMIC_HTTP_WORKERS', '32']],
+    );
+    assert.ok(
+      calls.some(
+        ([name, key, value]) =>
+          name === 'withEnvVariable' &&
+          key === 'PLAYWRIGHT_WORKERS' &&
+          value === '24',
+      ),
+    );
+    assert.equal(receipts.at(-1).httpWorkersRequested, 32);
+    assert.equal(receipts.at(-1).playwrightWorkers, 24);
+    assert.equal(receipts.at(-1).playwrightRetries, 0);
+  }
+  assert.deepEqual(
+    receipts.map(receipt => receipt.kind),
+    ['browser-first-pass', 'browser-deferred-retry'],
+  );
 });

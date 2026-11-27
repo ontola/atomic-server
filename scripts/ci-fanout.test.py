@@ -246,6 +246,9 @@ class FakeController(fanout.Controller):
     def prepare(self, node_id):
         self.node_update(node_id, status='ready')
 
+    def prepare_dagger_api(self, node_id):
+        self.events.append(('api-prepared', node_id))
+
     def tiny_probe(self, builder, worker):
         self.events.append('tiny-probe')
         self.update(lambda value: value.update(oci_probe_passed_at=fanout.stamp()))
@@ -349,7 +352,8 @@ class FakeController(fanout.Controller):
         (root / 'browser/test-results/.last-run.json').write_text(json.dumps({'status': 'failed' if ids or value.get('errors') else 'passed', 'failedTests': ids}))
         receipt = {'version': 1, 'kind': 'browser-first-pass' if phase == 'browser' else 'browser-deferred-retry',
                    'sourceCommit': SHA, 'manifestSha256': 'b' * 64, 'shardIndex': node['shard_index'],
-                   'shardCount': self.plan()['nodes'], 'playwrightRetries': 0}
+                   'shardCount': self.plan()['nodes'], 'playwrightRetries': 0,
+                   'httpWorkersRequested': self.config['server_workers'], 'playwrightWorkers': self.config['workers']}
         for field, name in [('reportSha256', 'test-results.json'),
                             ('lastRunSha256', 'test-results/.last-run.json'), ('exitCodeSha256', 'test-exit-code')]:
             receipt[field] = fanout.file_sha256(root / 'browser' / name)
@@ -747,7 +751,9 @@ class RunnerResourceTests(unittest.TestCase):
                   'cache_namespace': 'warm-seed', 'test_run_key': 'clone-one'},
                   ['--cache-namespace', 'warm-seed', '--max-build-jobs', '64', '--build-jobs', '64',
                    '--test-run-key', 'clone-one', 'rust-test', '--test-threads', '48']),
-                 ('probe', '/fixture/probe', ['build'], {'build_jobs': 64, 'test_run_key': 'clone-one', 'cache_namespace': 'warm-seed'}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
+                 ('check', None, ['js-test-integration'], {'server_workers': 32},
+                  ['--http-workers', '32', 'js-test-integration']),
+                 ('probe', '/fixture/probe', ['build'], {'server_workers': 0, 'build_jobs': 64, 'test_run_key': 'clone-one', 'cache_namespace': 'warm-seed'}, ['dagger', '-m', '/fixture/probe', 'call', 'build'])]
         for kind, module, args, widths, expected in cases:
             with self.subTest(kind=kind, args=args, widths=widths), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
@@ -759,6 +765,24 @@ class RunnerResourceTests(unittest.TestCase):
                      mock.patch.object(runner, 'run', side_effect=lambda command, directory, log: calls.append(command) or 0):
                     self.assertEqual(runner.main(config_path), 0)
                 self.assertEqual(calls[0][-len(expected):], expected)
+                receipt = json.loads((root / 'results/command/result.json').read_text())
+                if not module:
+                    self.assertEqual(receipt['worker_budget']['http_workers_requested'], widths.get('server_workers', 0))
+                else:
+                    self.assertNotIn('--http-workers', calls[0])
+
+    def test_custom_module_rejects_an_unsupported_http_worker_argument_before_work(self):
+        spec = importlib.util.spec_from_file_location('runner_custom_module', Path(__file__).with_name('ci-fanout-runner.py'))
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'config.json'
+            path.write_text(json.dumps({'module': '/fixture/probe', 'server_workers': 32}))
+            with mock.patch.object(runner, 'run') as run, mock.patch.object(runner, 'check_identity') as identity, \
+                    self.assertRaisesRegex(ValueError, 'custom modules'):
+                runner.main(path)
+            run.assert_not_called()
+            identity.assert_not_called()
 
     def test_builder_receives_both_compile_width_flags(self):
         spec = importlib.util.spec_from_file_location('runner_builder_fixture', Path(__file__).with_name('ci-fanout-runner.py'))
@@ -787,11 +811,58 @@ class RunnerResourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'config.json'
             for field, value in [('build_jobs', 0), ('build_jobs', True), ('rust_test_threads', 129),
+                                 ('server_workers', -1), ('server_workers', True), ('server_workers', 129),
+                                 ('server_workers', 1.5), ('server_workers', '32'),
                                  ('test_run_key', 'two words'), ('cache_namespace', '../foreign')]:
                 path.write_text(json.dumps({field: value}))
                 with self.subTest(field=field), mock.patch.object(runner, 'run') as run, self.assertRaises(ValueError):
                     runner.main(path)
                 run.assert_not_called()
+
+
+class CoreWorkerProfileTests(unittest.TestCase):
+    def test_profiles_are_opt_in_and_independent_explicit_overrides_win(self):
+        with tempfile.TemporaryDirectory() as temp:
+            original = config(Path(temp), 4)
+            self.assertEqual(original['server_workers'], 0)
+            self.assertEqual(original['worker_profile'], '')
+            for profile, expected in [('64-core', (24, 32)), ('32-core', (12, 16))]:
+                raw = {key: value for key, value in original.items()
+                       if key not in ('workers', 'server_workers', 'worker_profile')}
+                settings = fanout.validate_config(dict(raw, worker_profile=profile))
+                self.assertEqual((settings['workers'], settings['server_workers']), expected)
+                self.assertEqual(fanout.validate_config(dict(settings)), settings)
+                for overrides, values in [({'workers': 1}, (1, expected[1])),
+                                          ({'server_workers': 3}, (expected[0], 3)),
+                                          ({'workers': 2, 'server_workers': 0}, (2, 0))]:
+                    settings = fanout.validate_config(dict(raw, worker_profile=profile, **overrides))
+                    self.assertEqual((settings['workers'], settings['server_workers']), values)
+            for value in ('128-core', None, True, 64, [], {}):
+                with self.subTest(profile=value), self.assertRaises(ValueError):
+                    fanout.validate_config(dict(original, worker_profile=value))
+            for value in (-1, 129, True, 1.5, '32', None):
+                with self.subTest(server_workers=value), self.assertRaises(ValueError):
+                    fanout.validate_config(dict(original, server_workers=value))
+
+    def test_profile_requires_matching_provider_hardware_before_any_mutation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings = config(Path(temp), 4)
+            settings.update(worker_profile='64-core', workers=24, server_workers=32)
+            for vcpus in (32, 64):
+                api = mock.Mock()
+                api.identity.return_value = {'droplet_limit': 100}
+                api.call.side_effect = lambda account, args: ([] if args[1] == 'droplet' else [{
+                    'slug': settings['size'], 'available': True, 'regions': [settings['region']],
+                    'price_hourly': settings['expected_hourly_rate'], 'vcpus': vcpus}])
+                with mock.patch.object(fanout, 'execute', side_effect=[SHA, '', json.dumps({'engineVersion': '0.21.7'})]):
+                    if vcpus == 64:
+                        plan = fanout.Controller(settings, api).plan()
+                        self.assertEqual(plan['worker_budget'], {'profile': '64-core', 'profile_vcpus': 64,
+                            'playwright_workers_per_host': 24, 'http_workers_requested': 32})
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'vCPUs'):
+                            fanout.Controller(settings, api).plan()
+                self.assertFalse(Path(settings['runtime_dir']).exists())
 
 
 class ResourceConfigTests(unittest.TestCase):
@@ -815,6 +886,20 @@ class ResourceConfigTests(unittest.TestCase):
                 for value in bad_values:
                     with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                         fanout.validate_config(dict(settings, **{field: value}))
+
+    def test_resource_sampling_is_explicit_boolean_and_pinned_before_provider_calls(self):
+        with tempfile.TemporaryDirectory() as temp:
+            settings=config(Path(temp),4)
+            self.assertIs(settings['sample_resources'],False)
+            for value in (None,0,1,'true',[],{}):
+                with self.subTest(value=value),self.assertRaisesRegex(ValueError,'sample_resources'):
+                    fanout.validate_config(dict(settings,sample_resources=value))
+            settings['sample_resources']=True
+            api=mock.Mock()
+            with mock.patch.object(fanout,'execute',side_effect=[SHA,'',json.dumps({'engineVersion':'0.21.7'}),RuntimeError('missing pinned sampler')]):
+                with self.assertRaisesRegex(RuntimeError,'pinned sampler'):
+                    fanout.Controller(settings,api).plan()
+            api.identity.assert_not_called()
 
     def test_host_bundle_backup_is_boolean_and_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1199,6 +1284,164 @@ class LifecycleTests(unittest.TestCase):
         self.controller.initialize(self.controller.plan())
         self.controller.register_keys()
 
+    def three_node_controller(self):
+        settings = config(self.root, 4)
+        settings['accounts'] = [dict(settings['accounts'][0], nodes=3)]
+        self.controller = FakeController(settings, self.api)
+        return self.controller
+
+    def test_initial_bootstrap_overlaps_builder_api_and_preserves_both_build_gates(self):
+        ctl = self.three_node_controller()
+        started = {key:threading.Event() for key in ('node-002', 'node-003')}
+        api_started, probe_done, source_done = (threading.Event() for _ in range(3))
+        prepare, api, probe, preflight, phase = (ctl.prepare, ctl.prepare_dagger_api,
+                                               ctl.tiny_probe, ctl.source_preflight, ctl.phase)
+        def prepare_node(key):
+            if key in started:
+                self.assertEqual(ctl.read()['nodes']['node-001']['status'], 'ready')
+                started[key].set()
+                self.assertTrue(api_started.wait(5), 'builder API preparation did not overlap startup')
+            prepare(key)
+        def prepare_api(key):
+            self.assertTrue(all(event.wait(5) for event in started.values()),
+                            'the other initial nodes did not start together')
+            api_started.set()
+            api(key)
+        def portable_probe(builder, canary):
+            self.assertEqual(ctl.read()['nodes'][canary]['status'], 'ready')
+            probe(builder, canary)
+            probe_done.set()
+        def source_gate(builder, canary):
+            self.assertTrue(probe_done.is_set())
+            preflight(builder, canary)
+            source_done.set()
+        def launch(key, name, kind, args, **kwargs):
+            if name == 'build':
+                self.assertTrue(probe_done.is_set() and source_done.is_set())
+            return phase(key, name, kind, args, **kwargs)
+        with mock.patch.object(ctl, 'prepare', side_effect=prepare_node), \
+             mock.patch.object(ctl, 'prepare_dagger_api', side_effect=prepare_api), \
+             mock.patch.object(ctl, 'tiny_probe', side_effect=portable_probe), \
+             mock.patch.object(ctl, 'source_preflight', side_effect=source_gate), \
+             mock.patch.object(ctl, 'phase', side_effect=launch), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            ctl.run()
+        self.assertEqual(ctl.events.count(('api-prepared', 'node-001')), 1)
+        self.assertEqual(ctl.read()['status'], 'passed')
+        self.assertEqual(len([args for _,args in self.api.mutations
+                              if args[:3] == ['compute','droplet','create']]), 3)
+
+    def test_completed_startup_failure_prevents_probe_and_real_build(self):
+        ctl = self.three_node_controller()
+        failed = threading.Event()
+        executor = fanout.cf.ThreadPoolExecutor
+        class ObservedExecutor(executor):
+            def submit(self, function, *args, **kwargs):
+                future = super().submit(function, *args, **kwargs)
+                if function == ctl.create and args == ('node-003',):
+                    future.add_done_callback(lambda _:failed.set())
+                return future
+        prepare = ctl.prepare
+        def prepare_node(key):
+            if key == 'node-003':
+                raise ValueError('initial worker failed its source/cache proof')
+            prepare(key)
+        def prepare_api(key):
+            self.assertTrue(failed.wait(5), 'failure did not complete during API preparation')
+        with mock.patch.object(ctl, 'prepare', side_effect=prepare_node), \
+             mock.patch.object(ctl, 'prepare_dagger_api', side_effect=prepare_api), \
+             mock.patch.object(fanout.cf, 'ThreadPoolExecutor', ObservedExecutor), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'source/cache proof'):
+                ctl.run()
+        self.assertNotIn('tiny-probe', ctl.events)
+        self.assertFalse(any(isinstance(item,tuple) and item[1] == 'build' for item in ctl.events))
+        self.assertIn('source/cache proof', ctl.read()['startup_errors']['node-003'])
+        self.assertEqual(sum(map(len, self.api.droplets.values())), 0)
+
+    def test_probe_failure_joins_late_bootstrap_before_cleanup_and_reconciles_its_error(self):
+        ctl = self.three_node_controller()
+        started, fail_probe, finished = (threading.Event() for _ in range(3))
+        prepare, cleanup = ctl.prepare, ctl.cleanup
+        def prepare_node(key):
+            if key == 'node-003':
+                started.set()
+                self.assertTrue(fail_probe.wait(5))
+                # The controller must signal stop before waiting for startup.
+                for _ in range(500):
+                    if ctl.read()['stop_requested']:
+                        break
+                    threading.Event().wait(.01)
+                self.assertTrue(ctl.read()['stop_requested'])
+                finished.set()
+                raise RuntimeError('late bootstrap stopped')
+            prepare(key)
+        def probe(builder, canary):
+            self.assertTrue(started.wait(5))
+            fail_probe.set()
+            raise ValueError('portable OCI probe failed')
+        def joined_cleanup(*args, **kwargs):
+            self.assertTrue(finished.is_set(), 'cleanup raced an outstanding startup attempt')
+            return cleanup(*args, **kwargs)
+        with mock.patch.object(ctl, 'prepare', side_effect=prepare_node), \
+             mock.patch.object(ctl, 'tiny_probe', side_effect=probe), \
+             mock.patch.object(ctl, 'cleanup', side_effect=joined_cleanup), \
+             mock.patch.object(fanout.subprocess, 'Popen') as process:
+            process.return_value.poll.return_value = 0
+            process.return_value.pid = 12345
+            with self.assertRaisesRegex(ValueError, 'portable OCI probe failed'):
+                ctl.run()
+        self.assertEqual(ctl.read()['startup_errors']['node-003'], 'late bootstrap stopped')
+        self.assertEqual(sum(map(len, self.api.droplets.values())), 0)
+        self.assertTrue(all(node.get('deletion_verified') for node in ctl.read()['nodes'].values()))
+
+    def test_portable_fixture_api_preparation_is_once_per_pinned_node_and_source(self):
+        self.initialize()
+        for key in ('node-001','node-002'):
+            self.controller.create(key)
+            self.controller.node_update(key, ip='192.0.2.1')
+            (self.controller.root / key).mkdir()
+        ctl = self.controller
+        def prepare(key):
+            fanout.Controller.prepare_dagger_api(ctl, key)
+        def ssh(key, command, **kwargs):
+            return 'API functions' if command.endswith('dagger functions') else 'b'*64 + ' client.oci.tar'
+        with mock.patch.object(ctl, 'prepare_dagger_api', side_effect=prepare), \
+             mock.patch.object(ctl, 'ssh', side_effect=ssh) as remote, \
+             mock.patch.object(fanout, 'execute') as upload:
+            prepare('node-001')
+            fanout.Controller.tiny_probe(ctl, 'node-001','node-002')
+        api_calls = [call.args[0] for call in remote.call_args_list if call.args[1].endswith('dagger functions')]
+        self.assertEqual(api_calls, ['node-001','node-002'])
+        self.assertEqual(upload.call_count, 2)
+        self.assertTrue(ctl.read()['oci_probe_passed_at'])
+        ctl.node_update('node-001', dagger_api_prepared={'node_id':'node-002','source_commit':SHA})
+        with mock.patch.object(fanout, 'execute') as upload, self.assertRaisesRegex(ValueError,'different node or source'):
+            prepare('node-001')
+        upload.assert_not_called()
+
+    def test_plan_separates_initial_allocation_from_preflight_and_later_browser_canary(self):
+        ctl = self.three_node_controller()
+        call = self.api.call
+        def provider(account, args):
+            if args == ['compute','size','list']:
+                return [{'slug':ctl.config['size'], 'available':True, 'regions':[ctl.config['region']],
+                         'price_hourly':ctl.config['expected_hourly_rate']}]
+            return call(account, args)
+        with mock.patch.object(self.api, 'call', side_effect=provider), \
+             mock.patch.object(fanout, 'execute', side_effect=[SHA,'',json.dumps({'engineVersion':'0.21.7'})]):
+            plan = fanout.Controller.plan(ctl)
+        self.assertEqual(plan['nodes'], 3)
+        self.assertEqual(plan['initial_nodes'], 3)
+        self.assertFalse(plan['canary_before_remaining_nodes'])
+        self.assertTrue(plan['builder_ready_before_parallel_initial_nodes'])
+        self.assertTrue(plan['two_machine_preflight_before_real_build'])
+        self.assertTrue(plan['browser_canary_before_additional_shards'])
+
     def test_artifact_transfer_cap_does_not_extend_deadline_or_bypass_normal_stop(self):
         self.initialize()
         deadline = (fanout.utcnow() + dt.timedelta(hours=1)).isoformat()
@@ -1240,8 +1483,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(ssh.call_count, 1)
         self.assertNotIn('restored_bundle_archive', self.controller.read()['nodes']['node-001'])
 
+    def test_browser_receipt_checks_requested_worker_budget(self):
+        self.controller.config.update(workers=24, server_workers=32)
+        self.initialize()
+        self.controller.read_bundle('node-001')
+        self.controller.phase('node-001', 'browser', 'browser', [])
+        receipt = self.controller.write_browser_export('node-001', 'browser', report([1], 1, self.controller.plan()['nodes']))
+        path = self.controller.root / 'node-001/results/browser/browser/browser-run.json'
+        self.assertEqual(self.controller.verify_browser_receipt('node-001', 'browser', 'browser-first-pass'), receipt)
+        for key, value in [('httpWorkersRequested', 8), ('playwrightWorkers', 8), ('httpWorkersRequested', '32')]:
+            path.write_text(json.dumps(dict(receipt, **{key: value})))
+            with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, 'receipt'):
+                self.controller.verify_browser_receipt('node-001', 'browser', 'browser-first-pass')
+
     def test_phase_transport_preserves_explicit_resource_widths(self):
-        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16,
+        self.controller.config.update(build_jobs=64, rust_test_threads=48, workers=16, server_workers=32,
                                       test_run_key='clone-one', cache_namespace='warm-seed')
         self.initialize()
         self.controller.node_update('node-001', status='ready')
@@ -1254,6 +1510,12 @@ class LifecycleTests(unittest.TestCase):
         phase = actual.read()['nodes']['node-001']['phase_config']
         self.assertEqual((phase['build_jobs'], phase['rust_test_threads']), (64, 48))
         self.assertEqual(phase['args'], ['rust-test'])
+        self.assertEqual((phase['server_workers'], phase['playwright_workers']), (32, 16))
+        with mock.patch.object(actual, 'scp'), mock.patch.object(actual, 'ssh'), mock.patch.object(actual, 'event'):
+            actual.node_update('node-001', status='ready')
+            actual.phase('node-001', 'probe-import', 'probe', ['verify'], module='/fixture/probe')
+        probe = actual.read()['nodes']['node-001']['phase_config']
+        self.assertEqual(probe['server_workers'], 0)
         self.assertEqual((phase['test_run_key'], phase['cache_namespace']), ('clone-one', 'warm-seed'))
 
     def test_shared_check_generator_remains_lazy_and_finite_queues_prioritize_independent_checks(self):
@@ -1819,7 +2081,7 @@ class LifecycleTests(unittest.TestCase):
         for key in ('node-001','node-002'):
             self.assertTrue((self.controller.root / key / 'source-inputs.json').is_file())
 
-    def test_setup_byte_change_fails_real_before_after_gate_on_only_two_hosts(self):
+    def test_setup_byte_change_fails_real_before_after_gate_without_building_or_growing_past_initial_hosts(self):
         controller = self.controller
         source = self.root / 'input.txt'
         source.write_text('pristine')
@@ -1844,7 +2106,9 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'input.txt'):
                 controller.run()
         self.assertEqual(controller.read()['nodes']['node-001']['source_input_differences'], ['input.txt'])
-        self.assertEqual(len([args for _,args in self.api.mutations if args[:3] == ['compute','droplet','create']]),2)
+        created = len([args for _,args in self.api.mutations if args[:3] == ['compute','droplet','create']])
+        self.assertGreaterEqual(created, 2)
+        self.assertLessEqual(created, len(fanout.CHECKS) + 1)
         self.assertFalse(any(isinstance(item,tuple) and item[1]=='build' for item in controller.events))
 
     def test_running_rust_is_retained_without_extending_the_existing_deadline(self):
@@ -1860,7 +2124,7 @@ class LifecycleTests(unittest.TestCase):
         retrieve.assert_called_once_with('node-001')
         self.assertEqual(self.controller.read()['deadline'],deadline)
 
-    def test_input_mismatch_stops_before_expensive_build_and_only_two_hosts_exist(self):
+    def test_input_mismatch_stops_before_expensive_build_and_removes_initial_hosts(self):
         self.controller.fail_inputs = True
         with mock.patch.object(fanout.subprocess, 'Popen') as process:
             process.return_value.poll.return_value = 0
@@ -1868,7 +2132,8 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Source inputs differ'):
                 self.controller.run()
         created = [args for _, args in self.api.mutations if args[:3] == ['compute', 'droplet', 'create']]
-        self.assertEqual(len(created), 2)
+        self.assertGreaterEqual(len(created), 2)
+        self.assertLessEqual(len(created), len(fanout.CHECKS) + 1)
         self.assertFalse(any(isinstance(item, tuple) and item[1] == 'build' for item in self.controller.events))
         self.assertEqual(sum(len(value) for value in self.api.droplets.values()), 0)
 

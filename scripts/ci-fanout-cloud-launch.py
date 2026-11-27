@@ -32,12 +32,29 @@ SPEC.loader.exec_module(BASE)
 WARM_SPEC = importlib.util.spec_from_file_location('cloud_launch_warm', Path(__file__).with_name('ci-fanout-warm.py'))
 WARM = importlib.util.module_from_spec(WARM_SPEC)
 WARM_SPEC.loader.exec_module(WARM)
+SCRATCH_SPEC = importlib.util.spec_from_file_location('cloud_launch_scratch', Path(__file__).with_name('ci-fanout-scratch.py'))
+SCRATCH = importlib.util.module_from_spec(SCRATCH_SPEC)
+SCRATCH_SPEC.loader.exec_module(SCRATCH)
 ROOT = '/root/atomic-ci-control'
 MOUNT = '/mnt/atomic-ci'
 CLEANUP_SECONDS = 120
 FORBIDDEN = {'browser-bundles','doctl.yaml','doctl.json','doctl-selected.json','operator-key',
              'operator-key.pub','controller-key','controller-key.pub','id_ed25519','id_ed25519.pub',
              'id_rsa','id_rsa.pub','user-data.txt','user-data.yaml','launch-config.json','credentials','secrets'}
+
+
+def native_module():
+    spec = importlib.util.spec_from_file_location('native_ci', Path(__file__).with_name('ci-fanout-native.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def private_input_helper():
+    spec = importlib.util.spec_from_file_location('private_input', Path(__file__).with_name('ci-fanout-private-input.py'))
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
 
 
 def validate_config(config):
@@ -60,6 +77,8 @@ def validate_config(config):
             raise ValueError('invalid ' + field)
     if not config['expected_controller_hourly_rate'] or not config['expected_volume_hourly_rate'] or not 0 < config['max_total_usd'] <= 7.5:
         raise ValueError('positive prices and a total ceiling at most $7.50 are required')
+    if 'cloud_cache_min_free_gib' in config and (type(config['cloud_cache_min_free_gib']) is not int or config['cloud_cache_min_free_gib'] != 4):
+        raise ValueError('cloud_cache_min_free_gib must be the explicit 4 GiB reserve')
     mode = config.setdefault('cloud_worker_mode', 'cold')
     if mode not in ('cold', 'warm'):
         raise ValueError('cloud_worker_mode must be cold or warm')
@@ -85,6 +104,16 @@ def validate_config(config):
                     or companion.get('architecture') != 'linux/amd64'
                     or companion.get('docker_data_root') != '/mnt/atomic-ci/docker'):
                 raise ValueError('warm snapshot companion namespace, engine, architecture or Docker layout differs')
+    if 'supplemental_profile' in config:
+        if config['supplemental_profile'] != 'pr2621-native-private-v1' or config.get('cold_scratch_gib') != 200:
+            raise ValueError('unsupported supplemental profile')
+        private_input_helper().validate_descriptor(config.get('private_input'))
+        private_input_helper().verify_capsule(config['private_input'])
+        config = native_module().validate_config(config, BASE)
+    if 'cold_scratch_gib' in config:
+        config = SCRATCH.validate_config(config, BASE)
+    elif 'expected_scratch_volume_hourly_rate' in config:
+        raise ValueError('scratch price requires cold scratch mode')
     if config.get('cloud_volume_id') and not re.fullmatch(r'[0-9a-f-]{36}', config['cloud_volume_id']):
         raise ValueError('cloud_volume_id must be an explicit UUID')
     return config
@@ -106,8 +135,14 @@ def checked_source(config):
         raise ValueError('cloud launch requires the exact clean configured source')
     result = {}
     names = ['ci-fanout-cloud-launch.py', 'ci-fanout-cloud.py']
+    if 'cloud_cache_min_free_gib' in config:
+        names.append('ci-cache-prune.py')
     if config.get('cloud_worker_mode') == 'warm':
         names.append('ci-fanout-warm.py')
+    if config.get('cold_scratch_gib'):
+        names.append('ci-fanout-scratch.py')
+    if config.get('supplemental_profile'):
+        names.extend(['ci-fanout-native.py', 'ci-supplemental.py', 'ci-fanout-private-input.py'])
     for name in names:
         path = 'scripts/' + name
         try:
@@ -246,6 +281,11 @@ class CloudLauncher:
         credentials = selected_credentials(self.config['doctl_config'], self.account['context'])
         if self.config['cloud_worker_mode'] == 'warm':
             worker = WARM.controller_class(BASE, api_factory=lambda _: self.api)(worker_config(self.config)).plan()
+        elif self.config.get('supplemental_profile'):
+            parent = SCRATCH.controller_class(BASE, api_factory=lambda _: self.api)
+            worker = native_module().controller_class(BASE, parent)(self.config).plan()
+        elif self.config.get('cold_scratch_gib'):
+            worker = SCRATCH.controller_class(BASE, api_factory=lambda _: self.api)(self.config).plan()
         else:
             worker = BASE.Controller(self.config, api=self.api).plan()
         info = self.api.identity(self.account)
@@ -255,7 +295,9 @@ class CloudLauncher:
         if any(item['name'] == self.config['batch_key'] + '-controller' for item in droplets):
             raise ValueError('controller name already exists; refusing a second fleet')
         sizes = self.api.call(self.account, ['compute', 'size', 'list'])
-        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'], 64, self.config['region']),
+        for slug, expected, cores, region in ((self.config['size'], self.config['expected_hourly_rate'],
+                                      BASE.WORKER_PROFILES.get(self.config['worker_profile'], {}).get('vcpus', 64),
+                                      self.config['region']),
                                       (self.config['cloud_controller_size'], self.config['expected_controller_hourly_rate'], None, self.config['cloud_controller_region'])):
             item = next((value for value in sizes if value['slug'] == slug), None)
             if (not item or not item.get('available') or region not in item.get('regions', [])
@@ -272,7 +314,8 @@ class CloudLauncher:
             raise ValueError('controller SSH key name already exists')
         hourly = 3 * self.config['expected_hourly_rate'] + self.config['expected_controller_hourly_rate'] + self.config['expected_volume_hourly_rate']
         cache_hourly = 3 * self.config['expected_cache_volume_hourly_rate'] if self.config['cloud_worker_mode'] == 'warm' else 0
-        hourly += cache_hourly
+        scratch_hourly = 3 * self.config['expected_scratch_volume_hourly_rate'] if self.config.get('cold_scratch_gib') else 0
+        hourly += cache_hourly + scratch_hourly
         ceiling = hourly * (self.config['max_hours'] + CLEANUP_SECONDS / 3600) + self.config['cloud_egress_reserve_usd']
         if ceiling > self.config['max_total_usd']:
             raise ValueError('controller, test machines, storage, cleanup and egress exceed the authorized budget')
@@ -292,10 +335,19 @@ class CloudLauncher:
         scope = ({'validation_scope': 'selected-check', 'configured_test_nodes': 3,
                   'initial_nodes': 1, 'browser_shards': 0, 'check_jobs': ['flutter-test']}
                  if self.config.get('check_only') else {})
+        if 'cloud_cache_min_free_gib' in self.config:
+            scope['cloud_cache_min_free_gib'] = self.config['cloud_cache_min_free_gib']
+        if self.config.get('cold_scratch_gib'):
+            scope['storage_mode'] = 'cold-scratch'
+        if self.config.get('supplemental_profile'):
+            scope['supplemental'] = worker['supplemental']
         return {**scope, 'source_commit': self.config['source_commit'],
                 'test_nodes': 1 if self.config.get('check_only') else 3,
+                'worker_budget': BASE.worker_budget(self.config),
                 'controller_size': self.config['cloud_controller_size'], 'region': self.config['region'],
                 'controller_region': self.config['cloud_controller_region'], 'cloud_worker_mode': self.config['cloud_worker_mode'],
+                'scratch_volume_gib': self.config.get('cold_scratch_gib', 0),
+                'scratch_storage_hourly_usd_estimate': scratch_hourly,
                 'cache_volume_gib': WARM.VOLUME_GIB if cache_hourly else 0,
                 'cache_storage_hourly_usd_estimate': cache_hourly,
                 'source_snapshots': worker.get('source_snapshots', {}),
@@ -445,6 +497,8 @@ class CloudLauncher:
                 raise
             finally:
                 userdata.unlink(missing_ok=True)
+            if self.config.get('supplemental_profile'):
+                private_input_helper().stage_controller_input(self)
             self.update(lambda value: value.update(status='launched'))
             return self.summary()
         except BaseException:
@@ -482,7 +536,11 @@ class CloudLauncher:
                       doctl_config=ROOT + '/doctl.json', absolute_deadline=state['deadline'], host_bundle_backup=True,
                       oci_probe_dir='/opt/atomic-ci-control/repo/scripts/ci-fanout/oci-smoke',
                       artifact_archive_dir=MOUNT + '/browser-bundles')
-        return {'account': {key:self.account[key] for key in ('context','expected_uuid')}, 'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
+        if self.config.get('supplemental_profile'):
+            fanout['private_input'] = private_input_helper().remote_descriptor(self.config['private_input'], ROOT)
+        maintenance = ({'cloud_cache_min_free_gib': self.config['cloud_cache_min_free_gib']}
+                       if 'cloud_cache_min_free_gib' in self.config else {})
+        return {**maintenance, 'account': {key:self.account[key] for key in ('context','expected_uuid')}, 'batch_key': self.config['batch_key'], 'source_commit': self.config['source_commit'],
                 'deadline': state['deadline'], 'campaign_started_at': state['campaign_started_at'],
                 'root': ROOT, 'repo': '/opt/atomic-ci-control/repo', 'credentials': ROOT + '/doctl.json',
                 'controller': dict(state['controller'], size=self.config['cloud_controller_size'],
@@ -492,6 +550,7 @@ class CloudLauncher:
                 'volume': dict(state['volume'], size_gigabytes=10, region=self.config['cloud_controller_region'], mount_path=MOUNT),
                 'fanout_config': fanout, 'cloud_worker_mode': self.config['cloud_worker_mode'],
                 'cloud_controller_region': self.config['cloud_controller_region'],
+                'expected_scratch_volume_hourly_rate': self.config.get('expected_scratch_volume_hourly_rate', 0),
                 'expected_cache_volume_hourly_rate': self.config.get('expected_cache_volume_hourly_rate', 0),
                 'max_total_usd': self.config['max_total_usd'],
                 'expected_volume_hourly_rate': self.config['expected_volume_hourly_rate'],

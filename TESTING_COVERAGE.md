@@ -738,6 +738,30 @@ verify each nonce is inserted immediately before a test execution after reusable
 setup, and preserve stable namespace/nonce transport without adding either to
 the OCI probe. They establish graph-input differences, not a measured cache hit
 or proof that a specific cloud snapshot was quiescent.
+`scripts/ci-supplemental.test.py` exercises fixed native/private recipe selection,
+independent execution after ordinary test failures, explicit blocked dependencies,
+strict browser counts (no zero-test, skipped, retried or globally failed passes),
+source/hash/exit-bound receipt retrieval, rejection of raw private diagnostic
+fields, sanitized driver failures, early-removal and aggregate-result barriers,
+and identical normalized scheduler/watchdog configuration. These are fake-host
+and pure protocol tests: actual Docker/WebKitGTK/MinIO/Vault execution and native
+renderer acceptance are still required before claiming the supplemental matrix
+passed. Public `CHECKS` retains all ten lanes.
+
+Core-aware worker regressions exercise opt-in 64-core (32 HTTP/24 Playwright)
+and 32-core (16/12) profiles, independent explicit overrides, invalid widths,
+provider-vCPU mismatch before provisioning, and transport into remote commands,
+phase receipts, public plans and retained summaries. Recording-SDK tests execute
+both imported browser rounds and the separate native JS integration fixture
+path, checking the HTTP override and unchanged zero-immediate-retry policy.
+Custom OCI probe commands receive no unsupported constructor argument. Rust
+parser tests use child processes for actual CLI/environment precedence without
+mutating the parallel test process; worker selection tests preserve default
+eight-worker behavior and FD caps on explicit requests. These checks do not
+establish stability or speed at 24 browser workers, effective container CPU
+availability, or server-thread saturation; those require a new frozen-source
+full CI run with bounded process/host measurements.
+
 These fixtures do not establish real OCI
 transport, regional capacity or full browser acceptance; an actual frozen-commit
 Docker/Dagger fan-out run is required. Its full test inventory and all shard

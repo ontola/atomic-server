@@ -111,10 +111,15 @@ def check_prepared_bundle(config):
 def main(config_path):
     config = json.loads(config_path.read_text())
     repo = ROOT / 'repo'
-    for field, default, low in (('build_jobs', 4, 1), ('rust_test_threads', 0, 0)):
+    for field, default, low in (('build_jobs', 4, 1), ('rust_test_threads', 0, 0), ('server_workers', 0, 0)):
         value = config.get(field, default)
         if type(value) is not int or not low <= value <= 128:
             raise ValueError('invalid ' + field)
+    if config.get('module') and config.get('server_workers', 0):
+        raise ValueError('custom modules do not support the HTTP worker override')
+    playwright_workers = config.get('playwright_workers', 1)
+    if type(playwright_workers) is not int or not 1 <= playwright_workers <= 64:
+        raise ValueError('invalid playwright_workers')
     for field in ('test_run_key', 'cache_namespace'):
         value = config.get(field, '')
         if not isinstance(value, str) or value and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,80}', value):
@@ -137,6 +142,10 @@ def main(config_path):
     began = time.monotonic()
     state = {key: config[key] for key in ('batch_key', 'node_id', 'phase', 'source_commit')}
     state.update(status='running', started_at=stamp(), commands=[])
+    if not config.get('module'):
+        state['worker_budget'] = {'profile': config.get('worker_profile', ''),
+            'http_workers_requested': config.get('server_workers', 0),
+            'playwright_workers_per_host': playwright_workers}
     write_json(results / 'progress.json', state)
     namespace = config.get('cache_namespace') or config['batch_key'] + '-' + config['node_id']
     prefix = (['dagger', '-m', config['module'], 'call'] if config.get('module') else
@@ -145,6 +154,8 @@ def main(config_path):
                '--build-jobs', str(config.get('build_jobs', 4))])
     if not config.get('module') and config.get('test_run_key'):
         prefix += ['--test-run-key', config['test_run_key']]
+    if not config.get('module') and config.get('server_workers', 0):
+        prefix += ['--http-workers', str(config['server_workers'])]
     try:
         if config.get('preflight'):
             commands = [[sys.executable, 'scripts/ci-browser-build.test.py'],
@@ -157,7 +168,24 @@ def main(config_path):
                          'node --test ../scripts/table-package-cache.test.mjs']]
         else:
             commands = []
-        if config['kind'] == 'builder':
+        if config['kind'] == 'supplemental':
+            supplemental = config.get('supplemental')
+            if (not isinstance(supplemental, dict) or any(supplemental.get(key) != config[key]
+                    for key in ('batch_key', 'node_id', 'source_commit'))):
+                raise ValueError('supplemental source identity differs')
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('supplemental_driver', repo / 'scripts/ci-supplemental.py')
+            driver = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(driver)
+            driver.validate_phase(supplemental)
+            private_config = Path(supplemental['private_root']).parent / ('phase-' + config['phase'] + '.json')
+            if private_config.exists() or private_config.is_symlink():
+                raise ValueError('supplemental phase configuration already exists')
+            write_json(private_config, supplemental)
+            private_config.chmod(0o600)
+            commands.append([sys.executable, str(repo / 'scripts/ci-supplemental.py'),
+                '--config', str(private_config), '--receipt', str(results / 'supplemental-receipt.json')])
+        elif config['kind'] == 'builder':
             commands.append([sys.executable, str(repo / 'scripts/ci-browser-build.py'),
                 '--source-commit', config['source_commit'],
                 '--cache-root', config.get('artifact_cache_dir', '/var/cache/atomic-ci/browser-bundles'),
@@ -179,6 +207,15 @@ def main(config_path):
             item['exit_code'] = run(command, repo, results / (str(index) + '-command.log'))
             item['finished_at'] = stamp()
             check_identity(config, repo)
+            if config['kind'] == 'supplemental' and item['exit_code'] in (0, 1):
+                receipt_path = results / 'supplemental-receipt.json'
+                receipt = json.loads(receipt_path.read_text())
+                if receipt.get('completed') is not True or receipt.get('status') != ('passed' if item['exit_code']==0 else 'failed'):
+                    raise ValueError('supplemental receipt completion differs')
+                import hashlib
+                state['supplemental_receipt_sha256'] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+                if item['exit_code'] == 1:
+                    state['failure_scope'] = 'completed-supplemental'
             if item['exit_code'] != 0:
                 raise RuntimeError('phase command exited ' + str(item['exit_code']))
         if config['kind'] == 'builder':

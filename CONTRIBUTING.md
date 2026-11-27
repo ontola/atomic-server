@@ -301,6 +301,30 @@ Playwright's immediate retries. Choose these widths for the actual CPU and
 memory budget rather than assuming more parallel tests always finish sooner.
 Standalone Dagger calls can use constructor `--build-jobs N` to override the
 host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+
+`server_workers` (default 0) requests 1–128 HTTP worker threads; 0 leaves the
+server's existing automatic default, at most eight. The process descriptor
+budget can reduce a requested width. It applies to browser services and native
+JavaScript integration fixtures, including the final browser retry, and never
+to the custom OCI probe module. Standalone Dagger calls use constructor
+`--http-workers N`; the server itself accepts `--http-workers N` or
+`ATOMIC_HTTP_WORKERS=N` (positive values only).
+
+An optional `"worker_profile": "64-core"` chooses 32 HTTP workers and 24
+Playwright workers per host; `"32-core"` chooses 16 and 12. These are opt-in
+measurement profiles, not demonstrated fastest settings. Explicit `workers` or
+`server_workers` values override their respective profile defaults, including
+`workers: 1` and `server_workers: 0`. Without a profile the existing defaults
+stay unchanged. Specify the matching machine `size` and rate: the read-only
+provider plan rejects a profile whose vCPU count differs from that size. The
+cloud launcher otherwise retains its existing 64-vCPU worker requirement.
+Plans, phase results and retained summaries identify requested runtime widths;
+server startup logs report the effective HTTP width after descriptor capping.
+Browser receipts bind the requested widths to the scheduled source and shard.
+A three-host 64-core profile can run up to 72 Playwright workers against three
+isolated servers. This may increase contention, memory use and flakes; measure
+latency, first-pass failures, CPU and total time/cost before adopting it.
+
 For a warm-cache measurement, optional `cache_namespace` keeps the seeded Cargo
 volume names stable across cloned engines; omitting it retains the per-batch/node
 namespace. Give `test_run_key` a fresh safe identifier that differs from seed and
@@ -309,6 +333,36 @@ test results cannot satisfy the benchmark. Empty keys retain normal CI caching.
 Rust's combined nextest install/compile/run command and Flutter's post-Dart
 bridge tail execute again; their Cargo target volumes can still reuse compiled
 objects. Browser execution already has its own per-invocation nonce.
+
+The fixed `"supplemental_profile": "pr2621-native-private-v1"` adds the
+required native and private Vault matrix to a three-worker cold run with
+`cold_scratch_gib: 200`. It cannot be combined with selected-check mode. Supply
+a verified `private_input` capsule descriptor from the protected export helper;
+its archive contains filtered source at one exact private commit, never Git
+history, environment files or credentials. The cloud launcher stages it on the
+controller boot disk and waits for a source/hash-bound acknowledgment before
+worker allocation. Neither the capsule nor raw private output belongs on the
+retained artifact disk.
+
+Node two runs actual native peer/Vault recovery and the Iroh/WebRTC acceptance;
+node three runs private workspace/managed-node checks and both full-workspace
+Vault journeys. Each host finishes its ordinary public check queue, then its
+supplemental group, then its browser shard. Completed supplemental test failures
+remain visible while independent checks continue. Missing, skipped, wrong-source
+or failed supplemental evidence prevents overall success and early worker
+removal. `supplemental_jobs` (default 16, range 1–32) bounds container CPU and Cargo
+compile width; it does not raise the campaign deadline or budget.
+
+The native harness supports `NATIVE_RECOVERY_BUILD_ONLY=true` to build matching
+artifacts without claiming test or Clippy success. A caller using it must run
+Clippy independently and invoke `NATIVE_RECOVERY_CASE=peer` and `=vault`
+separately. Unset case selection retains the original combined run. Supplemental
+private logs, profiles, signed URLs and raw browser reports stay on temporary
+protected scratch; retained results contain constructed receipts and only known
+synthetic native PNGs. Image preparation currently runs inside the exclusive
+supplemental phase, avoiding unmeasured competition with the public check queue.
+A one-hour ceiling bounds the attempt; no full cold native/private completion
+time or 24-browser-worker stability has yet been established.
 
 For a focused Flutter refresh, optional `"check_only": "flutter-test"` runs
 only the standalone Flutter check on one worker. The configured fleet size and
@@ -335,13 +389,31 @@ python3 scripts/ci-fanout.py --config /absolute/private/batch.json status
 python3 scripts/ci-fanout.py --config /absolute/private/batch.json cleanup
 ```
 
+Startup first waits for the builder to be ready, including its restored-engine
+proof when using the warm runner. The other initial machines then bootstrap
+concurrently while the builder prepares its portable fixture and Dagger API.
+For a three-machine run, this starts both other machines at that point. The
+builder and one peer must still pass the cross-engine OCI probe and source
+preflight before the real build starts. The probe writes and removes the bundle
+paths, so it never overlaps that build. Successful API preparation is recorded
+once for the exact node and source; unrelated startup attempts are joined before
+failure cleanup reconciles their resources.
+
+The plan distinguishes allocation from validation:
+`canary_before_remaining_nodes` is false because initial peers are allocated
+before the two-machine probe. `builder_ready_before_parallel_initial_nodes` and
+`two_machine_preflight_before_real_build` describe the startup/build gates.
+`browser_canary_before_additional_shards` remains true for machines beyond the
+initial check fleet; they start after the first imported browser shard has been
+verified. These scheduling changes do not expand the configured fleet or budget.
+
 The runner records machine lifetimes and actual hourly prices, saves logs and
 browser reports, and removes its temporary machines and keys. A separate
 watchdog enforces the configured deadline (four hours by default). Completed
 checks are not repeated merely to occupy otherwise idle machines; additional
-browser workers are started after the build is ready. The first imported
-browser shard must return a complete, source-verified report before the rest
-of the fleet is created. Completed check or browser assertion failures are
+browser workers beyond the initial check fleet start after the build is ready.
+The first imported browser shard must return a complete, source-verified report
+before those additional machines are created. Completed check or browser assertion failures are
 collected while later independent checks and browser shards continue. The
 runner reconciles all ten checks and the complete browser inventory before
 starting the final retry round. Only completed, unexpected browser failures
