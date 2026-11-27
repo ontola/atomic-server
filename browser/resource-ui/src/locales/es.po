@@ -1448,16 +1448,8 @@ msgid "Data for"
 msgstr "Datos para"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "asunto:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "La URL del recurso"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "génesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1897,6 +1889,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} no es un asunto válido."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "sujeto"
 
@@ -2774,9 +2767,11 @@ msgstr "Este recurso tiene <0/> hijos"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "Editar {0}"
 
@@ -12206,10 +12201,12 @@ msgid "Activity will show up here"
 msgstr "La actividad aparecerá aquí"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Mostrar menos"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Mostrar todo"
 
@@ -13401,15 +13398,9 @@ msgstr "Para más personas, usa un Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Solo este navegador puede abrir tu trabajo. Inicia sesión o regístrate con tu correo, o conecta otro dispositivo, para poder abrirlo en otro lugar y no perder el acceso."
 
-#~ msgid "Save your work"
-#~ msgstr "Guarda tu trabajo"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Registra tu correo o conecta un dispositivo para abrirlo en otro lugar"
-
-#~ msgid "Save your work here"
-#~ msgstr "Guarda tu trabajo aquí"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13930,3 +13921,7 @@ msgstr "Actualización disponible"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Reinicia para usar la versión {0}"
+
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
