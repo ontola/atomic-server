@@ -12,7 +12,6 @@ import {
 import { AddMarketplaceDialog } from '../chunks/PluginRuns/AddMarketplaceDialog';
 import { useMarketplaceUrls } from '@helpers/pluginCatalogUrl';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
-import { PLUGIN_PREVIEW_PARAM } from '@helpers/integrationVisibility';
 import { driveHasServer } from '@helpers/driveData';
 import { parseListings, type Listing } from '@helpers/pluginListings';
 import { isOriginWithoutNode } from '@helpers/originNode';
@@ -60,9 +59,6 @@ function validateAppsSearch(search: Record<string, unknown>) {
   return {
     workspace:
       typeof search.workspace === 'string' ? search.workspace : undefined,
-    // `?preview=plugins` unlocks the experimental toggle on this device, for
-    // user-testing sessions.
-    preview: typeof search.preview === 'string' ? search.preview : undefined,
     // A shared app link: `?app=<shortname>[&marketplace=<catalog url>]`.
     app: typeof search.app === 'string' ? search.app : undefined,
     marketplace:
@@ -94,17 +90,11 @@ function IntegrationStore(): React.JSX.Element {
   const store = useStore();
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
-  const { workspace, preview, app, marketplace } =
+  const { workspace, app, marketplace } =
     IntegrationStoreRoute.useSearch();
   const marketplaceUrls = useMarketplaceUrls();
-  const {
-    showExperimentalPlugins,
-    showApiPlugins,
-    experimentalToggleVisible,
-    setVisibility,
-  } = useIntegrationVisibility({
-    unlockToggle: preview === PLUGIN_PREVIEW_PARAM,
-  });
+  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -429,7 +419,7 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {hasExperimentalPlugins && experimentalToggleVisible && (
+          {hasExperimentalPlugins && (
             <CheckboxLabel>
               <Checkbox
                 checked={showExperimentalPlugins}
