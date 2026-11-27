@@ -1,0 +1,334 @@
+[
+  {
+    "@id": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/shortname": "medical",
+    "https://atomicdata.dev/properties/description": "Lab results, daily biometrics, vital signs and documents for a personal health record (Atomic Medical). Modelled after FHIR R4 and the Dutch zib 2020.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/medical/v1/class/lab-result",
+      "https://atomicdata.dev/medical/v1/class/daily-biometrics",
+      "https://atomicdata.dev/medical/v1/class/measurement",
+      "https://atomicdata.dev/medical/v1/class/medical-document",
+      "https://atomicdata.dev/medical/v1/class/care-provider"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/medical/v1/property/med-code",
+      "https://atomicdata.dev/medical/v1/property/med-value",
+      "https://atomicdata.dev/medical/v1/property/med-value-secondary",
+      "https://atomicdata.dev/medical/v1/property/med-unit",
+      "https://atomicdata.dev/medical/v1/property/med-reference-low",
+      "https://atomicdata.dev/medical/v1/property/med-reference-high",
+      "https://atomicdata.dev/medical/v1/property/med-effective",
+      "https://atomicdata.dev/medical/v1/property/med-performer",
+      "https://atomicdata.dev/medical/v1/property/med-source-document",
+      "https://atomicdata.dev/medical/v1/property/med-measurement-kind",
+      "https://atomicdata.dev/medical/v1/property/med-date",
+      "https://atomicdata.dev/medical/v1/property/med-steps",
+      "https://atomicdata.dev/medical/v1/property/med-resting-heart-rate",
+      "https://atomicdata.dev/medical/v1/property/med-sleep-minutes",
+      "https://atomicdata.dev/medical/v1/property/med-active-energy",
+      "https://atomicdata.dev/medical/v1/property/med-document-kind",
+      "https://atomicdata.dev/medical/v1/property/med-file",
+      "https://atomicdata.dev/medical/v1/property/med-file-hash",
+      "https://atomicdata.dev/medical/v1/property/med-media-type",
+      "https://atomicdata.dev/medical/v1/property/med-provider"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/class/lab-result",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "lab-result",
+    "https://atomicdata.dev/properties/description": "One measured laboratory value with the lab's own reference range. Modelled after FHIR Observation and zib LaboratoryTestResult.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/medical/v1/property/med-code",
+      "https://atomicdata.dev/medical/v1/property/med-value",
+      "https://atomicdata.dev/medical/v1/property/med-effective"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/medical/v1/property/med-unit",
+      "https://atomicdata.dev/medical/v1/property/med-reference-low",
+      "https://atomicdata.dev/medical/v1/property/med-reference-high",
+      "https://atomicdata.dev/medical/v1/property/med-performer",
+      "https://atomicdata.dev/medical/v1/property/med-source-document"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/class/daily-biometrics",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "daily-biometrics",
+    "https://atomicdata.dev/properties/description": "One aggregate per day (steps, resting heart rate, sleep, active energy) from the phone's health store. Never per-minute samples.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/medical/v1/property/med-date"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/medical/v1/property/med-steps",
+      "https://atomicdata.dev/medical/v1/property/med-resting-heart-rate",
+      "https://atomicdata.dev/medical/v1/property/med-sleep-minutes",
+      "https://atomicdata.dev/medical/v1/property/med-active-energy"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/class/measurement",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "measurement",
+    "https://atomicdata.dev/properties/description": "A single vital sign reading, such as blood pressure or body weight. Modelled after FHIR Observation, zib BloodPressure and BodyWeight.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/medical/v1/property/med-measurement-kind",
+      "https://atomicdata.dev/medical/v1/property/med-value",
+      "https://atomicdata.dev/medical/v1/property/med-effective"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/medical/v1/property/med-code",
+      "https://atomicdata.dev/medical/v1/property/med-value-secondary",
+      "https://atomicdata.dev/medical/v1/property/med-unit"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/class/medical-document",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "medical-document",
+    "https://atomicdata.dev/properties/description": "A document with a date and a source: a lab report, a letter or an image. Modelled after FHIR DocumentReference.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/medical/v1/property/med-effective"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/medical/v1/property/med-document-kind",
+      "https://atomicdata.dev/medical/v1/property/med-file",
+      "https://atomicdata.dev/medical/v1/property/med-file-hash",
+      "https://atomicdata.dev/medical/v1/property/med-media-type",
+      "https://atomicdata.dev/medical/v1/property/med-provider"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/class/care-provider",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "care-provider",
+    "https://atomicdata.dev/properties/description": "A care provider or laboratory. Modelled after FHIR Organization.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/recommends": []
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-code",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-code",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "LOINC code of the test or vital sign, such as 2160-0."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-value",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "The numeric value. For a blood pressure Measurement: systolic."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-value-secondary",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-value-secondary",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Second value of a Measurement: diastolic for blood pressure."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-unit",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-unit",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Unit as a UCUM code, such as umol/L or mm[Hg]."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-reference-low",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-reference-low",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Lower bound of the reference range, as given by the lab."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-reference-high",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-reference-high",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Upper bound of the reference range, as given by the lab."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-effective",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-effective",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp",
+    "https://atomicdata.dev/properties/description": "When the value applies (sample or measurement time), in milliseconds since the epoch. Also the date of a MedicalDocument."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-performer",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-performer",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Name of the laboratory or practice that produced the value."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-source-document",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-source-document",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The MedicalDocument the value was read from.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/medical/v1/class/medical-document"
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-measurement-kind",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-measurement-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Kind of vital sign: blood-pressure or weight."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-date",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-date",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/date",
+    "https://atomicdata.dev/properties/description": "Calendar day (YYYY-MM-DD) in the user's local time."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-steps",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-steps",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Number of steps on the day."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-resting-heart-rate",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-resting-heart-rate",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Resting heart rate in beats per minute."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-sleep-minutes",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-sleep-minutes",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "Minutes asleep, counted for the day the sleep ended."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-active-energy",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-active-energy",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "Active energy burned on the day, in kilocalories."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-document-kind",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-document-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Kind of document: lab-report, letter or image."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-file",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-file",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The File resource that holds the document bytes.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File"
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-file-hash",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-file-hash",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "SHA-256 of the document bytes, as lowercase hex. Names the copy kept on the device until a synced File resource replaces it."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-media-type",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-media-type",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Media type of the document bytes, such as application/pdf or image/jpeg."
+  },
+  {
+    "@id": "https://atomicdata.dev/medical/v1/property/med-provider",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/medical/v1",
+    "https://atomicdata.dev/properties/shortname": "med-provider",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The CareProvider the document comes from.",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/medical/v1/class/care-provider"
+  }
+]
