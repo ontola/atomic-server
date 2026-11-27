@@ -622,10 +622,16 @@ class Controller:
                 'nodes': total, 'hourly_usd': total * self.config['expected_hourly_rate'],
                 'maximum_hours': self.config['max_hours'], 'check_jobs': [name for name, _ in CHECKS],
                 'browser_shards': total, 'initial_nodes': min(total, len(CHECKS) + 1),
-                'canary_before_remaining_nodes': True}
+                'canary_before_remaining_nodes': False,
+                'builder_ready_before_parallel_initial_nodes': True,
+                'two_machine_preflight_before_real_build': True,
+                'browser_canary_before_additional_shards': True}
         if self.config.get('check_only'):
             plan.update(validation_scope='selected-check', check_jobs=['flutter-test'],
-                        browser_shards=0, initial_nodes=1, canary_before_remaining_nodes=False)
+                        browser_shards=0, initial_nodes=1, canary_before_remaining_nodes=False,
+                        builder_ready_before_parallel_initial_nodes=False,
+                        two_machine_preflight_before_real_build=False,
+                        browser_canary_before_additional_shards=False)
         return plan
 
     def initialize(self, plan):
@@ -1757,20 +1763,32 @@ systemctl reload ssh
                     task.cancel()
                 raise
 
-    def tiny_probe(self, builder, worker):
+    def prepare_dagger_api(self, node_id):
+        """Prepare one pinned node's portable fixture/API once in this batch."""
+        node = self.read()['nodes'][node_id]
+        prepared = node.get('dagger_api_prepared')
+        if prepared is not None:
+            if prepared.get('node_id') != node_id or prepared.get('source_commit') != self.config['source_commit']:
+                raise ValueError('Dagger API preparation belongs to a different node or source')
+            return
+        self.check_deadline()
         fixture = Path(self.config['oci_probe_dir'])
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w:gz') as archive:
             for path in fixture.rglob('*'):
                 if path.is_file() and not any(part in ('node_modules', '.git') for part in path.parts):
                     archive.add(path, arcname=str(path.relative_to(fixture)), recursive=False)
+        execute(['ssh', *self.ssh_options(node), 'root@' + node['ip'],
+                 'mkdir -p /opt/atomic-ci/oci-smoke && tar -C /opt/atomic-ci/oci-smoke -xzf -'],
+                input=data.getvalue(), timeout=60)
+        output = self.ssh(node_id, 'cd /opt/atomic-ci/repo && dagger functions', timeout=300)
+        (self.root / node_id / 'dagger-functions.log').write_text(output)
+        self.node_update(node_id, dagger_api_prepared={'node_id': node_id,
+                         'source_commit': self.config['source_commit'], 'prepared_at': stamp()})
+
+    def tiny_probe(self, builder, worker):
         for key in (builder, worker):
-            node = self.read()['nodes'][key]
-            execute(['ssh', *self.ssh_options(node), 'root@' + node['ip'],
-                     'mkdir -p /opt/atomic-ci/oci-smoke && tar -C /opt/atomic-ci/oci-smoke -xzf -'],
-                    input=data.getvalue(), timeout=60)
-            output = self.ssh(key, 'cd /opt/atomic-ci/repo && dagger functions', timeout=300)
-            (self.root / key / 'dagger-functions.log').write_text(output)
+            self.prepare_dagger_api(key)
         self.phase(builder, 'probe-export', 'probe', ['prepare', 'export', '--path',
                    '/opt/atomic-ci/share/bundle'], module='/opt/atomic-ci/oci-smoke')
         self.wait([builder])
@@ -1824,6 +1842,8 @@ systemctl reload ssh
         self.initialize(plan)
         watcher = None
         checks = {}
+        startup = {}
+        startup_pool = None
         check_pool = cf.ThreadPoolExecutor(max_workers=len(CHECKS) + 1)
         browser_pool = cf.ThreadPoolExecutor(max_workers=plan['nodes'])
         try:
@@ -1840,13 +1860,29 @@ systemctl reload ssh
             builder, canary = node_ids[:2]
             initial = node_ids[:min(len(node_ids), len(CHECKS) + 1)]
             self.create(builder)
-            self.create(canary)
+            # The first ready node is also the warm-cache restoration canary.
+            # Other initial nodes can bootstrap while its API is prepared, but
+            # the shared-path OCI probe must still finish before the real build.
+            startup_pool = cf.ThreadPoolExecutor(max_workers=min(10, len(initial) - 1))
+            for key in initial[1:]:
+                startup[key] = startup_pool.submit(self.create, key)
+            self.prepare_dagger_api(builder)
+            for future in startup.values():
+                if future.done():
+                    future.result()
+            startup[canary].result()
             self.tiny_probe(builder, canary)
             self.source_preflight(builder, canary)
             self.restore_bundle(builder)
+            for future in startup.values():
+                if future.done():
+                    future.result()
             self.phase(builder, 'build', 'builder', ['prepare-browser-bundle', '--source-commit',
                 self.config['source_commit'], 'export', '--path', '/opt/atomic-ci/share/bundle'])
-            self._parallel_create(initial[2:])
+            for future in cf.as_completed(startup.values()):
+                future.result()
+            startup_pool.shutdown(wait=True)
+            startup_pool = None
             check_nodes = initial[1:]
             pending = self.new_check_queue()
             checks = {key:check_pool.submit(self.run_check_worker, key, pending) for key in check_nodes}
@@ -1893,7 +1929,18 @@ systemctl reload ssh
             self.cleanup('all checks and complete browser suite passed', successful=True)
         except BaseException as error:
             if self.path.exists():
+                # Stop further allocations, then join every startup attempt
+                # before cleanup reconciles/deletes owned provider resources.
                 self.update(lambda state:state.update(validation_error=str(error)))
+                if startup_pool is not None:
+                    self.update(lambda state:state.update(stop_requested=True))
+                    for future in startup.values():
+                        future.cancel()
+                    startup_pool.shutdown(wait=True, cancel_futures=True)
+                    startup_pool = None
+                    failures = {key:str(future.exception()) for key,future in startup.items()
+                                if not future.cancelled() and future.exception() is not None}
+                    self.update(lambda state:state.update(startup_errors=failures))
                 try:
                     if not isinstance(error, (KeyboardInterrupt, SystemExit)):
                         self.preserve_rust(checks)
@@ -1901,6 +1948,8 @@ systemctl reload ssh
                     self.cleanup('controller interrupted or a phase failed')
             raise
         finally:
+            if startup_pool is not None:
+                startup_pool.shutdown(wait=True, cancel_futures=True)
             check_pool.shutdown(wait=False, cancel_futures=True)
             browser_pool.shutdown(wait=False, cancel_futures=True)
             # A failed cleanup still owns paid resources or an unresolved API
