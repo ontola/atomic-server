@@ -174,6 +174,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LivePeerInfo dco_decode_live_peer_info(dynamic raw);
 
   @protected
+  OntologyInstall dco_decode_ontology_install(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -398,6 +401,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LivePeerInfo sse_decode_live_peer_info(SseDeserializer deserializer);
+
+  @protected
+  OntologyInstall sse_decode_ontology_install(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -633,6 +639,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_live_peer_info(LivePeerInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ontology_install(
+      OntologyInstall self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

@@ -786,11 +786,6 @@ msgstr "Keine passenden Ergebnisse."
 msgid "Click to enlarge"
 msgstr "Zum Vergrößern klicken"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Anmelden / Neuer Benutzer"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1273,7 +1268,6 @@ msgstr "Dokument"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Synchronisierung"
@@ -1905,6 +1899,8 @@ msgid "Edit value"
 msgstr "Wert bearbeiten"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -9240,6 +9236,7 @@ msgstr "Beim Öffnen des Formulars vorausgewählt. Wähle „Kein Standardwert�
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Vorschau"
 
@@ -11828,6 +11825,7 @@ msgstr "Wird eingerichtet"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Webadresse"
 
@@ -13908,15 +13906,81 @@ msgstr "Update verfügbar"
 msgid "Restart to use version {0}"
 msgstr "Neu starten, um Version {0} zu verwenden"
 
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Importquelle"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Webseite oder Text"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Füge eine Webadresse hinzu oder füge Text oder den Seitenquelltext ein."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Text oder den HTML-Code der Seite einfügen..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Text oder Seitenquelltext"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Speichern in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "Der Ordner oder das Laufwerk, dem das Ergebnis hinzugefügt wird."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Füge die Adresse einer Seite, ihren Text oder ihren Quelltext ein. Atomic Server ruft keine Seiten für dich ab: Öffne die Seite, kopiere, was du behalten möchtest, und füge es hier ein."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "{0}-Daten auf der Seite gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Titel und Beschreibung der Seite gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Keine strukturierten Daten gefunden, daher wird es ein einfacher Link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Nur Text gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Nur eine Adresse gefunden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Wird vorbereitet..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Du kannst alles vor dem Speichern bearbeiten. Es wurde noch nichts gespeichert."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Diese Seite wurde schon früher importiert. Beim Speichern wird sie aktualisiert, statt eine Kopie anzulegen."
+
 #: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "App settings"
-msgstr ""
+msgstr "App-Einstellungen"
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> App settings"
-msgstr ""
+msgstr "<0/> App-Einstellungen"
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
-msgstr ""
+msgstr "Beschreibe, was du möchtest, und der Assistent baut es in deinem Drive. Teile es, hoste deinen eigenen Marktplatz oder reiche es beim Community-Marktplatz ein."

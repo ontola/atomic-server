@@ -1,0 +1,741 @@
+[
+  {
+    "@id": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/shortname": "education",
+    "https://atomicdata.dev/properties/name": "Education",
+    "https://atomicdata.dev/properties/description": "Classes for teaching with learning trees (Leerboom): deck, cohort, assignment, submission, grade, question, assessment and attempt, plus the properties they share. The skill, lesson and mastery classes come from the earlier atomic-plugins ontology kit. Property names follow schema.org LRMI where one fits: teaches, assesses, license. Credentials (Open Badges) are not part of this version.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/education/v1/class/deck",
+      "https://atomicdata.dev/education/v1/class/cohort",
+      "https://atomicdata.dev/education/v1/class/assignment",
+      "https://atomicdata.dev/education/v1/class/submission",
+      "https://atomicdata.dev/education/v1/class/grade",
+      "https://atomicdata.dev/education/v1/class/question",
+      "https://atomicdata.dev/education/v1/class/assessment",
+      "https://atomicdata.dev/education/v1/class/attempt"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/education/v1/property/deck-slides",
+      "https://atomicdata.dev/education/v1/property/deck-teaches",
+      "https://atomicdata.dev/education/v1/property/cohort-members",
+      "https://atomicdata.dev/education/v1/property/cohort-teachers",
+      "https://atomicdata.dev/education/v1/property/cohort-goals",
+      "https://atomicdata.dev/education/v1/property/assignment-cohort",
+      "https://atomicdata.dev/education/v1/property/assignment-lesson",
+      "https://atomicdata.dev/education/v1/property/submission-work",
+      "https://atomicdata.dev/education/v1/property/submission-submitted-at",
+      "https://atomicdata.dev/education/v1/property/submission-status",
+      "https://atomicdata.dev/education/v1/property/grade-value",
+      "https://atomicdata.dev/education/v1/property/grade-scale",
+      "https://atomicdata.dev/education/v1/property/grade-weight",
+      "https://atomicdata.dev/education/v1/property/grade-evidence",
+      "https://atomicdata.dev/education/v1/property/question-prompt",
+      "https://atomicdata.dev/education/v1/property/question-type",
+      "https://atomicdata.dev/education/v1/property/question-options",
+      "https://atomicdata.dev/education/v1/property/question-answer",
+      "https://atomicdata.dev/education/v1/property/question-explanation",
+      "https://atomicdata.dev/education/v1/property/assessment-assesses",
+      "https://atomicdata.dev/education/v1/property/assessment-questions",
+      "https://atomicdata.dev/education/v1/property/assessment-pass-score",
+      "https://atomicdata.dev/education/v1/property/assessment-kind",
+      "https://atomicdata.dev/education/v1/property/assessment-draw",
+      "https://atomicdata.dev/education/v1/property/assessment-app",
+      "https://atomicdata.dev/education/v1/property/attempt-score",
+      "https://atomicdata.dev/education/v1/property/attempt-answers",
+      "https://atomicdata.dev/education/v1/property/attempt-seed",
+      "https://atomicdata.dev/education/v1/property/learner",
+      "https://atomicdata.dev/education/v1/property/assessment",
+      "https://atomicdata.dev/education/v1/property/assignment",
+      "https://atomicdata.dev/education/v1/property/skill",
+      "https://atomicdata.dev/education/v1/property/license",
+      "https://atomicdata.dev/education/v1/property/generated-with"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/deck",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "deck",
+    "https://atomicdata.dev/properties/name": "Deck",
+    "https://atomicdata.dev/properties/description": "An ordered list of slides, each an ordinary resource. Used as the content of a lesson (lesson-format slides) or on its own.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/education/v1/property/deck-slides"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/deck-teaches"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/cohort",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "cohort",
+    "https://atomicdata.dev/properties/name": "Cohort",
+    "https://atomicdata.dev/properties/description": "A group of learners with their teachers and the skills they work towards. Access follows the usual drive rights; the class adds no permission model.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/cohort-members",
+      "https://atomicdata.dev/education/v1/property/cohort-teachers",
+      "https://atomicdata.dev/education/v1/property/cohort-goals"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/assignment",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assignment",
+    "https://atomicdata.dev/properties/name": "Assignment",
+    "https://atomicdata.dev/properties/description": "Work given to a cohort on a skill, with an optional lesson and a due date (the task/v1 due-date, so a calendar or task view shows it). It does not extend a task: it has no status of its own, learners' progress lives in submissions.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/education/v1/property/assignment-cohort",
+      "https://atomicdata.dev/education/v1/property/skill"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/education/v1/property/assignment-lesson",
+      "https://atomicdata.dev/task/v1/due-date"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/submission",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "submission",
+    "https://atomicdata.dev/properties/name": "Submission",
+    "https://atomicdata.dev/properties/description": "One learner's handing in of the work for one assignment.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/education/v1/property/assignment",
+      "https://atomicdata.dev/education/v1/property/learner"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/submission-work",
+      "https://atomicdata.dev/education/v1/property/submission-submitted-at",
+      "https://atomicdata.dev/education/v1/property/submission-status"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/grade",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "grade",
+    "https://atomicdata.dev/properties/name": "Grade",
+    "https://atomicdata.dev/properties/description": "A teacher's judgment of one learner on an assignment or assessment, with scale and weight. Not mastery (what a learner can do) and not an Open Badge or other credential.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/education/v1/property/learner",
+      "https://atomicdata.dev/education/v1/property/grade-value",
+      "https://atomicdata.dev/education/v1/property/grade-scale"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/assignment",
+      "https://atomicdata.dev/education/v1/property/assessment",
+      "https://atomicdata.dev/education/v1/property/grade-weight",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/education/v1/property/grade-evidence",
+      "https://atomicdata.dev/properties/createdAt"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/question",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question",
+    "https://atomicdata.dev/properties/name": "Question",
+    "https://atomicdata.dev/properties/description": "One question of an assessment, a row in a question table. Also usable as a slide in a deck.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/education/v1/property/question-prompt",
+      "https://atomicdata.dev/education/v1/property/question-type"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/question-options",
+      "https://atomicdata.dev/education/v1/property/question-answer",
+      "https://atomicdata.dev/education/v1/property/question-explanation",
+      "https://atomicdata.dev/education/v1/property/skill"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/assessment",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment",
+    "https://atomicdata.dev/properties/name": "Assessment",
+    "https://atomicdata.dev/properties/description": "A set of questions that checks skills, for practice or as attested evidence.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/education/v1/property/assessment-assesses"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/assessment-questions",
+      "https://atomicdata.dev/education/v1/property/assessment-pass-score",
+      "https://atomicdata.dev/education/v1/property/assessment-kind",
+      "https://atomicdata.dev/education/v1/property/assessment-draw",
+      "https://atomicdata.dev/education/v1/property/assessment-app"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/class/attempt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "attempt",
+    "https://atomicdata.dev/properties/name": "Attempt",
+    "https://atomicdata.dev/properties/description": "One try at an assessment by one learner. Append-only, kept in the learner's own drive. Comparable to the result of an xAPI statement.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/education/v1/property/assessment",
+      "https://atomicdata.dev/education/v1/property/attempt-score"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/education/v1/property/learner",
+      "https://atomicdata.dev/education/v1/property/attempt-answers",
+      "https://atomicdata.dev/properties/createdAt",
+      "https://atomicdata.dev/education/v1/property/attempt-seed"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/deck-slides",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "deck-slides",
+    "https://atomicdata.dev/properties/name": "Slides",
+    "https://atomicdata.dev/properties/description": "The slides, in presentation order (the array order is the order). A slide is any existing resource: a document fragment, a canvas, a file, a question, a plugin view.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/deck-teaches",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "deck-teaches",
+    "https://atomicdata.dev/properties/name": "Teaches",
+    "https://atomicdata.dev/properties/description": "Skills this deck helps with. Same meaning as lesson-teaches, for a deck that is used as the content of a lesson. Maps to schema.org teaches Points at skill-v1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/cohort-members",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "cohort-members",
+    "https://atomicdata.dev/properties/name": "Members",
+    "https://atomicdata.dev/properties/description": "The agents (learners) in this cohort.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/cohort-teachers",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "cohort-teachers",
+    "https://atomicdata.dev/properties/name": "Teachers",
+    "https://atomicdata.dev/properties/description": "The agents who guide this cohort and may read its learners' shared mastery and write grades.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/cohort-goals",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "cohort-goals",
+    "https://atomicdata.dev/properties/name": "Goals",
+    "https://atomicdata.dev/properties/description": "Skills this cohort works towards Points at skill-v1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assignment-cohort",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assignment-cohort",
+    "https://atomicdata.dev/properties/name": "Cohort",
+    "https://atomicdata.dev/properties/description": "The cohort this assignment is for.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/education/v1/class/cohort"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assignment-lesson",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assignment-lesson",
+    "https://atomicdata.dev/properties/name": "Lesson",
+    "https://atomicdata.dev/properties/description": "The lesson to use for the assignment. Optional Points at lesson-v1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/submission-work",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "submission-work",
+    "https://atomicdata.dev/properties/name": "Work",
+    "https://atomicdata.dev/properties/description": "The submitted work: any resource, for example a document, a file or a canvas.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/submission-submitted-at",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "submission-submitted-at",
+    "https://atomicdata.dev/properties/name": "Submitted at",
+    "https://atomicdata.dev/properties/description": "When the work was handed in, milliseconds since the Unix epoch.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/timestamp"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/submission-status",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property",
+      "https://atomicdata.dev/classes/SelectProperty"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "submission-status",
+    "https://atomicdata.dev/properties/name": "Status",
+    "https://atomicdata.dev/properties/description": "Where the submission is in its life. A view shows a value it does not know as plain text.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/education/v1/value/submission-status-todo",
+      "https://atomicdata.dev/education/v1/value/submission-status-in-progress",
+      "https://atomicdata.dev/education/v1/value/submission-status-submitted",
+      "https://atomicdata.dev/education/v1/value/submission-status-reviewed"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/grade-value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "grade-value",
+    "https://atomicdata.dev/properties/name": "Value",
+    "https://atomicdata.dev/properties/description": "The grade as written on its scale, for example 7.5, 85, B or pass. A string, so that every scale fits.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/grade-scale",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property",
+      "https://atomicdata.dev/classes/SelectProperty"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "grade-scale",
+    "https://atomicdata.dev/properties/name": "Scale",
+    "https://atomicdata.dev/properties/description": "How to read the grade value.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/education/v1/value/grade-scale-1-10",
+      "https://atomicdata.dev/education/v1/value/grade-scale-percent",
+      "https://atomicdata.dev/education/v1/value/grade-scale-a-f",
+      "https://atomicdata.dev/education/v1/value/grade-scale-pass-fail"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/grade-weight",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "grade-weight",
+    "https://atomicdata.dev/properties/name": "Weight",
+    "https://atomicdata.dev/properties/description": "Weight of this grade in an average. Absent: 1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/grade-evidence",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "grade-evidence",
+    "https://atomicdata.dev/properties/name": "Evidence",
+    "https://atomicdata.dev/properties/description": "The attempt or submission that was judged.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/question-prompt",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question-prompt",
+    "https://atomicdata.dev/properties/name": "Prompt",
+    "https://atomicdata.dev/properties/description": "The question as shown to the learner.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/question-type",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property",
+      "https://atomicdata.dev/classes/SelectProperty"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question-type",
+    "https://atomicdata.dev/properties/name": "Type",
+    "https://atomicdata.dev/properties/description": "How the question is answered.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/education/v1/value/question-type-choice",
+      "https://atomicdata.dev/education/v1/value/question-type-numeric",
+      "https://atomicdata.dev/education/v1/value/question-type-short-text"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/question-options",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question-options",
+    "https://atomicdata.dev/properties/name": "Options",
+    "https://atomicdata.dev/properties/description": "For a choice question, the options as a JSON array of strings. Core has no string array datatype, and a tag resource per option would cost a resource per answer text.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/question-answer",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question-answer",
+    "https://atomicdata.dev/properties/name": "Answer",
+    "https://atomicdata.dev/properties/description": "The correct answer: for a choice question the text of the right option, for numeric a number written as text, for short-text the accepted text. Used for practice with direct feedback; an attested assessment keeps its key elsewhere.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/question-explanation",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "question-explanation",
+    "https://atomicdata.dev/properties/name": "Explanation",
+    "https://atomicdata.dev/properties/description": "Shown after answering.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/markdown"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-assesses",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-assesses",
+    "https://atomicdata.dev/properties/name": "Assesses",
+    "https://atomicdata.dev/properties/description": "Skills this assessment checks. Maps to schema.org assesses Points at skill-v1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-questions",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-questions",
+    "https://atomicdata.dev/properties/name": "Questions",
+    "https://atomicdata.dev/properties/description": "The question bank: a table whose rows are question-v1 resources.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-pass-score",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-pass-score",
+    "https://atomicdata.dev/properties/name": "Pass score",
+    "https://atomicdata.dev/properties/description": "Score from 0 to 1 at which the assessed skills count as mastered.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-kind",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property",
+      "https://atomicdata.dev/classes/SelectProperty"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-kind",
+    "https://atomicdata.dev/properties/name": "Kind",
+    "https://atomicdata.dev/properties/description": "Practice is for learning with direct feedback; attested is a test whose result may count as evidence.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/allowsOnly": [
+      "https://atomicdata.dev/education/v1/value/assessment-kind-practice",
+      "https://atomicdata.dev/education/v1/value/assessment-kind-attested"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-draw",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-draw",
+    "https://atomicdata.dev/properties/name": "Questions per attempt",
+    "https://atomicdata.dev/properties/description": "How many questions each attempt draws from the bank, so a learner can test themselves again without getting the same questions. Draws prefer questions this learner has not answered, then those answered longest ago. Absent: every question in the bank.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment-app",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment-app",
+    "https://atomicdata.dev/properties/name": "App",
+    "https://atomicdata.dev/properties/description": "A drive app that runs this assessment instead of, or next to, the question bank: it can generate questions (procedural, seeded) and check answers with its own logic, and records each try as an attempt-v1. A score the learner's own browser computes suits practice; an attested assessment needs a check the learner does not control.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/attempt-score",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "attempt-score",
+    "https://atomicdata.dev/properties/name": "Score",
+    "https://atomicdata.dev/properties/description": "Result of the attempt, 0 to 1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/attempt-answers",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "attempt-answers",
+    "https://atomicdata.dev/properties/name": "Answers",
+    "https://atomicdata.dev/properties/description": "The learner's answers as JSON, keyed by the subject of each question. Its keys are the questions this attempt drew.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/attempt-seed",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "attempt-seed",
+    "https://atomicdata.dev/properties/name": "Seed",
+    "https://atomicdata.dev/properties/description": "The seed that generated or drew this attempt's questions, so the same questions can be shown again for review.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/learner",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "learner",
+    "https://atomicdata.dev/properties/name": "Learner",
+    "https://atomicdata.dev/properties/description": "The learner this is about: who handed in a submission, received a grade or made an attempt.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assessment",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assessment",
+    "https://atomicdata.dev/properties/name": "Assessment",
+    "https://atomicdata.dev/properties/description": "The assessment this is about: the one that was graded or attempted.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/education/v1/class/assessment"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/assignment",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "assignment",
+    "https://atomicdata.dev/properties/name": "Assignment",
+    "https://atomicdata.dev/properties/description": "The assignment this is about: the one that was handed in or graded.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/education/v1/class/assignment"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/skill",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "skill",
+    "https://atomicdata.dev/properties/name": "Skill",
+    "https://atomicdata.dev/properties/description": "The skill this is about: what an assignment practises or a question checks. Points at skill-v1.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/license",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "license",
+    "https://atomicdata.dev/properties/name": "License",
+    "https://atomicdata.dev/properties/description": "The license of a creative work (a lesson, deck, question bank), as an SPDX identifier or a URL. Maps to schema.org license.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/property/generated-with",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1",
+    "https://atomicdata.dev/properties/shortname": "generated-with",
+    "https://atomicdata.dev/properties/name": "Generated with",
+    "https://atomicdata.dev/properties/description": "The tool or model that generated the material, if any, for example the model name. Fits any resource.",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/submission-status-todo",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/submission-status",
+    "https://atomicdata.dev/properties/shortname": "todo",
+    "https://atomicdata.dev/properties/name": "Todo"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/submission-status-in-progress",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/submission-status",
+    "https://atomicdata.dev/properties/shortname": "in-progress",
+    "https://atomicdata.dev/properties/name": "In progress"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/submission-status-submitted",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/submission-status",
+    "https://atomicdata.dev/properties/shortname": "submitted",
+    "https://atomicdata.dev/properties/name": "Submitted"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/submission-status-reviewed",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/submission-status",
+    "https://atomicdata.dev/properties/shortname": "reviewed",
+    "https://atomicdata.dev/properties/name": "Reviewed"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/grade-scale-1-10",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/grade-scale",
+    "https://atomicdata.dev/properties/shortname": "1-10",
+    "https://atomicdata.dev/properties/name": "1-10"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/grade-scale-percent",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/grade-scale",
+    "https://atomicdata.dev/properties/shortname": "percent",
+    "https://atomicdata.dev/properties/name": "Percent"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/grade-scale-a-f",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/grade-scale",
+    "https://atomicdata.dev/properties/shortname": "a-f",
+    "https://atomicdata.dev/properties/name": "A-F"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/grade-scale-pass-fail",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/grade-scale",
+    "https://atomicdata.dev/properties/shortname": "pass-fail",
+    "https://atomicdata.dev/properties/name": "Pass/fail"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/question-type-choice",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/question-type",
+    "https://atomicdata.dev/properties/shortname": "choice",
+    "https://atomicdata.dev/properties/name": "Choice"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/question-type-numeric",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/question-type",
+    "https://atomicdata.dev/properties/shortname": "numeric",
+    "https://atomicdata.dev/properties/name": "Numeric"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/question-type-short-text",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/question-type",
+    "https://atomicdata.dev/properties/shortname": "short-text",
+    "https://atomicdata.dev/properties/name": "Short text"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/assessment-kind-practice",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/assessment-kind",
+    "https://atomicdata.dev/properties/shortname": "practice",
+    "https://atomicdata.dev/properties/name": "Practice"
+  },
+  {
+    "@id": "https://atomicdata.dev/education/v1/value/assessment-kind-attested",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Tag"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/education/v1/property/assessment-kind",
+    "https://atomicdata.dev/properties/shortname": "attested",
+    "https://atomicdata.dev/properties/name": "Attested"
+  }
+]

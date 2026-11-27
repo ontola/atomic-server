@@ -63,6 +63,7 @@ pub mod metrics;
 /// The server notifier: follows, Inbox delivery, batching (`notify.rs`).
 #[cfg(all(feature = "db", not(target_arch = "wasm32")))]
 pub mod notify;
+pub mod ontology_bundle;
 /// **Internal:** parsing helpers; outside the application API contract.
 pub mod parse;
 #[cfg(feature = "db")]

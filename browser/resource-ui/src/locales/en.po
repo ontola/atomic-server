@@ -786,11 +786,6 @@ msgstr "No matching results."
 msgid "Click to enlarge"
 msgstr "Click to enlarge"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Login / New User"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1273,7 +1268,6 @@ msgstr "Document"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Sync"
@@ -1905,6 +1899,8 @@ msgid "Edit value"
 msgstr "Edit value"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -9243,6 +9239,7 @@ msgstr "Pre-selected when the form opens. Leave on \"No default\" to make the vi
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Preview"
 
@@ -11831,6 +11828,7 @@ msgstr "Setting up"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Web address"
 
@@ -13910,6 +13908,72 @@ msgstr "Update available"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Restart to use version {0}"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Import source"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Web page or text"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Add a web address or paste some text or page source."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Paste text, or the HTML of the page..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Text or page source"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Save in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "The folder or drive the result is added to."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "Found {0} data on the page."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Found the page title and description."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Found no structured data, so this is a plain link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Found only text."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Found only an address."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Preparing..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "You can edit everything before saving. Nothing is saved yet."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "This page was imported before. Saving updates it instead of making a copy."
 
 #: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx

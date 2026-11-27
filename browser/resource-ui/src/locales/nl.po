@@ -786,11 +786,6 @@ msgstr "Geen overeenkomende resultaten."
 msgid "Click to enlarge"
 msgstr "Klik om te vergroten"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Inloggen / Nieuwe gebruiker"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1273,7 +1268,6 @@ msgstr "Document"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Synchroniseren"
@@ -1905,6 +1899,8 @@ msgid "Edit value"
 msgstr "Waarde bewerken"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -9243,6 +9239,7 @@ msgstr "Vooraf geselecteerd wanneer het formulier opent. Laat op \"Geen standaar
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Voorbeeld"
 
@@ -11831,6 +11828,7 @@ msgstr "Instellen"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Webadres"
 
@@ -13910,6 +13908,72 @@ msgstr "Update beschikbaar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Herstart om versie {0} te gebruiken"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Bron van de import"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Webpagina of tekst"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Voeg een webadres toe of plak tekst of de paginabron."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Plak tekst, of de HTML van de pagina..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Tekst of paginabron"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Bewaar in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "De map of drive waaraan het resultaat wordt toegevoegd."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Plak het adres van een pagina, de tekst of de bron. Atomic Server haalt geen pagina's voor je op: open de pagina, kopieer wat je wilt bewaren en plak het hier."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "{0}-gegevens op de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "De titel en beschrijving van de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Geen gestructureerde gegevens gevonden, dus dit wordt een gewone link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Alleen tekst gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Alleen een adres gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Voorbereiden..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Je kunt alles aanpassen voordat je bewaart. Er is nog niets bewaard."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Deze pagina is eerder geïmporteerd. Bewaren werkt die bij in plaats van een kopie te maken."
 
 #: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx

@@ -786,11 +786,6 @@ msgstr "Tidak ada hasil yang cocok."
 msgid "Click to enlarge"
 msgstr "Klik untuk memperbesar"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Masuk / Pengguna baru"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1273,7 +1268,6 @@ msgstr "Dokumen"
 
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Sinkronisasi"
@@ -1905,6 +1899,8 @@ msgid "Edit value"
 msgstr "Sunting nilai"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -9240,6 +9236,7 @@ msgstr "Dipilih terlebih dahulu saat formulir dibuka. Biarkan pada \"Tanpa bawaa
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Pratinjau"
 
@@ -11828,6 +11825,7 @@ msgstr "Menyiapkan"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Alamat web"
 
@@ -13900,15 +13898,81 @@ msgstr "Pembaruan tersedia"
 msgid "Restart to use version {0}"
 msgstr "Mulai ulang untuk memakai versi {0}"
 
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Sumber impor"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Halaman web atau teks"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Tambahkan alamat web atau tempel teks atau sumber halaman."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Tempel teks atau HTML halaman..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Teks atau sumber halaman"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Simpan di"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "Folder atau drive tempat hasil ditambahkan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Tempel alamat halaman, teksnya, atau sumbernya. Atomic Server tidak mengambil halaman untukmu: buka halaman, salin yang ingin disimpan, lalu tempel di sini."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "Data {0} ditemukan di halaman."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Judul dan deskripsi halaman ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Tidak ada data terstruktur, jadi ini menjadi tautan biasa."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Hanya teks yang ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Hanya alamat yang ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Menyiapkan..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Kamu bisa mengubah semuanya sebelum menyimpan. Belum ada yang disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Halaman ini pernah diimpor. Menyimpan akan memperbaruinya, bukan membuat salinan."
+
 #: ../data-browser/src/actions/appActions.ts
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "App settings"
-msgstr ""
+msgstr "Pengaturan aplikasi"
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> App settings"
-msgstr ""
+msgstr "<0/> Pengaturan aplikasi"
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
-msgstr ""
+msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuatnya di drive Anda. Bagikan, host marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."

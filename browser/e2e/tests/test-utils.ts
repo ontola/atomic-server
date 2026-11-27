@@ -15,7 +15,7 @@ import {
   envCpuThrottle,
   registerPerfPage,
 } from './perf-attach';
-import { installEmptyDiscoveryRoom } from './fixtures';
+import { installEmptyDiscoveryRoom, openSidebarPanels } from './fixtures';
 import type { DiagnosticCollector } from './diagnostic-collector';
 
 /** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
@@ -353,6 +353,7 @@ export const before = async (
   // configured, so this is a guard for the day a build or a stored setting
   // names one; registering it a second time is harmless.
   await installEmptyDiscoveryRoom(page.context());
+  await openSidebarPanels(page.context());
 
   await installCommitWatcher(page);
   await test.step('Initialize fresh agent and drive', () => devDrive(page));
@@ -594,7 +595,7 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
  * Handles three entry states:
  *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
  *   2. Welcome gate visible: click its "Sign in" button → paste secret.
- *   3. On a drive page with a "Login / New User" sidebar row: go to the
+ *   3. On a drive page with a "Sign in" sidebar row: go to the
  *      welcome gate and follow its flow.
  *
  * There is no button to confirm the secret, by design: a secret either parses
@@ -629,14 +630,14 @@ export async function signIn(page: Page, secret?: string) {
     exact: true,
   });
   // The sidebar's user row, which opens the account menu. It carries
-  // `data-signed-in` once there is an agent, and reads "Login / New User"
+  // `data-signed-in` once there is an agent, and reads "Sign in"
   // before that.
   const settings = page.locator(
     '[data-testid="account-menu-trigger"][data-signed-in="true"]',
   );
   const login = page
     .getByTestId('account-menu-trigger')
-    .filter({ hasText: 'Login / New User' });
+    .filter({ hasText: 'Sign in' });
   // The first thing this helper waits for is a cold app boot in whatever
   // context it was handed: wasm, store init and the route all have to land
   // before any of these four appear. It was on the 10s default while the two
