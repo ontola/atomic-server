@@ -17,6 +17,11 @@
 
 ## Goal
 
+Replica durability and independence need a separate contract from transport
+connectivity. [Replica identity and durable acknowledgement](replica-independence.md)
+is a **design-only proposal** for storage identity, failure domains and per-change
+receipts; it does not change the existing protocol or claim implementation.
+
 One **transport-agnostic sync API** in `atomic_lib` that apps use the same way whether
 the carrier is **WebSocket** (browser ↔ server, mobile ↔ server) or **Iroh** (optional
 device-to-device). Callers subscribe to **node events** (including live queries); they
