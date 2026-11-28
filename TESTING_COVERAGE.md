@@ -2298,6 +2298,22 @@ Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `e2e.spec.ts` verify Continue remains clickable while feedback is offered.
 `onboarding-storage.spec.ts` checks feedback availability;
 `drive-template-onboarding.spec.ts` checks mobile creation.
+## Collection query visibility and cache refresh
+
+- Rust regressions check that an unsorted property lookup stays in the requested
+  Drive even when another Drive contains the same value. Both index paths
+  paginate and count only readable, existing members outside Trash. The tests
+  cover multiple pages, stale index hits and an explicit request for trashed
+  members.
+- SDK collection tests check the pinned Drive, ancestor moves into Trash,
+  off-page updates and removals, and refreshed HTTP snapshots that replace the
+  members and totals together. Ordinary resource snapshots still merge their
+  CRDT state.
+- The local WASM integration test populates two Drives and uses the SDK to look
+  up shared property and local ID values in each Drive without an HTTP query.
+  The Collection queries PR workflow runs that integration test, the Rust
+  query and Trash tests, and the SDK collection tests and typecheck.
+
 ## Paged table hydration count (2026-09-08)
 
 `collection-page-assemble.test.ts` reproduces 90 rows becoming 150 when deferred

@@ -258,6 +258,18 @@ describe('collection page assemble does not flash unsorted members', () => {
     store.setDrive(DRIVE);
     store.finishDriveSync(DRIVE, 3, Date.now());
 
+    // A positive optimistic addition has known, visible ancestry even before
+    // the local query answers; incomplete HTTP ancestry must not imply this.
+    for (const [subject, values] of [
+      [DRIVE, [[dataBrowser.properties.trashFolder, 'atomic:trash']]],
+      [TABLE, [[core.properties.parent, DRIVE]]],
+    ] as [string, [string, string][]][]) {
+      const ancestor = new Resource(subject);
+      ancestor.applyHydratedValues(values);
+      ancestor.loading = false;
+      store.resources.set(store.normalizeSubject(subject), ancestor);
+    }
+
     const created = 'atomic:resource:created-during-query';
     let releaseQuery!: () => void;
     const queryGate = new Promise<void>(resolve => {
