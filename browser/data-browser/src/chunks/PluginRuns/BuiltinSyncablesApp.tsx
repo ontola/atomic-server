@@ -63,6 +63,7 @@ import {
   readSyncableRuleStatus,
   type SyncableRuleRun,
 } from './syncableRules';
+import type { SyncAppViewContext } from './builtinSyncApp';
 import { resolveSyncablePickerSources } from './syncablePickerSources';
 import {
   assertSyncAppDrive,
@@ -788,7 +789,7 @@ export async function appProfile(
       flatMigrationBlocks: flatAdoption.blocks,
       flatAdoptionRules: flatAdoption.rules,
       worker,
-    },
+    } satisfies SyncAppViewContext,
     access: { root: table, signal, assertCurrent },
     proxy: syncProxyTransport(
       proxy,

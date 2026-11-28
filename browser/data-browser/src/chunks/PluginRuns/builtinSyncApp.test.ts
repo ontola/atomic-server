@@ -10,12 +10,15 @@ import {
   prepareDocument,
   resolveEntityIdentity,
   type OpenApiDocument,
+  type ReadSelection,
 } from 'syncables/browser';
 import {
   createSyncApp,
   view,
-  // @ts-expect-error The server-delivered JavaScript module has no declarations.
+  type SyncAppStore,
+  type SyncAppViewContext,
 } from './builtinSyncApp.js';
+import type { SyncableRuleConfig } from './syncableRules';
 import {
   entityTableKey,
   entitySourceKey,
@@ -240,13 +243,7 @@ function apiDocument(pageField?: string): OpenApiDocument {
 }
 
 type Stored = Record<string, unknown>;
-type Request = {
-  path: string;
-  connectionId?: string;
-  method?: string;
-  query?: Record<string, string>;
-  body?: string;
-};
+type Request = Parameters<SyncAppStore['proxy']['request']>[0];
 const team = { id: 100, name: 'A team', handle: 'old-handle' };
 const workspace = {
   id: 200,
@@ -303,7 +300,10 @@ function withPublicEntrypoint() {
   return document;
 }
 
-function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
+function setup(
+  kind: SyncAppViewContext['kind'] = 'collection',
+  extra: Record<string, unknown> = {},
+) {
   const document =
     (extra.document as OpenApiDocument | undefined) ?? apiDocument();
   const apiSchema = {
@@ -346,6 +346,7 @@ function setup(kind = 'collection', extra: Record<string, unknown> = {}) {
     subject: root,
     drive: 'atomic:drive',
     proxyOrigin: origin,
+    proxyTransport: 'host' as const,
     platform: 'example-service',
     kind,
     principal: (extra.principal ?? principal) as
@@ -535,7 +536,9 @@ let order = 10;
 
 function worker(set: ReturnType<typeof setup>, table: string, rule: string) {
   const saved = set.data.get(table)!;
-  const ruleConfig = config(set.data.get(rule)!);
+  const ruleConfig = set.data.get(rule)![
+    prop('source-config')
+  ] as SyncableRuleConfig;
   const run = {
     generation: 'generation-' + ++order,
     runId: 'run-' + order,
@@ -551,7 +554,7 @@ function worker(set: ReturnType<typeof setup>, table: string, rule: string) {
     ...config(saved),
     subject: table,
     kind: 'collection',
-    sourceKey: saved[prop('source-key')],
+    sourceKey: saved[prop('source-key')] as string,
     rule: {
       subject: rule,
       key: ruleConfig.ruleKey,
@@ -742,7 +745,7 @@ describe('catalog-driven Sync through the shared app bridge', () => {
       'A user supplied note',
     );
   });
-  it.each(['principal', 'collection'])(
+  it.each(['principal', 'collection'] as const)(
     'opens %s using saved state without provider reads',
     async kind => {
       const { store, request } = setup(kind);
@@ -1030,7 +1033,7 @@ describe('shared entity tables and independent saved filters', () => {
     const intent = (
       teamRow[1][prop('navigation-intents')] as Array<{
         resource: string;
-        definition: unknown;
+        definition: ReadSelection;
         label: string;
       }>
     ).find(item => item.resource === 'workspace')!;
@@ -1072,7 +1075,7 @@ describe('shared entity tables and independent saved filters', () => {
   it('completes a fanout only after every selected partition and retains old membership on partial refresh', async () => {
     const set = await ready();
     const table = tableFor(set, 'task');
-    const from = {
+    const from: ReadSelection = {
       version: 1,
       resource: 'workspace',
       source: {
@@ -1696,7 +1699,7 @@ describe('shared entity tables and independent saved filters', () => {
         });
         await createSyncApp(set.store, {
           ...set.context,
-          subject: tableProps[P + 'parent'],
+          subject: tableProps[P + 'parent'] as string,
           kind: 'principal',
         }).createCollection('teamWorkspaces', { handle: 'old-handle' });
         expect(set.store.ui.openResource).toHaveBeenCalledOnce();
@@ -2230,7 +2233,7 @@ describe('principal Apps outside the setup write root', () => {
       const first = publicSource
         ? await set.app.openPublic()
         : await set.app.openPrincipal('slot');
-      const identity = publicSource ? { kind: 'public' } : principal;
+      const identity = publicSource ? ({ kind: 'public' } as const) : principal;
       const props = set.data.get(first.subject)!;
       props[P + 'parent'] = 'atomic:drive';
       props[P + 'name'] = 'My named integration';

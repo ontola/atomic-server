@@ -15,6 +15,16 @@ import {
   describeResourceFields,
   resolveResourceField,
   resolveEntityIdentity,
+  type CollectionDescription,
+  type CollectionNavigation,
+  type EntityObservation,
+  type EntityTypeDescription,
+  type OpenApiDocument,
+  type OriginRecord,
+  type ReadSelection,
+  type ResourceFieldDescription,
+  type TransportRequest,
+  type TransportResponse,
 } from 'syncables/browser';
 import {
   canonicalValue,
@@ -24,9 +34,154 @@ import {
   entityTableKey,
   entitySourceKey,
   ruleSourceKey,
+  type FlatIdentityAlias,
+  type SourceKeyInput,
+  type SyncablePrincipal,
 } from './builtinSyncIdentity.js';
-import { reduceFlatState } from './builtinSyncFlatState.js';
+import {
+  reduceFlatState,
+  type DurableEntityObservation,
+  type DurableSyncRun,
+} from './builtinSyncFlatState.js';
 import { validateSyncableReferenceEvidence } from './builtinSyncReferenceIdentity.js';
+
+import type { ViewQuery } from '@helpers/extensions/viewQuery';
+import type { ConnectionReference } from '@helpers/proxyConnections';
+import type { HostRequest } from '../AppPage/hostStore';
+import type { SyncAppContext } from './builtinSyncablesProfile';
+import type {
+  FlatMigrationBlock,
+  SyncableFlatAdoptionRule,
+} from './syncableFlatAdoption';
+import type { SyncablePickerSource } from './syncablePickerSources';
+import type { SyncablePrincipalAppRef } from './syncablePrincipalApp';
+import type { SyncableRuleConfig, SyncableRuleRun } from './syncableRules';
+import type {
+  SyncableSourceConfig,
+  SyncableSourceConfigV3,
+  SyncableSourceKey,
+} from './syncableSource';
+
+type Values = Record<string, unknown>;
+type StoredSource = SyncableSourceConfig | SyncableRuleConfig;
+type StoredRecordSource = SyncableSourceConfigV3 & {
+  kind: 'record';
+  entityIdentity: OriginRecord['entity'];
+  record: OriginRecord['record'];
+};
+type SyncObservation = DurableEntityObservation & EntityObservation;
+type ResourceQuery = Required<Pick<ViewQuery, 'property' | 'value'>>;
+type CreateResource = Required<
+  Pick<HostRequest, 'parent' | 'isA' | 'propVals'>
+>;
+type ProxyRequest = Required<
+  Pick<HostRequest, 'platform' | 'path' | 'method'>
+> &
+  Pick<HostRequest, 'connectionId' | 'body' | 'readProgress'> & {
+    query: Record<string, string>;
+  };
+
+interface AppResource {
+  subject: string;
+  error?: undefined;
+  get(property: string): unknown;
+  set(property: string, value: unknown): unknown;
+  remove(property: string): unknown;
+  hasClasses(...classes: string[]): boolean;
+  save(): Promise<unknown>;
+}
+
+interface AppResourceFailure {
+  subject: string;
+  error: string;
+}
+
+interface ExecutionState {
+  running: boolean;
+  queued?: boolean;
+  progress?: { page: number; total?: number };
+}
+
+export interface SyncAppStore {
+  query(
+    args: ResourceQuery & Pick<ViewQuery, 'page' | 'pageSize'>,
+  ): Promise<string[]>;
+  getResource(subject: string): Promise<AppResource>;
+  getMany(subjects: string[]): Promise<(AppResource | AppResourceFailure)[]>;
+  newResource(args: CreateResource): Promise<AppResource>;
+  getContext(): Promise<SyncAppViewContext>;
+  subscribe?(subject: string, callback: () => void): () => void;
+  execution(action: 'start' | 'state' | 'cancel'): Promise<ExecutionState>;
+  proxy: {
+    request(args: ProxyRequest): Promise<{
+      status: number;
+      headers: TransportResponse['headers'];
+      body: unknown;
+    }>;
+    connections(args: { platform: string }): Promise<ConnectionReference[]>;
+    connect(args: {
+      platform: string;
+      connectionId?: string;
+    }): Promise<
+      | { status: 'connected'; connectionId: string; platform: string }
+      | { status: 'cancelled' }
+    >;
+  };
+  ui: { openResource(subject: string): Promise<unknown> };
+}
+
+export interface SyncAppViewContext extends SyncAppContext {
+  document?: OpenApiDocument;
+  preferredConnectionId?: string;
+  principalApps?: readonly SyncablePrincipalAppRef[];
+  adoptionWarnings?: readonly string[];
+  flatIdentityAliases?: readonly FlatIdentityAlias[];
+  flatMigrationBlocks?: readonly FlatMigrationBlock[];
+  flatAdoptionRules?: readonly SyncableFlatAdoptionRule[];
+  pickerSources?: readonly SyncablePickerSource[];
+}
+
+interface NodeValues {
+  key: string;
+  kind: string;
+  parent?: string;
+  isA: string[];
+  values: Values;
+}
+interface SyncCounts {
+  added: number;
+  changed: number;
+  unchanged: number;
+  protected?: number;
+}
+interface SyncStatus extends Partial<SyncCounts> {
+  paused?: boolean;
+  enabled?: boolean;
+  run?: SyncableRuleRun;
+  lastSuccess?: string;
+  rows?: number;
+  incomplete?: boolean;
+  error?: string | null;
+}
+interface PickerRow {
+  row: AppResource;
+  name: string;
+  origin: StoredRecordSource;
+}
+
+// These properties are read via the native store. Validation and authorization
+// remain in the host, including when a frame reads legacy stored values.
+function stored<T>(row: AppResource, property: string): T | undefined {
+  return row.get(property) as T | undefined;
+}
+
+function readable(row: AppResource | AppResourceFailure): row is AppResource {
+  return row.error === undefined;
+}
+
+function messageOf(error: unknown): string {
+  return String((error as { message?: unknown } | null)?.message ?? error);
+}
 
 const P = 'https://atomicdata.dev/properties/';
 const core = Object.fromEntries(
@@ -40,11 +195,14 @@ const viewClass = 'https://atomicdata.dev/classes/View';
 const tableViews = P + 'table-views';
 const defaultView = P + 'table-default-view';
 const viewKind = P + 'view-kind';
-const same = (left, right) =>
+const same = (left: unknown, right: unknown) =>
   JSON.stringify(canonicalValue(left)) ===
   JSON.stringify(canonicalValue(right));
 
-const relatedSelection = (navigation, origin) => ({
+const relatedSelection = (
+  navigation: CollectionNavigation,
+  origin: OriginRecord,
+): ReadSelection => ({
   version: 1,
   resource: navigation.resource,
   source: {
@@ -53,42 +211,51 @@ const relatedSelection = (navigation, origin) => ({
     via: {
       collection: navigation.collection,
       kind: navigation.kind === 'responseLink' ? 'responseLink' : 'identity',
-      ...(navigation.reference ? { reference: navigation.reference } : {}),
-      ...(navigation.link ? { link: navigation.link } : {}),
+      ...('reference' in navigation && navigation.reference
+        ? { reference: navigation.reference }
+        : {}),
+      ...('link' in navigation && navigation.link
+        ? { link: navigation.link }
+        : {}),
     },
   },
 });
 
 class PrincipalAuthorizationError extends Error {
-  constructor(connectionId, expired) {
+  constructor(
+    readonly connectionId: string | undefined,
+    expired: boolean,
+  ) {
     super(
       expired
         ? 'This connection has expired. Connect the account again to restore access.'
         : 'This connection could not authorize its account. Connect again to restore access.',
     );
-    this.connectionId = connectionId;
   }
 }
 
 /** Catalog interpretation belongs to Syncables; all I/O uses the shared app store. */
-export function createSyncApp(store, context) {
+export function createSyncApp(
+  store: SyncAppStore,
+  context: SyncAppViewContext,
+) {
   const root = context.subject;
 
-  const property = name => {
+  const property = (name: string) => {
     const subject = context.schema?.properties[name];
     if (!subject) throw new Error('The Sync schema is unavailable');
 
     return subject;
   };
 
-  const klass = name => {
+  const klass = (name: string) => {
     const subject = context.schema?.classes[name];
     if (!subject) throw new Error('The Sync row schema is unavailable');
 
     return subject;
   };
 
-  let document;
+  let document: OpenApiDocument | undefined;
 
   const readDocument = () => {
     if (!context.document)
@@ -97,10 +264,10 @@ export function createSyncApp(store, context) {
     return (document ??= prepareDocument(context.document));
   };
 
-  let catalog;
+  let catalog: CollectionDescription[] | undefined;
   const descriptions = () => (catalog ??= describeCollections(readDocument()));
 
-  const description = name => {
+  const description = (name: string) => {
     const matches = descriptions().filter(item => item.name === name);
     if (matches.length !== 1)
       throw new Error('Unknown or ambiguous collection ' + name);
@@ -108,16 +275,21 @@ export function createSyncApp(store, context) {
     return matches[0];
   };
 
-  const identity = values =>
+  const requirePrincipal = () => {
+    if (!context.principal) throw new Error('Choose a principal first');
+
+    return context.principal;
+  };
+
+  const identity = (values: Pick<SourceKeyInput, 'kind' | 'principal'>) =>
     sourceKey({
       proxyOrigin: context.proxyOrigin,
       platform: context.platform,
-      principal: context.principal,
       ...values,
     });
 
-  async function queryAll(args) {
-    const subjects = [];
+  async function queryAll(args: ResourceQuery) {
+    const subjects: string[] = [];
 
     for (let page = 0; page < 200; page++) {
       const chunk = await store.query({ ...args, page, pageSize: 100 });
@@ -128,32 +300,34 @@ export function createSyncApp(store, context) {
     throw new Error('Atomic query limit reached; cached rows were retained');
   }
 
-  async function resources(args) {
+  async function resources(args: ResourceQuery) {
     const subjects = await queryAll(args);
-    const found = [];
+    const found: AppResource[] = [];
     for (let i = 0; i < subjects.length; i += 100)
       found.push(
-        ...(await store.getMany(subjects.slice(i, i + 100))).filter(
-          row => !row.error,
-        ),
+        ...(await store.getMany(subjects.slice(i, i + 100))).filter(readable),
       );
 
     return found;
   }
 
-  async function withinRoot(subject) {
+  async function withinRoot(subject: string | undefined) {
     const seen = new Set();
 
     for (let depth = 0; subject && depth < 64 && !seen.has(subject); depth++) {
       if (subject === root) return true;
       seen.add(subject);
-      subject = (await store.getResource(subject)).get(core.parent);
+      subject = stored<string>(await store.getResource(subject), core.parent);
     }
 
     return false;
   }
 
-  async function patch(row, values, remove = []) {
+  async function patch(
+    row: AppResource,
+    values: Values,
+    remove: string[] = [],
+  ) {
     // A global source lookup never extends this frame's host-selected write scope.
     if (!(await withinRoot(row.subject))) return false;
     const changed = Object.entries(values).filter(
@@ -167,10 +341,10 @@ export function createSyncApp(store, context) {
     return changed.length > 0 || removed.length > 0;
   }
 
-  const adoptionMatches = new Map();
+  const adoptionMatches = new Map<string, FlatIdentityAlias>();
 
-  async function adoptableNode(key, existingSubject) {
-    const matches = [];
+  async function adoptableNode(key: string, existingSubject?: string) {
+    const matches: AppResource[] = [];
 
     for (const alias of context.flatIdentityAliases ?? []) {
       if (alias.canonicalSourceKey !== key || alias.subject === existingSubject)
@@ -185,7 +359,7 @@ export function createSyncApp(store, context) {
           row.get(core.localId) !== alias.localId) ||
         (alias.sourceConfigFingerprint !== undefined &&
           sourceConfigFingerprint(
-            row.get(property('syncable-source-config')),
+            stored<StoredSource>(row, property('syncable-source-config')),
           ) !== alias.sourceConfigFingerprint)
       )
         throw new Error(
@@ -201,7 +375,7 @@ export function createSyncApp(store, context) {
     return matches[0];
   }
 
-  async function findNode(key, expectedClass, kind) {
+  async function findNode(key: string, expectedClass: string, kind: string) {
     const matches = await resources({
       property: property('syncable-source-key'),
       value: key,
@@ -210,15 +384,23 @@ export function createSyncApp(store, context) {
     const row = matches[0];
 
     if (row) {
-      const savedConfig = row.get(property('syncable-source-config'));
+      const savedConfig = stored<StoredSource>(
+        row,
+        property('syncable-source-config'),
+      );
       let referenceIdentityProven = false;
 
-      if (!row.hasClasses(expectedClass) && savedConfig?.entityIdentity) {
+      if (
+        !row.hasClasses(expectedClass) &&
+        savedConfig?.version === 3 &&
+        savedConfig.kind === 'record' &&
+        savedConfig.entityIdentity
+      ) {
         try {
           referenceIdentityProven = same(
             resolveEntityIdentity(readDocument(), {
               resource: savedConfig.resource,
-              record: savedConfig.record,
+              record: savedConfig.record!,
               context: savedConfig.context,
             }),
             savedConfig.entityIdentity,
@@ -246,20 +428,26 @@ export function createSyncApp(store, context) {
         savedConfig.kind === 'record' &&
         savedConfig.entityIdentity &&
         referenceIdentityProven &&
-        entitySourceKey(savedConfig) === key;
+        entitySourceKey({
+          ...savedConfig,
+          entityIdentity: savedConfig.entityIdentity,
+        }) === key;
       if (
         (!row.hasClasses(expectedClass) && !partialReference) ||
         row.get(property('syncable-node-kind')) !== kind
       )
         throw new Error('The source identity does not match its resource');
 
-      const desired = JSON.parse(key);
+      const desired = JSON.parse(key) as SyncableSourceKey;
 
       if (
         desired.version === 3 &&
         ['collection', 'record'].includes(desired.kind)
       ) {
-        const saved = row.get(property('syncable-source-config'));
+        const saved = stored<StoredSource>(
+          row,
+          property('syncable-source-config'),
+        );
         const expected =
           saved?.kind === 'record' && saved.entityIdentity
             ? entitySourceKey({
@@ -287,9 +475,9 @@ export function createSyncApp(store, context) {
   }
 
   async function updateNode(
-    row,
-    { key, kind, isA, values, parent },
-    remove = [],
+    row: AppResource,
+    { key, kind, isA, values, parent }: NodeValues,
+    remove: string[] = [],
   ) {
     const migrated = row.get(property('syncable-source-key')) !== key;
     const alias = adoptionMatches.get(row.subject);
@@ -305,13 +493,25 @@ export function createSyncApp(store, context) {
       row,
       {
         ...(!isA.every(subject => row.hasClasses(subject))
-          ? { [core.isA]: [...new Set([...(row.get(core.isA) ?? []), ...isA])] }
+          ? {
+              [core.isA]: [
+                ...new Set([
+                  ...(stored<string[]>(row, core.isA) ?? []),
+                  ...isA,
+                ]),
+              ],
+            }
           : {}),
         ...(migrated
           ? {
               [property('syncable-source-key')]: key,
               [property('syncable-node-kind')]: kind,
-              [core.isA]: [...new Set([...(row.get(core.isA) ?? []), ...isA])],
+              [core.isA]: [
+                ...new Set([
+                  ...(stored<string[]>(row, core.isA) ?? []),
+                  ...isA,
+                ]),
+              ],
             }
           : {}),
         ...(relocate ? { [core.parent]: parent } : {}),
@@ -321,24 +521,29 @@ export function createSyncApp(store, context) {
     );
   }
 
-  async function ensureViews(row) {
-    const subjects = row.get(tableViews) ?? [];
-    const definitions = await store.getMany(subjects);
+  async function ensureViews(row: AppResource) {
+    const subjects = stored<string[]>(row, tableViews) ?? [];
+    const definitions = (await store.getMany(subjects)).filter(readable);
     const kinds = definitions
       .filter(
         definition =>
           !definition.error &&
-          definition.get(property('syncable-source-config'))?.kind !== 'rule',
+          stored<StoredSource>(definition, property('syncable-source-config'))
+            ?.kind !== 'rule',
       )
       .map(definition => definition.get(viewKind));
     const added = [];
-    const config = row.get(property('syncable-source-config'));
+    const config = stored<StoredSource>(
+      row,
+      property('syncable-source-config'),
+    );
     const entity = config?.version === 3 && config.kind === 'collection';
     const defaultKind = entity ? 'table' : 'syncable-collection';
     let preferred = definitions.find(
       definition =>
         !definition.error &&
-        definition.get(property('syncable-source-config'))?.kind !== 'rule' &&
+        stored<StoredSource>(definition, property('syncable-source-config'))
+          ?.kind !== 'rule' &&
         definition.get(viewKind) === defaultKind,
     )?.subject;
 
@@ -366,7 +571,18 @@ export function createSyncApp(store, context) {
       });
   }
 
-  async function ensureNode({ key, kind, parent, name, isA, values = {} }) {
+  async function ensureNode({
+    key,
+    kind,
+    parent,
+    name,
+    isA,
+    values = {},
+  }: Omit<NodeValues, 'parent' | 'values'> & {
+    parent: string;
+    name: string;
+    values?: Values;
+  }): Promise<AppResource> {
     let row = await findNode(key, isA[0], kind);
 
     if (row) {
@@ -381,7 +597,7 @@ export function createSyncApp(store, context) {
       throw new Error(
         'Open the moved resource to sync at its current location',
       );
-    const desired = JSON.parse(key);
+    const desired = JSON.parse(key) as SyncableSourceKey;
     const block = (context.flatMigrationBlocks ?? []).find(
       item =>
         item.resource === desired.resource &&
@@ -396,7 +612,10 @@ export function createSyncApp(store, context) {
       });
 
       for (const previous of previousTables) {
-        const config = previous.get(property('syncable-source-config'));
+        const config = stored<StoredSource>(
+          previous,
+          property('syncable-source-config'),
+        );
         if (
           config?.version === 2 &&
           same(config.principal, desired.principal) &&
@@ -425,14 +644,17 @@ export function createSyncApp(store, context) {
     return row;
   }
 
-  async function transport(request, connectionId = context.connectionId) {
+  async function transport(
+    request: TransportRequest,
+    connectionId = context.connectionId,
+  ): Promise<TransportResponse> {
     if (context.principal?.kind === 'public') connectionId = undefined;
     const { url, method, body } = request;
     if (
       url.username ||
       url.password ||
       url.hash ||
-      !['GET', 'POST'].includes(method)
+      (method !== 'GET' && method !== 'POST')
     )
       throw new Error(
         'The catalog read is outside the supported request scope',
@@ -457,7 +679,8 @@ export function createSyncApp(store, context) {
     if (request.purpose === 'principal' && response.status === 401)
       throw new PrincipalAuthorizationError(
         connectionId,
-        response.body?.error === 'credential_refresh_failed',
+        (response.body as { error?: unknown } | null)?.error ===
+          'credential_refresh_failed',
       );
 
     return {
@@ -467,7 +690,7 @@ export function createSyncApp(store, context) {
     };
   }
 
-  const rowClass = collection => {
+  const rowClass = (collection: { resource: string }) => {
     const subject =
       context.apiSchema?.classes[ontologyShortname(collection.resource)];
     if (!subject) throw new Error('The catalog row schema is unavailable');
@@ -475,19 +698,19 @@ export function createSyncApp(store, context) {
     return subject;
   };
 
-  const apiBindings = new Map();
+  const apiBindings = new Map<string, Record<string, string>>();
 
-  const apiProperties = resource => {
+  const apiProperties = (resource: string) => {
     if (!apiBindings.has(resource))
       apiBindings.set(resource, {
         ...context.apiSchema?.properties,
         ...context.apiSchema?.resourceProperties?.[resource],
       });
 
-    return apiBindings.get(resource);
+    return apiBindings.get(resource)!;
   };
 
-  function collectionView(collection) {
+  function collectionView(collection: EntityTypeDescription) {
     const columns = (collection.presentation?.columns ?? [])
       .flatMap(column => {
         const subject = apiProperties(collection.resource)[column.property];
@@ -509,7 +732,7 @@ export function createSyncApp(store, context) {
     return {
       version: 1,
       rowClass: rowClass(collection),
-      title: collection.presentation?.title ?? collection.name,
+      title: collection.presentation.title,
       columns: columns.length
         ? columns
         : [{ property: core.name, label: 'Name' }],
@@ -520,21 +743,21 @@ export function createSyncApp(store, context) {
     };
   }
 
-  let types;
+  let types: EntityTypeDescription[] | undefined;
   const entityTypes = () => (types ??= describeEntityTypes(readDocument()));
-  const resourceFields = new Map();
+  const resourceFields = new Map<string, ResourceFieldDescription[]>();
 
-  const fieldsFor = resource => {
+  const fieldsFor = (resource: string) => {
     if (!resourceFields.has(resource))
       resourceFields.set(
         resource,
         describeResourceFields(readDocument(), resource),
       );
 
-    return resourceFields.get(resource);
+    return resourceFields.get(resource)!;
   };
 
-  const entityType = resource => {
+  const entityType = (resource: string) => {
     const found = entityTypes().find(item => item.resource === resource);
     if (!found) throw new Error('Unknown catalog entity type');
 
@@ -543,9 +766,14 @@ export function createSyncApp(store, context) {
 
   async function ensureEntityTable({
     parent = root,
-    principal = context.principal,
+    principal = requirePrincipal(),
     connectionId = context.connectionId,
     resource,
+  }: {
+    parent?: string;
+    principal?: SyncablePrincipal;
+    connectionId?: string;
+    resource: string;
   }) {
     const type = entityType(resource);
     const key = entityTableKey({ ...context, principal, resource });
@@ -595,11 +823,17 @@ export function createSyncApp(store, context) {
     return (await resources({ property: core.parent, value: table })).filter(
       row =>
         row.hasClasses(viewClass) &&
-        row.get(property('syncable-source-config'))?.kind === 'rule',
+        stored<StoredSource>(row, property('syncable-source-config'))?.kind ===
+          'rule',
     );
   }
 
-  async function ensureRule(table, definition, name, tableSourceKey) {
+  async function ensureRule(
+    table: AppResource,
+    definition: ReadSelection,
+    name?: string,
+    tableSourceKey?: string,
+  ) {
     compileReadSelection(readDocument(), definition, {
       querySelection: context.querySelection,
     });
@@ -607,7 +841,7 @@ export function createSyncApp(store, context) {
     if (typeof ruleKey !== 'string' || !ruleKey)
       throw new Error('The catalog selection has no stable rule key');
     const key = ruleSourceKey(
-      tableSourceKey ?? table.get(property('syncable-source-key')),
+      tableSourceKey ?? stored<string>(table, property('syncable-source-key'))!,
       ruleKey,
     );
     const rule = await ensureNode({
@@ -638,16 +872,20 @@ export function createSyncApp(store, context) {
       ],
     });
     const views =
-      (await store.getResource(table.subject)).get(tableViews) ?? [];
+      stored<string[]>(await store.getResource(table.subject), tableViews) ??
+      [];
     if (!views.includes(rule.subject))
       await patch(table, { [tableViews]: [...views, rule.subject] });
 
     return rule;
   }
 
-  async function adoptFlatRows(principal, resource) {
+  async function adoptFlatRows(
+    principal: SyncablePrincipal,
+    resource?: string,
+  ) {
     for (const alias of context.flatIdentityAliases ?? []) {
-      const config = alias.canonicalConfig;
+      const config = alias.canonicalConfig as StoredRecordSource | undefined;
       if (
         !config ||
         config.kind !== 'record' ||
@@ -677,7 +915,7 @@ export function createSyncApp(store, context) {
           'The older row has no validated canonical entity identity',
         );
       const table = await findNode(
-        alias.entityTableSourceKey,
+        alias.entityTableSourceKey!,
         tableClass,
         'collection',
       );
@@ -706,7 +944,11 @@ export function createSyncApp(store, context) {
     }
   }
 
-  async function discoverCollections(principalTable, principal, connectionId) {
+  async function discoverCollections(
+    principalTable: AppResource,
+    principal: SyncablePrincipal,
+    connectionId?: string,
+  ) {
     const created = [];
 
     const errors = [];
@@ -750,9 +992,7 @@ export function createSyncApp(store, context) {
         }
       } catch (error) {
         errors.push(
-          (type.presentation?.title ?? type.resource) +
-            ': ' +
-            String(error?.message ?? error),
+          (type.presentation?.title ?? type.resource) + ': ' + messageOf(error),
         );
       }
     }
@@ -760,7 +1000,7 @@ export function createSyncApp(store, context) {
     try {
       await adoptFlatRows(principal);
     } catch (error) {
-      errors.push(String(error?.message ?? error));
+      errors.push(messageOf(error));
     }
 
     if (errors.length) throw new Error(errors.join('; ').slice(0, 2048));
@@ -768,7 +1008,7 @@ export function createSyncApp(store, context) {
     return created;
   }
 
-  async function installedPrincipal(principal) {
+  async function installedPrincipal(principal: SyncablePrincipal) {
     const matches = (context.principalApps ?? []).filter(ref =>
       same(ref.principal, principal),
     );
@@ -776,7 +1016,10 @@ export function createSyncApp(store, context) {
       throw new Error('The installed principal identity is ambiguous');
     if (!matches.length) return;
     const row = await store.getResource(matches[0].subject);
-    const config = row.get(property('syncable-source-config'));
+    const config = stored<StoredSource>(
+      row,
+      property('syncable-source-config'),
+    );
     if (
       row.error ||
       !row.hasClasses(tableClass, klass('syncable-principal')) ||
@@ -792,7 +1035,7 @@ export function createSyncApp(store, context) {
     return row;
   }
 
-  async function openPrincipal(connectionId, navigate = true) {
+  async function openPrincipal(connectionId: string, navigate = true) {
     const principal = await resolveAuthenticatedPrincipal(readDocument(), {
       clientContext: context.clientContext,
       transport: request => transport(request, connectionId),
@@ -839,7 +1082,7 @@ export function createSyncApp(store, context) {
   }
 
   async function openPublic(navigate = true) {
-    const principal = { kind: 'public' };
+    const principal: SyncablePrincipal = { kind: 'public' };
     const installed = await installedPrincipal(principal);
 
     if (installed) {
@@ -878,10 +1121,10 @@ export function createSyncApp(store, context) {
   }
 
   async function createCollection(
-    name,
-    parameters = {},
-    sourcePath,
-    filterName,
+    name: string,
+    parameters: Record<string, string> = {},
+    sourcePath?: string,
+    filterName?: string,
   ) {
     if (!['principal', 'collection'].includes(context.kind))
       throw new Error('Choose a principal first');
@@ -891,7 +1134,7 @@ export function createSyncApp(store, context) {
       collection.resource !== context.resource
     )
       throw new Error('Choose a source for this entity collection');
-    if (context.principal.kind === 'public' && !collection.allowsAnonymous)
+    if (requirePrincipal().kind === 'public' && !collection.allowsAnonymous)
       throw new Error('This collection requires an authenticated principal');
     const doc = readDocument();
     const resolved = sourcePath
@@ -925,13 +1168,15 @@ export function createSyncApp(store, context) {
     );
     // A fresh profile after navigation must see the table and its proven rows
     // on the same identity version; the old parent key cannot prove a v3 table.
-    await adoptFlatRows(context.principal, collection.resource);
+    await adoptFlatRows(requirePrincipal(), collection.resource);
     await store.ui.openResource(rule.subject);
 
     return rule;
   }
 
-  async function pickerRows(source) {
+  async function pickerRows(
+    source: Pick<SyncablePickerSource, 'table' | 'resource'>,
+  ): Promise<PickerRow[]> {
     if (!source.table) return [];
     const rows = await resources({
       property: property('syncable-entity-table'),
@@ -939,7 +1184,10 @@ export function createSyncApp(store, context) {
     });
 
     return rows.flatMap(row => {
-      const origin = row.get(property('syncable-source-config'));
+      const origin = stored<StoredRecordSource>(
+        row,
+        property('syncable-source-config'),
+      );
       const name = row.get(core.name);
       if (
         origin?.version !== 3 ||
@@ -971,11 +1219,14 @@ export function createSyncApp(store, context) {
     });
   }
 
-  function pickerDefinition(collection, origin) {
+  function pickerDefinition(
+    collection: CollectionDescription,
+    origin: StoredRecordSource,
+  ) {
     const reads = relatedCollectionReads(readDocument(), {
       resource: origin.resource,
       record: origin.record,
-      context: origin.context,
+      context: origin.context as Record<string, string> | undefined,
     }).filter(read => read.collection === collection.name);
     if (reads.length !== 1) return;
     const [read] = reads;
@@ -988,7 +1239,12 @@ export function createSyncApp(store, context) {
     });
   }
 
-  async function createPickerCollection(name, source, choice, filterName) {
+  async function createPickerCollection(
+    name: string,
+    source: SyncablePickerSource,
+    choice: PickerRow,
+    filterName?: string,
+  ) {
     const collection = description(name);
     if (
       context.kind !== 'collection' ||
@@ -1000,7 +1256,10 @@ export function createSyncApp(store, context) {
     if (
       current.error ||
       current.get(property('syncable-entity-table')) !== source.table ||
-      !same(current.get(property('syncable-source-config')), choice.origin)
+      !same(
+        stored<StoredSource>(current, property('syncable-source-config')),
+        choice.origin,
+      )
     )
       throw new Error(
         'The stored source changed. Open Sync again to reload it.',
@@ -1010,7 +1269,7 @@ export function createSyncApp(store, context) {
       throw new Error('This record has no matching catalog read');
     const table = await store.getResource(root);
     const rule = await ensureRule(table, definition, filterName || choice.name);
-    await adoptFlatRows(context.principal, collection.resource);
+    await adoptFlatRows(requirePrincipal(), collection.resource);
     await store.ui.openResource(rule.subject);
 
     return rule;
@@ -1018,17 +1277,17 @@ export function createSyncApp(store, context) {
 
   const statusSubject = () => context.rule?.subject ?? root;
 
-  async function status() {
+  async function status(): Promise<SyncStatus> {
     const value = (await store.getResource(statusSubject())).get(
       property('syncable-mirror-status'),
     );
 
     return value && typeof value === 'object' && !Array.isArray(value)
-      ? value
+      ? (value as SyncStatus)
       : {};
   }
 
-  async function saveStatus(values) {
+  async function saveStatus(values: SyncStatus) {
     await patch(await store.getResource(statusSubject()), {
       [property('syncable-mirror-status')]: { ...(await status()), ...values },
     });
@@ -1056,18 +1315,29 @@ export function createSyncApp(store, context) {
       current.run?.runId !== run.runId
     )
       throw new Error('This saved filter run is no longer current');
-    const rule = await store.getResource(context.rule.subject);
-    const config = rule.get(property('syncable-source-config'));
+    const selectedRule = context.rule;
+    if (!selectedRule) throw new Error('Choose a saved filter to sync');
+    const rule = await store.getResource(selectedRule.subject);
+    const config = stored<StoredSource>(
+      rule,
+      property('syncable-source-config'),
+    );
     if (
-      config?.ruleKey !== context.rule.key ||
-      readSelectionKey(config.definition) !== context.rule.key
+      config?.kind !== 'rule' ||
+      config.ruleKey !== selectedRule.key ||
+      readSelectionKey(config.definition) !== selectedRule.key
     )
       throw new Error('The saved filter definition changed');
 
     return run;
   }
 
-  async function durableResource(kind, parent, id, payload) {
+  async function durableResource(
+    kind: 'syncable-sync-run' | 'syncable-observation',
+    parent: string,
+    id: string,
+    payload: DurableSyncRun | SyncObservation,
+  ) {
     await assertRun();
     const existing = await resources({ property: core.localId, value: id });
     if (existing.length > 1)
@@ -1077,7 +1347,7 @@ export function createSyncApp(store, context) {
       if (!(await withinRoot(existing[0].subject)))
         throw new Error('The sync evidence moved outside this table');
 
-      const previous = existing[0].get(property(kind));
+      const previous = stored<DurableSyncRun>(existing[0], property(kind));
       if (kind === 'syncable-observation' && !same(previous, payload))
         throw new Error('The immutable entity observation changed');
       if (
@@ -1101,17 +1371,20 @@ export function createSyncApp(store, context) {
   }
 
   async function ledger() {
-    const runs = [],
-      observations = [];
+    const runs: DurableSyncRun[] = [];
+    const observations: SyncObservation[] = [];
 
     for (const rule of await savedRules()) {
       for (const row of await resources({
         property: core.parent,
         value: rule.subject,
       })) {
-        const run = row.get(property('syncable-sync-run'));
+        const run = stored<DurableSyncRun>(row, property('syncable-sync-run'));
         if (run) runs.push(run);
-        const observation = row.get(property('syncable-observation'));
+        const observation = stored<SyncObservation>(
+          row,
+          property('syncable-observation'),
+        );
         if (observation) observations.push(observation);
       }
     }
@@ -1122,7 +1395,10 @@ export function createSyncApp(store, context) {
   async function reconcile() {
     const evidence = await ledger();
     const state = reduceFlatState(evidence);
-    const latest = new Map();
+    const latest = new Map<
+      string,
+      { run: DurableSyncRun; observation: SyncObservation }
+    >();
     const runs = new Map(evidence.runs.map(run => [run.runId, run]));
 
     for (const observation of evidence.observations) {
@@ -1137,23 +1413,21 @@ export function createSyncApp(store, context) {
         latest.set(observation.entityKey, { run, observation });
     }
 
-    const counts = { added: 0, changed: 0, unchanged: 0 };
-    const fullClass = rowClass(entityType(context.resource));
+    const counts: SyncCounts = { added: 0, changed: 0, unchanged: 0 };
+    const resource = context.resource;
+    if (!resource) throw new Error('Choose an entity collection first');
+    const fullClass = rowClass(entityType(resource));
     const required =
-      (await store.getResource(fullClass)).get(core.requires) ?? [];
+      stored<string[]>(await store.getResource(fullClass), core.requires) ?? [];
 
     for (const [key, reduced] of Object.entries(state)) {
       await assertRun();
       const item = latest.get(key)?.observation;
       if (!item) continue;
-      const old = await findNode(
-        key,
-        rowClass(entityType(context.resource)),
-        'record',
-      );
-      const descriptors = fieldsFor(context.resource);
+      const old = await findNode(key, fullClass, 'record');
+      const descriptors = fieldsFor(resource);
       const linkedFields = new Set(descriptors.map(field => field.property));
-      const bindings = apiProperties(context.resource);
+      const bindings = apiProperties(resource);
       const values = Object.fromEntries(
         Object.entries(reduced.values)
           .filter(([name]) => !linkedFields.has(name))
@@ -1194,12 +1468,12 @@ export function createSyncApp(store, context) {
               writable: true,
               configurable: true,
             });
-          parent = parent[part];
+          parent = parent[part] as Values;
         }
 
         // The winning explicit field is authoritative. A changed owner must
         // never inherit a previous discriminator or ID from a merged snapshot.
-        Object.defineProperty(parent, path.at(-1), {
+        Object.defineProperty(parent, path[path.length - 1], {
           value: reduced.cleared.includes(name)
             ? null
             : structuredClone(reduced.values[name]),
@@ -1243,6 +1517,7 @@ export function createSyncApp(store, context) {
         for (const target of resolution.objects) {
           const targetKey = entitySourceKey({
             ...context,
+            principal: requirePrincipal(),
             entityIdentity: target.entity,
           });
           const row = await findNode(
@@ -1269,13 +1544,13 @@ export function createSyncApp(store, context) {
         }
       }
 
-      const recordConfig = {
+      const recordConfig: StoredRecordSource = {
         version: 3,
         kind: 'record',
         proxyOrigin: context.proxyOrigin,
         platform: context.platform,
-        principal: context.principal,
-        resource: context.resource,
+        principal: requirePrincipal(),
+        resource: resource,
         entityIdentity: item.entity,
         record: referenceRecord,
         context: item.context,
@@ -1283,7 +1558,7 @@ export function createSyncApp(store, context) {
         managedProperties: Object.keys(values),
       };
       const intents = relatedCollectionReads(readDocument(), {
-        resource: context.resource,
+        resource: resource,
         record: referenceRecord,
         context: item.provenance.read.pathParams,
       }).map(navigation => ({
@@ -1301,15 +1576,15 @@ export function createSyncApp(store, context) {
       let name = item.projected.name;
 
       if (name === item.projected.id) {
-        const label = entityType(context.resource).presentation.columns.find(
+        const label = entityType(resource).presentation.columns.find(
           column =>
             typeof reduced.values[column.property] === 'string' &&
-            reduced.values[column.property].trim(),
+            (reduced.values[column.property] as string).trim(),
         );
-        if (label) name = reduced.values[label.property];
+        if (label) name = reduced.values[label.property] as string;
       }
 
-      const rowValues = {
+      const rowValues: Values = {
         [core.name]: name,
         ...values,
         [property('syncable-entity-table')]: root,
@@ -1382,49 +1657,46 @@ export function createSyncApp(store, context) {
       throw new Error('Choose a saved filter to sync');
     await assertRun();
     const stamp = runStamp();
-    let run = {
-      ruleSubject: context.rule.subject,
-      ruleKey: context.rule.key,
+    const rule = context.rule;
+    let run: DurableSyncRun = {
+      ruleSubject: rule.subject,
+      ruleKey: rule.key,
       ...stamp,
       complete: false,
       entityKeys: [],
     };
     const id =
-      'syncables:run:' +
-      sourceConfigFingerprint([context.rule.subject, stamp.runId]);
+      'syncables:run:' + sourceConfigFingerprint([rule.subject, stamp.runId]);
     const storedRun = await durableResource(
       'syncable-sync-run',
-      context.rule.subject,
+      rule.subject,
       id,
       run,
     );
 
     try {
-      const result = await readSelection(
-        readDocument(),
-        context.rule.definition,
-        {
-          transport,
-          querySelection: context.querySelection,
-          maxPartitions: 32,
-          limits: {
-            maxRequests: 128,
-            maxRecords: 4000,
-            // Responses include native journal validation and linked-record
-            // storage, so this bounds that work as well as provider latency.
-            timeoutMs: 300000,
-            maxRetries: 0,
-          },
+      const result = await readSelection(readDocument(), rule.definition, {
+        transport,
+        querySelection: context.querySelection,
+        maxPartitions: 32,
+        limits: {
+          maxRequests: 128,
+          maxRecords: 4000,
+          // Responses include native journal validation and linked-record
+          // storage, so this bounds that work as well as provider latency.
+          timeoutMs: 300000,
+          maxRetries: 0,
         },
-      );
+      });
       await assertRun();
       const accepted = result.observations.map(observation => ({
         ...observation,
         entityKey: entitySourceKey({
           ...context,
+          principal: requirePrincipal(),
           entityIdentity: observation.entity,
         }),
-        ruleKey: context.rule.key,
+        ruleKey: rule.key,
         ...stamp,
       }));
       if (
@@ -1436,10 +1708,10 @@ export function createSyncApp(store, context) {
       for (const observation of accepted)
         await durableResource(
           'syncable-observation',
-          context.rule.subject,
+          rule.subject,
           'syncables:observation:' +
             sourceConfigFingerprint([
-              context.rule.subject,
+              rule.subject,
               stamp.runId,
               observation.entityKey,
               observation.representationKey,
@@ -1487,9 +1759,7 @@ export function createSyncApp(store, context) {
       return summary;
     } catch (error) {
       await assertRun()
-        .then(() =>
-          saveStatus({ error: String(error?.message ?? error).slice(0, 1024) }),
-        )
+        .then(() => saveStatus({ error: messageOf(error).slice(0, 1024) }))
         .catch(() => undefined);
       throw error;
     }
@@ -1506,8 +1776,17 @@ export function createSyncApp(store, context) {
 
       // Pending setup rows are retained; the registered App is the displayed choice.
       for (let i = saved.length - 1; i >= 0; i--) {
-        const config = saved[i].get(property('syncable-source-config'));
-        if (same(config?.principal, ref.principal)) saved.splice(i, 1);
+        const config = stored<StoredSource>(
+          saved[i],
+          property('syncable-source-config'),
+        );
+        if (
+          same(
+            config?.kind === 'rule' ? undefined : config?.principal,
+            ref.principal,
+          )
+        )
+          saved.splice(i, 1);
       }
 
       saved.push(row);
@@ -1521,12 +1800,15 @@ export function createSyncApp(store, context) {
       platform: context.platform,
     });
     const saved = await storedPrincipals();
-    const known = new Set();
+    const known = new Set<string | undefined>();
     const errors = [];
     const authorizationRequired = [];
 
     for (const row of saved) {
-      const config = row.get(property('syncable-source-config'));
+      const config = stored<StoredSource>(
+        row,
+        property('syncable-source-config'),
+      );
       if (config?.version !== 2 || config.principal?.kind !== 'authenticated')
         continue;
       known.add(config.connectionId);
@@ -1586,7 +1868,11 @@ export function createSyncApp(store, context) {
   };
 }
 
-function el(tag, text, className) {
+function el<Tag extends keyof HTMLElementTagNameMap>(
+  tag: Tag,
+  text?: unknown,
+  className?: string,
+) {
   const node = document.createElement(tag);
   if (text !== undefined && text !== null) node.textContent = String(text);
   if (className) node.className = className;
@@ -1603,6 +1889,15 @@ function mountStoredSourcePicker({
   inputs,
   save,
   showError,
+}: {
+  app: ReturnType<typeof createSyncApp>;
+  store: SyncAppStore;
+  context: SyncAppViewContext;
+  collection: CollectionDescription;
+  source: SyncablePickerSource;
+  inputs: HTMLDivElement;
+  save: HTMLButtonElement;
+  showError: (reason: unknown) => void;
 }) {
   const groups = (source.groups ?? []).map(group => ({
     ...group,
@@ -1612,7 +1907,7 @@ function mountStoredSourcePicker({
   const status = el('p', 'Loading saved sources…', 'muted');
   status.setAttribute('role', 'status');
 
-  const field = (title, control) => {
+  const field = (title: string, control: HTMLSelectElement) => {
     const label = el('label', title);
     control.setAttribute('aria-label', title);
     label.append(control);
@@ -1623,7 +1918,11 @@ function mountStoredSourcePicker({
   field(source.title, select);
   inputs.append(status);
 
-  const setOptions = (control, placeholder, options) => {
+  const setOptions = (
+    control: HTMLSelectElement,
+    placeholder: string,
+    options: PickerRow[],
+  ) => {
     const previous = control.value;
     const first = el('option', placeholder);
     first.value = '';
@@ -1647,11 +1946,11 @@ function mountStoredSourcePicker({
       ...groups.flatMap(group => group.ruleSubjects),
     ]),
   ];
-  let options = [];
-  let choices = [];
+  let options: PickerRow[] = [];
+  let choices: PickerRow[] = [];
   let disposed = false;
   let changed = false;
-  let pending;
+  let pending: Promise<void> | undefined;
   const selected = () =>
     choices.find(({ row }) => row.subject === select.value);
 
@@ -1680,7 +1979,7 @@ function mountStoredSourcePicker({
   });
   filter();
 
-  const byName = (a, b) => a.name.localeCompare(b.name);
+  const byName = (a: PickerRow, b: PickerRow) => a.name.localeCompare(b.name);
 
   const refresh = () => {
     changed = true;
@@ -1697,7 +1996,7 @@ function mountStoredSourcePicker({
         const eligible = rows.filter(({ origin }) =>
           app.pickerDefinition(collection, origin),
         );
-        const counts = new Map();
+        const counts = new Map<string, number>();
         for (const { name } of eligible)
           counts.set(name, (counts.get(name) ?? 0) + 1);
         const groupNames = new Map(
@@ -1707,7 +2006,13 @@ function mountStoredSourcePicker({
           .map(choice => {
             if (counts.get(choice.name) === 1) return choice;
             const groupName = groups
-              .map(group => groupNames.get(choice.row.get(group.property)))
+              .map(group => {
+                const subject = choice.row.get(group.property);
+
+                return typeof subject === 'string'
+                  ? groupNames.get(subject)
+                  : undefined;
+              })
               .find(Boolean);
 
             return {
@@ -1720,9 +2025,14 @@ function mountStoredSourcePicker({
           setOptions(group.select, 'All', groupRows[index].sort(byName));
         filter();
 
-        const states = rules.map(rule =>
-          rule.get(context.schema.properties['syncable-mirror-status']),
-        );
+        const states = rules.map(rule => {
+          if (!readable(rule)) throw new Error(rule.error);
+
+          return stored<SyncStatus>(
+            rule,
+            context.schema.properties['syncable-mirror-status'],
+          );
+        });
         status.textContent = states.some(state => state?.error)
           ? 'A source sync needs attention. Open its Sync tab to retry.'
           : states.some(
@@ -1763,7 +2073,13 @@ function mountStoredSourcePicker({
 }
 
 /** The visible controls read saved state. Accepted executions run separately. */
-export async function view({ root, store }) {
+export async function view({
+  root,
+  store,
+}: {
+  root: HTMLElement;
+  store: SyncAppStore;
+}) {
   const context = await store.getContext();
   const app = createSyncApp(store, context);
 
@@ -1779,15 +2095,15 @@ export async function view({ root, store }) {
     ':root{font-family:"Open Sans","Segoe UI",sans-serif;color-scheme:light dark}body{margin:0;font-size:14px}#root{padding:12px 0}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}button,input,select{font:inherit;padding:7px 12px;border:1px solid #aaa;border-radius:8px;color:inherit;background:transparent}button{cursor:pointer}button:disabled{opacity:.55}.muted{color:#777}.error{padding:12px;border:1px solid #c66;border-radius:8px}label{display:flex;gap:8px;align-items:center;margin:8px 0}';
   document.head.append(style);
 
-  const showError = reason => {
+  const showError = (reason: unknown) => {
     root.querySelector('[data-sync-error]')?.remove();
-    const message = el('p', String(reason?.message ?? reason), 'error');
+    const message = el('p', messageOf(reason), 'error');
     message.setAttribute('role', 'alert');
     message.setAttribute('data-sync-error', '');
     root.prepend(message);
   };
 
-  const button = (label, action) => {
+  const button = (label: unknown, action: () => unknown) => {
     const node = el('button', label);
     node.addEventListener('click', async () => {
       node.disabled = true;
@@ -1817,7 +2133,9 @@ export async function view({ root, store }) {
       });
 
   if (context.kind === 'platform') {
-    let discovery;
+    let discovery:
+      | Awaited<ReturnType<typeof app.discoverPrincipals>>
+      | undefined;
     const errors = [];
 
     if (context.preferredConnectionId) {
@@ -1846,11 +2164,13 @@ export async function view({ root, store }) {
     const principals = await app.storedPrincipals();
     const hasPublic = principals.some(
       principal =>
-        principal.get(context.schema.properties['syncable-source-config'])
-          ?.principal?.kind === 'public',
+        stored<SyncableSourceConfig>(
+          principal,
+          context.schema.properties['syncable-source-config'],
+        )?.principal?.kind === 'public',
     );
 
-    const connect = async connectionId => {
+    const connect = async (connectionId?: string) => {
       const result = await store.proxy.connect({
         platform: context.platform,
         ...(connectionId ? { connectionId } : {}),
@@ -1873,8 +2193,10 @@ export async function view({ root, store }) {
       discovery?.connections.length === 0 &&
       principals.every(
         principal =>
-          principal.get(context.schema.properties['syncable-source-config'])
-            ?.principal?.kind === 'public',
+          stored<SyncableSourceConfig>(
+            principal,
+            context.schema.properties['syncable-source-config'],
+          )?.principal?.kind === 'public',
       )
     )
       root.append(el('p', 'No accounts connected yet.', 'muted'));
@@ -1906,7 +2228,7 @@ export async function view({ root, store }) {
       showError(
         new Error(
           errors
-            .map(error => String(error?.message ?? error))
+            .map(error => messageOf(error))
             .join('; ')
             .slice(0, 1024),
         ),
@@ -1931,7 +2253,10 @@ export async function view({ root, store }) {
       root.append(
         button('Open principal', async () =>
           store.ui.openResource(
-            (await store.getResource(context.subject)).get(core.parent),
+            stored<string>(
+              await store.getResource(context.subject),
+              core.parent,
+            )!,
           ),
         ),
       );
@@ -1999,7 +2324,7 @@ export async function view({ root, store }) {
           context.principal?.kind !== 'public' || source.allowsAnonymous,
       );
 
-    let storedPicker;
+    let storedPicker: ReturnType<typeof mountStoredSourcePicker> | undefined;
     const sourceType = el('select');
     sourceType.setAttribute('aria-label', 'Source record type');
 
@@ -2008,24 +2333,24 @@ export async function view({ root, store }) {
       storedPicker = undefined;
       inputs.replaceChildren();
       const definition = selectedDefinition();
-      const stored = (context.pickerSources ?? []).filter(source =>
-        source.collections.includes(definition?.name),
+      const storedSources = (context.pickerSources ?? []).filter(
+        source => definition && source.collections.includes(definition.name),
       );
       sourceControls.hidden =
-        !selectedEntrypoints().length || stored.length > 0;
+        !selectedEntrypoints().length || storedSources.length > 0;
 
-      if (stored.length) {
-        if (stored.length > 1) {
+      if (definition && storedSources.length) {
+        if (storedSources.length > 1) {
           const previous = sourceType.value;
           sourceType.replaceChildren(
-            ...stored.map(source => {
+            ...storedSources.map(source => {
               const option = el('option', source.title);
               option.value = source.resource;
 
               return option;
             }),
           );
-          if (stored.some(source => source.resource === previous))
+          if (storedSources.some(source => source.resource === previous))
             sourceType.value = previous;
           inputs.append(sourceType);
         }
@@ -2036,8 +2361,9 @@ export async function view({ root, store }) {
           context,
           collection: definition,
           source:
-            stored.find(source => source.resource === sourceType.value) ??
-            stored[0],
+            storedSources.find(
+              source => source.resource === sourceType.value,
+            ) ?? storedSources[0],
           inputs,
           save,
           showError,
@@ -2141,6 +2467,7 @@ export async function view({ root, store }) {
     return;
   }
 
+  if (!context.rule) throw new Error('Choose a saved filter to sync');
   const selected = await store.getResource(context.rule.subject);
   const start = button('Sync now', async () => {
     await store.execution('start');
@@ -2175,9 +2502,9 @@ export async function view({ root, store }) {
     ...warnings(),
   );
 
-  let timer;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let rendering = 0;
-  let previousDetails;
+  let previousDetails: string | undefined;
 
   const render = async () => {
     clearTimeout(timer);

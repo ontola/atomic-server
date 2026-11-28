@@ -1,11 +1,59 @@
 // @wc-ignore-file
 import { canonicalValue } from './builtinSyncIdentity.js';
 
-const textOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-const compare = (a, b) =>
+export type FieldEvidence =
+  | { kind: 'value'; value: unknown }
+  | { kind: 'null' }
+  | { kind: 'absent' };
+export interface DurableSyncRun {
+  ruleSubject: string;
+  ruleKey: string;
+  runId: string;
+  generation: string;
+  startOrder: number;
+  complete: boolean;
+  entityKeys: string[];
+}
+export interface DurableEntityObservation {
+  entityKey: string;
+  raw?: Record<string, unknown>;
+  ruleKey: string;
+  runId: string;
+  generation: string;
+  representationKey: string;
+  partitionKey: string;
+  fields: Record<string, FieldEvidence>;
+}
+
+interface ReducedEntity {
+  values: Record<string, unknown>;
+  raw?: Record<string, unknown>;
+  cleared: string[];
+  memberships: string[];
+}
+
+interface ObservationRank {
+  run: DurableSyncRun;
+  rank: string;
+}
+
+interface FieldObservation extends ObservationRank {
+  field: string;
+  evidence: Exclude<FieldEvidence, { kind: 'absent' }>;
+}
+
+interface EntityObservations {
+  memberships: Set<string>;
+  ledgers: Map<string, FieldObservation>;
+  raw: (ObservationRank & { raw: Record<string, unknown> })[];
+}
+
+const textOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+const compare = (a: DurableSyncRun, b: DurableSyncRun) =>
   a.startOrder - b.startOrder || textOrder(a.runId, b.runId);
-const fingerprint = value => JSON.stringify(canonicalValue(value));
-const observationOrder = observation =>
+const fingerprint = (value: DurableSyncRun | unknown[]) =>
+  JSON.stringify(canonicalValue(value));
+const observationOrder = (observation: DurableEntityObservation) =>
   fingerprint([
     observation.representationKey,
     observation.partitionKey,
@@ -15,7 +63,13 @@ const observationOrder = observation =>
 // Binding evidence is reconstructed from explicit observed fields, not claimed
 // as a new provider response. Immutable observations retain actual provenance;
 // native selection execution still verifies identity on every detail/Link read.
-const mergeRaw = (previous, value) => {
+function mergeRaw(
+  previous: unknown,
+  value: Record<string, unknown>,
+): Record<string, unknown>;
+function mergeRaw(previous: unknown, value: unknown): unknown;
+
+function mergeRaw(previous: unknown, value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     return canonicalValue(value);
   const merged = Object.fromEntries(
@@ -32,15 +86,21 @@ const mergeRaw = (previous, value) => {
     });
 
   return merged;
-};
+}
 
 /** Pure projection of durable per-rule runs and immutable entity observations.
  * An incomplete run only adds membership. Only the latest complete exact rule
  * scope may retract it; entity data itself is always retained.
  */
-export function reduceFlatState({ runs, observations }) {
-  const acceptedRuns = new Map();
-  const byRule = new Map();
+export function reduceFlatState({
+  runs,
+  observations,
+}: {
+  runs: DurableSyncRun[];
+  observations: DurableEntityObservation[];
+}): Record<string, ReducedEntity> {
+  const acceptedRuns = new Map<string, DurableSyncRun>();
+  const byRule = new Map<string, DurableSyncRun[]>();
 
   for (const run of runs) {
     if (
@@ -63,17 +123,19 @@ export function reduceFlatState({ runs, observations }) {
     byRule.set(run.ruleKey, list);
   }
 
-  const entities = new Map();
+  const entities = new Map<string, EntityObservations>();
 
-  const get = key => {
-    if (!entities.has(key))
-      entities.set(key, {
-        memberships: new Set(),
-        ledgers: new Map(),
-        raw: [],
-      });
+  const get = (key: string): EntityObservations => {
+    const existing = entities.get(key);
+    if (existing) return existing;
+    const entity: EntityObservations = {
+      memberships: new Set(),
+      ledgers: new Map(),
+      raw: [],
+    };
+    entities.set(key, entity);
 
-    return entities.get(key);
+    return entity;
   };
 
   // A cancelled frame can persist an observation before acknowledging the run's
@@ -92,7 +154,7 @@ export function reduceFlatState({ runs, observations }) {
 
   for (const list of byRule.values()) {
     list.sort(compare);
-    let membership = new Set();
+    let membership = new Set<string>();
 
     for (const run of list) {
       if (run.complete === true) membership = new Set(run.entityKeys);
@@ -100,7 +162,7 @@ export function reduceFlatState({ runs, observations }) {
     }
 
     for (const key of membership)
-      get(key).memberships.add(list.at(-1).ruleSubject);
+      get(key).memberships.add(list[list.length - 1].ruleSubject);
   }
 
   for (const observation of observations) {
@@ -118,7 +180,7 @@ export function reduceFlatState({ runs, observations }) {
 
     for (const [field, evidence] of Object.entries(observation.fields)) {
       if (evidence.kind === 'absent') continue;
-      if (!['value', 'null'].includes(evidence.kind))
+      if (evidence.kind !== 'value' && evidence.kind !== 'null')
         throw new Error('Invalid field evidence');
       const key = fingerprint([
         run.ruleKey,
@@ -136,12 +198,12 @@ export function reduceFlatState({ runs, observations }) {
     }
   }
 
-  const result = {};
+  const result: Record<string, ReducedEntity> = {};
 
   for (const [key, entity] of entities) {
-    const values = {};
-    const cleared = new Set();
-    const winners = new Map();
+    const values: Record<string, unknown> = {};
+    const cleared = new Set<string>();
+    const winners = new Map<string, FieldObservation>();
 
     for (const item of entity.ledgers.values()) {
       const previous = winners.get(item.field);
@@ -158,7 +220,7 @@ export function reduceFlatState({ runs, observations }) {
       else values[field] = item.evidence.value;
     }
 
-    let raw;
+    let raw: Record<string, unknown> | undefined;
     for (const item of entity.raw.sort(
       (a, b) => compare(a.run, b.run) || textOrder(a.rank, b.rank),
     ))

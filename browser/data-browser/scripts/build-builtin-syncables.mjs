@@ -6,7 +6,7 @@ export function bundleBuiltinSyncables() {
   return build({
     entryPoints: [
       fileURLToPath(
-        new URL('../src/chunks/PluginRuns/builtinSyncApp.js', import.meta.url),
+        new URL('../src/chunks/PluginRuns/builtinSyncApp.ts', import.meta.url),
       ),
     ],
     bundle: true,

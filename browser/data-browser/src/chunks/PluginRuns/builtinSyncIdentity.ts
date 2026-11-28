@@ -1,22 +1,69 @@
 // @wc-ignore-file
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import type {
+  BoundCollection,
+  CollectionNavigation,
+  EntityIdentity,
+} from 'syncables/browser';
+
+export type SyncablePrincipal =
+  | { kind: 'public' }
+  | {
+      kind: 'authenticated';
+      namespace: string;
+      subject: string | number;
+      clientContext?: string;
+    };
+export interface SourceKeyInput {
+  version?: 2 | 3;
+  proxyOrigin: string;
+  platform: string;
+  kind: string;
+  resource?: string;
+  entityIdentityHash?: string;
+  principal: SyncablePrincipal;
+  collection?: Record<string, unknown>;
+  parentSourceKey?: string;
+  parentSourceKeyHash?: string;
+  remoteId?: string | number;
+}
+
+export type CanonicalEntityIdentity = EntityIdentity;
+type Scope = Pick<SourceKeyInput, 'proxyOrigin' | 'platform' | 'principal'>;
+
+export interface FlatIdentityAlias {
+  canonicalSourceKey: string;
+  canonicalConfig?: Record<string, unknown>;
+  entityTableSourceKey?: string;
+  subject: string;
+  previousSourceKey?: string;
+  localId?: string;
+  sourceConfigFingerprint?: string;
+  previousParent?: string;
+  reparentToLogicalParent?: boolean;
+}
 
 /** Deterministic source identities contain JSON values, never display names or Atomic paths. */
-export function canonicalValue(value) {
+export function canonicalValue<T>(value: T): T;
+export function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue);
-  if (value && typeof value === 'object')
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+
     return Object.fromEntries(
-      Object.keys(value)
+      Object.keys(record)
         .sort()
-        .filter(key => value[key] !== undefined)
-        .map(key => [key, canonicalValue(value[key])]),
+        .filter(key => record[key] !== undefined)
+        .map(key => [key, canonicalValue(record[key])]),
     );
+  }
 
   return value;
 }
 
-export function sourceConfigFingerprint(value) {
+export function sourceConfigFingerprint(value: unknown): string {
   return bytesToHex(
     sha256(
       new TextEncoder().encode(
@@ -26,7 +73,17 @@ export function sourceConfigFingerprint(value) {
   );
 }
 
-export function principalIdentity(principal) {
+export function principalIdentity(value: unknown): SyncablePrincipal {
+  const principal = value as
+    | {
+        kind?: unknown;
+        namespace?: unknown;
+        subject?: unknown;
+        clientContext?: unknown;
+      }
+    | null
+    | undefined;
+
   if (principal?.kind === 'public') return { kind: 'public' };
   if (
     !principal ||
@@ -65,7 +122,7 @@ export function sourceKey({
   version = 2,
   resource,
   entityIdentityHash,
-}) {
+}: SourceKeyInput): string {
   if (version === 3) {
     if (
       !['collection', 'record'].includes(kind) ||
@@ -140,7 +197,13 @@ export function sourceKey({
 }
 
 /** A nested collection's transport address may change; its declared relationship does not. */
-export function collectionIdentity(bound, navigation) {
+export function collectionIdentity(
+  bound?: Pick<BoundCollection, 'collection' | 'resource' | 'pathParams'>,
+  navigation?: Pick<CollectionNavigation, 'collection' | 'resource'> & {
+    reference?: string;
+    link?: string;
+  },
+): Record<string, unknown> {
   if (navigation)
     return {
       name: navigation.collection,
@@ -148,6 +211,8 @@ export function collectionIdentity(bound, navigation) {
       reference: navigation.reference,
       link: navigation.link,
     };
+
+  if (!bound) throw new Error('The collection has no source binding');
 
   return {
     name: bound.collection,
@@ -162,7 +227,7 @@ export function entitySourceKey({
   proxyOrigin,
   platform,
   principal,
-}) {
+}: Scope & { entityIdentity: EntityIdentity }): string {
   if (
     !entityIdentity ||
     typeof entityIdentity.key !== 'string' ||
@@ -183,7 +248,12 @@ export function entitySourceKey({
   });
 }
 
-export function entityTableKey({ resource, proxyOrigin, platform, principal }) {
+export function entityTableKey({
+  resource,
+  proxyOrigin,
+  platform,
+  principal,
+}: Scope & { resource: string }): string {
   return sourceKey({
     proxyOrigin,
     platform,
@@ -195,7 +265,7 @@ export function entityTableKey({ resource, proxyOrigin, platform, principal }) {
 }
 
 /** A saved View's identity remains bounded even for a deep fanout definition. */
-export function ruleSourceKey(tableKey, ruleKey) {
+export function ruleSourceKey(tableKey: string, ruleKey: string): string {
   if (
     typeof tableKey !== 'string' ||
     !tableKey ||

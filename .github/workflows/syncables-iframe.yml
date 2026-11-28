@@ -21,7 +21,7 @@ on:
       - 'browser/lib/src/plugin-apply*'
       - 'browser/lib/src/plugin-run.integration.test.ts'
       - 'browser/lib/src/resource.ts'
-      - 'browser/data-browser/src/chunks/TablePage/**'
+      - 'browser/table-page/src/TablePage/**'
       - 'browser/data-browser/src/helpers/proxyConnections*'
       - 'browser/data-browser/src/chunks/AppPage/ProxyConnectReturn*'
       - 'browser/e2e/scripts/local-e2e.mjs'
@@ -68,15 +68,44 @@ jobs:
         run: pnpm --filter @tomic/e2e typecheck
       - name: Test built-in Syncables unit specs
         working-directory: browser
-        run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncableHierarchy.test.ts src/chunks/PluginRuns/syncablesNavigation.test.ts src/chunks/PluginRuns/syncableCollection.test.ts src/chunks/AppPage/builtinApp.test.ts src/chunks/AppPage/builtinAppPage.test.tsx src/chunks/TablePage/TableViewTabs.test.tsx src/chunks/PluginRuns/proxyCatalog.test.ts src/chunks/PluginRuns/builtinSyncablesProfile.test.ts src/chunks/PluginRuns/builtinSyncApp.test.ts src/chunks/PluginRuns/syncableDocument.test.ts scripts/builtin-syncables-bundle.test.mjs src/chunks/PluginRuns/SyncableCollectionView.test.tsx src/chunks/PluginRuns/installIntegrationIcon.test.ts src/chunks/AppPage/AppExecutionRuntime.test.ts src/chunks/AppPage/AppFrameProfile.test.tsx src/chunks/AppPage/hostStoreProfile.test.ts src/chunks/AppPage/hostStore.test.ts src/chunks/AppPage/viewClient.test.ts src/helpers/proxyConnections.test.ts src/chunks/AppPage/ProxyConnectReturn.test.tsx
+        run: >-
+          pnpm --filter @tomic/data-browser exec vitest run
+          src/chunks/PluginRuns/syncablePlatform.test.ts
+          src/chunks/PluginRuns/syncableHierarchy.test.ts
+          src/chunks/PluginRuns/syncablesNavigation.test.ts
+          src/chunks/PluginRuns/syncableCollection.test.ts
+          src/chunks/AppPage/builtinApp.test.ts
+          src/chunks/AppPage/builtinAppPage.test.tsx
+          src/chunks/PluginRuns/proxyCatalog.test.ts
+          src/chunks/PluginRuns/builtinSyncablesProfile.test.ts
+          src/chunks/PluginRuns/builtinSyncApp.test.ts
+          src/chunks/PluginRuns/syncableDocument.test.ts
+          scripts/builtin-syncables-bundle.test.mjs
+          src/chunks/PluginRuns/SyncableCollectionView.test.tsx
+          src/chunks/PluginRuns/installIntegrationIcon.test.ts
+          src/chunks/AppPage/AppExecutionRuntime.test.ts
+          src/chunks/AppPage/AppFrameProfile.test.tsx
+          src/chunks/AppPage/hostStoreProfile.test.ts
+          src/chunks/AppPage/hostStore.test.ts
+          src/helpers/proxyConnections.test.ts
+          src/chunks/AppPage/ProxyConnectReturn.test.tsx
+          src/chunks/PluginRuns/builtinSyncIdentity.test.ts
+          src/chunks/PluginRuns/builtinSyncFlatState.test.ts
+          src/chunks/PluginRuns/syncableSource.test.ts
+          src/chunks/PluginRuns/syncableFlatAdoption.test.ts
+          src/chunks/PluginRuns/syncableFlatNavigation.test.ts
+          src/chunks/PluginRuns/useSyncableTableNavigation.test.tsx
+          src/chunks/PluginRuns/syncableReferenceRecords.test.ts
+          src/chunks/PluginRuns/syncablePrincipalApp.test.ts
+      - name: Test Sync and Table view tabs
+        working-directory: browser
+        run: pnpm --filter @tomic/table-page exec vitest run src/TablePage/TableViewTabs.test.tsx
       - name: Test shared bridge client protocol
         working-directory: browser
         run: pnpm --filter @tomic/plugin exec vitest run src/store.test.ts src/viewProtocol.test.ts
       - name: Test shared Store write authority
         working-directory: browser
         run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/resource.test.ts
-      - name: Validate sandbox module JavaScript syntax
-        run: node --check browser/data-browser/src/chunks/PluginRuns/builtinSyncApp.js
 
   github-playwright:
     runs-on: ubuntu-latest

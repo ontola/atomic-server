@@ -4,14 +4,33 @@ import {
   describeResourceFields,
   resolveEntityIdentity,
   resolveResourceField,
+  type EntityIdentity,
+  type OpenApiDocument,
+  type TypedReadContext,
 } from 'syncables/browser';
 import { sourceConfigFingerprint } from './builtinSyncIdentity.js';
-const object = value =>
+
+export interface SyncableReferenceEvidence {
+  version: 1;
+  sourceResource: string;
+  sourceEntity: EntityIdentity;
+  sourceRecord: Record<string, unknown>;
+  context: TypedReadContext;
+  field: string;
+  index: number;
+}
+
+const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
-const equal = (a, b) =>
+const equal = (a: unknown, b: unknown) =>
   sourceConfigFingerprint(a) === sourceConfigFingerprint(b);
 
-export function validateSyncableReferenceEvidence(document, value, entity) {
+/** Stored reference evidence proves consistency only. */
+export function validateSyncableReferenceEvidence(
+  document: OpenApiDocument,
+  value: unknown,
+  entity: EntityIdentity,
+): boolean {
   try {
     if (
       !object(value) ||
@@ -21,14 +40,16 @@ export function validateSyncableReferenceEvidence(document, value, entity) {
       !object(value.sourceRecord) ||
       !object(value.context) ||
       typeof value.field !== 'string' ||
+      typeof value.index !== 'number' ||
       !Number.isSafeInteger(value.index) ||
       value.index < 0
     )
       return false;
+    const context = value.context as TypedReadContext;
     const source = resolveEntityIdentity(document, {
       resource: value.sourceResource,
       record: value.sourceRecord,
-      context: value.context,
+      context,
     });
     if (!equal(source, value.sourceEntity)) return false;
     const descriptor = describeResourceFields(
@@ -40,7 +61,7 @@ export function validateSyncableReferenceEvidence(document, value, entity) {
       document,
       descriptor,
       value.sourceRecord,
-      value.context,
+      context,
     );
 
     return (
