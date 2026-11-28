@@ -10,7 +10,6 @@ const state = vi.hoisted(() => ({ store: { getDrive: () => 'drive' } }));
 vi.mock('@tomic/react', async original => ({
   ...(await original<typeof import('@tomic/react')>()),
   useStore: () => state.store,
-  useTitle: () => ['GitHub · michiel'],
 }));
 vi.mock('./builtinApp', () => ({ resolveBuiltinApp: vi.fn() }));
 vi.mock('./AppFrame', () => ({
@@ -21,6 +20,11 @@ vi.mock('./AppFrame', () => ({
 vi.mock('@chunks/PluginRuns/BuiltinSyncablesApp', () => ({
   BuiltinSyncablesApp: ({ table }: { table: string }) => (
     <div data-testid='builtin-app'>{table}</div>
+  ),
+}));
+vi.mock('@tomic/table-page/TablePage/TableResource', () => ({
+  TableResource: ({ resource }: { resource: Resource }) => (
+    <div data-testid='principal-app-collections'>{resource.subject}</div>
   ),
 }));
 vi.mock('@tomic/ui/components/Loader', () => ({
@@ -61,7 +65,7 @@ it('keeps ordinary App entrypoints on the existing AppFrame path', async () => {
   expect(screen.queryByTestId('builtin-app')).toBeNull();
 });
 
-it('opens a registered principal without mounting an iframe', async () => {
+it('opens a principal App as native stored collections without mounting an iframe', async () => {
   vi.mocked(resolveBuiltinApp).mockResolvedValue({
     kind: 'syncables',
     table: 'installed-app',
@@ -69,8 +73,8 @@ it('opens a registered principal without mounting an iframe', async () => {
   });
   open();
   expect(
-    await screen.findByText(/Integration installed in this drive/),
-  ).toBeDefined();
+    (await screen.findByTestId('principal-app-collections')).textContent,
+  ).toBe('installed-app');
   expect(screen.queryByTestId('builtin-app')).toBeNull();
   expect(screen.queryByTestId('ordinary-app')).toBeNull();
 });

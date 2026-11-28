@@ -87,8 +87,10 @@ export function parseViewQuery(args: Record<string, unknown>): ViewQuery {
 export async function runViewQuery(
   store: Store,
   query: ViewQuery,
+  drive?: string,
 ): Promise<string[]> {
   const builder = new CollectionBuilder(store).setFilters(query.filters);
+  if (drive) builder.setDrive(drive);
 
   if (query.property) builder.setProperty(query.property);
   if (query.value !== undefined) builder.setValue(query.value);

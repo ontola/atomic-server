@@ -6,6 +6,18 @@ type FlutterChannel = { postMessage(message: string): void };
 
 let locked: FlutterChannel | undefined;
 
+/** Native hosts need no standalone browser fixtures or their default data. */
+export async function selectEmbedHost(
+  native: NativeChannel | undefined,
+  flutter: FlutterChannel | undefined,
+): Promise<NativeChannel> {
+  if (native) return native;
+  if (flutter) return createFlutterHost(flutter);
+  const { createMockHost } = await import('./mockHost');
+
+  return createMockHost();
+}
+
 /**
  * Locks the app's channel to this page. The app puts a secret in the URL
  * fragment (`#ch=<token>`); this reads it once, removes it from the URL

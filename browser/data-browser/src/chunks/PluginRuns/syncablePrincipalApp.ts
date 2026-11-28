@@ -114,6 +114,11 @@ function principalOf(
     key.version !== 2 ||
     key.kind !== 'principal' ||
     config.version !== 2 ||
+    config.collection ||
+    config.navigation ||
+    config.record ||
+    config.resource ||
+    config.parentSourceKey ||
     key.proxyOrigin !== scope.proxyOrigin ||
     key.platform !== scope.platform ||
     typeof raw !== 'string' ||

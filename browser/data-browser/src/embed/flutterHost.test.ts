@@ -1,11 +1,88 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFlutterHost,
   flutterChannel,
   lockFlutterChannel,
+  selectEmbedHost,
 } from './flutterHost';
+
+const mock = vi.hoisted(() => ({
+  loaded: vi.fn(),
+  create: vi.fn(),
+}));
+
+vi.mock('./mockHost', () => {
+  mock.loaded();
+
+  return { createMockHost: mock.create };
+});
+
+describe('selectEmbedHost', () => {
+  beforeEach(() => {
+    mock.create.mockClear();
+  });
+
+  afterEach(() => {
+    delete window.AtomicFlutter;
+    window.history.replaceState(null, '', '/');
+    lockFlutterChannel();
+  });
+
+  it('uses the native host before Flutter without loading browser fixtures', async () => {
+    const native = { call: vi.fn() };
+    const flutter = { postMessage: vi.fn() };
+
+    expect(await selectEmbedHost(native, flutter)).toBe(native);
+    expect(flutter.postMessage).not.toHaveBeenCalled();
+    expect(mock.loaded).not.toHaveBeenCalled();
+    expect(mock.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the locked Flutter channel without loading browser fixtures', async () => {
+    const post = vi.fn();
+
+    window.AtomicFlutter = { postMessage: post };
+    window.history.replaceState(null, '', '/embed#ch=secret');
+    lockFlutterChannel();
+
+    const channel = await selectEmbedHost(undefined, flutterChannel());
+    const reply = channel.call('agent', []);
+    const message = JSON.parse(post.mock.calls[0][0]);
+
+    expect(message).toEqual({
+      token: 'secret',
+      id: 1,
+      method: 'agent',
+      args: [],
+    });
+    expect(window.location.hash).toBe('');
+    expect(mock.loaded).not.toHaveBeenCalled();
+    expect(mock.create).not.toHaveBeenCalled();
+
+    const hostWindow = window as unknown as {
+      __atomicReply(id: number, ok: boolean, payload: string): void;
+    };
+
+    hostWindow.__atomicReply(
+      message.id,
+      true,
+      JSON.stringify('signed-in agent'),
+    );
+    await expect(reply).resolves.toBe('signed-in agent');
+  });
+
+  it('loads the browser mock only when neither native channel exists', async () => {
+    const channel = { call: vi.fn() };
+
+    mock.create.mockReturnValue(channel);
+
+    expect(await selectEmbedHost(undefined, undefined)).toBe(channel);
+    expect(mock.loaded).toHaveBeenCalledOnce();
+    expect(mock.create).toHaveBeenCalledOnce();
+  });
+});
 
 describe('lockFlutterChannel', () => {
   afterEach(() => {

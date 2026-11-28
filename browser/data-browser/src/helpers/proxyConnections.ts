@@ -216,6 +216,24 @@ export interface MintedCapability {
 
 /** What `hostStore` needs for one app's frame. */
 export interface ProxyHost {
+  /** Optional host-selected transport. The frame cannot opt into its authority. */
+  request?: (
+    request: {
+      platform?: string;
+      connectionId?: string;
+      path?: string;
+      query?: unknown;
+      method?: string;
+      body?: string;
+      ifMatch?: string;
+      readProgress?: 'page';
+    },
+    signal?: AbortSignal,
+  ) => Promise<{
+    status: number;
+    headers: Record<string, string>;
+    text: string;
+  }>;
   capability(request: {
     platform: string;
     connectionId: string;

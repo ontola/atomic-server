@@ -44,6 +44,46 @@ const withSchema = (store: { getProperty: unknown }) => {
 };
 
 describe('a run, end to end', () => {
+  it('revokes an awaited guarded edit before it mutates or enters the outbox', async () => {
+    const { store, posted } = await testStore();
+    withSchema(store as unknown as { getProperty: unknown });
+    const existing = await store.newResource({
+      parent: 'https://example.com',
+      isA: [THING],
+      propVals: { [NAME]: 'Before' },
+    });
+    await existing.save();
+    const count = posted.length;
+    const controller = new AbortController();
+    let resolveProperty!: (property: Property) => void;
+    const property = vi.spyOn(store, 'getProperty').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveProperty = resolve;
+        }),
+    );
+    property.mockClear();
+    const authorize = vi.fn(async () => undefined);
+    const host = applyHostFromStore(store, {
+      authorize,
+      assertCurrent: () => controller.signal.throwIfAborted(),
+    });
+    const editing = host.set(existing.subject, { [NAME]: 'After' });
+    await vi.waitFor(() => expect(property).toHaveBeenCalled());
+    controller.abort(new Error('Source changed'));
+    resolveProperty(schema[NAME]);
+    await expect(editing).rejects.toThrow('Source changed');
+    expect(authorize).toHaveBeenCalledWith({
+      op: 'set',
+      subject: existing.subject,
+      propVals: { [NAME]: 'After' },
+    });
+    expect(existing.get(NAME)).toBe('Before');
+    expect(store.outbox.hasPending(existing.subject)).toBe(false);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(posted).toHaveLength(count);
+  });
+
   it('creates linked resources and commits real subjects', async () => {
     const { store, posted } = await testStore();
     withSchema(store as unknown as { getProperty: unknown });

@@ -247,6 +247,10 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set(
   Object.values(ErrorCode).filter(code => code !== ErrorCode.UNKNOWN),
 );
 
+// Import identity failures still arrive with UNKNOWN from the server. This
+// classification is local to the outbox and must not be treated as a wire code.
+const IMPORT_IDENTITY_CONFLICT = -1;
+
 /**
  * The ONLY place that reads a refusal's wording: for servers that predate the
  * code of a refusal, which sent `UNKNOWN` (or, for not-enrolled,
@@ -257,6 +261,16 @@ export function legacyRefusalCode(message: string): number {
   const has = (text: string) => message.includes(text);
 
   if (has('Commits cannot be edited')) return ErrorCode.IMMUTABLE_COMMIT;
+
+  // import_identity.rs refuses a competing (parent, localId) claim or an
+  // unresolved group of existing copies. Reposting cannot reconcile identity.
+  // Keep the pending write for review; never drop its signed genesis or edits.
+  if (
+    has('Import identity already exists; preview again') ||
+    has('Ambiguous import identity: review all copies again before importing')
+  ) {
+    return IMPORT_IDENTITY_CONFLICT;
+  }
 
   if (has('is_genesis: true, but the resource already exists')) {
     return ErrorCode.GENESIS_COLLISION;
@@ -360,6 +374,7 @@ export function isUnrecoverableCommitError(
     case ErrorCode.MISSING_PARENT:
     case ErrorCode.INVALID_SIGNATURE:
     case ErrorCode.CAUSALITY_CONFLICT:
+    case IMPORT_IDENTITY_CONFLICT:
       return true;
     default:
       return false;

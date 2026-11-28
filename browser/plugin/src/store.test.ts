@@ -62,6 +62,7 @@ const shared = [
   'callExport',
   'undo',
   'getContext',
+  'execution',
   'getResource',
   'newResource',
   'query',
@@ -82,6 +83,33 @@ it('gives a drive app and a packaged view one store API', () => {
 
   expect(methods(app.ui)).toEqual(methods(packaged.ui));
 });
+
+it.each(['packaged', 'drive app'])(
+  'uses the shared execution operation without supplying host authority: %s',
+  async kind => {
+    const f = frame();
+    vi.stubGlobal('window', f.window);
+    const store = kind === 'packaged' ? new ViewStore() : driveAppStore(f);
+    const pending = store.execution('state');
+    const request = f.parent.postMessage.mock.calls[0][0];
+    expect(isViewRequest(request)).toBe(true);
+    expect(request).toMatchObject({
+      op: 'execution',
+      args: { action: 'state' },
+    });
+    f.reply({
+      type: 'atomic.view.response',
+      version: 1,
+      id: request.id,
+      result: { status: 'running' },
+    });
+    expect(await pending).toEqual({ status: 'running' });
+    await expect(store.execution('other' as 'state')).rejects.toThrow(
+      'Unknown view execution action',
+    );
+    expect(f.parent.postMessage).toHaveBeenCalledTimes(1);
+  },
+);
 
 it.each(['packaged', 'drive app'])(
   'shapes a resource like @tomic/lib does: %s',

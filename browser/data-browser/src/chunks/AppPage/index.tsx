@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
-import { useStore, useTitle, type Resource } from '@tomic/react';
+import { useStore, type Resource, type DataBrowser } from '@tomic/react';
 import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { AppFrame } from './AppFrame';
 import { BuiltinSyncablesApp } from '@chunks/PluginRuns/BuiltinSyncablesApp';
 import { resolveBuiltinApp, type BuiltinApp } from './builtinApp';
+import { TableResource } from '@tomic/table-page/TablePage/TableResource';
 
 /**
  * An app opens to its view.
@@ -19,7 +20,6 @@ export function AppPage({
   resource: Resource;
 }): React.JSX.Element {
   const store = useStore();
-  const [title] = useTitle(resource);
   const drive = store.getDrive();
   const [resolved, setResolved] = useState<{
     subject: string;
@@ -61,13 +61,7 @@ export function AppPage({
       {resolved.error ? (
         <p role='alert'>{resolved.error}</p>
       ) : resolved.app?.kind === 'syncables' && resolved.app.principal ? (
-        <section>
-          <h1>{title}</h1>
-          <p>
-            Integration installed in this drive. Manage connected accounts from
-            Apps.
-          </p>
-        </section>
+        <TableResource resource={resource as Resource<DataBrowser.Table>} />
       ) : resolved.app?.kind === 'syncables' ? (
         <BuiltinSyncablesApp table={resolved.app.table} drive={drive} />
       ) : (

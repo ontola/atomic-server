@@ -1,6 +1,6 @@
 import { HostError, isViewRequest } from '@tomic/plugin';
 import { viewSession } from '@helpers/extensions/viewSession';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { styled } from 'styled-components';
 import {
   errorMessageFromResponse,
@@ -18,6 +18,10 @@ import {
   handleRequest,
   isHostRequest,
   isWithinApp,
+  assertHostProfile,
+  authorizeViewWrite,
+  bindHostProfile,
+  type HostStoreProfile,
   type HostReply,
 } from './hostStore';
 import { LoaderBlock } from '@tomic/ui/components/Loader';
@@ -51,28 +55,14 @@ import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
 /** A fixed built-in source and authority chosen by the native mounting host. */
-export interface AppFrameProfile {
+export interface AppFrameProfile extends HostStoreProfile {
   source: string;
-  context: Record<string, unknown>;
-  access: { root: string; signal?: AbortSignal; assertCurrent: () => void };
-  proxy?: Pick<ProxyHost, 'connections'>;
+  proxy?: ProxyHost;
   /** Called after the existing native Connect dialog receives consent. */
   connect?: (platform: string, connectionId?: string) => Promise<string>;
   /** Native setup step before the existing host navigation operation. */
-  prepareOpenResource?: (subject: string, choice?: unknown) => Promise<string>;
+  prepareOpenResource?: (subject: string) => Promise<string>;
 }
-
-function assertHostProfile(profile?: AppFrameProfile): void {
-  profile?.access.signal?.throwIfAborted();
-  profile?.access.assertCurrent();
-}
-
-const profileOperations = new Set([
-  'context',
-  'proxyConnections',
-  'proxyConnect',
-  'openResource',
-]);
 
 /** Source authority comes from the native mount, confined to its own node. */
 export function appFrameProfileSource(source: string, server: string): string {
@@ -203,11 +193,19 @@ function AppFrameSession({
   // Subject to the store's unsubscribe, so a view that re-renders does not
   // accumulate a listener per render and get told about one change N times.
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
+  const authority = useMemo(
+    () => profile && bindHostProfile(store, profile),
+    [store, profile],
+  );
   const stylesheet = useCreateThemeVars();
   const hostUI = useHostUI({
     writeRoot: profile?.access.root ?? app,
-    mayWriteUnder: subject =>
-      profile ? Promise.resolve(false) : isWithinApp(store, subject, app),
+    mayWriteUnder: async subject => {
+      if (!authority) return isWithinApp(store, subject, app);
+      await authorizeViewWrite(store, subject, app, authority);
+
+      return true;
+    },
     appTitle,
     frame: frameRef,
     table,
@@ -311,8 +309,12 @@ function AppFrameSession({
     const frame = frameRef.current;
     if (!frame) return;
     // Per frame: `undo` reverts what this frame applied, nothing older.
-    const changes = appChanges(store, drive, app);
-    const selected = profile;
+    const controller = new AbortController();
+    const selected = authority
+      ? bindHostProfile(store, authority, controller.signal)
+      : undefined;
+    const changes = appChanges(store, drive, app, selected);
+    const readSubscriptions = new Map<string, { active: boolean }>();
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -358,15 +360,6 @@ function AppFrameSession({
         return;
       }
 
-      if (selected && !profileOperations.has(data.op)) {
-        session.post({
-          id: data.id,
-          error: 'This built-in view cannot perform that operation',
-        });
-
-        return;
-      }
-
       const prepareOpenResource = profile?.prepareOpenResource;
 
       if (data.op === 'openResource' && prepareOpenResource) {
@@ -374,42 +367,14 @@ function AppFrameSession({
           assertHostProfile(selected);
           if (typeof data.subject !== 'string' || !data.subject)
             throw new Error('A resource subject is required');
-          const subject = await prepareOpenResource(
-            data.subject,
-            data.principalChoice,
-          );
+          const subject = await prepareOpenResource(data.subject);
           assertHostProfile(selected);
-          if (!session.isActive()) return;
           if (typeof subject !== 'string' || !subject)
             throw new Error('The prepared resource is unavailable');
           handleUI(
             { ...data, subject } as unknown as Parameters<typeof handleUI>[0],
             session.post,
           );
-        })().catch(reason => {
-          session.post({
-            id: data.id,
-            error: String(reason?.message ?? reason),
-          });
-        });
-
-        return;
-      }
-
-      if (selected && data.op === 'context') {
-        session.post({ id: data.id, result: selected.context });
-
-        return;
-      }
-
-      if (selected && data.op === 'proxyConnections') {
-        const platform = data.platform;
-        void (async () => {
-          if (!selected.proxy || !isPlatformId(platform))
-            throw new Error('A supported integration platform is required');
-          const result = await selected.proxy.connections(platform);
-          assertHostProfile(selected);
-          session.post({ id: data.id, result });
         })().catch(reason => {
           session.post({
             id: data.id,
@@ -486,6 +451,55 @@ function AppFrameSession({
 
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
+        const authorizeRead = selected?.authorizeRead;
+
+        if (authorizeRead) {
+          const token = readSubscriptions.get(subject) ?? { active: true };
+          readSubscriptions.set(subject, token);
+          void (async () => {
+            assertHostProfile(selected);
+            await authorizeRead(subject);
+            assertHostProfile(selected);
+            if (!token.active || !session.isActive()) return;
+            session.watch(subject, () => {
+              const remove = store.subscribe(subject, () => {
+                void (async () => {
+                  assertHostProfile(selected);
+                  await authorizeRead(subject);
+                  assertHostProfile(selected);
+                  if (token.active) session.post({ __atomicChanged: subject });
+                })().catch(() => {
+                  if (token.active && readSubscriptions.get(subject) === token)
+                    session.unwatch(subject);
+                });
+              });
+
+              return () => {
+                token.active = false;
+                readSubscriptions.delete(subject);
+                remove();
+              };
+            });
+            session.post({ id: data.id, result: true });
+          })().catch(reason => {
+            if (
+              !session.isActive() ||
+              !token.active ||
+              readSubscriptions.get(subject) !== token
+            )
+              return;
+            token.active = false;
+            readSubscriptions.delete(subject);
+            session.unwatch(subject);
+            session.post({
+              id: data.id,
+              error: String(reason?.message ?? reason),
+            });
+          });
+
+          return;
+        }
+
         session.watch(subject, () =>
           store.subscribe(subject, () => {
             try {
@@ -502,13 +516,26 @@ function AppFrameSession({
       }
 
       if (data.op === 'unsubscribe' && typeof data.subject === 'string') {
+        const token = readSubscriptions.get(data.subject);
+        if (token) token.active = false;
+        readSubscriptions.delete(data.subject);
         session.unwatch(data.subject);
         session.post({ id: data.id, result: true });
 
         return;
       }
 
-      void answer(store, app, drive, table, data, session.post, changes);
+      void answer(
+        store,
+        app,
+        drive,
+        table,
+        data,
+        session.post,
+        changes,
+        selected,
+        profile?.proxy,
+      );
     });
     bridgeRef.current = bridge;
     const stop = () => bridge.close();
@@ -516,10 +543,22 @@ function AppFrameSession({
 
     return () => {
       selected?.access.signal?.removeEventListener('abort', stop);
+      controller.abort();
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey, profile]);
+  }, [
+    store,
+    app,
+    drive,
+    table,
+    src,
+    srcDoc,
+    handleUI,
+    forwardKey,
+    profile,
+    authority,
+  ]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
@@ -578,9 +617,9 @@ function AppFrameSession({
     if (!store.getAgent()) throw new Error('Sign in to connect an account.');
 
     if (profile?.connect) {
-      assertHostProfile(profile);
+      assertHostProfile(authority);
       const url = await profile.connect(ask.platform, ask.connectionId);
-      assertHostProfile(profile);
+      assertHostProfile(authority);
       if (connectAskRef.current?.id === ask.id) location.assign(url);
 
       return;
@@ -702,6 +741,8 @@ async function answer(
   request: Parameters<typeof handleRequest>[3],
   post: (reply: HostReply) => void,
   changes: ViewChanges,
+  profile?: HostStoreProfile,
+  selectedProxy?: ProxyHost,
 ): Promise<void> {
   try {
     const result = await handleRequest(
@@ -710,9 +751,11 @@ async function answer(
       drive,
       request,
       table,
-      proxyHost(store, app, drive),
+      profile ? selectedProxy : proxyHost(store, app, drive),
       changes,
+      profile,
     );
+    assertHostProfile(profile);
     post({
       id: request.id,
       result,
