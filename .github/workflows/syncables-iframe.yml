@@ -14,13 +14,15 @@ on:
       - 'browser/data-browser/src/chunks/AppPage/index.tsx'
       - 'browser/data-browser/src/views/FolderPage/**'
       - 'browser/data-browser/src/chunks/AppPage/AppFrame*'
+      - 'browser/data-browser/src/chunks/AppPage/AppVerifierContext.tsx'
       - 'browser/data-browser/src/chunks/AppPage/AppExecution*'
       - 'browser/data-browser/src/chunks/AppPage/hostStore*'
       - 'browser/data-browser/src/chunks/AppPage/viewClient.js'
       - 'browser/plugin/src/*'
       - 'browser/lib/src/plugin-apply*'
       - 'browser/lib/src/plugin-run.integration.test.ts'
-      - 'browser/lib/src/resource.ts'
+      - 'browser/lib/src/resource.*'
+      - 'browser/lib/src/plugin-connection*'
       - 'browser/table-page/src/TablePage/**'
       - 'browser/data-browser/src/helpers/proxyConnections*'
       - 'browser/data-browser/src/chunks/AppPage/ProxyConnectReturn*'
@@ -90,6 +92,7 @@ jobs:
           src/chunks/PluginRuns/SyncableCollectionView.test.tsx
           src/chunks/PluginRuns/installIntegrationIcon.test.ts
           src/chunks/AppPage/AppExecutionRuntime.test.ts
+          src/chunks/AppPage/noServerApp.test.tsx
           src/chunks/AppPage/AppFrameProfile.test.tsx
           src/chunks/AppPage/hostStoreProfile.test.ts
           src/chunks/AppPage/hostStore.test.ts
@@ -112,7 +115,7 @@ jobs:
         run: pnpm --filter @tomic/plugin exec vitest run src/store.test.ts src/viewProtocol.test.ts
       - name: Test shared Store write authority
         working-directory: browser
-        run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/resource.test.ts
+        run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/plugin-connection.test.ts src/resource.test.ts
 
   catalog-playwright:
     runs-on: ubuntu-latest

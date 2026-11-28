@@ -1,5 +1,6 @@
 import { describe, it, vi } from 'vitest';
 import { encodeB64Url } from './base64.js';
+import { Datatype } from './datatypes.js';
 import { encodeGenesisCert, genesisSignerDid } from './genesis.js';
 import {
   localizeInternalSubject,
@@ -13,6 +14,41 @@ import { LoroLoader } from './loro-loader.js';
 import { LoroList as LoroListClass, LoroMap as LoroMapClass } from 'loro-crdt';
 
 describe('resource.ts', () => {
+  it('checks the mutation guard after loading property metadata', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const resource = new Resource('https://example.com/guarded', true);
+    const name = core.properties.name;
+    resource.setStore(store);
+    await resource.set(name, 'Original', false);
+
+    let canWrite = true;
+    vi.mocked(store.getProperty).mockImplementationOnce(async subject => {
+      await Promise.resolve();
+      canWrite = false;
+
+      return {
+        subject,
+        datatype: Datatype.STRING,
+        shortname: 'name',
+        description: '',
+      };
+    });
+
+    const checkWrite = () => {
+      if (!canWrite) throw new Error('Write revoked');
+    };
+
+    await expect(
+      resource.set(name, 'Replacement', true, undefined, checkWrite),
+    ).rejects.toThrow('Write revoked');
+    await expect(
+      resource.set(name, undefined, false, undefined, checkWrite),
+    ).rejects.toThrow('Write revoked');
+    expect(resource.get(name)).toBe('Original');
+  });
+
   it('reports buffered snapshots separately until WASM can materialize them', ({
     expect,
   }) => {
