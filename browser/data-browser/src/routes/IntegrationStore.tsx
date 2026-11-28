@@ -1,6 +1,5 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
-import { ProxyCatalogApps } from '../chunks/PluginRuns/ProxyCatalogApps';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import {
   CatalogApps,
@@ -17,7 +16,7 @@ import { driveHasServer } from '@helpers/driveData';
 import { parseListings, type Listing } from '@helpers/pluginListings';
 import { isOriginWithoutNode } from '@helpers/originNode';
 import { createRoute, redirect } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaGear, FaPlug } from 'react-icons/fa6';
 import {
@@ -45,6 +44,7 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { Main } from '@components/Main';
 import { ContainerWide } from '@tomic/ui/components/Containers';
+import { LoaderBlock } from '@tomic/ui/components/Loader';
 import { Card } from '@tomic/ui/components/Card';
 import { Column, Row } from '@tomic/ui/components/Row';
 import { Button } from '@tomic/ui/components/Button';
@@ -55,6 +55,12 @@ import { useAISidebar } from '@components/AI/AISidebarContext';
 import { BUILD_APP_PROMPT } from '@components/AI/buildAppPrompt';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
+
+const ProxyCatalogApps = lazy(() =>
+  import('../chunks/PluginRuns/ProxyCatalogApps').then(module => ({
+    default: module.ProxyCatalogApps,
+  })),
+);
 
 function validateAppsSearch(search: Record<string, unknown>) {
   return {
@@ -376,7 +382,9 @@ function IntegrationStore(): React.JSX.Element {
               )}
               {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
               {proxyAppDrive && (
-                <ProxyCatalogApps drive={proxyAppDrive} query={query} />
+                <Suspense fallback={<LoaderBlock />}>
+                  <ProxyCatalogApps drive={proxyAppDrive} query={query} />
+                </Suspense>
               )}
               {drive && (
                 <CatalogApps
