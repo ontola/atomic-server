@@ -33,6 +33,11 @@ export type ResourceVaultSyncStatus = Readonly<{
   scope?: VaultSyncScope;
 }>;
 
+type ResourceVaultCopies = Readonly<{
+  document: ResourceVaultSyncStatus;
+  contents: ResourceVaultSyncStatus;
+}>;
+
 export type ConfirmedVaultExport = {
   objectKey: string;
   resourceVersions: Record<string, Record<string, number>>;
@@ -80,13 +85,13 @@ type Context = {
 type Ledger = {
   contexts: Map<string, Context>;
   listeners: Set<{ resource: Resource; callback: () => void }>;
-  snapshots: WeakMap<Resource, ResourceVaultSyncStatus>;
-  attachmentSnapshots: WeakMap<Resource, ResourceVaultSyncStatus>;
+  snapshots: WeakMap<Resource, ResourceVaultCopies>;
   epoch: number;
   attachmentEpoch: number;
 };
 const ledgers = new WeakMap<Store, Ledger>();
 const UNKNOWN: ResourceVaultSyncStatus = Object.freeze({ state: 'unknown' });
+const UNKNOWN_COPIES = Object.freeze({ document: UNKNOWN, contents: UNKNOWN });
 
 function notify(ledger: Ledger) {
   for (const listener of ledger.listeners) {
@@ -151,7 +156,6 @@ function ledgerFor(store: Store): Ledger {
     contexts: new Map(),
     listeners: new Set(),
     snapshots: new WeakMap(),
-    attachmentSnapshots: new WeakMap(),
     epoch: 0,
     attachmentEpoch: 0,
   };
@@ -376,45 +380,71 @@ function ensureEvidence(
   });
 }
 
-/** Pure snapshot read. Neither account requests nor database RPCs run here. */
-export function getResourceVaultSyncStatus(
+/** Read both proofs against the same account, drive and database scope. */
+export function getResourceVaultCopies(
   store: Store,
   resource: Resource,
-): ResourceVaultSyncStatus {
+): ResourceVaultCopies {
+  resource = resource.__internalObject;
   const ledger = ledgers.get(store);
   if (
     !ledger ||
     store.isDestroyed(resource.subject) ||
     store.hasPendingDestroy(resource.subject)
   )
-    return UNKNOWN;
+    return UNKNOWN_COPIES;
   const context = contextFor(store, ledger, resource);
   if (!context || !contextCurrent(store, ledger, context, ledger.epoch))
-    return UNKNOWN;
+    return UNKNOWN_COPIES;
   const subject = store.normalizeSubject(resource.subject);
-  const receipt = context.receipts.latest(subject, 'stored');
-  const state: ResourceVaultSyncStatus['state'] = context.receipts.covering(
+  const covering = context.receipts.covering(
     subject,
     'stored',
     resourcePersistenceVersion(resource),
-  )
+  );
+  const document = covering ?? context.receipts.latest(subject, 'stored');
+  const contents = context.receipts.content(subject);
+  const manifest =
+    contents && resourceAttachmentDescriptor(store, resource).manifest;
+  const matchingContents =
+    manifest &&
+    contents &&
+    attachmentManifestKey(manifest) ===
+      attachmentManifestKey(contents.manifest);
+  const documentState = covering
     ? 'confirmed'
-    : receipt
+    : document
       ? 'pending'
       : 'unknown';
-
-  const next = {
-    state,
-    scope: context.scope,
-    confirmedAt: receipt?.confirmedAt,
-  };
+  const contentsState = matchingContents
+    ? 'confirmed'
+    : contents
+      ? 'pending'
+      : 'unknown';
   const previous = ledger.snapshots.get(resource);
-  if (previous && JSON.stringify(previous) === JSON.stringify(next))
+  if (
+    previous?.document.scope === context.scope &&
+    previous.document.state === documentState &&
+    previous.document.confirmedAt === document?.confirmedAt &&
+    previous.contents.state === contentsState &&
+    previous.contents.confirmedAt === contents?.confirmedAt
+  )
     return previous;
-  const result = Object.freeze(next);
-  ledger.snapshots.set(resource, result);
+  const snapshot = Object.freeze({
+    document: Object.freeze({
+      state: documentState,
+      confirmedAt: document?.confirmedAt,
+      scope: context.scope,
+    }),
+    contents: Object.freeze({
+      state: contentsState,
+      confirmedAt: contents?.confirmedAt,
+      scope: context.scope,
+    }),
+  });
+  ledger.snapshots.set(resource, snapshot);
 
-  return result;
+  return snapshot;
 }
 
 function ensureAttachmentEvidence(
@@ -504,73 +534,27 @@ function ensureAttachmentEvidence(
   });
 }
 
-export function getResourceVaultAttachmentSyncStatus(
-  store: Store,
-  resource: Resource,
-): ResourceVaultSyncStatus {
-  const ledger = ledgers.get(store);
-  if (!ledger) return UNKNOWN;
-
-  const context = contextFor(store, ledger, resource);
-  if (
-    !context ||
-    !contextCurrent(store, ledger, context, ledger.epoch) ||
-    store.isDestroyed(resource.subject) ||
-    store.hasPendingDestroy(resource.subject)
-  )
-    return UNKNOWN;
-  const receipt = context.receipts.content(
-    store.normalizeSubject(resource.subject),
-  );
-  const manifest = resourceAttachmentDescriptor(store, resource).manifest;
-  const next: ResourceVaultSyncStatus = {
-    state: receipt
-      ? manifest &&
-        attachmentManifestKey(manifest) ===
-          attachmentManifestKey(receipt.manifest)
-        ? 'confirmed'
-        : 'pending'
-      : 'unknown',
-    confirmedAt: receipt?.confirmedAt,
-    scope: context.scope,
-  };
-  const previous = ledger.attachmentSnapshots.get(resource);
-  if (previous && JSON.stringify(previous) === JSON.stringify(next))
-    return previous;
-  ledger.attachmentSnapshots.set(resource, Object.freeze(next));
-
-  return next;
-}
-
-/** Follow all per-item copy evidence. The attachment watch also delivers peer
- * changes, so metadata and attachments need one Store observer each.
- */
+/** Follow Store copy changes and managed Vault evidence for the same resource. */
 export function subscribeResourceCopies(
   store: Store,
   resource: Resource,
   callback: () => void,
 ): () => void {
+  resource = resource.__internalObject;
   const ledger = ledgerFor(store);
   const listener = { resource, callback };
   ledger.listeners.add(listener);
   ensureEvidence(store, ledger, resource);
   ensureAttachmentEvidence(store, ledger, resource);
-  const stopMetadata = store.subscribeResourceSyncStatus(resource, () => {
+  const stop = store.subscribeResourceCopies(resource, () => {
     ensureEvidence(store, ledger, resource);
+    ensureAttachmentEvidence(store, ledger, resource);
     callback();
   });
-  const stopAttachments = store.subscribeResourceAttachmentSyncStatus(
-    resource,
-    () => {
-      ensureAttachmentEvidence(store, ledger, resource);
-      callback();
-    },
-  );
 
   return () => {
-    stopMetadata();
-    stopAttachments();
     ledger.listeners.delete(listener);
+    stop();
   };
 }
 

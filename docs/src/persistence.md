@@ -30,6 +30,14 @@ For a complete remote copy, metadata and contents must name the same storage
 identity and generation. Two sessions using one storage identity count once;
 different identities alone do not prove separate physical devices.
 
+Use `Store.getResourceCopies(resource)` and
+`Store.subscribeResourceCopies(resource, callback)` to display local, server,
+and peer copy status. Reads are synchronous and reuse the snapshot until its
+contents change. Multiple subscribers share one evidence watch per resource.
+The managed app adds Vault's document and file proofs from one account-scoped
+snapshot. The transport adapters still authenticate and recover their own
+receipts, and the destination-specific Store APIs remain available.
+
 ## Online, offline, and unfinished work
 
 For a browser database that supports durable persistence, delivery first writes

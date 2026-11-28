@@ -259,3 +259,19 @@ reload exposed missing local-font precaching; the cache now includes the
 already-shipped fonts and the former failure passes without raising its warning
 allowance. Release embed remains within the 1,000,000-byte first-use gzip budget.
 These are source-bound local repairs, not a full clean-commit DO result.
+
+## Shared resource copy API
+
+Use #2613's `getResourceCopies` and `subscribeResourceCopies` entry points on
+the existing evidence registry. One Store snapshot resolves document and
+attachment evidence for local, server, and peer copies, and concurrent views
+share one Store watch per resource. The managed adapter supplies document and
+file evidence from the same Vault scope. The existing wire formats, durable
+observations, save checkpoints, and scope invalidation rules are preserved.
+
+Merge acceptance applies to the exact published commit. Run the full public
+DigitalOcean suite with `supplemental_profile: pr2621-native-private-v1` and
+the paired `atomic-saas` source. It requires executed browser Vault backup and
+clean-profile restore, native peer and Vault recovery, Iroh/WebRTC renderer
+checks, and private workspace and managed-node checks. The separate Atomic
+Flutter package workflow covers the `atomic_store_flutter` Dart tests.

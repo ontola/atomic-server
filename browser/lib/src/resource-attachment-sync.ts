@@ -5,6 +5,7 @@ import {
 import { isNativePeerConnectionId } from './resource-peer-evidence.js';
 import { StoreEvents, type Store } from './store.js';
 import { ResourceEvents, type Resource } from './resource.js';
+import type { ResourcePeerSyncStatus } from './resource-peer-sync-status.js';
 import type { ReplicaIdentity } from './peer-receipts.js';
 import {
   attachmentManifestKey,
@@ -305,8 +306,11 @@ export class ResourceAttachmentSync {
     for (const receipt of receipts) this.acknowledge(receipt);
     this.notify(subject);
   }
-  get(resource: Resource): ResourceAttachmentSyncStatus {
-    resource = resource.__internalObject;
+  get(
+    resource: Resource,
+    serverUrl: string | undefined,
+    peerStatus: ResourcePeerSyncStatus,
+  ): ResourceAttachmentSyncStatus {
     const descriptor = resourceAttachmentDescriptor(this.store, resource);
     const subject = this.store.normalizeSubject(resource.subject);
     const current =
@@ -324,24 +328,21 @@ export class ResourceAttachmentSync {
               ...proof.replica,
             }
           : { state: 'pending', confirmedAt: proof.confirmedAt };
-    const serverUrl = this.store.getResourceSyncStatus(resource).server.url;
-    const peers = this.store
-      .getResourcePeerSyncStatus(resource)
-      .peers.map(peer => {
-        const receipt = this.peers.get(peer.connectionId)?.content(subject);
-        const matching =
-          receipt &&
-          receipt.replica?.storageId === peer.storageId &&
-          receipt.replica?.generation === peer.generation &&
-          receipt.confirmedAt <= Date.now();
+    const peers = peerStatus.peers.map(peer => {
+      const receipt = this.peers.get(peer.connectionId)?.content(subject);
+      const matching =
+        receipt &&
+        receipt.replica?.storageId === peer.storageId &&
+        receipt.replica?.generation === peer.generation &&
+        receipt.confirmedAt <= Date.now();
 
-        return {
-          ...state(matching ? receipt : undefined),
-          connectionId: peer.connectionId,
-          storageId: peer.storageId,
-          generation: peer.generation,
-        };
-      });
+      return {
+        ...state(matching ? receipt : undefined),
+        connectionId: peer.connectionId,
+        storageId: peer.storageId,
+        generation: peer.generation,
+      };
+    });
     const value: ResourceAttachmentSyncStatus = {
       required: descriptor.required,
       manifest: descriptor.manifest,

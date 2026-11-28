@@ -1,60 +1,46 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { useStore, type Resource, type Store } from '@tomic/react';
 import {
-  getResourceVaultAttachmentSyncStatus,
-  getResourceVaultSyncStatus,
+  useStore,
+  type Resource,
+  type ResourceCopies,
+  type Store,
+} from '@tomic/react';
+import {
+  getResourceVaultCopies,
   subscribeResourceCopies,
 } from '../../helpers/managed/vaultResourceSync';
 
-function readReceipts(store: Store, resource: Resource) {
-  return {
-    status: store.getResourceSyncStatus(resource),
-    peers: store.getResourcePeerSyncStatus(resource),
-    vault: getResourceVaultSyncStatus(store, resource),
-    attachments: store.getResourceAttachmentSyncStatus(resource),
-    vaultAttachments: getResourceVaultAttachmentSyncStatus(store, resource),
-  };
-}
-
-function copies({
-  status,
-  peers,
-  vault,
-  attachments,
-  vaultAttachments,
-}: ReturnType<typeof readReceipts>) {
+function copiesWithVault(
+  { status, peers, contents }: ResourceCopies,
+  vault: ReturnType<typeof getResourceVaultCopies>,
+) {
   return {
     status,
     peers,
-    vault,
-    contents: { ...attachments, vault: vaultAttachments },
+    vault: vault.document,
+    contents: { ...contents, vault: vault.contents },
   };
 }
 
 const snapshots = new WeakMap<
   Resource,
   {
-    receipts: ReturnType<typeof readReceipts>;
-    value: ReturnType<typeof copies>;
+    copies: ResourceCopies;
+    vault: ReturnType<typeof getResourceVaultCopies>;
+    value: ReturnType<typeof copiesWithVault>;
   }
 >();
 
 function getResourceCopies(store: Store, resource: Resource) {
-  const next = readReceipts(store, resource);
+  const copies = store.getResourceCopies(resource);
+  const vault = getResourceVaultCopies(store, resource);
   const previous = snapshots.get(resource);
 
-  if (
-    previous &&
-    next.status === previous.receipts.status &&
-    next.peers === previous.receipts.peers &&
-    next.vault === previous.receipts.vault &&
-    next.attachments === previous.receipts.attachments &&
-    next.vaultAttachments === previous.receipts.vaultAttachments
-  )
+  if (previous?.copies === copies && previous.vault === vault)
     return previous.value;
 
-  const value = copies(next);
-  snapshots.set(resource, { receipts: next, value });
+  const value = copiesWithVault(copies, vault);
+  snapshots.set(resource, { copies, vault, value });
 
   return value;
 }

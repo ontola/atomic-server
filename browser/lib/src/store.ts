@@ -258,6 +258,13 @@ export type IndexingStatusCallback = (indexing: boolean) => void;
  */
 export type CommitTransport = (commit: Commit) => Promise<Commit>;
 
+/** The version and file evidence available to the Store for one resource. */
+export type ResourceCopies = Readonly<{
+  status: ResourceSyncStatus;
+  peers: ResourcePeerSyncStatus;
+  contents: ResourceAttachmentSyncStatus;
+}>;
+
 /** How long a migration fetch may take before the answer stops being useful.
  *  These are servers the device may never reach; sign-in must not wait on
  *  them. */
@@ -6717,6 +6724,11 @@ export class Store {
   }
 
   public readonly persistenceEvidence = new PersistenceEvidenceRegistry();
+  private resourceCopySnapshots = new WeakMap<Resource, ResourceCopies>();
+  private resourceCopyWatches = new WeakMap<
+    Resource,
+    { listeners: Set<() => void>; stop: () => void }
+  >();
   private resourceAttachmentSync = new ResourceAttachmentSync(
     this,
     async (subjects, signal) => {
@@ -6743,10 +6755,81 @@ export class Store {
     },
   );
 
+  /** Pure snapshot for the copy view. A subscription owns evidence recovery. */
+  public getResourceCopies(resource: Resource): ResourceCopies {
+    const target = resource.__internalObject;
+    const status = this.getResourceSyncStatus(target);
+    const peers = this.getResourcePeerSyncStatus(target);
+    const contents = this.resourceAttachmentSync.get(
+      target,
+      status.server.url,
+      peers,
+    );
+    const previous = this.resourceCopySnapshots.get(target);
+    if (
+      previous?.status === status &&
+      previous.peers === peers &&
+      previous.contents === contents
+    )
+      return previous;
+
+    const snapshot = Object.freeze({ status, peers, contents });
+    this.resourceCopySnapshots.set(target, snapshot);
+
+    return snapshot;
+  }
+
+  /** One evidence watch per resource. The attachment watch includes peers. */
+  public subscribeResourceCopies(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    const target = resource.__internalObject;
+    let watch = this.resourceCopyWatches.get(target);
+
+    if (!watch) {
+      const listeners = new Set<() => void>();
+
+      const changed = () => {
+        for (const listener of listeners) {
+          try {
+            listener();
+          } catch {
+            // An observer must not interrupt evidence collection or saving.
+          }
+        }
+      };
+
+      const stopMetadata = this.subscribeResourceSyncStatus(target, changed);
+      const stopAttachments = this.subscribeResourceAttachmentSyncStatus(
+        target,
+        changed,
+      );
+      watch = {
+        listeners,
+        stop: () => {
+          stopMetadata();
+          stopAttachments();
+        },
+      };
+      this.resourceCopyWatches.set(target, watch);
+    }
+
+    const current = watch;
+    const listener = () => callback();
+    current.listeners.add(listener);
+
+    return () => {
+      if (!current.listeners.delete(listener) || current.listeners.size) return;
+      this.resourceCopyWatches.delete(target);
+      current.stop();
+    };
+  }
+
   public getResourceAttachmentSyncStatus(
     resource: Resource,
   ): ResourceAttachmentSyncStatus {
-    return this.resourceAttachmentSync.get(resource);
+    return this.getResourceCopies(resource).contents;
   }
 
   public subscribeResourceAttachmentSyncStatus(

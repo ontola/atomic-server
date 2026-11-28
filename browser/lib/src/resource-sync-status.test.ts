@@ -50,6 +50,42 @@ function database(put = vi.fn(async () => {})) {
 }
 
 describe('resource copy evidence', () => {
+  it('shares one copy watch and keeps it until the last observer leaves', () => {
+    const store = new Store({
+      serverUrl: 'https://example.com',
+      connect: false,
+    });
+    const resource = localResource(store);
+    const stopMetadata = vi.fn();
+    const stopAttachments = vi.fn();
+    const metadata = vi
+      .spyOn(store, 'subscribeResourceSyncStatus')
+      .mockReturnValue(stopMetadata);
+    const attachments = vi
+      .spyOn(store, 'subscribeResourceAttachmentSyncStatus')
+      .mockReturnValue(stopAttachments);
+    const callback = vi.fn();
+    const stopFirst = store.subscribeResourceCopies(resource, callback);
+    const stopSecond = store.subscribeResourceCopies(resource, callback);
+
+    expect(metadata).toHaveBeenCalledTimes(1);
+    expect(attachments).toHaveBeenCalledTimes(1);
+    const changed = metadata.mock.calls[0][1];
+    changed();
+    expect(callback).toHaveBeenCalledTimes(2);
+
+    stopFirst();
+    stopFirst();
+    changed();
+    expect(callback).toHaveBeenCalledTimes(3);
+    expect(stopMetadata).not.toHaveBeenCalled();
+    expect(stopAttachments).not.toHaveBeenCalled();
+
+    stopSecond();
+    expect(stopMetadata).toHaveBeenCalledOnce();
+    expect(stopAttachments).toHaveBeenCalledOnce();
+  });
+
   it('requires an actual server barrier and fences generations per drive', async () => {
     const { store } = await testStore();
     const resource = await store.newResource({
@@ -57,7 +93,9 @@ describe('resource copy evidence', () => {
       noParent: true,
     });
     await resource.save();
-    expect(store.getResourceSyncStatus(resource).server).toMatchObject({
+    const accepted = store.getResourceCopies(resource);
+    expect(store.getResourceCopies(resource)).toBe(accepted);
+    expect(accepted.status.server).toMatchObject({
       accepted: 'confirmed',
       stored: 'unknown',
     });
@@ -89,9 +127,9 @@ describe('resource copy evidence', () => {
         },
       });
     emit(resource, resource.subject);
-    expect(store.getResourceSyncStatus(resource).server.stored).toBe(
-      'confirmed',
-    );
+    const stored = store.getResourceCopies(resource);
+    expect(stored).not.toBe(accepted);
+    expect(stored.status.server.stored).toBe('confirmed');
     store.setServerConnected(false);
     expect(store.getResourceSyncStatus(resource).server.stored).toBe(
       'confirmed',
