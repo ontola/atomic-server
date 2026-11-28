@@ -11,6 +11,7 @@ import {
 import { canonicalizeScheme } from '@tomic/lib';
 import { useMemo } from 'react';
 import { isHiddenFromChildLists } from '../helpers/hiddenFromChildLists';
+import { useSyncableSetupSubjects } from '@chunks/PluginRuns/useSyncableSetupSubjects';
 
 /**
  * The children of a drive minus its schema plumbing, shared by the sidebar and
@@ -55,7 +56,7 @@ export function useVisibleDriveChildren(
     [allSubjects, children, hidden],
   );
 
-  return { subjects, allSubjects, loading, total };
+  return { subjects, allSubjects, loading, total, hiddenSubjects: hidden };
 }
 
 /**
@@ -63,6 +64,7 @@ export function useVisibleDriveChildren(
  * default ontology, Comments folder, AI Chats folder, Inbox and Trash.
  */
 export function useHiddenDriveSubjects(drive: string): Set<string> {
+  const setupSubjects = useSyncableSetupSubjects(drive);
   const driveResource = useResource(drive);
   const [defaultOntology] = useString(
     driveResource,
@@ -82,10 +84,24 @@ export function useHiddenDriveSubjects(drive: string): Set<string> {
   return useMemo(
     () =>
       new Set(
-        [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder]
+        [
+          defaultOntology,
+          commentsFolder,
+          aiChatsFolder,
+          inbox,
+          trashFolder,
+          ...setupSubjects,
+        ]
           .filter((subject): subject is string => !!subject)
           .map(canonicalizeScheme),
       ),
-    [defaultOntology, commentsFolder, aiChatsFolder, inbox, trashFolder],
+    [
+      defaultOntology,
+      commentsFolder,
+      aiChatsFolder,
+      inbox,
+      trashFolder,
+      setupSubjects,
+    ],
   );
 }

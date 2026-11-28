@@ -1,0 +1,33 @@
+{
+  "oauthSecurityScheme": "githubOAuth",
+  "tenantIdentity": {
+    "operationId": "getGitHubAuthenticatedPrincipal",
+    "namespace": "https://github.com"
+  },
+  "query_overrides": [
+    {
+      "path": "/user/orgs",
+      "values": {
+        "per_page": 100
+      }
+    },
+    {
+      "path": "/user/repos",
+      "values": {
+        "per_page": 100
+      }
+    },
+    {
+      "path": "/repositories/{repository_id}/issues",
+      "values": {
+        "per_page": 100
+      }
+    },
+    {
+      "path": "/orgs/{org}/repos",
+      "values": {
+        "per_page": 100
+      }
+    }
+  ]
+}

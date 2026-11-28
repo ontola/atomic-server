@@ -37,6 +37,11 @@ fn precompressed_index() -> &'static HashMap<&'static str, (&'static [u8], &'sta
     })
 }
 
+/// Read an already embedded bundle without constructing another resource map.
+pub(crate) fn embedded_asset(path: &str) -> Option<&'static [u8]> {
+    precompressed_index().get(path).map(|(data, _)| *data)
+}
+
 /// Serve a pre-compressed `.br` asset when the request supports brotli
 /// AND a precompressed sibling exists in the embedded resource map.
 /// The build script (`build.rs`) writes these at brotli q11, which is
@@ -257,6 +262,10 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
     #[cfg(feature = "wasm-plugins")]
     {
         app.service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui));
+        app.service(
+            web::resource("/builtin-syncables-ui")
+                .route(web::get().to(handlers::plugin_ui::handle_builtin_syncables_ui)),
+        );
         json_routes!(app;
             "/plugin-release-pin" => handlers::plugin_release::pin,
             "/plugin-external-read" => handlers::plugin_external::read,

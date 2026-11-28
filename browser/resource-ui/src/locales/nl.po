@@ -1826,13 +1826,14 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Bepaal of deze resource in je favorieten verschijnt."
 
 #: ../data-browser/src/actions/resourceActions.tsx
-#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
-#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
+#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
 msgid "Open"
 msgstr "Openen"
 
@@ -7344,6 +7345,7 @@ msgstr "Nog geen automatiseringen."
 msgid "Connect services to this workspace. Your data and views stay here when sync is paused."
 msgstr "Verbind diensten met deze werkruimte. Je gegevens en weergaven blijven hier wanneer synchronisatie is gepauzeerd."
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Connect a service"
 msgstr "Een dienst verbinden"
@@ -7375,6 +7377,7 @@ msgstr "Hele dag"
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr "{0} · Terugkerende vergadering (opent de reeks of uitzondering)"
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy"
 msgstr "Integratieproxy"
@@ -8548,9 +8551,11 @@ msgid "Install {0}"
 msgstr "{0} installeren"
 
 #. 0: app.name
+#. 0: name
 #. 0: driveName
 #. 0: driveName
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
@@ -11770,6 +11775,7 @@ msgstr "Accountinstellingen"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> vraagt om je Atomic-gegevens te gebruiken. De app heeft een eigen sleutel, zodat je geheime sleutel bij jou blijft. Je kunt de toegang altijd intrekken."
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Verbonden apps"
@@ -12967,6 +12973,7 @@ msgstr "Of beschrijf wat je nodig hebt"
 msgid "Start with"
 msgstr "Begin met"
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/views/Drive/EmptyDriveStart.tsx
 msgid "Adding…"
 msgstr "Toevoegen…"
@@ -13988,6 +13995,7 @@ msgstr "<0/> App-instellingen"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
 msgstr "Beschrijf wat je wilt en de assistent bouwt het in je drive. Deel het, host je eigen marktplaats of dien het in bij de community-marktplaats."
+
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Back to the plain link"
 msgstr "Terug naar de gewone link"
@@ -14045,3 +14053,171 @@ msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar je O
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
 msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar OpenRouter. Je bekijkt het resultaat voordat er iets wordt opgeslagen."
+
+#: ../data-browser/src/chunks/AppPage/AppFrame.tsx
+msgid "This view cannot connect an account"
+msgstr "Deze weergave kan geen account verbinden"
+
+#: ../data-browser/src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Return to the app"
+msgstr "Terug naar de app"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Built-in app"
+msgstr "Ingebouwde app"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A registered app delivered by this Atomic Server release."
+msgstr "Een geregistreerde app die met deze versie van Atomic Server wordt meegeleverd."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Oude Accounts-container"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Compatibiliteitsgegevens van deze installatie, bewaard nadat de bronresources rechtstreeks onder de app zijn geplaatst."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API description"
+msgstr "API-beschrijving van de integratie"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public composed OpenAPI metadata saved from the configured integration catalog."
+msgstr "Samengevoegde openbare OpenAPI-metadata, opgeslagen vanuit de ingestelde integratiecatalogus."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API selection"
+msgstr "API-selectie voor de integratie"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public catalog consumer selections for the saved API description."
+msgstr "Openbare clientinstellingen uit de catalogus voor de opgeslagen API-beschrijving."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration connection manager"
+msgstr "Verbindingsbeheer voor integraties"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A native provider setup resource accessed from Apps rather than the drive tree."
+msgstr "Een ingebouwde bron voor het instellen van een aanbieder, bereikbaar via Apps in plaats van de mappenboom van de drive."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App index"
+msgstr "Index van identiteitsapps"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native lookup hint for validated principal Apps; registrations remain authoritative."
+msgstr "Ingebouwde zoekverwijzing voor gevalideerde identiteitsapps; registraties blijven leidend."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration key"
+msgstr "Registratiesleutel van de identiteitsapp"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only typed principal installation identity; independent of physical location."
+msgstr "Getypeerde installatie-identiteit, uitsluitend voor het ingebouwde systeem en onafhankelijk van de fysieke locatie."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration complete"
+msgstr "Registratie van de identiteitsapp voltooid"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native recovery marker written after promotion reaches its drive destination."
+msgstr "Ingebouwde herstelmarkering die wordt geschreven zodra de omzetting de bestemming in de drive bereikt."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Registered principal App"
+msgstr "Geregistreerde identiteitsapp"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only registration target retained across same-drive moves."
+msgstr "Registratiedoel dat uitsluitend door het ingebouwde systeem wordt beheerd en bij verplaatsingen binnen dezelfde drive behouden blijft."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Connected platform tables"
+msgstr "Tabellen van verbonden platforms"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+msgstr "Koppeling op schijfniveau van platformidentiteit naar Atomic-tabel, onafhankelijk van het pad van de bovenliggende bron."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable platform ID"
+msgstr "ID van synchroniseerbaar platform"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Platform identifier in the selected integration proxy catalog."
+msgstr "Platform-ID in de catalogus van de geselecteerde integratieproxy."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration proxy origin"
+msgstr "Herkomst van de integratieproxy"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "The HTTPS origin of the proxy describing this platform."
+msgstr "De HTTPS-herkomst van de proxy die dit platform beschrijft."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration"
+msgstr "Registratie van de identiteitsapp"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native uniqueness registration outside any integration iframe write root."
+msgstr "Ingebouwde registratie voor uniciteit buiten elke schrijfgrens van het integratie-iframe."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable account"
+msgstr "Synchroniseerbaar account"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A connected account through which remote collection instances can be discovered."
+msgstr "Een verbonden account waarmee externe verzamelingsinstanties kunnen worden gevonden."
+
+#: ../data-browser/src/chunks/AppPage/index.tsx
+msgid "Integration installed in this drive. Manage connected accounts from Apps."
+msgstr "Integratie geïnstalleerd in deze drive. Beheer gekoppelde accounts vanuit Apps."
+
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Opening integration…"
+msgstr "Integratie openen…"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Loading integration proxy catalog…"
+msgstr "Catalogus van de integratieproxy laden…"
+
+#. 0: catalog.origin; 1: catalog.message
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not load apps from {0}: {1}"
+msgstr "Apps van {0} konden niet worden geladen: {1}"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "De app is klaar, maar het pictogram kon niet worden geladen."
+
+#. 0: lookupError
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not determine installed services: {0}"
+msgstr "Geïnstalleerde diensten konden niet worden bepaald: {0}"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "No matching services."
+msgstr "Geen overeenkomende diensten."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add to Drive"
+msgstr "Aan schijf toevoegen"
+
+#. 0: name
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add {0} to drive"
+msgstr "{0} aan schijf toevoegen"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service and choose an account for this drive."
+msgstr "Van de ingestelde integratieproxy op <0/>. Voeg een dienst toe en kies een account voor deze drive."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Integration proxy apps"
+msgstr "Apps van de integratieproxy"

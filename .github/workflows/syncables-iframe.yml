@@ -1,0 +1,90 @@
+name: Built-in Syncables iframe validation
+
+on:
+  pull_request:
+    paths:
+      - 'browser/data-browser/src/chunks/PluginRuns/**'
+      - 'browser/data-browser/src/chunks/AppPage/**'
+      - 'browser/data-browser/src/helpers/proxyConnections*'
+      - 'browser/data-browser/src/routes/IntegrationStore.tsx'
+      - 'browser/data-browser/scripts/*builtin-syncables*'
+      - 'browser/data-browser/package.json'
+      - 'browser/data-browser/vite.config.ts'
+      - 'browser/lib/src/plugin-connection*'
+      - 'browser/lib/src/resource.*'
+      - 'browser/e2e/tests/syncables-apps.spec.ts'
+      - 'browser/e2e/tests/fixtures/syncablesProxy.ts'
+      - 'browser/pnpm-lock.yaml'
+      - 'server/build.rs'
+      - 'server/src/handlers/plugin_ui.rs'
+      - 'server/src/routes.rs'
+      - '.github/workflows/syncables-iframe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: browser/package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter '@tomic/data-browser^...' build
+      - run: pnpm --filter @tomic/data-browser typecheck
+      - run: pnpm --filter @tomic/e2e typecheck
+      - run: pnpm --filter @tomic/data-browser test:syncables-apps
+      - run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/AppPage/noServerApp.test.tsx
+      - run: pnpm --filter @tomic/lib exec vitest run src/plugin-connection.test.ts src/resource.test.ts
+
+  onboarding-playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: browser
+    env:
+      CARGO_BUILD_JOBS: '4'
+      ATOMIC_E2E_CARGO_PROFILE: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: wasm32-unknown-unknown,wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: syncables-onboarding-playwright
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: browser/package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tomic/e2e exec playwright install-deps chromium
+      - run: pnpm test-e2e:local tests/syncables-apps.spec.ts --workers=1 --retries=0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: syncables-onboarding-playwright
+          path: |
+            .e2e-runs/*/*.log
+            .e2e-runs/*/report.json
+            .e2e-runs/*/report/
+          include-hidden-files: true

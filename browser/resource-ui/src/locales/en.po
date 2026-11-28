@@ -1826,13 +1826,14 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Toggle whether this resource appears in your Favorites."
 
 #: ../data-browser/src/actions/resourceActions.tsx
-#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
-#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
+#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -7344,6 +7345,7 @@ msgstr "No automations yet."
 msgid "Connect services to this workspace. Your data and views stay here when sync is paused."
 msgstr "Connect services to this workspace. Your data and views stay here when sync is paused."
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Connect a service"
 msgstr "Connect a service"
@@ -7375,6 +7377,7 @@ msgstr "All day"
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr "{0} · Recurring meeting (opens its series or exception)"
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy"
 msgstr "Integration proxy"
@@ -8548,9 +8551,11 @@ msgid "Install {0}"
 msgstr "Install {0}"
 
 #. 0: app.name
+#. 0: name
 #. 0: driveName
 #. 0: driveName
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 #: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 msgid "Open {0}"
@@ -11770,6 +11775,7 @@ msgstr "Account settings"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
 msgid "Connected apps"
 msgstr "Connected apps"
@@ -12967,6 +12973,7 @@ msgstr "Or describe what you need"
 msgid "Start with"
 msgstr "Start with"
 
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/views/Drive/EmptyDriveStart.tsx
 msgid "Adding…"
 msgstr "Adding…"
@@ -13988,6 +13995,7 @@ msgstr "<0/> App settings"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
 msgstr "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Back to the plain link"
 msgstr "Back to the plain link"
@@ -14045,3 +14053,171 @@ msgstr "Sends the page title and its main text (at most 8,000 characters) to you
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
 msgstr "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+
+#: ../data-browser/src/chunks/AppPage/AppFrame.tsx
+msgid "This view cannot connect an account"
+msgstr "This view cannot connect an account"
+
+#: ../data-browser/src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Return to the app"
+msgstr "Return to the app"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Built-in app"
+msgstr "Built-in app"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A registered app delivered by this Atomic Server release."
+msgstr "A registered app delivered by this Atomic Server release."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Legacy Accounts container"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Installation-owned compatibility data retained after moving source roots directly under the App."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API description"
+msgstr "Integration API description"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public composed OpenAPI metadata saved from the configured integration catalog."
+msgstr "Public composed OpenAPI metadata saved from the configured integration catalog."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration API selection"
+msgstr "Integration API selection"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Public catalog consumer selections for the saved API description."
+msgstr "Public catalog consumer selections for the saved API description."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration connection manager"
+msgstr "Integration connection manager"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A native provider setup resource accessed from Apps rather than the drive tree."
+msgstr "A native provider setup resource accessed from Apps rather than the drive tree."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App index"
+msgstr "Principal App index"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native lookup hint for validated principal Apps; registrations remain authoritative."
+msgstr "Native lookup hint for validated principal Apps; registrations remain authoritative."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration key"
+msgstr "Principal App registration key"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only typed principal installation identity; independent of physical location."
+msgstr "Native-only typed principal installation identity; independent of physical location."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration complete"
+msgstr "Principal App registration complete"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native recovery marker written after promotion reaches its drive destination."
+msgstr "Native recovery marker written after promotion reaches its drive destination."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Registered principal App"
+msgstr "Registered principal App"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native-only registration target retained across same-drive moves."
+msgstr "Native-only registration target retained across same-drive moves."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Connected platform tables"
+msgstr "Connected platform tables"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+msgstr "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable platform ID"
+msgstr "Syncable platform ID"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Platform identifier in the selected integration proxy catalog."
+msgstr "Platform identifier in the selected integration proxy catalog."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration proxy origin"
+msgstr "Integration proxy origin"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "The HTTPS origin of the proxy describing this platform."
+msgstr "The HTTPS origin of the proxy describing this platform."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Principal App registration"
+msgstr "Principal App registration"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Native uniqueness registration outside any integration iframe write root."
+msgstr "Native uniqueness registration outside any integration iframe write root."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable account"
+msgstr "Syncable account"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A connected account through which remote collection instances can be discovered."
+msgstr "A connected account through which remote collection instances can be discovered."
+
+#: ../data-browser/src/chunks/AppPage/index.tsx
+msgid "Integration installed in this drive. Manage connected accounts from Apps."
+msgstr "Integration installed in this drive. Manage connected accounts from Apps."
+
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Opening integration…"
+msgstr "Opening integration…"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Loading integration proxy catalog…"
+msgstr "Loading integration proxy catalog…"
+
+#. 0: catalog.origin; 1: catalog.message
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not load apps from {0}: {1}"
+msgstr "Could not load apps from {0}: {1}"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "The app is ready, but its icon could not be loaded."
+
+#. 0: lookupError
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not determine installed services: {0}"
+msgstr "Could not determine installed services: {0}"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "No matching services."
+msgstr "No matching services."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add to Drive"
+msgstr "Add to Drive"
+
+#. 0: name
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add {0} to drive"
+msgstr "Add {0} to drive"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service and choose an account for this drive."
+msgstr "From the configured integration proxy at <0/> . Add a service and choose an account for this drive."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Integration proxy apps"
+msgstr "Integration proxy apps"

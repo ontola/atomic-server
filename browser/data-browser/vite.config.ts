@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { buildWebsiteRuntime } from './scripts/build-website-runtime.mjs';
+import { bundleBuiltinSyncables } from './scripts/build-builtin-syncables.mjs';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -280,6 +281,17 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       wasm(),
+      {
+        name: 'builtin-syncables-bundle',
+        async generateBundle() {
+          const bundle = await bundleBuiltinSyncables();
+          this.emitFile({
+            type: 'asset',
+            fileName: 'builtin-syncables.js',
+            source: bundle.outputFiles[0].text,
+          });
+        },
+      },
       {
         // `src/chunks/Website/runtime/{search-view.html,website-runtime.min.js}`
         // are gitignored bundles of the runtime's `.ts` sources. `config` runs

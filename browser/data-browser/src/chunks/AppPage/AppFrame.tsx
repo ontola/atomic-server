@@ -5,7 +5,9 @@ import { styled } from 'styled-components';
 import {
   errorMessageFromResponse,
   signRequest,
+  useCurrentAgent,
   useResource,
+  useServerURL,
   useStore,
   useTitle,
 } from '@tomic/react';
@@ -34,6 +36,7 @@ import {
   isPlatformId,
   ProxyConnections,
   type ProxyConnection,
+  type ProxyHost,
 } from '@helpers/proxyConnections';
 import { NO_SERVER_APP_MESSAGE } from './noServer';
 import {
@@ -47,9 +50,59 @@ import { ConnectDialog } from './ConnectDialog';
 import { useHostUI } from '@components/HostUI/hostUI';
 import type { ViewChanges } from '@helpers/extensions/viewApply';
 
+/** A fixed built-in source and authority chosen by the native mounting host. */
+export interface AppFrameProfile {
+  source: string;
+  context: Record<string, unknown>;
+  access: { root: string; signal?: AbortSignal; assertCurrent: () => void };
+  proxy?: Pick<ProxyHost, 'connections'>;
+  /** Called after the existing native Connect dialog receives consent. */
+  connect?: (platform: string, connectionId?: string) => Promise<string>;
+  /** Native setup step before the existing host navigation operation. */
+  prepareOpenResource?: (subject: string, choice?: unknown) => Promise<string>;
+}
+
+function assertHostProfile(profile?: AppFrameProfile): void {
+  profile?.access.signal?.throwIfAborted();
+  profile?.access.assertCurrent();
+}
+
+const profileOperations = new Set([
+  'context',
+  'proxyConnections',
+  'proxyConnect',
+  'openResource',
+]);
+
+/** Source authority comes from the native mount, confined to its own node. */
+export function appFrameProfileSource(source: string, server: string): string {
+  const url = new URL(source, server);
+  if (
+    url.origin !== new URL(server).origin ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw new Error('Built-in views must be served by this Atomic Server');
+
+  return url.href;
+}
+
+function profileSource(profile: AppFrameProfile | undefined, server: string) {
+  if (!profile) return undefined;
+
+  try {
+    return { src: appFrameProfileSource(profile.source, server) };
+  } catch (reason) {
+    return { problem: (reason as Error).message };
+  }
+}
+
 /** Changing installation or destination must discard source tokens and pending replies. */
 export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
   const store = useStore();
+  const [actor] = useCurrentAgent();
+  const [server] = useServerURL();
   const [identityRevision, setIdentityRevision] = useState(0);
   useEffect(
     () =>
@@ -67,6 +120,9 @@ export function AppFrame(props: Parameters<typeof AppFrameSession>[0]) {
         props.drive,
         props.table,
         identityRevision,
+        props.profile?.source,
+        props.profile?.context,
+        ...(props.profile ? [actor?.subject, server] : []),
       ])}
       {...props}
     />
@@ -96,6 +152,7 @@ function AppFrameSession({
   table,
   onOutcome,
   silent,
+  profile,
 }: {
   app: string;
   drive: string;
@@ -117,12 +174,18 @@ function AppFrameSession({
   onOutcome?: (outcome: AppOutcome) => void;
   /** Report the outcome, but do not draw the error bar. For an unattended run. */
   silent?: boolean;
+  profile?: AppFrameProfile;
 }): React.JSX.Element {
   const store = useStore();
-  const [src, setSrc] = useState<string>();
+  const fixed = profileSource(profile, store.getServerUrl());
+  const [appSrc, setSrc] = useState<string>();
+  const src = fixed?.src ?? appSrc;
   const [srcDoc, setSrcDoc] = useState<string>();
-  const [entrypoint, setEntrypoint] = useState<string | null>();
-  const [problem, setProblem] = useState<string>();
+  const [entrypoint, setEntrypoint] = useState<string | null | undefined>(
+    profile?.source,
+  );
+  const [loadProblem, setProblem] = useState<string>();
+  const problem = fixed?.problem ?? loadProblem;
   const [appError, setAppError] = useState<AppError>();
   // An app asking to connect a proxy platform. Drawn by this page, not the
   // frame, so only a click the person makes here can navigate away.
@@ -142,8 +205,9 @@ function AppFrameSession({
   const bridgeRef = useRef<FrameBridge | undefined>(undefined);
   const stylesheet = useCreateThemeVars();
   const hostUI = useHostUI({
-    writeRoot: app,
-    mayWriteUnder: subject => isWithinApp(store, subject, app),
+    writeRoot: profile?.access.root ?? app,
+    mayWriteUnder: subject =>
+      profile ? Promise.resolve(false) : isWithinApp(store, subject, app),
     appTitle,
     frame: frameRef,
     table,
@@ -155,6 +219,8 @@ function AppFrameSession({
   // table tab and an app page both need it, and two copies would drift.
   useEffect(() => {
     let cancelled = false;
+
+    if (profile) return;
 
     (async () => {
       const schema = await readSchema(store, drive);
@@ -173,12 +239,14 @@ function AppFrameSession({
     return () => {
       cancelled = true;
     };
-  }, [store, drive, app]);
+  }, [store, drive, app, profile]);
 
   useEffect(() => {
     if (!entrypoint) return;
 
     let cancelled = false;
+
+    if (profile) return;
 
     // No node holds a local-only drive either, so its apps run from the
     // source this device has.
@@ -237,13 +305,14 @@ function AppFrameSession({
     return () => {
       cancelled = true;
     };
-  }, [store, drive, entrypoint, app]);
+  }, [store, drive, entrypoint, app, profile]);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     // Per frame: `undo` reverts what this frame applied, nothing older.
     const changes = appChanges(store, drive, app);
+    const selected = profile;
     const bridge = new FrameBridge(frame, (wire, originalSession) => {
       const canonical = isViewRequest(wire);
       const data = canonical
@@ -257,6 +326,7 @@ function AppFrameSession({
       if (forwardKey(message)) return;
 
       if (message.type === '__atomic_plugin_error') {
+        if (selected?.access.signal?.aborted) return;
         const failure: AppError = {
           message: String(message.message ?? 'Something went wrong.'),
           stack: typeof message.stack === 'string' ? message.stack : undefined,
@@ -269,6 +339,7 @@ function AppFrameSession({
       }
 
       if (message.type === '__atomic_plugin_rendered') {
+        if (selected?.access.signal?.aborted) return;
         onOutcomeRef.current?.({
           ok: true,
           children: typeof message.children === 'number' ? message.children : 0,
@@ -278,6 +349,76 @@ function AppFrameSession({
       }
 
       if (!isHostRequest(data)) return;
+
+      try {
+        assertHostProfile(selected);
+      } catch (reason) {
+        session.post({ id: data.id, error: String(reason?.message ?? reason) });
+
+        return;
+      }
+
+      if (selected && !profileOperations.has(data.op)) {
+        session.post({
+          id: data.id,
+          error: 'This built-in view cannot perform that operation',
+        });
+
+        return;
+      }
+
+      const prepareOpenResource = profile?.prepareOpenResource;
+
+      if (data.op === 'openResource' && prepareOpenResource) {
+        void (async () => {
+          assertHostProfile(selected);
+          if (typeof data.subject !== 'string' || !data.subject)
+            throw new Error('A resource subject is required');
+          const subject = await prepareOpenResource(
+            data.subject,
+            data.principalChoice,
+          );
+          assertHostProfile(selected);
+          if (!session.isActive()) return;
+          if (typeof subject !== 'string' || !subject)
+            throw new Error('The prepared resource is unavailable');
+          handleUI(
+            { ...data, subject } as unknown as Parameters<typeof handleUI>[0],
+            session.post,
+          );
+        })().catch(reason => {
+          session.post({
+            id: data.id,
+            error: String(reason?.message ?? reason),
+          });
+        });
+
+        return;
+      }
+
+      if (selected && data.op === 'context') {
+        session.post({ id: data.id, result: selected.context });
+
+        return;
+      }
+
+      if (selected && data.op === 'proxyConnections') {
+        const platform = data.platform;
+        void (async () => {
+          if (!selected.proxy || !isPlatformId(platform))
+            throw new Error('A supported integration platform is required');
+          const result = await selected.proxy.connections(platform);
+          assertHostProfile(selected);
+          session.post({ id: data.id, result });
+        })().catch(reason => {
+          session.post({
+            id: data.id,
+            error: String(reason?.message ?? reason),
+          });
+        });
+
+        return;
+      }
 
       if (
         handleUI(
@@ -301,6 +442,15 @@ function AppFrameSession({
           return;
         }
 
+        if (profile && !profile.connect) {
+          session.post({
+            id: data.id,
+            error: 'This view cannot connect an account',
+          });
+
+          return;
+        }
+
         // One question at a time; a second ask answers the first.
         const previous = connectAskRef.current;
         previous?.reply({ id: previous.id, result: { status: 'cancelled' } });
@@ -308,6 +458,10 @@ function AppFrameSession({
           id: data.id,
           platform: data.platform!,
           reply: session.post,
+          connectionId:
+            profile && typeof data.connectionId === 'string'
+              ? data.connectionId
+              : undefined,
         };
         connectAskRef.current = ask;
         setConnectAsk(ask);
@@ -315,7 +469,10 @@ function AppFrameSession({
         // Offer a connection the person already has for this platform, so
         // using it for one more app needs no second trip through OAuth. A
         // proxy that cannot list them still lets them connect a new one.
-        existingConnections(store, data.platform!)
+        (profile
+          ? Promise.resolve([])
+          : existingConnections(store, data.platform!)
+        )
           .catch((): ProxyConnection[] => [])
           .then(existing => {
             if (connectAskRef.current !== ask) return;
@@ -330,9 +487,14 @@ function AppFrameSession({
       if (data.op === 'subscribe' && typeof data.subject === 'string') {
         const subject = data.subject;
         session.watch(subject, () =>
-          store.subscribe(subject, () =>
-            session.post({ __atomicChanged: subject }),
-          ),
+          store.subscribe(subject, () => {
+            try {
+              assertHostProfile(selected);
+              session.post({ __atomicChanged: subject });
+            } catch {
+              session.unwatch(subject);
+            }
+          }),
         );
         session.post({ id: data.id, result: true });
 
@@ -349,12 +511,15 @@ function AppFrameSession({
       void answer(store, app, drive, table, data, session.post, changes);
     });
     bridgeRef.current = bridge;
+    const stop = () => bridge.close();
+    selected?.access.signal?.addEventListener('abort', stop, { once: true });
 
     return () => {
+      selected?.access.signal?.removeEventListener('abort', stop);
       bridge.close();
       bridgeRef.current = undefined;
     };
-  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey]);
+  }, [store, app, drive, table, src, srcDoc, handleUI, forwardKey, profile]);
 
   useEffect(() => {
     bridgeRef.current?.setStyle(`${resetCss}\n${stylesheet}`, colorScheme);
@@ -411,6 +576,15 @@ function AppFrameSession({
 
   const connect = async (ask: ConnectAsk) => {
     if (!store.getAgent()) throw new Error('Sign in to connect an account.');
+
+    if (profile?.connect) {
+      assertHostProfile(profile);
+      const url = await profile.connect(ask.platform, ask.connectionId);
+      assertHostProfile(profile);
+      if (connectAskRef.current?.id === ask.id) location.assign(url);
+
+      return;
+    }
 
     const appAgent = await appAgentOf(store, { drive, app });
     const url = await proxyConnections(store).start(
@@ -497,7 +671,6 @@ function AppFrameSession({
         // So an app can go full screen (`element.requestFullscreen()`); a
         // frame is not allowed to without it.
         allow='fullscreen'
-        allowFullScreen
         title='App'
       />
     </Wrapper>
@@ -531,17 +704,18 @@ async function answer(
   changes: ViewChanges,
 ): Promise<void> {
   try {
+    const result = await handleRequest(
+      store,
+      app,
+      drive,
+      request,
+      table,
+      proxyHost(store, app, drive),
+      changes,
+    );
     post({
       id: request.id,
-      result: await handleRequest(
-        store,
-        app,
-        drive,
-        request,
-        table,
-        proxyHost(store, app, drive),
-        changes,
-      ),
+      result,
     });
   } catch (e) {
     post({
@@ -620,7 +794,7 @@ async function appLabel(
   }
 }
 
-/** `pets` -> `Pets`, `github-issues` -> `Github Issues`. */
+/** Turns a platform slug into a display label when branding is unavailable. */
 function platformName(id: string) {
   return id
     .split('-')
@@ -634,6 +808,7 @@ interface ConnectAsk {
   reply: (reply: HostReply) => void;
   /** Connections the person already has for this platform; unset while looking. */
   existing?: ProxyConnection[];
+  connectionId?: string;
 }
 
 type MintResult = { ok: true; token: string } | { ok: false; error: string };
