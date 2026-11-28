@@ -30,8 +30,9 @@ String formatCount(int count) {
 }
 
 /// "1.2 MB · 842 resources", the line under a drive's name.
-String formatResources(int count, [AtomicStrings strings = AtomicStrings.en]) =>
-    strings.resources(formatCount(count), count);
+String formatResources(int count, [Translate t = tEn]) => count == 1
+    ? t('{count} resource', {'count': formatCount(count)})
+    : t('{count} resources', {'count': formatCount(count)});
 
 /// One drive's share of what the device stores.
 class DriveStats {
@@ -144,13 +145,13 @@ String shortId(String id) => id.length <= 22
 
 /// Coarse "2m ago" / "3h ago" / "5d ago" for a unix-millis timestamp — enough
 /// to tell "just now" from "days back" without a date library.
-String relativeTime(int millis, [AtomicStrings strings = AtomicStrings.en]) {
+String relativeTime(int millis, [Translate t = tEn]) {
   final delta =
       DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
 
-  if (delta.inSeconds < 60) return strings.justNow;
-  if (delta.inMinutes < 60) return strings.minutesAgo(delta.inMinutes);
-  if (delta.inHours < 24) return strings.hoursAgo(delta.inHours);
+  if (delta.inSeconds < 60) return t('just now');
+  if (delta.inMinutes < 60) return t('{n}m ago', {'n': delta.inMinutes});
+  if (delta.inHours < 24) return t('{n}h ago', {'n': delta.inHours});
 
-  return strings.daysAgo(delta.inDays);
+  return t('{n}d ago', {'n': delta.inDays});
 }

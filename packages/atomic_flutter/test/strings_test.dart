@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:atomic_flutter/atomic_flutter.dart';
+import 'package:atomic_flutter/src/translations.g.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -66,7 +65,8 @@ class _Backend extends AtomicSettingsBackend {
   Future<void> Function()? get signOut => () async {};
   @override
   Future<String> Function(String secret)? get signInWithSecret =>
-      (secret) async => strings.addedToAccount(['"Notities"', '"Recepten"']);
+      (secret) async =>
+          t('Added to your account: {names}.', {'names': '"Notities"'});
 }
 
 Future<void> openPanel(WidgetTester tester, Locale locale) async {
@@ -95,7 +95,7 @@ Future<void> openPanel(WidgetTester tester, Locale locale) async {
 }
 
 void main() {
-  tearDown(() => AtomicStrings.override = null);
+  tearDown(() => AtomicLocale.override = null);
 
   testWidgets('the panel is Dutch when the locale is Dutch', (tester) async {
     await openPanel(tester, const Locale('nl'));
@@ -118,9 +118,9 @@ void main() {
     expect(find.text('Recepten'), findsOneWidget);
   });
 
-  testWidgets('the panel is English for every other locale, and says Drive',
+  testWidgets('the panel is English for a locale without a catalog',
       (tester) async {
-    await openPanel(tester, const Locale('fr'));
+    await openPanel(tester, const Locale('ja'));
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Copy secret key'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
@@ -129,48 +129,57 @@ void main() {
   });
 
   testWidgets('an app can force a language', (tester) async {
-    AtomicStrings.override = AtomicStrings.nl;
+    AtomicLocale.override = 'nl';
     await openPanel(tester, const Locale('en'));
     expect(find.text('Uitloggen'), findsOneWidget);
   });
 
-  test('the sign-in line is Dutch and names the drives', () {
-    expect(AtomicStrings.nl.addedToAccount(['"Notities"', '"Recepten"']),
-        'Toegevoegd aan je account: "Notities" en "Recepten".');
-    expect(AtomicStrings.nl.addedToAccount(['"A"', '"B"', '"C"']),
-        'Toegevoegd aan je account: "A", "B" en "C".');
-    expect(AtomicStrings.en.addedToAccount(['"Notes"', '"Recipes"']),
-        'Added to your account: "Notes" and "Recipes".');
-    expect(AtomicStrings.en.addedToAccount(['"Notes"']),
-        'Added to your account: "Notes".');
+  test('placeholders are filled, and a missing translation stays English', () {
+    expect(translate('nl', '{what} copied', {'what': 'Link'}),
+        'Link gekopieerd');
+    expect(translate('en', '{what} copied', {'what': 'Link'}), 'Link copied');
+    // A language without an entry for the sentence (or without a catalog).
+    expect(translate('ja', 'Sign out'), 'Sign out');
+    expect(translate('nl', 'Not in any catalog {x}', {'x': 1}),
+        'Not in any catalog 1');
+    // A placeholder without an argument is left as it is.
+    expect(translate('en', '{a} and {b}', {'a': 1}), '1 and {b}');
   });
 
-  test('Dutch text has no em dash and no en dash used as a dash', () {
-    final source = File('lib/src/strings.dart').readAsStringSync();
-    expect(source.contains('—'), isFalse);
-    expect(source.contains(' – '), isFalse);
-    // The same for what the strings produce.
-    final nl = AtomicStrings.nl;
-    final samples = [
-      nl.signOutBody,
-      nl.inviteCopiedPeer,
-      nl.driveNotOnDevice,
-      nl.someoneElsesDevice,
-      nl.addDeviceBody,
-      nl.noOtherDevicesOrServer,
-      nl.signedIn,
-      nl.driveNotHereYet(3),
-      nl.syncedToServer(2, 'x'),
-      nl.relationReplica,
-    ];
-    for (final text in samples) {
-      expect(text.contains('—'), isFalse, reason: text);
-      expect(text.contains(' – '), isFalse, reason: text);
+  test('the Dutch comes from the catalog', () {
+    expect(
+        translate('nl', 'Added to your account: {names}.',
+            {'names': '"Notities" en "Recepten"'}),
+        'Toegevoegd aan je account: "Notities" en "Recepten".');
+    expect(translate('nl', '{n} more drives not on this device yet', {'n': 3}),
+        '3 andere drives staan nog niet op dit apparaat');
+    expect(shownDriveName(tFor('nl'), "Me's Drive"), 'Mijn drive');
+    expect(shownDriveName(tFor('nl'), 'Recepten'), 'Recepten');
+    expect(shownAgentName(tFor('en'), 'Me'), 'Me');
+    expect(shownAgentName(tFor('nl'), 'Me'), 'Ik');
+  });
+
+  test('every translation keeps its placeholders', () {
+    final holes = RegExp(r'\{(\w+)\}');
+    String of(String s) =>
+        (holes.allMatches(s).map((m) => m[1]!).toList()..sort()).join(',');
+    kTranslations.forEach((lang, table) {
+      table.forEach((en, text) {
+        expect(of(text), of(en), reason: '$lang: $en');
+      });
+    });
+  });
+
+  test('Dutch text has no em dash and no en dash', () {
+    for (final MapEntry(key: en, value: nl) in kTranslations['nl']!.entries) {
+      expect(nl.contains('—') || nl.contains('–'), isFalse, reason: nl);
+      expect(en.contains('—'), isFalse, reason: en);
     }
   });
 
   test('English says Drive, never Workspace', () {
-    final source = File('lib/src/strings.dart').readAsStringSync();
-    expect(source.toLowerCase().contains('workspace'), isFalse);
+    for (final en in kTranslations['nl']!.keys) {
+      expect(en.toLowerCase().contains('workspace'), isFalse, reason: en);
+    }
   });
 }

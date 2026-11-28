@@ -62,7 +62,7 @@ class _AtomicSpinnerState extends State<AtomicSpinner>
         Theme.of(context).extension<AppColors>()?.textPrimary ??
         Theme.of(context).colorScheme.onSurface;
     return Semantics(
-      label: widget.semanticsLabel ?? AtomicStrings.of(context).loading,
+      label: widget.semanticsLabel ?? tOf(context)('Loading'),
       child: SizedBox.square(
         dimension: widget.size,
         child: RepaintBoundary(

@@ -116,26 +116,26 @@ class PairedDevice {
   /// The chip: whose it is, when that is known.
   String? get relationLabel => relationText();
 
-  /// [relationLabel] in the language of [strings].
-  String? relationText([AtomicStrings strings = AtomicStrings.en]) =>
+  /// [relationLabel] in the language of [t].
+  String? relationText([Translate t = tEn]) =>
       switch (relation) {
-        PeerRelation.sameAgent => strings.relationSameAgent,
-        PeerRelation.contact => strings.relationContact,
-        PeerRelation.replica => strings.relationReplica,
+        PeerRelation.sameAgent => t('Your device'),
+        PeerRelation.contact => t('Shared with you'),
+        PeerRelation.replica => t('Holds your data'),
         PeerRelation.unknown => null,
       };
 
   /// What the last sync moved, or null before the first one.
   String? get lastSyncCounts => lastSyncCountsText();
 
-  /// [lastSyncCounts] in the language of [strings].
-  String? lastSyncCountsText([AtomicStrings strings = AtomicStrings.en]) {
+  /// [lastSyncCounts] in the language of [t].
+  String? lastSyncCountsText([Translate t = tEn]) {
     final sent = lastSent;
     final received = lastReceived;
     if (sent == null && received == null) return null;
     return [
-      if (received != null) strings.received(received),
-      if (sent != null) strings.sent(sent),
+      if (received != null) t('received {n}', {'n': received}),
+      if (sent != null) t('sent {n}', {'n': sent}),
     ].join(', ');
   }
 

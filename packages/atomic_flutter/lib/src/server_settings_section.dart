@@ -40,7 +40,7 @@ class ServerSettingsSection extends StatefulWidget {
 }
 
 class _ServerSettingsSectionState extends State<ServerSettingsSection> {
-  AtomicStrings get _s => AtomicStrings.of(context);
+  Translate get t => tOf(context);
 
   List<String> _servers = [];
   String? _active;
@@ -250,7 +250,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     } catch (e) {
       // The server stays selected: it is the one the session now points at, and
       // saying so beats silently snapping back to the old one.
-      if (mounted) setState(() => _error = _s.couldNotConnect('$e'));
+      if (mounted) setState(() => _error = t('Could not connect: {why}', {'why': '$e'}));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -304,8 +304,12 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
         SnackBar(
           content: Text(
             pushed == 0
-                ? _s.alreadyUpToDate
-                : _s.syncedToServer(pushed, serverLabel(active)),
+                ? t('Already up to date')
+                : pushed == 1
+                    ? t('Synced 1 resource to {server}',
+                        {'server': serverLabel(active)})
+                    : t('Synced {n} resources to {server}',
+                        {'n': pushed, 'server': serverLabel(active)}),
           ),
         ),
       );
@@ -347,7 +351,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(_s.copied(label)),
+          content: Text(t('{what} copied', {'what': label})),
           duration: const Duration(seconds: 2)),
     );
   }
@@ -357,9 +361,9 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
   Widget _copyIdButton(String id, String label) => Tooltip(
         message: id,
         child: SyncTextAction(
-          label: _s.copyId,
+          label: t('Copy ID'),
           icon: Icons.copy,
-          onPressed: () => _copy(id, _s.id),
+          onPressed: () => _copy(id, t('ID')),
         ),
       );
 
@@ -378,15 +382,15 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: SyncGap.m),
-        SyncHeader(_s.devicesHeader),
+        SyncHeader(t('Devices')),
         if (_search != null) _searchStatus(c, _search!),
         if (_servers.isEmpty && _peers.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: SyncGap.s),
             child: SyncNote(
               widget.backend.servers == null
-                  ? _s.noOtherDevices
-                  : _s.noOtherDevicesOrServer,
+                  ? t('No other devices yet. Pair one below.')
+                  : t('No other devices yet. Pair one below, or add an always-on device by address.'),
             ),
           ),
         for (final server in _servers) _serverCard(c, server),
@@ -394,7 +398,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
           if (!_servers.any((s) => _isServerPeer(s, peer))) _peerCard(c, peer),
         if (_unsaved.isNotEmpty) ...[
           const SizedBox(height: SyncGap.s),
-          SyncHeader(_s.connectedNow),
+          SyncHeader(t('Connected now')),
           for (final peer in _unsaved) _unsavedCard(c, peer),
         ],
         if (_error != null)
@@ -474,7 +478,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
                           if (!search.busy &&
                               !search.connected &&
                               (search.retryInSecs ?? 0) > 0)
-                            '${_s.tryingAgainIn} ${search.retryInSecs} s',
+                            '${t('trying again in')} ${search.retryInSecs} s',
                         ].join(' · '),
                         style: style,
                       ),
@@ -483,7 +487,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
                 ),
                 if (again != null && !search.busy)
                   SyncTextAction(
-                    label: _s.searchAgain,
+                    label: t('Search again'),
                     onPressed: () {
                       again();
                       setState(
@@ -525,7 +529,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (isActive) StatusChip(_s.inUse, tone: SyncTone.info),
+              if (isActive) StatusChip(t('In use'), tone: SyncTone.info),
             ],
           ),
           _serverAddressLine(c, server, peer, showId: !isActive),
@@ -536,11 +540,11 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
               child: Text(
                 [
                   if (isLiveAtomicPeer(peer['node_id'] ?? '', _livePeerIds))
-                    _s.connected
+                    t('Connected')
                   else
-                    _s.paired,
+                    t('Paired'),
                   if (peerSynced != null)
-                    _s.lastSyncedAgo(relativeTime(peerSynced, _s)),
+                    t('last synced {ago}', {'ago': relativeTime(peerSynced, t)}),
                 ].join(' · '),
                 style: SyncText.caption(c),
               ),
@@ -552,16 +556,16 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
               children: [
                 if (isActive)
                   SyncTextAction(
-                    label: _s.syncDriveHere,
+                    label: t('Sync drive here'),
                     onPressed: _busy ? null : _pushWorkspace,
                   ),
                 if (!isActive)
                   SyncTextAction(
-                    label: _s.switchToThis,
+                    label: t('Switch to this'),
                     onPressed: _busy ? null : () => _switchTo(server),
                   ),
                 SyncActionButton(
-                  label: _s.remove,
+                  label: t('Remove'),
                   kind: SyncButtonKind.destructive,
                   onPressed:
                       _busy ? null : () => _runAction(() => _remove(server)),
@@ -588,7 +592,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
               style: SyncText.caption(c), overflow: TextOverflow.ellipsis),
         ),
         if (showId && nodeId != null && nodeId.isNotEmpty)
-          _copyIdButton(nodeId, _s.id),
+          _copyIdButton(nodeId, t('ID')),
       ],
     );
   }
@@ -612,23 +616,25 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
           Expanded(
             child: _info.version != null
                 ? Text('atomic-server ${_info.version}', style: labelStyle)
-                : Text(_s.notReachableServer,
+                : Text(t('Not reachable'),
                     style:
                         labelStyle.copyWith(color: SyncTone.warning.color(c))),
           ),
-          if (_info.nodeId != null) _copyIdButton(_info.nodeId!, _s.id),
+          if (_info.nodeId != null) _copyIdButton(_info.nodeId!, t('ID')),
         ],
       ),
       if (_usage != null) ...[
         const SizedBox(height: SyncGap.xs),
         Text(
-          '${_s.resourceCount(_usage!.resourceCount)} · ${formatBytes(_usage!.totalBytes)}',
+          '${t('{n} resources', {'n': _usage!.resourceCount})} · ${formatBytes(_usage!.totalBytes)}',
           style: labelStyle,
         ),
         if (_usage!.blobBytes > 0)
           Text(
-            _s.filesAndEdits(
-                formatBytes(_usage!.blobBytes), formatBytes(_usage!.loroBytes)),
+            t('files {files} · edits {edits}', {
+              'files': formatBytes(_usage!.blobBytes),
+              'edits': formatBytes(_usage!.loroBytes),
+            }),
             style: labelStyle,
           ),
       ],
@@ -657,7 +663,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
               ),
             ],
           ),
-          Text('$shortId · ${_s.connectedNotSaved}',
+          Text('$shortId · ${t('Connected to you · not saved')}',
               key: const ValueKey('unsaved-peer-caption'),
               style: SyncText.caption(c)),
         ],
@@ -676,7 +682,7 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
     final lastSynced = device.lastSynced;
     final isServer = _looksLikeServer(peer);
     final relay = Uri.tryParse(device.relayUrl ?? '')?.host ?? '';
-    final relation = device.relationText(_s);
+    final relation = device.relationText(t);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: SyncGap.s),
@@ -696,14 +702,14 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
                   child: Text(device.label,
                       style: SyncText.body(c), overflow: TextOverflow.ellipsis),
                 ),
-                StatusChip(isLive ? _s.connected : _s.paired,
+                StatusChip(isLive ? t('Connected') : t('Paired'),
                     tone: isLive ? SyncTone.success : SyncTone.neutral),
                 IconButton(
                   icon: const Icon(Icons.close, size: 20),
                   color: c.textSecondary,
                   constraints:
                       const BoxConstraints(minWidth: 48, minHeight: 48),
-                  tooltip: _s.remove,
+                  tooltip: t('Remove'),
                   onPressed: _busy ? null : () => _forgetPeer(nodeId),
                 ),
               ],
@@ -724,28 +730,28 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
                 Expanded(
                   child: Text(
                     [
-                      if (isServer) _s.serverAddressUnknown,
+                      if (isServer) t('Server, address unknown'),
                       // Connected devices exchange every change as it is
                       // made; a stamp only comes from a full sync round.
                       if (isLive)
-                        _s.upToDateLive
+                        t('Up to date, syncing live')
                       else if (lastSynced != null)
-                        '${_s.lastSynced} ${relativeTime(lastSynced, _s)}'
+                        '${t('Last synced')} ${relativeTime(lastSynced, t)}'
                       else
-                        _s.notSyncedYet,
+                        t('Not synced yet'),
                       if (relay.isNotEmpty)
-                        _s.via(relay.replaceAll(RegExp(r'\.$'), '')),
+                        t('via {relay}', {'relay': relay.replaceAll(RegExp(r'\.$'), '')}),
                     ].join(' · '),
                     style: SyncText.caption(c),
                   ),
                 ),
-                if (nodeId.isNotEmpty) _copyIdButton(nodeId, _s.deviceId),
+                if (nodeId.isNotEmpty) _copyIdButton(nodeId, t('Device ID')),
               ],
             ),
             if (!isServer)
               Padding(
                 padding: const EdgeInsets.only(bottom: SyncGap.xs),
-                child: Text(_s.dataSizeUnknown,
+                child: Text(t('Data size unknown'),
                     key: const ValueKey('peer-data-size-unknown'),
                     style: SyncText.caption(c)),
               ),
@@ -813,14 +819,14 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
       runSpacing: SyncGap.s,
       children: [
         SyncActionButton(
-          label: _s.pairWithQr,
+          label: t('Pair with QR code'),
           icon: Icons.qr_code_2,
           kind: SyncButtonKind.primary,
           onPressed: _pairWithQr,
         ),
         if (widget.backend.servers != null)
           SyncActionButton(
-            label: _s.connectByAddress,
+            label: t('Connect by address'),
             icon: Icons.add,
             onPressed: () => setState(() => _showAdd = true),
           ),
@@ -854,11 +860,11 @@ class _ServerSettingsSectionState extends State<ServerSettingsSection> {
         ),
         const SizedBox(width: SyncGap.s),
         SyncTextAction(
-          label: _s.add,
+          label: t('Add'),
           onPressed: _busy ? null : () => _runAction(_add),
         ),
         SyncTextAction(
-          label: _s.cancel,
+          label: t('Cancel'),
           onPressed: () => setState(() {
             _showAdd = false;
             _addController.clear();

@@ -45,7 +45,7 @@ abstract class AtomicSettingsBackend {
   /// The language of the notes this backend writes itself (after a sign-in or
   /// an invite). The panel sets it from its locale each time it builds; a host
   /// that has no panel can set it too.
-  AtomicStrings strings = AtomicStrings.en;
+  Translate t = tEn;
 
   Future<AtomicIdentity?> getActiveAgent();
   Future<String> exportSecret();

@@ -68,7 +68,7 @@ class _ErrorTextState extends State<ErrorText> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AtomicStrings.of(context);
+    final t = tOf(context);
     final color = widget.color ?? Theme.of(context).colorScheme.error;
     final collapsed = _long && !_expanded;
     final body = Column(
@@ -90,7 +90,7 @@ class _ErrorTextState extends State<ErrorText> {
               onTap: () => setState(() => _expanded = !_expanded),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(_expanded ? s.showLess : s.showMore,
+                child: Text(_expanded ? t('Show less') : t('Show more'),
                     style: TextStyle(
                         color: color,
                         fontSize: widget.fontSize - 1,
@@ -108,13 +108,13 @@ class _ErrorTextState extends State<ErrorText> {
         if (_copied)
           Padding(
             padding: const EdgeInsets.only(left: 8, top: 8),
-            child: Text(s.copiedShort,
+            child: Text(t('Copied'),
                 style: TextStyle(color: color, fontSize: widget.fontSize - 1)),
           )
         else
           IconButton(
             icon: Icon(Icons.copy, size: 18, color: color),
-            tooltip: s.copy,
+            tooltip: t('Copy'),
             onPressed: _copy,
             constraints: const BoxConstraints.tightFor(width: 36, height: 36),
             padding: EdgeInsets.zero,

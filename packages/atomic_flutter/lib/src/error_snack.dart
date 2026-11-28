@@ -34,7 +34,7 @@ void showErrorSnack(BuildContext context, String message) {
       closeIconColor: scheme.onInverseSurface,
       behavior: SnackBarBehavior.floating,
       action: SnackBarAction(
-        label: AtomicStrings.of(context).copy,
+        label: tOf(context)('Copy'),
         textColor: scheme.inversePrimary,
         onPressed: () {
           Clipboard.setData(ClipboardData(text: message));

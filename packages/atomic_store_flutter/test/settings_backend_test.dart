@@ -1,4 +1,4 @@
-import 'package:atomic_flutter/atomic_flutter.dart' show AtomicStrings;
+import 'package:atomic_flutter/atomic_flutter.dart' show AtomicLocale;
 import 'package:atomic_store/atomic_store.dart';
 import 'package:atomic_store/testing.dart';
 import 'package:atomic_store_flutter/atomic_store_flutter.dart';
@@ -121,8 +121,8 @@ void main() {
 
   testWidgets('signing in in Dutch says what was added and keeps the drive',
       (tester) async {
-    AtomicStrings.override = AtomicStrings.nl;
-    addTearDown(() => AtomicStrings.override = null);
+    AtomicLocale.override = 'nl';
+    addTearDown(() => AtomicLocale.override = null);
     final node =
         FakeNode(Store(backend: InMemoryBackend(), drive: drive), drives: [
       const DriveInfo(subject: 'did:ad:test:n', name: 'Notities'),
