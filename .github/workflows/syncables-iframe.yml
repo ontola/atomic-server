@@ -11,6 +11,7 @@ on:
       - 'browser/data-browser/package.json'
       - 'browser/data-browser/vite.config.ts'
       - 'browser/lib/src/plugin-connection*'
+      - 'browser/lib/src/resource.*'
       - 'browser/e2e/tests/syncables-apps.spec.ts'
       - 'browser/e2e/tests/fixtures/syncablesProxy.ts'
       - 'browser/pnpm-lock.yaml'
@@ -46,7 +47,7 @@ jobs:
       - run: pnpm --filter @tomic/data-browser typecheck
       - run: pnpm --filter @tomic/e2e typecheck
       - run: pnpm --filter @tomic/data-browser test:syncables-apps
-      - run: pnpm --filter @tomic/lib exec vitest run src/plugin-connection.test.ts
+      - run: pnpm --filter @tomic/lib exec vitest run src/plugin-connection.test.ts src/resource.test.ts
 
   onboarding-playwright:
     runs-on: ubuntu-latest
