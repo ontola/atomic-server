@@ -3322,3 +3322,13 @@ It checks that Pause disables syncing and ordinary Table keeps the stored data.
 The Syncables unit suites cover typed reconciliation, filter memberships,
 incomplete runs, source authority, scoped storage, and offline navigation from
 imported records. The scoped workflow runs the browser journey independently.
+
+## Syncables linked records
+
+The targeted Syncables workflow runs the reference projector, link schema and
+stored-view migration tests. `browser/e2e/tests/syncables-github.spec.ts`
+covers linking real-shaped fields to typed same-drive records, permission
+changes, navigation from embedded records, refresh of a shared entity from
+multiple filters, preserved user fields and identities, paused sync,
+reconnection, Trash, and unrelated-provider coverage. The browser fixture
+records every provider request and verifies the native host's signed requests.

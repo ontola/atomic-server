@@ -33,6 +33,7 @@ import {
   type SyncableSourceKey,
 } from './syncableSource';
 import { parseSyncableRuleConfig } from './syncableRules';
+import { validateSyncableReferenceEvidence } from './syncableReferenceRecords';
 import { assertSyncableLocalSubject } from './syncablePlatform';
 
 export interface FlatMigrationBlock {
@@ -60,6 +61,7 @@ export interface SyncableFlatAdoptionOptions {
   document: OpenApiDocument;
   querySelection?: QuerySelection;
   properties: Record<string, string>;
+  referenceClass?: string;
   maxResources?: number;
   assertCurrent: () => void;
 }
@@ -307,9 +309,22 @@ export async function collectSyncableFlatAdoption(
                 }),
               ) === sourceConfigFingerprint(config.entityIdentity);
           } catch {
-            /* Invalid provider identity is handled by the migration guard below. */
+            /* Identity-only summaries retain their declaring source evidence. */
           }
 
+          if (
+            !proven &&
+            options.referenceClass &&
+            config.entityIdentity &&
+            row
+              .getSubjects(core.properties.isA)
+              .includes(options.referenceClass)
+          )
+            proven = validateSyncableReferenceEvidence(
+              options.document,
+              row.get(p['syncable-reference-evidence']),
+              config.entityIdentity,
+            );
           if (!proven)
             throw new Error(
               'The saved entity identity does not match its typed record',

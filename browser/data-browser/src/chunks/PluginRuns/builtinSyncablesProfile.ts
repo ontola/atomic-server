@@ -13,6 +13,7 @@ import {
   compileReadSelection,
   describeEntityTypes,
   type CompiledReadSelection,
+  type EntityObservation,
   type OpenApiDocument,
   type BoundCollection,
   type CollectionNavigation,
@@ -125,6 +126,15 @@ export function subscribeSyncAppContext(
   onInvalidated: () => void,
 ): () => void {
   return resolvedRules.get(context)?.subscribe(onInvalidated) ?? (() => {});
+}
+
+/** Host-resolved origins must stay unchanged while their selected read is active. */
+export function syncAppOriginEntityKeys(
+  context: SyncAppContext,
+): readonly string[] {
+  return (
+    resolvedRules.get(context)?.origins.map(origin => origin.entity.key) ?? []
+  );
 }
 
 /** Revalidate the selected drive without yielding between authority and mutation.
@@ -777,6 +787,7 @@ export function syncProxyTransport(
   onPrincipalVerified?: (
     proof: VerifiedSyncablePrincipal,
   ) => void | Promise<void>,
+  onObserved?: (observations: readonly EntityObservation[]) => Promise<void>,
   onPage?: (request: TransportRequest, response?: TransportResponse) => void,
 ): ProxyHost {
   const assertCurrent = () => {
@@ -1196,7 +1207,12 @@ export function syncProxyTransport(
         assertReadCurrent();
         signal?.throwIfAborted();
         reportPage?.(request, response);
-        await plan.observe(request, response);
+        const observations = await plan.observe(request, response);
+        assertReadCurrent();
+        signal?.throwIfAborted();
+        // Native storage consumes the host-held response journal. The frame
+        // cannot submit evidence or extend its selected-table write root.
+        if (observations.length) await onObserved?.(observations);
         assertReadCurrent();
         signal?.throwIfAborted();
 

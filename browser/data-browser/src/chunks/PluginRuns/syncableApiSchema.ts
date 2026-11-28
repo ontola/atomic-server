@@ -13,8 +13,10 @@ import {
 } from '@tomic/lib';
 import {
   deriveOntology,
+  describeResourceFields,
   ontologyShortname,
   prepareDocument,
+  type ResourceFieldDescription,
 } from 'syncables/browser';
 import { platformLocalId } from './syncablePlatform';
 
@@ -57,10 +59,14 @@ export function syncableApiSchemaSpec(
   const resourcePropertyKeys: Record<string, Record<string, string>> = {};
   const requiredPropertyKeys: Record<string, string[]> = {};
   const requiredFieldNames: Record<string, string[]> = {};
+  const fields = new Map<string, ResourceFieldDescription[]>();
   const resources = Object.keys(prepared.components?.crudResources ?? {});
   const resourceNames = new Map(
     resources.map(name => [ontologyShortname(name), name]),
   );
+
+  for (const resource of resources)
+    fields.set(resource, describeResourceFields(prepared, resource));
 
   for (const term of ontology.terms) {
     if (!term.shortname || term.shortname.length > 160)
@@ -82,15 +88,45 @@ export function syncableApiSchemaSpec(
     });
   }
 
+  for (const resource of resources) {
+    const bindings = { ...propertyKeys };
+
+    for (const field of fields.get(resource) ?? []) {
+      const datatype =
+        field.cardinality === 'many'
+          ? Datatype.RESOURCEARRAY
+          : Datatype.ATOMIC_URL;
+      const suffix = datatype
+        .slice(datatype.lastIndexOf('/') + 1)
+        .toLowerCase();
+      const key = `api-${scope}-${field.property}-${suffix}`;
+      bindings[field.property] = key;
+      if (!properties.some(property => property.shortname === key))
+        properties.push({
+          shortname: key,
+          name: field.property,
+          description: `Catalog-declared linked record: ${field.field}.`,
+          datatype,
+        });
+    }
+
+    resourcePropertyKeys[resource] = bindings;
+  }
+
   for (const term of ontology.terms) {
     if (term.kind !== 'class') continue;
     const key = `api-${scope}-${term.shortname}`;
     classKeys[term.shortname] = key;
     const resource = resourceNames.get(term.shortname);
     if (!resource) throw new Error('The integration class has no resource');
+    const links = new Set(
+      (fields.get(resource) ?? []).map(field => field.property),
+    );
     const propertiesOf = (paths: string[]) =>
       paths.map(path => {
-        const property = termProperties.get(path);
+        const rawProperty = termProperties.get(path);
+        const name = path.slice(path.lastIndexOf('/') + 1);
+        const property = rawProperty && resourcePropertyKeys[resource][name];
         if (!property)
           throw new Error(
             'The integration schema refers to an unknown property',
@@ -98,9 +134,10 @@ export function syncableApiSchemaSpec(
 
         return property;
       });
-    const requires = propertiesOf(term.requires);
+    const isLink = (path: string) =>
+      links.has(path.slice(path.lastIndexOf('/') + 1));
+    const requires = propertiesOf(term.requires.filter(path => !isLink(path)));
     requiredPropertyKeys[resource] = requires;
-    resourcePropertyKeys[resource] = propertyKeys;
     requiredFieldNames[resource] = term.requires.map(path =>
       path.slice(path.lastIndexOf('/') + 1),
     );
@@ -108,8 +145,13 @@ export function syncableApiSchemaSpec(
       shortname: key,
       name: term.shortname,
       description: term.description,
+      // Raw required values remain in provenance. Derived links may be unresolved
+      // or awaiting backfill and must not invalidate previously imported rows.
       requires,
-      recommends: propertiesOf(term.recommends),
+      recommends: propertiesOf([
+        ...term.recommends,
+        ...term.requires.filter(isLink),
+      ]),
     });
   }
 

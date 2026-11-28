@@ -280,7 +280,6 @@ export async function resolveSyncableRule(
       !sourceConfigMatchesKey(parsed, parsedKey, key) ||
       !parsed.entityIdentity ||
       !parsed.record ||
-      !parsed.read ||
       parsed.resource !== saved.entity.resource ||
       parsed.entityIdentity.key !== saved.entity.key
     )
@@ -293,7 +292,7 @@ export async function resolveSyncableRule(
       entity: parsed.entityIdentity,
       record: parsed.record,
       context: parsed.context ?? {},
-      read: parsed.read,
+      ...(parsed.read ? { read: parsed.read } : {}),
     });
   };
 

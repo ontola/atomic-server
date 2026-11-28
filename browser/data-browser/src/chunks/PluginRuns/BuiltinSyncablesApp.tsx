@@ -49,6 +49,8 @@ import {
 import { ShowRoute } from '../../routes/ShowRoute';
 import { fetchSyncableDocument } from './syncableDocument';
 import { syncableApiSchema } from './syncableApiSchema';
+import { materializeSyncableReferences } from './syncableReferenceRecords';
+import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import { syncablePageTotal } from './syncablePageProgress';
 import {
   ruleSourceKey,
@@ -68,6 +70,7 @@ import {
   assertSyncAppContext,
   captureSyncAppWriteScope,
   subscribeSyncAppContext,
+  syncAppOriginEntityKeys,
   canonicalSyncAppContext,
   syncAppContext,
   syncProxyTransport,
@@ -562,6 +565,7 @@ export async function appProfile(
         document,
         querySelection: trusted.querySelection,
         properties: p,
+        referenceClass: context.schema.classes['syncable-reference'],
         assertCurrent,
       });
   assertCurrent();
@@ -575,6 +579,11 @@ export async function appProfile(
     assertCurrent,
   );
   assertCurrent();
+
+  if (!worker && !canonicalControls) {
+    await migrateSyncableApiViews(store, drive, apiSchema, assertCurrent);
+    assertCurrent();
+  }
 
   if (worker) {
     if (context.resource && !context.rule)
@@ -694,12 +703,13 @@ export async function appProfile(
         trusted.querySelection,
       );
   const warmSources = new Map<string, string>();
-
-  for (const source of pickerSources) {
-    const { table: sibling, ruleSubjects } = source;
-    if (sibling)
-      for (const rule of ruleSubjects) warmSources.set(rule, sibling);
-  }
+  for (const source of pickerSources)
+    for (const { table: sibling, ruleSubjects } of [
+      ...(source.groups ?? []),
+      source,
+    ])
+      if (sibling)
+        for (const rule of ruleSubjects) warmSources.set(rule, sibling);
 
   const queueSource = async (ruleSubjectToWarm: string, sibling: string) => {
     const execution = syncableExecutionKey(drive, sibling, ruleSubjectToWarm);
@@ -793,6 +803,26 @@ export async function appProfile(
       proof => {
         assertCurrent();
         verifiedPrincipals.set(proof.connectionId, proof);
+      },
+      async observations => {
+        if (!worker) return;
+        assertQueuedAuthority();
+        if (!context.principal || !context.principalApp)
+          throw new Error('The linked record principal App is unavailable');
+        await materializeSyncableReferences(
+          store,
+          {
+            ...context,
+            principal: context.principal,
+            principalApp: context.principalApp,
+            document: trusted.document,
+            apiSchema,
+            readonlyOriginEntityKeys: syncAppOriginEntityKeys(context),
+          },
+          observations,
+          assertQueuedAuthority,
+        );
+        assertQueuedAuthority();
       },
       worker && context.rule
         ? (request, response) => {

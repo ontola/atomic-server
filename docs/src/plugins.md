@@ -76,9 +76,9 @@ rechecks the row, direct child target and selected drive. Missing or invalid
 values remain unknown. Legacy GitHub Organizations and Repositories view kinds
 resolve to this generic view. The Sync app is provider-independent: schema and
 relationships come from the catalog, while Atomic provisioning, reconciliation
-and UI stay here. Historical GitHub storage formats are recognized only by the
-legacy migration adapter. No provider URL or owner-grouping policy is embedded
-in the active Sync path. See [Apps](app/apps.md#import-github-issues) for the user flow.
+and UI stay here. The migration adapter uses catalog evidence to adopt existing
+v2 Syncables resources and retain their identities. See
+[Apps](app/apps.md#import-github-issues) for the user flow.
 
 ## Installing a plugin
 

@@ -267,7 +267,7 @@ async function rowNavigation(
   activeRule?: string,
 ) {
   const assertSession = captureSession(store);
-  const { properties } = await findSchema(
+  const { properties, classes } = await findSchema(
     store,
     drive,
     syncableHierarchySchema(),
@@ -354,13 +354,20 @@ async function rowNavigation(
   let name = String(
     row.get(core.properties.name) ?? record.entityIdentity.path,
   );
-  if (!row.hasClasses(table.get(core.properties.classtype) as string))
+  const referenceClass = classes?.['syncable-reference'];
+  const reference = !!referenceClass && row.hasClasses(referenceClass);
+  if (
+    !row.hasClasses(table.get(core.properties.classtype) as string) &&
+    !reference
+  )
     throw new Error('This row no longer belongs to this entity collection');
+  // A reference may supply a relationship origin without claiming its own
+  // collection membership or a complete API row. Empty scalar evidence cannot.
   if (
     !record.record ||
     !Object.keys(record.record).length ||
-    !record.read ||
-    record.read.resource !== record.resource
+    (!reference && !record.read) ||
+    (record.read && record.read.resource !== record.resource)
   )
     return { actions: [], name, assertCurrent, configProperty };
   let selected: ReturnType<typeof parseSyncableRuleConfig> | undefined;
@@ -412,7 +419,32 @@ async function rowNavigation(
   }
 
   const actions: FlatSyncableRowAction[] = [];
-  const intents = row.get(p['syncable-navigation-intents']);
+  let intents: unknown = row.get(p['syncable-navigation-intents']);
+  // Older native summaries predate persisted intents. These are declarative
+  // candidates from their stored catalog descriptor, not proof of route bindings.
+  // Sync re-resolves the stored origin and validates the current catalog before
+  // any provider request. Present but invalid metadata never enables a fallback.
+  if (reference && intents === undefined && descriptor)
+    intents = (descriptor.relationships ?? []).map(relationship => ({
+      version: 1,
+      sourceEntityKey: row.get(keyProperty),
+      resource: relationship.resource,
+      label: relationship.title,
+      definition: {
+        version: 1,
+        resource: relationship.resource,
+        source: {
+          kind: 'related',
+          origin: {
+            entity: record.entityIdentity,
+            record: record.record,
+            context: record.context ?? {},
+            ...(record.read ? { read: record.read } : {}),
+          },
+          via: relationship.via,
+        },
+      },
+    }));
   if (!descriptor || !Array.isArray(intents) || intents.length > 100)
     return { actions, name, assertCurrent, configProperty };
 
