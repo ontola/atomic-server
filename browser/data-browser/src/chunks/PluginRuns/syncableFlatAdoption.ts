@@ -3,7 +3,6 @@
 import {
   collections,
   core,
-  isAtomicIdentifier,
   isCommitSubject,
   subjectsReferToSameResource,
   type Collections,
@@ -35,6 +34,7 @@ import {
 } from './syncableSource';
 import { parseSyncableRuleConfig } from './syncableRules';
 import { validateSyncableReferenceEvidence } from './syncableReferenceRecords';
+import { assertSyncableLocalSubject } from './syncablePlatform';
 
 export interface FlatMigrationBlock {
   principal: SyncablePrincipal;
@@ -95,17 +95,10 @@ export async function collectSyncableFlatAdoption(
     return { aliases, blocks: [], warnings: [], rules };
 
   const safe = (subject: string) => {
-    if (isAtomicIdentifier(subject)) return true;
-
     try {
-      const url = new URL(subject);
+      assertSyncableLocalSubject(store, subject);
 
-      return (
-        url.origin === new URL(store.getServerUrl()).origin &&
-        !url.username &&
-        !url.password &&
-        !url.hash
-      );
+      return true;
     } catch {
       return false;
     }

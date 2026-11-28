@@ -7,7 +7,6 @@ import {
   findSchema,
   subjectsReferToSameResource,
   type JSONValue,
-  type Collection,
   type Resource,
   type Store,
 } from '@tomic/lib';
@@ -25,6 +24,7 @@ import {
 import {
   parseSyncableSourceConfig,
   parseSyncableSourceKey,
+  readStoredFlatSource,
   sourceConfigMatchesKey,
 } from './syncableSource';
 import { parseSyncableRuleConfig } from './syncableRules';
@@ -56,9 +56,16 @@ function captureSession(store: Store) {
 async function storedSubjectsInDrive(
   store: Store,
   drive: string,
-  query: Collection,
+  keyProperty: string,
+  key: string,
   assertCurrent: () => void,
 ) {
+  const query = new CollectionBuilder(store)
+    .setDrive(drive)
+    .setProperty(keyProperty)
+    .setValue(key)
+    .setPageSize(2)
+    .build();
   await query.waitForReady();
   assertCurrent();
   if (query.totalMembers > 10_000)
@@ -76,6 +83,39 @@ async function storedSubjectsInDrive(
   }
 
   return scoped;
+}
+
+async function findStoredEntityTable(
+  store: Store,
+  drive: string,
+  properties: Record<string, string>,
+  key: string,
+  assertCurrent: () => void,
+) {
+  const subjects = await storedSubjectsInDrive(
+    store,
+    drive,
+    properties['syncable-source-key'],
+    key,
+    assertCurrent,
+  );
+  const subject = subjects[0];
+  if (subjects.length !== 1 || !subject) return undefined;
+  const table = await store.getResource(subject);
+  assertCurrent();
+  if (
+    !subjectsReferToSameResource(table.subject, subject) ||
+    !(await isSyncableResourceInDrive(store, drive, table.subject))
+  )
+    throw new Error('The target collection is outside this drive');
+  assertCurrent();
+  if (
+    !table.hasClasses(dataBrowser.classes.table) ||
+    readStoredFlatSource(table, properties, key)?.kind !== 'collection'
+  )
+    throw new Error('The target entity collection changed');
+
+  return { table, subject };
 }
 
 /** A catalog-declared action reconstructed from stored Atomic evidence only. */
@@ -416,32 +456,16 @@ async function rowNavigation(
 
     if (!pending) {
       pending = (async () => {
-        const expectedKey = entityTableKey({ ...source, resource });
-        const query = new CollectionBuilder(store)
-          .setDrive(drive)
-          .setProperty(keyProperty)
-          .setValue(expectedKey)
-          .setPageSize(2)
-          .build();
-        let subjects: string[];
-
-        try {
-          subjects = await storedSubjectsInDrive(
-            store,
-            drive,
-            query,
-            assertCurrent,
-          );
-        } catch {
-          assertCurrent();
-
-          return undefined;
-        }
-
+        const match = await findStoredEntityTable(
+          store,
+          drive,
+          p,
+          entityTableKey({ ...source, resource }),
+          assertCurrent,
+        ).catch(() => undefined);
         assertCurrent();
-        if (subjects.length !== 1) return undefined;
-        const target = await store.getResource(subjects[0]);
-        assertCurrent();
+        if (!match) return undefined;
+        const { table: target } = match;
         const targetValues = () => [
           target.get(configProperty),
           target.get(keyProperty),
@@ -452,18 +476,6 @@ async function rowNavigation(
           target.get('https://atomicdata.dev/properties/drive'),
         ];
         const stamp = sourceConfigFingerprint(targetValues());
-        const config = parseSyncableSourceConfig(target.get(configProperty));
-        if (
-          target.error ||
-          !target.hasClasses(dataBrowser.classes.table) ||
-          config.version !== 3 ||
-          config.kind !== 'collection' ||
-          target.get(keyProperty) !== expectedKey ||
-          entityTableKey(config) !== expectedKey ||
-          !(await isSyncableResourceInDrive(store, drive, target.subject))
-        )
-          return undefined;
-        assertCurrent();
         guards.push(() => {
           assertSyncAppDrive(store, drive, target.subject);
           if (target.error)
@@ -684,53 +696,31 @@ export async function saveFlatSyncableSelection(
     ...source,
     resource: definition.resource,
   });
-  const query = new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(keyProperty)
-    .setValue(targetKey)
-    .setPageSize(2)
-    .build();
-  const targets = await storedSubjectsInDrive(
+  const match = await findStoredEntityTable(
     store,
     drive,
-    query,
+    p,
+    targetKey,
     assertSource,
   );
-  if (targets.length !== 1)
+  if (!match)
     throw new Error(
       'The target entity collection is missing or ambiguous. Open the app Sync view to prepare its collections.',
     );
-  const subject = targets[0];
-  if (!subject || !(await isSyncableResourceInDrive(store, drive, subject)))
-    throw new Error('The target collection is outside this drive');
-  const target = await store.getResource(subject);
-  const targetConfig = parseSyncableSourceConfig(target.get(configProperty));
-  if (
-    target.error ||
-    !target.hasClasses(dataBrowser.classes.table) ||
-    targetConfig.version !== 3 ||
-    targetConfig.kind !== 'collection' ||
-    target.get(keyProperty) !== targetKey ||
-    entityTableKey(targetConfig) !== targetKey
-  )
-    throw new Error('The target entity collection changed');
-  const targetStamp = sourceConfigFingerprint([
+  const { table: target, subject } = match;
+  const targetValues = () => [
     target.get(configProperty),
     target.get(keyProperty),
     target.get(core.properties.parent),
-  ]);
+    target.get(core.properties.isA),
+  ];
+  const targetStamp = sourceConfigFingerprint(targetValues());
 
   const assertMutation = () => {
     assertSource();
     assertSyncAppDrive(store, drive, table.subject);
     assertSyncAppDrive(store, drive, target.subject);
-    if (
-      sourceConfigFingerprint([
-        target.get(configProperty),
-        target.get(keyProperty),
-        target.get(core.properties.parent),
-      ]) !== targetStamp
-    )
+    if (target.error || sourceConfigFingerprint(targetValues()) !== targetStamp)
       throw new Error('The target collection changed; reopen it');
   };
 
@@ -758,16 +748,11 @@ export async function saveFlatSyncableSelection(
 
   const ruleKey = readSelectionKey(definition);
   const stableKey = ruleSourceKey(targetKey, ruleKey);
-  const ruleQuery = new CollectionBuilder(store)
-    .setDrive(drive)
-    .setProperty(keyProperty)
-    .setValue(stableKey)
-    .setPageSize(2)
-    .build();
   const rules = await storedSubjectsInDrive(
     store,
     drive,
-    ruleQuery,
+    keyProperty,
+    stableKey,
     assertSource,
   );
   if (rules.length > 1)

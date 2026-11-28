@@ -97,7 +97,11 @@ async function terms(store: SchemaStore, drive: string, create = false) {
 type Terms = Awaited<ReturnType<typeof terms>>;
 
 /** A validated, stored principal; display names and connection slots are not identity. */
-function principalOf(row: SchemaResource, scope: PrincipalScope, t: Terms) {
+function principalOf(
+  row: SchemaResource,
+  scope: Pick<PrincipalScope, 'platform' | 'proxyOrigin'>,
+  t: Terms,
+) {
   const keyProperty = t.h['syncable-source-key'];
   const configProperty = t.h['syncable-source-config'];
   const kindProperty = t.h['syncable-node-kind'];
@@ -131,6 +135,32 @@ function principalOf(row: SchemaResource, scope: PrincipalScope, t: Terms) {
   return { key: raw, config, principal: principalIdentity(config.principal) };
 }
 
+/** Check registration after the caller has proved the principal source. */
+async function isRegisteredPrincipalApp(
+  store: SchemaStore,
+  drive: string,
+  row: SchemaResource,
+  t: Terms,
+  scope: Pick<PrincipalScope, 'platform' | 'proxyOrigin'>,
+): Promise<boolean> {
+  const app = t.app.classes?.app;
+  const data = t.app.properties?.['app-data'];
+
+  return (
+    !!app &&
+    !!data &&
+    !!t.p['builtin-app'] &&
+    !!t.p['syncable-platform-id'] &&
+    !!t.p['syncable-proxy-origin'] &&
+    list(row.get(core.properties.isA)).includes(app) &&
+    row.get(t.p['builtin-app']) === 'syncables' &&
+    row.get(t.p['syncable-platform-id']) === scope.platform &&
+    row.get(t.p['syncable-proxy-origin']) === scope.proxyOrigin &&
+    same(row.get(data), row.subject) &&
+    (await isSyncableResourceInDrive(store, drive, row.subject))
+  );
+}
+
 /** Read-only App resolver validation; never creates metadata or fetches a provider. */
 export async function isSyncablePrincipalApp(
   store: SchemaStore,
@@ -143,28 +173,10 @@ export async function isSyncablePrincipalApp(
   if (source === undefined) return false;
   const key = parseSyncableSourceKey(source);
   if (key.version !== 2 || key.kind !== 'principal') return false;
-  const config = principalOf(
-    row,
-    { drive, proxyOrigin: key.proxyOrigin, platform: key.platform },
-    t,
-  );
-  if (
-    !config ||
-    !t.p['builtin-app'] ||
-    !t.p['syncable-platform-id'] ||
-    !t.p['syncable-proxy-origin'] ||
-    !t.app.properties?.['app-data']
-  )
-    return false;
 
   return (
-    !!t.app.classes?.app &&
-    list(row.get(core.properties.isA)).includes(t.app.classes.app) &&
-    row.get(t.p['builtin-app']) === 'syncables' &&
-    row.get(t.p['syncable-platform-id']) === key.platform &&
-    row.get(t.p['syncable-proxy-origin']) === key.proxyOrigin &&
-    same(row.get(t.app.properties!['app-data']), row.subject) &&
-    (await isSyncableResourceInDrive(store, drive, row.subject))
+    !!principalOf(row, key, t) &&
+    (await isRegisteredPrincipalApp(store, drive, row, t, key))
   );
 }
 
@@ -198,7 +210,7 @@ export async function findRegisteredSyncablePrincipalApp(
   if (
     !parsed ||
     parsed.key !== key ||
-    !(await isSyncablePrincipalApp(store, input.drive, row))
+    !(await isRegisteredPrincipalApp(store, input.drive, row, t, input))
   )
     throw new Error(
       'The registered principal App no longer matches this source',
@@ -307,7 +319,7 @@ export async function listSyncablePrincipalApps(
       !list(row.get(core.properties.isA)).includes(t.app.classes.app)
     )
       continue;
-    if (!(await isSyncablePrincipalApp(store, scope.drive, row)))
+    if (!(await isRegisteredPrincipalApp(store, scope.drive, row, t, scope)))
       throw new Error(
         'The saved principal App is invalid or outside this drive',
       );
@@ -464,14 +476,11 @@ async function promote(
     check();
   }
 
-  const principalClass = t.c['syncable-principal'];
   check();
   const candidate = principalOf(row, input, t);
   if (
     !candidate ||
     candidate.key !== expectedKey ||
-    !principalClass ||
-    !list(row.get(core.properties.isA)).includes(principalClass) ||
     setup.get(t.p['builtin-app']) !== 'syncables' ||
     setup.get(t.p['syncable-platform-id']) !== platform ||
     setup.get(t.p['syncable-proxy-origin']) !== proxyOrigin ||

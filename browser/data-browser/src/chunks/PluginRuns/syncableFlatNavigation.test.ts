@@ -370,8 +370,8 @@ it('refuses another principal target and ambiguous canonical tables without writ
   expect(store.newResource).not.toHaveBeenCalled();
 });
 
-it.each(['account', 'target move', 'source definition'])(
-  'revokes a delayed native Open after %s changes',
+it.each(['account', 'target move', 'target class', 'source definition'])(
+  'rejects saving a delayed native filter after %s changes',
   async change => {
     let release!: () => void;
     let entered!: () => void;
@@ -396,6 +396,10 @@ it.each(['account', 'target move', 'source definition'])(
     if (change === 'account') session.actor = 'atomic:agent:another';
     else if (change === 'target move')
       values.get('atomic:tasks')![core.properties.parent] = 'atomic:elsewhere';
+    else if (change === 'target class')
+      values.get('atomic:tasks')![core.properties.isA] = [
+        dataBrowser.classes.view,
+      ];
     else
       values.get('atomic:workspaces')![p['syncable-source-config']] = {
         version: 3,

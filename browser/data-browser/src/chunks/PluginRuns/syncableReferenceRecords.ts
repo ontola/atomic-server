@@ -35,7 +35,7 @@ import {
 import {
   parseSyncableSourceConfig,
   parseSyncableSourceKey,
-  sourceConfigMatchesKey,
+  readStoredFlatSource,
 } from './syncableSource';
 import {
   assertSyncableLocalSubject,
@@ -514,17 +514,9 @@ export async function materializeSyncableReferences(
       key: string,
       kind: 'collection' | 'record',
     ) => {
-      const raw = row.get(p['syncable-source-key']);
-      const config = parseSyncableSourceConfig(
-        row.get(p['syncable-source-config']),
-      );
-      const parsed = parseSyncableSourceKey(raw);
+      const config = readStoredFlatSource(row, p, key);
       if (
-        raw !== key ||
-        config.version !== 3 ||
-        parsed.version !== 3 ||
-        config.kind !== kind ||
-        !sourceConfigMatchesKey(config, parsed, key) ||
+        config?.kind !== kind ||
         row.get(p['syncable-node-kind']) !== kind ||
         typeof row.get(core.properties.localId) !== 'string'
       )

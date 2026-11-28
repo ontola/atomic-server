@@ -1,4 +1,5 @@
 // @wc-ignore-file
+import type { Resource } from '@tomic/lib';
 import type { BoundCollection, CollectionNavigation } from 'syncables/browser';
 import { isHttpsOrLoopback } from '@helpers/runtimeSetting';
 import {
@@ -404,6 +405,24 @@ export function parseSyncableSourceKey(
   return result;
 }
 
+function flatSourceKey(config: SyncableSourceConfigV3): string {
+  return sourceKey({
+    version: 3,
+    proxyOrigin: config.proxyOrigin,
+    platform: config.platform,
+    principal: config.principal,
+    kind: config.kind,
+    resource: config.resource,
+    ...(config.kind === 'record' && config.entityIdentity
+      ? {
+          entityIdentityHash: sourceConfigFingerprint(
+            config.entityIdentity.key,
+          ),
+        }
+      : {}),
+  });
+}
+
 export function sourceConfigMatchesKey(
   config: SyncableSourceConfig,
   key: SyncableSourceKey,
@@ -412,25 +431,10 @@ export function sourceConfigMatchesKey(
   if (config.version !== key.version) return false;
 
   if (config.version === 3 && key.version === 3) {
-    if (config.kind !== key.kind || config.resource !== key.resource)
-      return false;
-
     return (
-      sourceKey({
-        version: 3,
-        proxyOrigin: config.proxyOrigin,
-        platform: config.platform,
-        principal: config.principal,
-        kind: config.kind,
-        resource: config.resource,
-        ...(config.kind === 'record' && config.entityIdentity
-          ? {
-              entityIdentityHash: sourceConfigFingerprint(
-                config.entityIdentity.key,
-              ),
-            }
-          : {}),
-      }) === raw
+      config.kind === key.kind &&
+      config.resource === key.resource &&
+      flatSourceKey(config) === raw
     );
   }
 
@@ -459,4 +463,21 @@ export function sourceConfigMatchesKey(
       ...(key.remoteId === undefined ? {} : { remoteId: key.remoteId }),
     }) === raw
   );
+}
+
+/** Read an exact flat identity. Its current parent is not part of the key. */
+export function readStoredFlatSource(
+  resource: Resource,
+  properties: Record<string, string>,
+  key: string,
+): SyncableSourceConfigV3 | undefined {
+  if (resource.error || resource.get(properties['syncable-source-key']) !== key)
+    return undefined;
+  const config = parseSyncableSourceConfig(
+    resource.get(properties['syncable-source-config']),
+  );
+
+  return config.version === 3 && flatSourceKey(config) === key
+    ? config
+    : undefined;
 }
