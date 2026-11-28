@@ -351,8 +351,8 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
     expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y);
   }
 
+  // The Integration section is called "App settings" since #2689.
   await page
-    // The Integration section is called "App settings" since #2689.
     .getByRole('main')
     .getByText('App settings', { exact: true })
     .scrollIntoViewIfNeeded();
