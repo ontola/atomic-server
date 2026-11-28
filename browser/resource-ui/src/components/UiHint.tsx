@@ -1,6 +1,7 @@
 import { resourceTheme } from '../theme.js';
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type JSX,
@@ -50,7 +51,10 @@ export function UiHint({
     },
   }));
 
-  useEffect(() => {
+  // A visible target must already be registered when layout-time focus or
+  // pointer interactions ask for its hint; a passive effect can lose the
+  // only hover event while the newly arrived page is mounting.
+  useLayoutEffect(() => {
     const el = wrapper.current?.firstElementChild as HTMLElement | null;
 
     if (!el || disabled) return;

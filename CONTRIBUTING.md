@@ -206,7 +206,11 @@ branch-specific workflow under `.github/workflows/`.
 For independent Docker/Dagger engines, build the E2E artifacts once and copy
 them to the browser workers. The bundle contains the optimized E2E server
 (with its production frontend and WASM), the installed Playwright client image,
-and the complete test inventory. Obtain the manifest hash from the trusted
+a complete Node 22 checks image (`checks.oci.tar`), and the complete test
+inventory. Manifest version 2 hashes every artifact. Both images are prepared
+in the same builder invocation so their WASM compilation is shared; the checks
+image keeps the normal production build flags and full workspace/fixtures,
+while the browser image retains its E2E routes. Obtain the manifest hash from the trusted
 builder, rather than from an untrusted copy of the bundle:
 
 ```sh
@@ -220,7 +224,7 @@ manifest_hash=$(shasum -a 256 /absolute/path/browser-bundle/manifest.json | cut 
 dagger call browser-shard --bundle /absolute/path/browser-bundle \
   --expected-commit "$commit" --manifest-sha256 "$manifest_hash" \
   --shard-index 1 --shard-count 20 --playwright-workers 1 \
-  --playwright-retries 1 export --path /absolute/path/browser-results
+  --playwright-retries 0 export --path /absolute/path/browser-results
 ```
 
 Workers verify the manifest, file hashes, platform, pinned tool versions and
@@ -231,6 +235,15 @@ reports even when a browser assertion fails: the caller must require
 `test-exit-code` to be zero and reconcile every test against the inventory.
 Lint, compiler checks, Rust tests, JS integration, Flutter and documentation
 checks still run independently; the shared E2E build does not replace them.
+The DO runner executes `js-test`, `js-typecheck` and `typedoc-publish` through
+`bundle-check`, importing the verified checks image instead of building the
+workspace again. Typechecking still runs every existing TypeScript check.
+`js-test-integration` reuses the verified WASM package but retains its own
+minimal Node setup and glibc debug server, profile and feature flags. All test
+bodies execute with the run's fresh key. Missing, old-version or corrupt checks
+artifacts are rejected rather than silently rebuilt on each worker.
+Checks without this bundle dependency can run while the builder prepares it;
+dependent checks start only after their worker has the validated bundle.
 
 `dagger call browser-source-inputs` reports the exact source files and their
 hashes before compilation. The fingerprint excludes generated package stores,
@@ -278,7 +291,39 @@ Required keys are `batch_key`, `source_commit`, `worktree`, `runtime_dir` and
 `accounts`; each account supplies `context`, `expected_uuid` and `nodes`.
 Optional `region`, `size`, `expected_hourly_rate`, `max_hours`, `workers` and
 `retries` set the budget. The default is a four-vCPU Amsterdam machine and a
-four-hour deadline. The tiny cross-engine probe ships with the runner.
+four-hour deadline. `build_jobs` (default 4, range 1–128) sets the explicit
+Cargo compilation width for the build and independent checks;
+`rust_test_threads` (default 0, range 0–128) overrides Rust test execution
+threads only when nonzero. `workers` accepts 1–64 Playwright workers per
+shard; its default remains one. `retries` is either 0 (no retry) or 1 (the
+default: one final browser retry round). Both browser attempts disable
+Playwright's immediate retries. Choose these widths for the actual CPU and
+memory budget rather than assuming more parallel tests always finish sooner.
+Standalone Dagger calls can use constructor `--build-jobs N` to override the
+host profile, with `--max-build-jobs N` retaining its upper-cap behavior.
+For a warm-cache measurement, optional `cache_namespace` keeps the seeded Cargo
+volume names stable across cloned engines; omitting it retains the per-batch/node
+namespace. Give `test_run_key` a fresh safe identifier that differs from seed and
+previous measurement keys. It reaches only test execution, so matching cached
+test results cannot satisfy the benchmark. Empty keys retain normal CI caching.
+Rust's combined nextest install/compile/run command and Flutter's post-Dart
+bridge tail execute again; their Cargo target volumes can still reuse compiled
+objects. Browser execution already has its own per-invocation nonce.
+
+For a focused Flutter refresh, optional `"check_only": "flutter-test"` runs
+only the standalone Flutter check on one worker. The configured fleet size and
+price ceiling remain conservative (the cloud launcher still plans three), but
+the other planned workers are never created. The plan explicitly reports
+`validation_scope: selected-check`, one initial worker, `check_jobs:
+[flutter-test]` and zero browser shards. This mode skips the browser build,
+portable OCI probe and browser tests; its successful source-pinned receipt
+certifies Flutter analysis, root Flutter tests and Rust bridge tests only.
+It retains the normal watchdog, deadline, source verification, artifact retrieval
+and resource cleanup. Other check names are rejected before provider access.
+Omit `check_only` for the unchanged full pipeline. A selected check pass cannot
+replace full CI or relabel an older build/test receipt as a new-source pass.
+
+The tiny cross-engine probe ships with the runner.
 `plan` checks capacity and prices without creating resources; `run` builds and
 runs the checks, then distributes the bundle directly to the browser workers:
 
@@ -295,14 +340,36 @@ browser reports, and removes its temporary machines and keys. A separate
 watchdog enforces the configured deadline (four hours by default). Completed
 checks are not repeated merely to occupy otherwise idle machines; additional
 browser workers are started after the build is ready. The first imported
-browser shard must succeed before the rest of the fleet is created.
-Before that first browser shard, the runner also copies the completed bundle
-and its original build receipt to `artifact_archive_dir` on the controller's
-machine. This archive survives Droplet deletion and can restore a verified
-same-commit cache on a fresh runner. A browser-preparation failure preserves an
-already-running Rust check within the existing deadline; explicit interruption
-and the deadline still stop the run. Failed backups are reported, and cleanup
-continues within its time bound.
+browser shard must return a complete, source-verified report before the rest
+of the fleet is created. Completed check or browser assertion failures are
+collected while later independent checks and browser shards continue. The
+runner reconciles all ten checks and the complete browser inventory before
+starting the final retry round. Only completed, unexpected browser failures
+are selected again, using the same verified bundle and a fresh isolated server.
+Passing and intentionally skipped tests are not rerun. Retry selection is
+validated before execution; a missing or corrupt selection cannot fall back
+to running the whole suite. Failed workers remain available until this round,
+within the original deadline; workers that passed can be removed earlier.
+The original reports and traces remain available alongside the retry reports.
+The combined JSON report classifies a recovered failure as `flaky`, preserving
+both attempts. Read the validated aggregate at `runtime_dir/browser-merged.json`
+or each worker's `results/browser-merged/test-results.json`; the original
+`results/browser/browser/test-results.json` deliberately keeps the first pass.
+Custom schedulers call `finish_validation` after all first-pass futures finish;
+it validates coverage and performs the final round before the aggregate gate.
+A failed check, persistent browser failure, missing test or
+unexpectedly skipped/interrupted retry keeps the result red. Other CI checks
+are not automatically repeated as whole suites.
+Source, build, transport, malformed-report and deadline errors still stop the
+run because the remaining results could not be validated safely.
+The bundle is shared directly between DO machines. Controller backup defaults
+to disabled (`host_bundle_backup: false`); explicitly enabling it copies the
+completed bundle and original build receipt to `artifact_archive_dir` in the
+background, bounded to 120 seconds and the original deadline. Only a fully
+verified archive can restore a same-commit build on a fresh runner. A
+browser-preparation failure preserves an already-running Rust check within the
+existing deadline; explicit interruption and the deadline still stop the run.
+Failed backups are reported, and cleanup cancels unfinished transfers.
 Full-suite acceptance requires successful independent checks and an exact,
 disjoint union of all browser shard reports. Quota and a listed machine size
 do not guarantee regional capacity. These commands do not dispatch GitHub CI.
@@ -310,6 +377,22 @@ Public-IP artifact transfers count against the sender account's bandwidth
 allowance. The runner records payload bytes separately from compute costs;
 the eventual bandwidth bill depends on that account's monthly usage and
 allowance. See [DigitalOcean bandwidth billing](https://docs.digitalocean.com/platform/billing/bandwidth/).
+
+For laptop-independent orchestration, use `scripts/ci-fanout-cloud-launch.py`.
+Its read-only `plan` checks the three test machines plus a small separate
+controller, a regional 10-GiB volume and the complete time/cost bound. Only
+`launch` provisions resources. Cloud-init starts separate supervisor and
+reaper services before tool installation, so closing the monitoring connection
+does not stop CI. The absolute deadline includes controller bootstrap time.
+Credentials and the live runtime stay on the temporary controller boot disk;
+only allowlisted evidence and verified build archives are copied to the
+explicitly retained volume. `collect` retrieves reports, never the large build
+cache. After collecting, `finalize` requests controller removal; the independent
+reaper also removes it at the original deadline when the laptop is offline.
+The build volume remains paid storage until deliberately removed. See the
+[DO operator guide](docs/skills/atomic-do-ci/references/operations.md) for the
+configuration, ownership/recovery rules and result interpretation. This wrapper
+runs the existing ten-check/full-browser scheduler; it is not another test lane.
 
 ```sh
 # Make sure nextest is installed
@@ -678,3 +761,11 @@ rewrite the tested dependency graph. Commit any needed lockfile updates in the
 paired PR, run the affected Rust suites, and merge the pair together after CI.
 The SaaS alignment gate requires the Server checker, so land the Server PR
 before the SaaS PR when first introducing this policy.
+
+
+The autonomous DO launcher also supports `cloud_worker_mode: "warm"`, separate
+worker/controller regions and explicit snapshot companions. Temporary writable
+cache clones are included in the bounded budget and independent cleanup; the
+retained artifact disk is separate. See the
+[operator guide](docs/skills/atomic-do-ci/references/operations.md#autonomous-snapshot-backed-workers)
+for configuration, cache evidence and acceptance limitations.

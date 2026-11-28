@@ -112,46 +112,47 @@ msgstr "AI-agenten"
 
 #: ../data-browser/src/chunks/AI/ConfigEditorDialog.tsx
 #: ../data-browser/src/chunks/AppPage/ConnectDialog.tsx
-#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/AddMarketplaceDialog.tsx
 #: ../data-browser/src/chunks/PluginRuns/RunPluginDialog.tsx
 #: ../data-browser/src/chunks/Plugins/InstallationReviewDialog.tsx
-#: ../table-page/src/TablePage/BreakdownDialog.tsx
-#: ../table-page/src/TablePage/CellSelectionMenu.tsx
-#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
-#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Issues/IssuesView.tsx
-#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
-#: ../table-page/src/TablePage/QuickAddDialog.tsx
-#: ../table-page/src/TablePage/RowActionDialog.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
 #: ../data-browser/src/chunks/Website/WebsitePage.tsx
-#: src/components/AvatarCropper.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
-#: src/components/ConfirmationDialog.tsx
 #: ../data-browser/src/components/ConnectAppForm.tsx
-#: src/components/EditLanguagesDialog.tsx
 #: ../data-browser/src/components/HostUI/hostUIDialogs.tsx
 #: ../data-browser/src/components/MoveResourceDialog.tsx
 #: ../data-browser/src/components/ParentPicker/ParentPickerDialog.tsx
 #: ../data-browser/src/components/Share/ShareDialog.tsx
-#: src/components/forms/EditFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewArticleDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewCollectionDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
-#: src/components/forms/NewForm/NewFormDialog.tsx
-#: src/components/forms/ResourceForm.tsx
-#: src/components/forms/ValueForm/ValueFormEdit.tsx
 #: ../data-browser/src/routes/History/HistoryMobileView.tsx
 #: ../data-browser/src/views/Conversation/NewMessageDialog.tsx
 #: ../data-browser/src/views/Installation/AssignRights.tsx
 #: ../data-browser/src/views/OntologyPage/NewClassButton.tsx
 #: ../data-browser/src/views/OntologyPage/NewPropertyButton.tsx
 #: ../data-browser/src/views/PluginView/useResourcePicker.tsx
+#: ../table-page/src/DashboardPage/BlockConfigDialog.tsx
+#: ../table-page/src/TablePage/BreakdownDialog.tsx
+#: ../table-page/src/TablePage/CellSelectionMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+#: ../table-page/src/TablePage/CreateTableFormDialog.tsx
+#: ../table-page/src/TablePage/DerivedColumnDialog.tsx
+#: ../table-page/src/TablePage/Issues/IssuesView.tsx
+#: ../table-page/src/TablePage/PropertyForm/ExternalPropertyDialog.tsx
+#: ../table-page/src/TablePage/QuickAddDialog.tsx
+#: ../table-page/src/TablePage/RowActionDialog.tsx
+#: src/components/AvatarCropper.tsx
+#: src/components/ConfirmationDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
+#: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/NewForm/NewFormDialog.tsx
+#: src/components/forms/ResourceForm.tsx
+#: src/components/forms/ValueForm/ValueFormEdit.tsx
 msgid "Cancel"
 msgstr "Annuleren"
 
@@ -262,18 +263,18 @@ msgid "Automatically compact the conversation when input tokens exceed this perc
 msgstr "Vat het gesprek automatisch samen wanneer het aantal invoertokens dit percentage van het contextvenster van het geselecteerde model overschrijdt. Handmatig /compact gebruiken werkt ook wanneer dit is uitgeschakeld."
 
 #: ../data-browser/src/chunks/AI/MessageContextItem.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Settings/SyncSettings.tsx
+#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 #: ../table-page/src/DashboardPage/DashboardBlock.tsx
-#: src/chunks/RTE/EditLinkForm.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/ColumnSpecHeading.tsx
 #: ../table-page/src/TablePage/QuickAddDialog.tsx
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Settings/SyncSettings.tsx
-#: ../data-browser/src/components/Share/PeopleWithAccess.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
-#: ../data-browser/src/views/OntologyPage/Property/PropertyLineWrite.tsx
 msgid "Remove"
 msgstr "Verwijderen"
 
@@ -554,7 +555,7 @@ msgstr "Reageert niet"
 
 #: ../data-browser/src/components/Share/ShareDialog.tsx
 #: src/components/datatypes/Markdown.tsx
-msgid "Read more "
+msgid "Read more"
 msgstr "Meer lezen "
 
 #: src/components/forms/Field.tsx
@@ -784,11 +785,6 @@ msgstr "Geen overeenkomende resultaten."
 #: ../data-browser/src/components/ImageViewer.tsx
 msgid "Click to enlarge"
 msgstr "Klik om te vergroten"
-
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Inloggen / Nieuwe gebruiker"
 
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
@@ -1273,7 +1269,6 @@ msgstr "Document"
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 msgid "Sync"
 msgstr "Synchroniseren"
 
@@ -1447,16 +1442,8 @@ msgid "Data for"
 msgstr "Gegevens voor"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "subject:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "De URL van de resource"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "genesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1896,6 +1883,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} is geen geldig subject."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "subject"
 
@@ -1904,6 +1892,8 @@ msgid "Edit value"
 msgstr "Waarde bewerken"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2145,7 +2135,6 @@ msgstr "<0/> Notitie"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Nieuw"
@@ -2773,9 +2762,11 @@ msgstr "Deze resource heeft <0/> onderliggende resources"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "{0} bewerken"
 
@@ -3095,21 +3086,21 @@ msgid "Hide in this view"
 msgstr "In deze weergave verbergen"
 
 #. 0: ' '
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove <0/> from{0} <1/>"
 msgstr "<0/> verwijderen uit{0} <1/>"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "<0/> Delete property and its children"
 msgstr "<0/> Eigenschap en onderliggende resources verwijderen"
 
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Delete property"
 msgstr "Eigenschap verwijderen"
 
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
-#: ../table-page/src/TablePage/TableHeadingMenu.tsx
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
 msgid "Remove column"
 msgstr "Kolom verwijderen"
 
@@ -3184,7 +3175,6 @@ msgstr "Zoeken"
 msgid "Disabled"
 msgstr "Uitgeschakeld"
 
-#: src/components/forms/MinMaxInput.tsx
 #: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "Waarde moet een geheel getal zijn."
@@ -4760,7 +4750,7 @@ msgid "Stop the running entry when another starts"
 msgstr "Stop de actieve registratie wanneer een andere start"
 
 #: ../table-page/src/TablePage/DerivedColumnDialog.tsx
-#: ../table-page/src/TablePage/Timer/useTimerColumns.tsx
+#: ../table-page/src/TablePage/Timer/timerProperties.ts
 msgid "Duration"
 msgstr "Duur"
 
@@ -7419,10 +7409,6 @@ msgid "Publish to integration store"
 msgstr "Publiceren in integratiewinkel"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integratie"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr "Deze voorkeuren worden opgeslagen op je privéschijf in Atomic. Bestaande verbindingen blijven beschikbaar."
 
@@ -9248,6 +9234,7 @@ msgstr "Vooraf geselecteerd wanneer het formulier opent. Laat op \"Geen standaar
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Voorbeeld"
 
@@ -11836,6 +11823,7 @@ msgstr "Instellen"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Webadres"
 
@@ -12212,10 +12200,12 @@ msgid "Activity will show up here"
 msgstr "Activiteit verschijnt hier"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Minder tonen"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Alles tonen"
 
@@ -12820,6 +12810,7 @@ msgstr "Apps laden…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Apps ontdekken"
 
@@ -13343,10 +13334,6 @@ msgid "Models, providers and voice."
 msgstr "Modellen, aanbieders en spraak."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Integratie-instellingen"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalogus en experimentele plugins."
 
@@ -13445,18 +13432,6 @@ msgstr "Handleiding: een app publiceren"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Mis je een app? Bouw hem zelf met AI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Beschrijf wat je wilt en de assistent bouwt de app in je drive. Deel hem daarna met je drive, host je eigen marktplaats, of dien hem in bij de community-marktplaats."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Dit is een nieuwe functie. Je ziet experimentele apps om uit te proberen."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Dit is een nieuwe functie. Binnenkort verschijnen hier apps om uit te proberen."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13778,6 +13753,31 @@ msgstr "Filterwaarde"
 msgid "This column is unavailable."
 msgstr "Deze kolom is niet beschikbaar."
 
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "Wait for the column removal to sync before continuing."
+msgstr "Wacht tot het verwijderen van de kolom is gesynchroniseerd voordat je verdergaat."
+
+#: ../table-page/src/TablePage/ColumnRemovalDialog.tsx
+msgid "This property is no longer available for deletion."
+msgstr "Deze property kan niet meer worden verwijderd."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A total is unavailable. Check its column."
+msgstr "Een totaal is niet beschikbaar. Controleer de kolom."
+
+#: ../table-page/src/TablePage/TableResource.tsx
+msgid "A filter is unavailable. Edit or remove it to see rows."
+msgstr "Een filter is niet beschikbaar. Bewerk of verwijder het om rijen te zien."
+
+#: ../table-page/src/DashboardPage/blocks/ChartBlock.tsx
+#: ../table-page/src/DashboardPage/blocks/StatBlock.tsx
+msgid "Measurement unavailable. Check the source view."
+msgstr "De meting is niet beschikbaar. Controleer de bronweergave."
+
+#: ../table-page/src/TablePage/PropertyForm/Inputs/DateFormatPicker.tsx
+msgid "Saved format"
+msgstr "Opgeslagen formaat"
+
 #: ../table-page/src/TablePage/PropertyForm/PropertyForm.tsx
 msgid "Column name"
 msgstr "Kolomnaam"
@@ -13905,3 +13905,143 @@ msgstr "Update beschikbaar"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Herstart om versie {0} te gebruiken"
+
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Bron van de import"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Webpagina of tekst"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Voeg een webadres toe of plak tekst of de paginabron."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Plak tekst, of de HTML van de pagina..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Tekst of paginabron"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Bewaar in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "De map of drive waaraan het resultaat wordt toegevoegd."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Plak het adres van een pagina, de tekst of de bron. Atomic Server haalt geen pagina's voor je op: open de pagina, kopieer wat je wilt bewaren en plak het hier."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "{0}-gegevens op de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "De titel en beschrijving van de pagina gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Geen gestructureerde gegevens gevonden, dus dit wordt een gewone link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Alleen tekst gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Alleen een adres gevonden."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Voorbereiden..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Je kunt alles aanpassen voordat je bewaart. Er is nog niets bewaard."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Deze pagina is eerder geïmporteerd. Bewaren werkt die bij in plaats van een kopie te maken."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr "App-instellingen"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr "<0/> App-instellingen"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr "Beschrijf wat je wilt en de assistent bouwt het in je drive. Deel het, host je eigen marktplaats of dien het in bij de community-marktplaats."
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Back to the plain link"
+msgstr "Terug naar de gewone link"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI can read this page and file it under a better kind of item. Set up a model first."
+msgstr "AI kan deze pagina lezen en onder een passender soort item opslaan. Stel eerst een model in."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+msgstr "AI staat uit. Zet het aan in de instellingen om deze pagina door AI te laten lezen en onder een passender soort item op te slaan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Set up AI"
+msgstr "AI instellen"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The AI could not read this page."
+msgstr "De AI kon deze pagina niet lezen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Reading the page..."
+msgstr "De pagina lezen..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Extract with AI"
+msgstr "Uitlezen met AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+msgstr "De gewone import vond weinig om mee te werken. AI kan de pagina lezen en een van de soorten items kiezen die je al hebt."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI read the page and filled in this item."
+msgstr "AI heeft de pagina gelezen en dit item ingevuld."
+
+#. 0: ai.dropped.map(d => d.property).join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Left out because they did not fit: {0}"
+msgstr "Weggelaten omdat ze niet pasten: {0}"
+
+#. 0: ai.missing.join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Still to fill in: {0}"
+msgstr "Nog in te vullen: {0}"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) via Atomic naar de AI-aanbieders. Je bekijkt het resultaat voordat er iets wordt opgeslagen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar je Ollama-server. Je bekijkt het resultaat voordat er iets wordt opgeslagen."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+msgstr "Stuurt de paginatitel en de hoofdtekst (maximaal 8.000 tekens) naar OpenRouter. Je bekijkt het resultaat voordat er iets wordt opgeslagen."

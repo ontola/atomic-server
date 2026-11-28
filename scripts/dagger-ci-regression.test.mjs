@@ -30,7 +30,7 @@ test('Flutter repairs official Ubuntu mirrors in both APT source formats', async
   const command = recordedCalls()
     .filter(([name]) => name === 'withExec')
     .map(([, args]) => args[2])
-    .find(candidate =>
+    .find((candidate) =>
       candidate?.includes('apt-get install -y --no-install-recommends'),
     );
   assert.ok(command);
@@ -90,7 +90,7 @@ test('Flutter repairs official Ubuntu mirrors in both APT source formats', async
             },
           },
         ),
-      error => error.status === 77,
+      (error) => error.status === 77,
     );
     assert.equal(
       readFileSync(log, 'utf8'),
@@ -178,14 +178,14 @@ test('end-to-end applies overrides to the actual shard run and clone setting', a
   pipeline.e2eShardContainer = (_base, index) => {
     shardIndexes.push(index);
     return {
-      file: path => ({
+      file: (path) => ({
         contents: async () => (path === '/test-exit-code' ? '0\n' : 'ok'),
       }),
       directory: () => ({}),
     };
   };
   pipeline.netlifyDeploy = async () => 'https://example.test/report';
-  pipeline.extractDeployUrl = output => output;
+  pipeline.extractDeployUrl = (output) => output;
 
   await pipeline.endToEnd('token', 'light', 3, 4, 0, 'focused', true);
   assert.equal(cloned, true);
@@ -279,6 +279,111 @@ test('build-job limits reject invalid counts before any work', () => {
     assert.throws(
       () => new AtomicServer(source(), '', limit),
       /max-build-jobs must be an integer >= 0/,
+    );
+  }
+});
+
+test('warm-clone keys rerun only test execs after reusable setup', async () => {
+  for (const method of [
+    'rustTest',
+    'jsTest',
+    'jsTestIntegration',
+    'flutterTest',
+  ]) {
+    let defaultCommands;
+    for (const key of ['', 'warm-clone-one', 'warm-clone-two']) {
+      const pipeline = new AtomicServer(source(), 'stable-seed', 0, 0, key);
+      resetCalls();
+      await pipeline[method]();
+      const calls = recordedCalls();
+      const commands = calls
+        .filter(([name]) => name === 'withExec')
+        .map(([, args]) => args);
+      if (!key) defaultCommands = commands;
+      else
+        assert.deepEqual(
+          commands,
+          defaultCommands,
+          'freshness must not change setup/test commands',
+        );
+      const markers = calls
+        .map((call, index) => ({ call, index }))
+        .filter(
+          ({ call }) =>
+            call[0] === 'withEnvVariable' &&
+            call[1] === 'ATOMIC_CI_TEST_RUN_KEY',
+        );
+      const expected = ['jsTest', 'flutterTest'].includes(method) ? 2 : 1;
+      assert.equal(markers.length, key ? expected : 0);
+      for (const { call, index } of markers) {
+        assert.equal(call[2], key);
+        const next = calls[index + 1];
+        assert.equal(next[0], 'withExec');
+        assert.match(
+          next[1].join(' '),
+          /cargo nextest run|pnpm run test|node --test|flutter test|cargo test/,
+        );
+      }
+      if (key) {
+        const setupCommands = calls
+          .slice(0, markers[0].index)
+          .filter(([name]) => name === 'withExec');
+        assert.ok(
+          setupCommands.length > 0,
+          'cached setup must precede freshness injection',
+        );
+      }
+    }
+  }
+});
+
+test('warm-clone keys reject unsafe constructor values', () => {
+  for (const key of [
+    null,
+    true,
+    123,
+    'two words',
+    '../other',
+    'x'.repeat(82),
+  ]) {
+    assert.throws(
+      () => new AtomicServer(source(), '', 0, 0, key),
+      /test-run-key must be empty or a safe identifier/,
+    );
+  }
+});
+
+test('explicit compile widths override the host profile while the maximum cap still wins', async () => {
+  for (const [override, maximum, expected] of [
+    [0, 0, 4],
+    [64, 0, 64],
+    [64, 48, 48],
+  ]) {
+    const pipeline = new AtomicServer(
+      source(),
+      'large-runner',
+      maximum,
+      override,
+    );
+    resetCalls();
+    await pipeline.rustTest(48);
+    assert.deepEqual(
+      recordedCalls().filter(
+        ([name, variable]) =>
+          name === 'withEnvVariable' && variable === 'CARGO_BUILD_JOBS',
+      ),
+      [['withEnvVariable', 'CARGO_BUILD_JOBS', String(expected)]],
+    );
+    assert.match(nextestCommand(), new RegExp(`--build-jobs ${expected} `));
+    assert.match(nextestCommand(), /--test-threads 48 /);
+  }
+});
+
+test('explicit compile widths reject invalid counts before building', () => {
+  for (const count of [-1, 0.5, NaN, Infinity, 129]) {
+    assert.throws(
+      () => new AtomicServer(source(), '', 0, count),
+      /build-jobs must be an integer between 0 and 128/,
     );
   }
 });
@@ -439,7 +544,7 @@ for (const sequential of [false, true]) {
         events.push(`start ${name}`);
         active++;
         peak = Math.max(peak, active);
-        await new Promise(resolve => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
         active--;
         events.push(`end ${name}`);
       };

@@ -1,4 +1,5 @@
 import {
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
@@ -40,39 +41,60 @@ export function TableQuickAddBar({
 }: TableQuickAddBarProps) {
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const queued = useRef<string[]>([]);
+  const pending = useRef(false);
+  const queued = useRef<
+    {
+      value: string;
+      create: TableQuickAddBarProps['create'];
+      onError?: TableQuickAddBarProps['onError'];
+    }[]
+  >([]);
+  const currentOnCreated = useRef(onCreated);
   const ready = !field || typed.trim() !== '';
 
-  const submit = (value: string) => {
+  useLayoutEffect(() => {
+    currentOnCreated.current = onCreated;
+
+    return () => {
+      currentOnCreated.current = undefined;
+    };
+  }, [onCreated]);
+
+  const drain = async () => {
+    pending.current = true;
     setBusy(true);
-    void create(value)
-      .then(() => onCreated?.())
-      .catch(error => onError?.(error))
-      .finally(() => {
-        const next = queued.current.shift();
 
-        if (next === undefined) {
-          setBusy(false);
+    try {
+      for (
+        let request = queued.current.shift();
+        request;
+        request = queued.current.shift()
+      ) {
+        try {
+          try {
+            await request.create(request.value);
+          } catch (error) {
+            request.onError?.(error);
+            continue;
+          }
 
-          return;
+          currentOnCreated.current?.();
+        } catch (error) {
+          console.error('Quick-add notification failed', error);
         }
-
-        submit(next);
-      });
+      }
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   };
 
   const add = () => {
     if (!ready) return;
-    const value = typed.trim();
+    queued.current.push({ value: typed.trim(), create, onError });
     setTyped('');
 
-    if (busy) {
-      queued.current.push(value);
-
-      return;
-    }
-
-    submit(value);
+    if (!pending.current) void drain();
   };
 
   return (

@@ -66,8 +66,11 @@ export function specFromDraft(
 
   return quickAddSpecFromDraft(draft, model.kinds);
 }
-export function isQuickAddDraftComplete(draft: QuickAddDraft): boolean {
-  return complete(draft);
+export function isQuickAddDraftComplete(
+  draft: QuickAddDraft,
+  properties: Property[],
+): boolean {
+  return complete(draft, options(properties).kinds);
 }
 export function QuickAddFields({
   draft,

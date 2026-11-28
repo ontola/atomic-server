@@ -68,7 +68,13 @@ export const AppSettingsRoute = createRoute({
     search: Record<string, unknown>,
   ): { q?: string; section?: string; drive?: string } => ({
     q: typeof search.q === 'string' ? search.q : undefined,
-    section: typeof search.section === 'string' ? search.section : undefined,
+    // `integration` is the section's old id, kept for old links.
+    section:
+      search.section === 'integration'
+        ? 'apps'
+        : typeof search.section === 'string'
+          ? search.section
+          : undefined,
     // The drive the Sync section shows (`?section=sync&drive=`).
     drive:
       typeof search.drive === 'string' && isAtomicIdentifier(search.drive)
@@ -370,7 +376,7 @@ const AppSettings: React.FunctionComponent = () => {
                 </SettingsSection>
               )}
             {showSettingsSection('ai') && <AISettings />}
-            {showSettingsSection('integration') && <IntegrationSettings />}
+            {showSettingsSection('apps') && <IntegrationSettings />}
           </SettingsGroup>
         </SettingsSearchProvider>
       </ContainerNarrow>

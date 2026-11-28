@@ -20,8 +20,7 @@ export const settingsKeywords = {
     'accessibility enable disable page transition animations view transitions motion',
   notifications: 'notify notifications alerts messages comments replies push',
   ai: 'ai enable features token usage panel sidebar openrouter ollama mcp server generative model chat provider api key local agents skills default voice microphone speech stt transcription privacy retention zdr generate titles follow up prompts temperature context tools system prompt content references transport headers',
-  integration:
-    'integration proxy catalog marketplace marketplaces server url experimental apps plugins',
+  apps: 'integration proxy catalog marketplace marketplaces server url experimental apps plugins',
 } as const;
 
 export type SettingsSectionKey = keyof typeof settingsKeywords;

@@ -1,12 +1,23 @@
 import { FaRotateLeft } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '@tomic/ui/components/Button';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 
 import type { JSX } from 'react';
+
+/**
+ * Subjects whose automatic restore already ran in this page session. Module
+ * level on purpose: the offer unmounts whenever the vault status flips or the
+ * error page remounts, and a guard inside the component then restarted the
+ * whole download about once a second.
+ */
+const autoRestored = new Set<string>();
+
+/** Forget which drives were restored automatically (tests). */
+export const resetAutoRestored = (): void => autoRestored.clear();
 
 /**
  * "Restore from Cloud Vault", for a drive this device cannot open.
@@ -41,7 +52,6 @@ export function VaultRestoreAction({
   // A caller that passed its own vault does not need a second one.
   const own = useDriveVault(given ? null : subject);
   const vault = given ?? own;
-  const startedFor = useRef<string | null>(null);
   const canRestore = canRestoreFromVault(vault);
   const signedIn = !!store.getAgent();
   const { busy, error, restore } = vault;
@@ -52,9 +62,9 @@ export function VaultRestoreAction({
   useEffect(() => {
     if (!autoStart || !canRestore || !signedIn || busy || error) return;
 
-    if (startedFor.current === subject) return;
+    if (autoRestored.has(subject)) return;
 
-    startedFor.current = subject;
+    autoRestored.add(subject);
     void restore();
   }, [autoStart, canRestore, signedIn, busy, error, restore, subject]);
 

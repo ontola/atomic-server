@@ -241,6 +241,44 @@ export function agentPublicKey(raw: string): string | undefined {
     : undefined;
 }
 
+/**
+ * The public key behind an Agent subject in any of its spellings: an Agent
+ * DID, or the pre-DID `https://server/agents/{pubkey}` URL (and its
+ * `internal:/agents/{pubkey}` form). Normalized to unpadded standard base64,
+ * because the same key has been written padded, unpadded and URL-safe.
+ */
+function normalizedAgentKey(raw: string): string | undefined {
+  let key = agentPublicKey(raw);
+
+  if (key === undefined) {
+    const match = /\/agents\/([^/?#]+)$/.exec(raw);
+
+    if (!match || match[1] === 'publicAgent') {
+      return undefined;
+    }
+
+    key = decodeURIComponent(match[1]);
+  }
+
+  return key.replace(/=+$/, '').replace(/-/g, '+').replace(/_/g, '/');
+}
+
+/**
+ * Whether two Agent subjects name the same key. Mirrors the server's
+ * `same_agent_key`: a drive migrated from before DIDs grants write to
+ * `https://atomicdata.dev/agents/{pubkey}`, and the same person now signs in
+ * as `did:ad:agent:{pubkey}`.
+ */
+export function sameAgent(a: string, b: string): boolean {
+  if (a === b) {
+    return true;
+  }
+
+  const keyA = normalizedAgentKey(a);
+
+  return keyA !== undefined && keyA === normalizedAgentKey(b);
+}
+
 export function commitSignature(raw: string): string | undefined {
   const body = identifierBody(raw);
 

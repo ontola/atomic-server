@@ -10,16 +10,30 @@ export * from '@playwright/test';
 export const test = base.extend<{
   browserDiagnostics: Pick<DiagnosticCollector, 'expect'>;
 }>({
+  page: async ({ page }, use) => {
+    try {
+      await use(page);
+    } finally {
+      // A routed fetch belongs to this test even after its last assertion.
+      // Finish callbacks before Playwright closes the page or ends its APIs.
+      if (!page.isClosed()) {
+        await page.unrouteAll({ behavior: 'wait' });
+        await page.context().unrouteAll({ behavior: 'wait' });
+      }
+    }
+  },
   browserDiagnostics: [
     async ({ browser, context: defaultContext }, use, testInfo) => {
       const diagnostics = new DiagnosticCollector();
       const transport = new TransportCollector();
       const watched = new Set<BrowserContext>();
       const ownedContexts = new Set<BrowserContext>();
+      const closedContexts = new Set<BrowserContext>();
 
       const watch = async (context: BrowserContext) => {
         if (watched.has(context)) return;
         watched.add(context);
+        context.once('close', () => closedContexts.add(context));
         diagnostics.start(context);
         transport.start(context);
         await context.addInitScript(() => {
@@ -55,6 +69,7 @@ export const test = base.extend<{
         // service availability. verify-peer-mesh.mjs separately exercises real
         // signaling, authenticated WebRTC, persistence and reconciliation.
         await installEmptyDiscoveryRoom(context);
+        await openSidebarPanels(context);
         await installAbsentLocalOllama(context);
         await installStubbedWebSearchMcp(context);
       };
@@ -80,6 +95,34 @@ export const test = base.extend<{
         });
       } finally {
         browser.newContext = newContext;
+        // Extra tabs and restored session profiles can bypass the page fixture.
+        // Drain every test-owned route while diagnostics still observe errors.
+        // Settle all drains so one rejection cannot prevent the other cleanups.
+        const routeDrains = await Promise.allSettled(
+          [...watched]
+            .filter(context => !closedContexts.has(context))
+            .map(async context => {
+              const pages = await Promise.allSettled(
+                context
+                  .pages()
+                  .filter(page => !page.isClosed())
+                  .map(page => page.unrouteAll({ behavior: 'wait' })),
+              );
+              const routes = await Promise.allSettled([
+                context.unrouteAll({ behavior: 'wait' }),
+              ]);
+              const failures = [...pages, ...routes].filter(
+                result => result.status === 'rejected',
+              );
+
+              if (failures.length) {
+                throw new AggregateError(
+                  failures.map(result => result.reason),
+                  'Could not finish in-flight browser routes',
+                );
+              }
+            }),
+        );
         diagnostics.dispose();
         transport.dispose();
         const { entries, expectations, unexpected, missing } =
@@ -166,6 +209,10 @@ export const test = base.extend<{
           `Unexpected browser warnings/errors (${unexpected.length}); first 20 shown, full browser-diagnostics attached`,
         ).toEqual([]);
         expect(missing, 'Expected diagnostic count did not match').toEqual([]);
+        expect(
+          routeDrains.filter(result => result.status === 'rejected'),
+          'Browser route teardown failed; original callback errors must remain visible',
+        ).toEqual([]);
       }
     },
     { auto: true },
@@ -289,6 +336,30 @@ export async function installStubbedWebSearchMcp(context: BrowserContext) {
           }
         : { tools: [] };
     await route.fulfill({ json: { jsonrpc: '2.0', id: request.id, result } });
+  });
+}
+
+/**
+ * Sidebar panels start collapsed for a new user. The specs drive the rows
+ * inside them, so open the panels that hold content unless a test already
+ * chose (the stored value wins).
+ */
+export async function openSidebarPanels(context: BrowserContext) {
+  await context.addInitScript(() => {
+    for (const key of [
+      'favoritesPanelHeight',
+      'sharedWithMePanelHeight',
+      'messagesPanelHeight',
+      'aiChatsPanelHeight',
+    ]) {
+      try {
+        if (localStorage.getItem(`${key}.open`) === null) {
+          localStorage.setItem(`${key}.open`, 'true');
+        }
+      } catch {
+        // Storage can be unavailable on about:blank.
+      }
+    }
   });
 }
 

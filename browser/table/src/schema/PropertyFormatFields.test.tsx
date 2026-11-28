@@ -45,3 +45,29 @@ it('keeps precision uncontrolled and delegates host validation and blur', () => 
   expect(input.max).toBe('20');
   expect(screen.getByText('Invalid precision')).toBeDefined();
 });
+
+it('isolates concurrent date formats into separate radio groups', () => {
+  const options = [
+    { value: 'numeric', label: 'Numeric', example: '13/11/2026' },
+    { value: 'long', label: 'Long', example: '13 November 2026' },
+  ];
+  render(
+    <>
+      <PropertyDateFormatField
+        value='numeric'
+        options={options}
+        onChange={vi.fn()}
+      />
+      <PropertyDateFormatField
+        value='long'
+        options={options}
+        onChange={vi.fn()}
+      />
+    </>,
+  );
+  const [first, second] = screen.getAllByRole<HTMLInputElement>('radio', {
+    name: 'Numeric',
+  });
+  expect(first.name).not.toBe(second.name);
+  expect(first.checked).toBe(true);
+});

@@ -1,24 +1,33 @@
 import {
   core,
   type ExpressionFilter,
-  PropVal,
+  type PropVal,
+  type Aggregation,
   Resource,
-  unknownSubject,
   useCollection,
   UseCollectionResult,
   useResource,
   useStore,
   useSubject,
 } from '@tomic/react';
+import { useMemo } from 'react';
+import { useTableColumns } from './useTableColumns.js';
+import { effectiveViewDerivedColumns } from './Timer/timerProperties.js';
+import type { DerivedColumnSpec } from './derivedColumns.js';
 import { useTableView, UseTableViewResult } from './useTableView.js';
 import { toAggregation } from './tableAggregates.js';
 import { getTableDrive } from './tableDrive.js';
-import { quantizedNow, splitFilters } from './tableFiltering.js';
+import { compileViewPredicates } from './viewQuery.js';
 
 const PAGE_SIZE = 30;
 
 type UseTableDataResult = {
   tableClass: Resource;
+  derivedSpecs: DerivedColumnSpec[];
+  queryValue: string;
+  queryAggregation: Aggregation | undefined;
+  unresolvedFilters: boolean;
+  unresolvedAggregates: boolean;
   /**
    * The constraints the grid queries with (class + the view's filters). Shared
    * so the totals can be computed over exactly the rows the grid shows.
@@ -28,7 +37,8 @@ type UseTableDataResult = {
    *  numbers describe the same rows. */
   queryExpressionFilters: ExpressionFilter[];
 } & UseCollectionResult &
-  UseTableViewResult;
+  UseTableViewResult &
+  ReturnType<typeof useTableColumns>;
 
 export function useTableData(
   resource: Resource,
@@ -43,42 +53,58 @@ export function useTableData(
   const [classSubject] = useSubject(resource, core.properties.classtype);
   const tableClass = useResource(classSubject);
 
-  // Only constraints with an actual value narrow the query; an in-progress
-  // filter (empty value) stays visible as a chip but doesn't blank the table.
-  // A constraint on a computed column can't be indexed, so it travels separately
-  // and the store evaluates it over the rows the index narrows to.
-  const { propVals: userFilters, expressionFilters } = splitFilters(
-    filters,
-    tableView.viewDerivedColumns,
-    quantizedNow(),
+  const columnState = useTableColumns(
+    tableClass,
+    tableView.viewColumns,
+    tableView.setViewColumns,
+    tableView.viewSplitLanguages,
   );
-
-  // Constrain rows to instances of the table's classtype. This keeps non-row
-  // children — notably the table's own View resources — out of the row list.
-  // Don't query at all until the classtype is known: a `parent=` query
-  // without `isA` briefly lists views as rows, then filters them out.
-  const classReady = !!classSubject && classSubject !== unknownSubject;
-  const classFilter: PropVal[] = classReady
-    ? [{ property: core.properties.isA, value: classSubject }]
-    : [];
-
-  // The view's statistics ride along with the query, so the store computes them
-  // over every matching row (filters included, paging excluded) instead of the
-  // client adding up the page it happens to have.
+  const {
+    viewKind,
+    viewDerivedColumns,
+    viewDerivedColumnsSet,
+    viewGroupBy,
+    viewEndProp,
+  } = tableView;
+  const derivedSpecs = useMemo(
+    () =>
+      effectiveViewDerivedColumns(
+        viewKind,
+        viewDerivedColumns,
+        viewDerivedColumnsSet,
+        columnState.allColumns,
+        viewGroupBy,
+        viewEndProp,
+      ),
+    [
+      viewKind,
+      viewDerivedColumns,
+      viewDerivedColumnsSet,
+      columnState.allColumns,
+      viewGroupBy,
+      viewEndProp,
+    ],
+  );
+  const predicates = compileViewPredicates(classSubject, filters, derivedSpecs);
+  const queryValue =
+    predicates.classReady && !predicates.hasUnresolved ? resource.subject : '';
   const aggregation = toAggregation(
     tableView.viewAggregates,
     tableView.viewGroupByColumn,
     tableView.viewGroupGranularity,
-    tableView.viewDerivedColumns,
+    derivedSpecs,
+    predicates.now,
   );
+  const unresolvedAggregates =
+    tableView.viewAggregates.length > 0 && !aggregation;
 
   const queryFilter = {
     property: core.properties.parent,
     // `Collection.fetchPage` no-ops when value is undefined. Hold the
     // query until classtype is known so views don't flash as rows.
-    value: classReady ? resource.subject : undefined,
-    filters: [...classFilter, ...userFilters],
-    expression_filters: expressionFilters,
+    value: queryValue || undefined,
+    filters: predicates.filters,
+    expression_filters: predicates.expressionFilters,
     sort_by: sorting.prop,
     sort_desc: sorting.sortDesc,
     aggregation,
@@ -99,11 +125,17 @@ export function useTableData(
 
   return {
     ...tableView,
+    ...columnState,
     tableClass,
+    derivedSpecs,
+    queryValue,
+    queryAggregation: aggregation,
+    unresolvedFilters: predicates.hasUnresolved,
+    unresolvedAggregates,
     queryFilters: queryFilter.filters,
-    queryExpressionFilters: expressionFilters,
+    queryExpressionFilters: predicates.expressionFilters,
     collection,
-    ready: classReady && ready,
+    ready: !!queryValue && ready,
     invalidateCollection,
     mapAll,
   };

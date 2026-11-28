@@ -15,6 +15,7 @@ import type {
   TableRowActionTarget,
 } from './rowActionTypes.js';
 import { tableTheme } from './theme.js';
+import { parseFloatText } from './chunks/TablePage/EditorCells/numberInput.js';
 import { Checkbox as SharedCheckbox } from '@tomic/ui/components/forms/Checkbox';
 import {
   InputStyled,
@@ -30,6 +31,8 @@ export interface QuickAddDraft {
   presetKind: RowActionKind | '';
   presetProperty: string;
   presetValue: string;
+  /** The form edits only the first stored preset. */
+  remainingPresets?: QuickAddPreset[];
 }
 export function quickAddDraftFromSpec(
   spec: QuickAddSpec | undefined,
@@ -45,30 +48,54 @@ export function quickAddDraftFromSpec(
     presetKind: preset?.kind ?? '',
     presetProperty: preset?.property ?? '',
     presetValue: preset?.value === undefined ? '' : String(preset.value),
+    remainingPresets: spec?.presets?.slice(1).map(value => ({ ...value })),
   };
 }
 
-export function isQuickAddDraftComplete(draft: QuickAddDraft): boolean {
-  return draft.label.trim() !== '';
+export function isQuickAddDraftComplete(
+  draft: QuickAddDraft,
+  kinds?: readonly TableRowActionKind[],
+): boolean {
+  if (!draft.label.trim()) return false;
+  if (!draft.presetKind) return true;
+
+  const target = kinds
+    ?.find(kind => kind.kind === draft.presetKind)
+    ?.targets.find(candidate => candidate.key === draft.presetProperty);
+  if (!draft.presetProperty || (kinds && !target)) return false;
+
+  if (draft.presetKind === 'increment')
+    return typeof parseFloatText(draft.presetValue) === 'number';
+
+  if (draft.presetKind === 'setValue') {
+    return (
+      draft.presetValue !== '' &&
+      (!target?.values?.length ||
+        target.values.some(option => option.key === draft.presetValue))
+    );
+  }
+
+  return true;
 }
 export function quickAddSpecFromDraft(
   draft: QuickAddDraft,
   kinds: readonly TableRowActionKind[],
 ): QuickAddSpec {
   const generator = kinds.find(kind => kind.kind === draft.presetKind);
+  const value =
+    generator?.valueField?.input === 'number'
+      ? parseFloatText(draft.presetValue)
+      : draft.presetValue;
   const first: QuickAddPreset[] =
     draft.presetKind && draft.presetProperty
       ? [
           {
             kind: draft.presetKind,
             property: draft.presetProperty,
-            ...(generator?.valueField
-              ? {
-                  value:
-                    generator.valueField.input === 'number'
-                      ? Number(draft.presetValue)
-                      : draft.presetValue,
-                }
+            ...(generator?.valueField &&
+            typeof value !== 'symbol' &&
+            value !== undefined
+              ? { value }
               : {}),
           },
         ]
@@ -80,7 +107,10 @@ export function quickAddSpecFromDraft(
     ...(draft.withField && draft.placeholder.trim()
       ? { placeholder: draft.placeholder.trim() }
       : {}),
-    presets: first,
+    presets: [
+      ...first,
+      ...(draft.remainingPresets ?? []).map(preset => ({ ...preset })),
+    ],
   };
 }
 export interface TableQuickAddFieldsProps {
