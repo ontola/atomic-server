@@ -3312,3 +3312,13 @@ Nov27 focused native validation of the seven affected/current regression journey
 7/7 passed, then 35/35 passed across five repetitions with four workers and no
 retries, skips, or global errors. This is targeted evidence, not a full CI result;
 the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.
+
+Catalog response compatibility (#2419): `pluginListings.test.ts` exercises both
+legacy arrays and `{ entries, hostFeatures }` envelopes, unchanged row/search
+normalization, empty catalogs, ignored host metadata and malformed top-level
+responses. `integration-store-install.spec.ts` contains strict-diagnostic browser
+journeys for searching and reviewing either format and keeping Apps usable after
+an invalid response. These browser journeys still require matching-build CI.
+The moved `table-page/src/TablePage/TableCell.test.tsx` fixture supplies edited
+column and creation-timestamp metadata locally and rejects every HTTP request;
+the real date commit still updates the value and records its creation timestamp.

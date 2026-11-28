@@ -3,7 +3,15 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { StrictMode } from 'react';
-import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   act,
   cleanup,
@@ -22,7 +30,7 @@ import {
   Store,
   StoreContext,
   type Property,
-  type Resource,
+  Resource,
 } from '@tomic/react';
 import { FancyTable } from '@tomic/resource-ui/chunks/TableEditor/index';
 import { buildTheme, ThemeProvider } from '../../test/providers';
@@ -41,6 +49,11 @@ vi.mock('./helpers/useColumnLabel', () => ({ useColumnLabel: () => 'Day' }));
 
 const DAY = 'https://example.com/properties/day';
 const STORED = '2026-09-25';
+const fetchResource = vi.fn<typeof fetch>(async input => {
+  throw new Error(
+    `Unexpected HTTP request in a TableCell test: ${String(input)}`,
+  );
+});
 
 const dayProperty: Property = {
   subject: DAY,
@@ -72,7 +85,13 @@ beforeAll(async () => {
     ResizeObserverStub as unknown as typeof ResizeObserver;
 });
 
-afterEach(cleanup);
+beforeEach(() => {
+  fetchResource.mockClear();
+});
+afterEach(() => {
+  cleanup();
+  expect(fetchResource).not.toHaveBeenCalled();
+});
 
 async function renderDateCell(): Promise<Resource> {
   return renderCell(dayProperty, STORED);
@@ -83,16 +102,30 @@ async function renderCell(
   stored: JSONValue,
 ): Promise<Resource> {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
-  // First edits set createdAt. Seed its definition so this local fixture never
-  // fetches timestamp metadata over HTTP before reaching its value assertion.
-  const timestamp = await store.newResource({
-    subject: commits.properties.createdAt,
-    noParent: true,
-  });
-  await timestamp.set(core.properties.datatype, Datatype.TIMESTAMP, false);
-  await timestamp.set(core.properties.shortname, 'createdAt', false);
-  await timestamp.set(core.properties.description, 'Creation timestamp', false);
-  // A `_new:` row stays local, so nothing here reaches for a server.
+  store.injectFetch(fetchResource);
+
+  // `connect: false` disables WebSockets, not HTTP metadata reads. Supply both
+  // the edited column and the creation timestamp property before the first edit.
+  for (const definition of [
+    property,
+    {
+      subject: commits.properties.createdAt,
+      datatype: Datatype.TIMESTAMP,
+      shortname: 'createdAt',
+      description: 'Creation timestamp',
+    },
+  ]) {
+    const metadata = new Resource(definition.subject);
+    metadata.applyHydratedValues([
+      [core.properties.isA, [core.classes.property]],
+      [core.properties.datatype, definition.datatype],
+      [core.properties.shortname, definition.shortname],
+      [core.properties.description, definition.description],
+    ]);
+    store.addResource(metadata);
+  }
+
+  // A `_new:` row stays local; these tests never persist to a server.
   const row = await store.newResource({
     subject: '_new:day-row',
     noParent: true,
@@ -195,6 +228,7 @@ describe('typing on a selected date cell (#1822)', () => {
     });
 
     await waitFor(() => expect(row.get(DAY)).toBe('2026-10-02'));
+    expect(row.get(commits.properties.createdAt)).toEqual(expect.any(Number));
   });
 });
 

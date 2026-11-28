@@ -24,17 +24,22 @@ function strings(value: unknown): string[] {
 }
 
 /**
- * Reads the body of `/plugin-catalog`, which is untrusted: a node that has no
- * such route (older, or built without plugin routes) or a proxy in front of
- * one can answer 200 with JSON that is not a list, and the page filters it.
- * Throws so the page shows the problem instead of crashing.
+ * Reads `/plugin-catalog` as a legacy array or an envelope with `entries` and
+ * optional host metadata. Only the entries reach the existing normalizer.
+ * Unrelated JSON still throws so the page can show its catalog error card.
  */
 export function parseListings(body: unknown): Listing[] {
-  if (!Array.isArray(body)) {
+  const entries: unknown = Array.isArray(body)
+    ? body
+    : typeof body === 'object' && body !== null && 'entries' in body
+      ? body.entries
+      : undefined;
+
+  if (!Array.isArray(entries)) {
     throw new Error('The app catalog did not return a list of apps.');
   }
 
-  return body
+  return entries
     .filter(
       (entry): entry is Listing => typeof entry === 'object' && entry !== null,
     )

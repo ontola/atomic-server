@@ -17,6 +17,11 @@ Three classes describe a plugin's life on a server:
 - A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
 - An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
+The Apps page accepts `/plugin-catalog` as either an array of Listings or an
+object with an `entries` array and optional `hostFeatures` metadata. It displays
+the entries using the same normalization and search rules for both formats.
+Malformed catalog responses show a catalog error while the Apps page stays usable.
+
 ## Apps that use a drive
 
 A native app that has its own repository and writes its own classes into a drive (a Flutter council app, say) is not a plugin and is never run by the server, so it leaves no trace in the drive by itself. It records itself as an **ExternalApp** (`https://atomicdata.dev/classes/ExternalApp`), a child of the drive. Required: `name` and `homepage`. Recommended: `emoji`, `description`, `openUrlTemplate` (a URL containing `{subject}`, replaced by the URL-encoded subject of a resource) and `handlesClasses` (the class URLs the app can open).
