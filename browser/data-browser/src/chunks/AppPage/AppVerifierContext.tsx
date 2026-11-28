@@ -1,6 +1,8 @@
 // @wc-ignore-file
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useRef,
@@ -8,7 +10,11 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { styled } from 'styled-components';
-import { AppFrame, type AppOutcome } from './AppFrame';
+import type { AppOutcome } from './AppFrame';
+
+const AppFrame = lazy(() =>
+  import('./AppFrame').then(module => ({ default: module.AppFrame })),
+);
 
 /**
  * How long to wait before calling it inconclusive.
@@ -122,13 +128,15 @@ export function AppVerifierProvider({
         // skip layout entirely, and an app that measures anything would see
         // zeroes and take a path nobody will ever take in real use.
         <OffScreen aria-hidden>
-          <AppFrame
-            key={`${running.app}-${running.drive}`}
-            app={running.app}
-            drive={running.drive}
-            onOutcome={onOutcome}
-            silent
-          />
+          <Suspense fallback={null}>
+            <AppFrame
+              key={`${running.app}-${running.drive}`}
+              app={running.app}
+              drive={running.drive}
+              onOutcome={onOutcome}
+              silent
+            />
+          </Suspense>
         </OffScreen>
       )}
     </AppVerifierContext.Provider>

@@ -47,6 +47,7 @@ jobs:
       - run: pnpm --filter @tomic/data-browser typecheck
       - run: pnpm --filter @tomic/e2e typecheck
       - run: pnpm --filter @tomic/data-browser test:syncables-apps
+      - run: pnpm --filter @tomic/data-browser exec vitest run src/chunks/AppPage/noServerApp.test.tsx
       - run: pnpm --filter @tomic/lib exec vitest run src/plugin-connection.test.ts src/resource.test.ts
 
   onboarding-playwright:
