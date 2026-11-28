@@ -132,7 +132,8 @@ Drive apps follow a stricter rule: they read what the signed-in person can read,
 
 ### Built-in service apps
 
-Server-bundled Sync apps use the same frame, request protocol and Store APIs.
+Atomic builds the built-in Sync app from TypeScript into one browser module.
+The module uses the same frame, request protocol and Store APIs as other apps.
 Their native host selects a fixed server source and a single collection root.
 Writes use the signed-in person's existing rights, limited to that root and its
 children. The frame cannot choose a wider destination or receive connection keys.

@@ -1592,6 +1592,14 @@ This does not yet prove restoration of the user's private staging workspace.
 
 ## Plugin UI sandbox and private assets
 
+- The Data Browser typecheck covers the built-in Sync iframe entry point and its
+  shared identity, observation and reference helpers. The bundle test verifies
+  the TypeScript entry point, the embedded Syncables reader and the existing
+  shell-provided bridge. The targeted workflow also runs the scope and adapter
+  tests and the Table view tabs test from its owning package. The native Table
+  Open test covers a store snapshot refresh during a pending navigation and
+  invalidation when the row moves or the cell unmounts.
+
 - `browser/data-browser/scripts/check-translations.test.ts` audits every
   supported UI catalog, including the Syncables Apps and OAuth strings, for
   missing entries, empty translations and invalid placeholders/markup.

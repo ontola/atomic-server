@@ -15,8 +15,11 @@ links use the ordinary Table settings.
 - [x] Integrate develop `02eb7c0be`. Keep its Apps layout and settings link.
   The integration proxy uses the existing experimental opt-in and search
   under Discover apps. Keep develop's independent default-store bootstrap fix.
-- [ ] Maintainer review still covers the handwritten iframe module, adapter
-  boundaries and how to split the change for review.
+- [x] Address the maintainer review in the existing feature worktree on
+  `codex/builtin-syncables-completion`, starting from `5cb26a54f`.
+  - [x] Typecheck the handwritten iframe entry point and its shared helpers.
+  - [x] Consolidate duplicate native identity resolution and validate its callers.
+  - [x] Map a dependency-ordered review stack with acceptance tests per slice.
 - [ ] Trekmeester runs full shared Main/server CI on the final integration
   candidate, reviews and merges. Remove this handoff after acceptance.
 - [x] Signed-in Chrome verification on `fa9cb95f4` completed 25 November.
@@ -30,6 +33,39 @@ links use the ordinary Table settings.
   the 2,608 stored Issues/PRs and linked authors. This edited capture uses the
   existing connection and completed import; it does not repeat OAuth.
   The earlier real sign-in recording shows the historical UI.
+
+## Proposed review stack
+
+Build each slice from the current feature tree against `develop`. The original
+catalog, flat-collection, principal App and reference commits each modify the
+same host and iframe paths, so their historical commits need to be separated
+along the boundaries below.
+
+| Review slice | Code boundary | Independent acceptance |
+| --- | --- | --- |
+| Shared query correctness | Scoped query offsets and visible totals in `lib/src/db/query_index.rs` and `storelike.rs`, plus the matching client query, paging and cache behavior in `browser/lib`. | Rust and SDK cases for drive scope, Trash, visible page counts and changes outside the loaded page. |
+| Catalog and principal Apps | Apps discovery, catalog parsing, proxy connection and OAuth/PKCE, server bundle and existing host bridge, native drive-scoped principal registration. Split principal promotion from collection provisioning at the iframe's `openPrincipal` and `openPublic` entry points and their native host handlers. | A provider appears in Apps, then creates a Public or authenticated App in the selected drive. Verify reconnect, duplicate prevention, moves, Trash and independent drives. |
+| Flat collections and sync | Catalog-derived schemas and canonical tables, TablePage extension, saved rules, typed observations and memberships, background execution, v2 flat adoption. Keep navigation from fully imported rows in this slice. | Open and sync a saved filter, verify scope, pause and resume, overlapping memberships, incomplete reads, moved identities and stored table navigation. |
+| Linked records | Catalog-declared link datatypes, proved reference materialization, iframe field projection, column and view migration, and navigation from embedded records. Keep the typed link write and its permission checks together. | A linked field lands as an Atomic link to the canonical same-drive target. Verify re-use and enrichment, permission changes, embedded-origin navigation and provider request counts. |
+
+The three feature slices depend on their predecessors. The catalog slice needs
+the minimal host relay and account proof used by the chooser. Collection
+execution and its exact rule permissions arrive with flat collections.
+The last slice owns the link schema, host response journal and reference writes
+together. Reuse the provider fixtures, with smaller journeys for each slice.
+Validate each branch independently before combining the stack. Schedule the
+combined rollout after the link slice or after testing a scalar-to-link backfill
+on data written by the intermediate release.
+
+### Native adapters
+
+`syncableSource` owns canonical flat-source validation and key reconstruction.
+Native Table navigation and filter creation share a drive-scoped stored-table
+lookup. Reference imports use the same identity proof with their own complete
+signed lookup, Trash conflict detection, and guarded writes. Principal App
+registration reuses its proved scope and schema to validate candidates.
+Historical adoption retains its own ancestry and migration checks and uses
+the shared local-subject validation.
 
 ## Contract
 
