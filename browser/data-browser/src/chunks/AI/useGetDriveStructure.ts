@@ -1,10 +1,19 @@
 import { useSettings } from '@helpers/AppSettings';
+import {
+  isSyncablesNavigationTable,
+  isSyncablesPlatformRoot,
+  withoutTableViews,
+} from '@chunks/PluginRuns/syncablesNavigation';
+import { syncableHierarchySchema } from '@chunks/PluginRuns/syncableHierarchy';
+import { readHiddenSyncableSetups } from '@chunks/PluginRuns/syncableSetupVisibility';
+import { canonicalizeScheme } from '@tomic/lib';
 import { shortenSubject } from '@tomic/react';
 import {
   ai,
   CollectionBuilder,
   core,
   dataBrowser,
+  findSchema,
   isCommitSubject,
   useStore,
   type Store,
@@ -56,10 +65,10 @@ async function fetchChildren(store: Store, parent: string): Promise<string[]> {
  *  them (table rows, chat messages) would flood the tree. Same set the
  *  sidebar hides children for — including "class not loaded yet", so a
  *  table's rows don't flash in the tree before `isA` arrives. */
-function hideChildrenOf(classes: string[]): boolean {
+function hideChildrenOf(classes: string[], isDirectory: boolean): boolean {
   return (
     classes.length === 0 ||
-    classes.includes(dataBrowser.classes.table) ||
+    (classes.includes(dataBrowser.classes.table) && !isDirectory) ||
     classes.includes(dataBrowser.classes.chatroom) ||
     classes.includes(dataBrowser.classes.meeting) ||
     classes.includes(ai.classes.aiChat) ||
@@ -74,6 +83,8 @@ export function useGetDriveStructure() {
   const buildTree = async (
     subjects: string[],
     visited: Set<string>,
+    getSourceKeyProperty: () => Promise<string | undefined>,
+    hidden: ReadonlySet<string>,
   ): Promise<TreeNode> => {
     const node: TreeNode = {};
 
@@ -83,6 +94,8 @@ export function useGetDriveStructure() {
 
     for (const resource of resources) {
       const subject = resource.subject;
+
+      if (hidden.has(canonicalizeScheme(subject))) continue;
 
       if (visited.has(subject)) {
         continue;
@@ -94,11 +107,38 @@ export function useGetDriveStructure() {
         subject,
       };
 
-      if (!hideChildrenOf(resource.getClasses())) {
-        const children = await fetchChildren(store, subject);
+      const classes = resource.getClasses();
+      const localId = resource.get(core.properties.localId);
+      const legacyDirectory =
+        classes.includes(dataBrowser.classes.table) &&
+        isSyncablesNavigationTable(localId);
+      const keyProperty =
+        legacyDirectory && !isSyncablesPlatformRoot(localId)
+          ? await getSourceKeyProperty()
+          : undefined;
+      const isDirectory =
+        legacyDirectory &&
+        isSyncablesNavigationTable(
+          localId,
+          keyProperty ? resource.get(keyProperty) : undefined,
+        );
 
-        if (children.length > 0) {
-          element.children = await buildTree(children, visited);
+      if (!hideChildrenOf(classes, isDirectory)) {
+        const children = await fetchChildren(store, subject);
+        const visibleChildren = isDirectory
+          ? withoutTableViews(
+              children,
+              resource.getSubjects(dataBrowser.properties.tableViews),
+            )
+          : children;
+
+        if (visibleChildren.length > 0) {
+          element.children = await buildTree(
+            visibleChildren,
+            visited,
+            getSourceKeyProperty,
+            hidden,
+          );
         }
       }
 
@@ -109,8 +149,28 @@ export function useGetDriveStructure() {
   };
 
   return async (): Promise<TreeNode> => {
+    let sourceKeyProperty: Promise<string | undefined> | undefined;
+
+    const getSourceKeyProperty = () => {
+      if (!sourceKeyProperty)
+        sourceKeyProperty = findSchema(store, drive, syncableHierarchySchema())
+          .then(terms => terms.properties?.['syncable-source-key'])
+          .catch(() => undefined);
+
+      return sourceKeyProperty;
+    };
+
     const rootSubjects = await fetchChildren(store, drive);
 
-    return buildTree(rootSubjects, new Set([drive]));
+    const hidden = await readHiddenSyncableSetups(store, drive).catch(
+      () => new Set<string>(),
+    );
+
+    return buildTree(
+      rootSubjects,
+      new Set([drive]),
+      getSourceKeyProperty,
+      hidden,
+    );
   };
 }

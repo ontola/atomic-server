@@ -165,7 +165,6 @@
     "preview": "vite preview",
     "start": "vite",
     "test": "vitest run --exclude scripts/integration-mcp.test.mjs && node --test scripts/integration-mcp.test.mjs",
-    "test:syncables-apps": "vitest run scripts/builtin-syncables-bundle.test.mjs src/chunks/PluginRuns/proxyCatalog.test.ts src/chunks/PluginRuns/syncableDocument.test.ts src/chunks/PluginRuns/syncablePlatform.test.ts src/chunks/PluginRuns/syncablePrincipalApp.test.ts src/chunks/PluginRuns/syncableSetupVisibility.test.ts src/chunks/PluginRuns/useSyncableSetupSubjects.test.tsx src/chunks/PluginRuns/installIntegrationIcon.test.ts src/chunks/AppPage/AppFrameProfile.test.tsx src/chunks/AppPage/ProxyConnectReturn.test.tsx src/chunks/AppPage/builtinApp.test.ts src/chunks/AppPage/builtinAppPage.test.tsx src/helpers/proxyConnections.test.ts",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
     "check:react-compiler": "node scripts/check-react-compiler.mjs",
     "clean-translations": "pnpm --dir ../resource-ui clean-translations",

@@ -63,10 +63,12 @@ function Harness({
   store,
   initial,
   setViewKind,
+  allowCollection = false,
 }: {
   store: Store;
   initial: string[];
   setViewKind: (subject: string, kind: string) => void;
+  allowCollection?: boolean;
 }) {
   const portal = useRef<HTMLDivElement>(null);
   const [views, setViews] = useState(initial);
@@ -87,6 +89,9 @@ function Harness({
         <DropdownPortalContext.Provider value={portal}>
           <TableViewTabs
             rowClass='https://example.com/classes/piece'
+            builtinKinds={
+              allowCollection ? ['table', 'syncable-collection'] : undefined
+            }
             views={views}
             activeView={active}
             setActiveView={setActive}
@@ -115,7 +120,7 @@ function Harness({
   );
 }
 
-async function setup(views: Array<[string, string]>) {
+async function setup(views: Array<[string, string]>, allowCollection = false) {
   const store = new Store({ serverUrl: 'https://example.com', connect: false });
   const subjects: string[] = [];
 
@@ -125,10 +130,15 @@ async function setup(views: Array<[string, string]>) {
 
   const setViewKind = vi.fn();
   render(
-    <Harness store={store} initial={subjects} setViewKind={setViewKind} />,
+    <Harness
+      store={store}
+      initial={subjects}
+      setViewKind={setViewKind}
+      allowCollection={allowCollection}
+    />,
   );
 
-  return { setViewKind };
+  return { setViewKind, store, subjects };
 }
 
 /** Clicking the active tab opens its menu. */
@@ -193,3 +203,70 @@ it('offers an in-place change while another table view remains', async () => {
     'calendar',
   );
 });
+
+it('keeps collection views out of a table without a valid descriptor', async () => {
+  await setup([['All pieces', 'table']]);
+  const menu = await openMenu('All pieces');
+
+  expect(within(menu).queryByText('Syncable Collections')).toBeNull();
+  expect(within(menu).queryByText('Sync')).toBeNull();
+});
+
+it('manually adds an applicable generic collection view while keeping the Table tab', async () => {
+  await setup([['All pieces', 'table']], true);
+  fireEvent.click(screen.getByRole('button', { name: 'Add view' }));
+  const menu = await screen.findByRole('menu');
+  fireEvent.click(
+    within(menu).getByRole('menuitem', { name: 'Syncable Collections' }),
+  );
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual([
+      'All pieces',
+      'Syncable Collections',
+    ]),
+  );
+});
+
+it('offers the generic collection view in applicable add and change menus', async () => {
+  const { setViewKind } = await setup(
+    [
+      ['All repositories', 'table'],
+      ['Another table', 'table'],
+    ],
+    true,
+  );
+  const menu = await openMenu('All repositories');
+  const choices = within(menu).getAllByRole('menuitem', {
+    name: 'Syncable Collections',
+  });
+
+  expect(choices).toHaveLength(2);
+  expect(within(menu).queryByText('Sync')).toBeNull();
+  fireEvent.click(choices[1]);
+  expect(setViewKind).toHaveBeenCalledWith(
+    expect.stringMatching(/^_new:view-/),
+    'syncable-collection',
+  );
+});
+
+it.each(['Collection', 'Browse', 'Syncable Collection'])(
+  'labels historical %s tabs without rewriting names or changing custom titles',
+  async storedName => {
+    const { store, subjects } = await setup([
+      [storedName, 'syncable-collection'],
+      ['My saved repositories', 'syncable-collection'],
+      ['Browse', 'table'],
+    ]);
+    expect(
+      await screen.findByRole('tab', { name: 'Syncable Collections' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('tab', { name: 'My saved repositories' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Browse' })).toBeTruthy();
+    expect(
+      (await store.getResource(subjects[0])).get(core.properties.name),
+    ).toBe(storedName);
+  },
+);

@@ -18,12 +18,14 @@ import { useTableView, UseTableViewResult } from './useTableView.js';
 import { toAggregation } from './tableAggregates.js';
 import { getTableDrive } from './tableDrive.js';
 import { compileViewPredicates } from './viewQuery.js';
+import type { TableExtension } from './TableExtension.js';
 
 const PAGE_SIZE = 30;
 
 type UseTableDataResult = {
   tableClass: Resource;
   derivedSpecs: DerivedColumnSpec[];
+  queryProperty: string;
   queryValue: string;
   queryAggregation: Aggregation | undefined;
   unresolvedFilters: boolean;
@@ -45,9 +47,18 @@ export function useTableData(
   /** Which view to show, when the caller decides rather than the URL. */
   viewOverride?: string,
   embedded = false,
+  extension?: TableExtension,
 ): UseTableDataResult {
-  const tableView = useTableView(resource, viewOverride, embedded);
+  const tableView = useTableView(
+    resource,
+    viewOverride,
+    embedded,
+    extension?.selectViews,
+  );
   const { filters, sorting } = tableView;
+  const viewKind =
+    extension?.viewKind?.(tableView.viewKind) ?? tableView.viewKind;
+  const scope = extension?.rowScope?.(viewKind);
   const store = useStore();
 
   const [classSubject] = useSubject(resource, core.properties.classtype);
@@ -60,7 +71,6 @@ export function useTableData(
     tableView.viewSplitLanguages,
   );
   const {
-    viewKind,
     viewDerivedColumns,
     viewDerivedColumnsSet,
     viewGroupBy,
@@ -87,7 +97,9 @@ export function useTableData(
   );
   const predicates = compileViewPredicates(classSubject, filters, derivedSpecs);
   const queryValue =
-    predicates.classReady && !predicates.hasUnresolved ? resource.subject : '';
+    predicates.classReady && !predicates.hasUnresolved && scope?.ready !== false
+      ? resource.subject
+      : '';
   const aggregation = toAggregation(
     tableView.viewAggregates,
     tableView.viewGroupByColumn,
@@ -99,11 +111,11 @@ export function useTableData(
     tableView.viewAggregates.length > 0 && !aggregation;
 
   const queryFilter = {
-    property: core.properties.parent,
+    property: scope?.property ?? core.properties.parent,
     // `Collection.fetchPage` no-ops when value is undefined. Hold the
     // query until classtype is known so views don't flash as rows.
     value: queryValue || undefined,
-    filters: predicates.filters,
+    filters: [...predicates.filters, ...(scope?.filters ?? [])],
     expression_filters: predicates.expressionFilters,
     sort_by: sorting.prop,
     sort_desc: sorting.sortDesc,
@@ -125,9 +137,11 @@ export function useTableData(
 
   return {
     ...tableView,
+    viewKind,
     ...columnState,
     tableClass,
     derivedSpecs,
+    queryProperty: queryFilter.property,
     queryValue,
     queryAggregation: aggregation,
     unresolvedFilters: predicates.hasUnresolved,

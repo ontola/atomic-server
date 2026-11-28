@@ -3,18 +3,36 @@ name: Built-in Syncables iframe validation
 on:
   pull_request:
     paths:
-      - 'browser/data-browser/src/chunks/PluginRuns/**'
-      - 'browser/data-browser/src/chunks/AppPage/**'
+      - 'browser/data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx'
+      - 'browser/data-browser/src/chunks/PluginRuns/proxyCatalog*'
+      - 'browser/data-browser/src/chunks/PluginRuns/syncable*'
+      - 'browser/data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx'
+      - 'browser/data-browser/src/chunks/PluginRuns/builtin*'
+      - 'browser/data-browser/src/chunks/PluginRuns/SyncableCollectionView*'
+      - 'browser/data-browser/src/chunks/PluginRuns/installIntegrationIcon*'
+      - 'browser/data-browser/src/chunks/AppPage/builtinApp*'
+      - 'browser/data-browser/src/chunks/AppPage/index.tsx'
+      - 'browser/data-browser/src/views/FolderPage/**'
+      - 'browser/data-browser/src/chunks/AppPage/AppFrame*'
+      - 'browser/data-browser/src/chunks/AppPage/AppExecution*'
+      - 'browser/data-browser/src/chunks/AppPage/hostStore*'
+      - 'browser/data-browser/src/chunks/AppPage/viewClient.js'
+      - 'browser/plugin/src/*'
+      - 'browser/lib/src/plugin-apply*'
+      - 'browser/lib/src/plugin-run.integration.test.ts'
+      - 'browser/lib/src/resource.ts'
+      - 'browser/table-page/src/TablePage/**'
       - 'browser/data-browser/src/helpers/proxyConnections*'
-      - 'browser/data-browser/src/routes/IntegrationStore.tsx'
+      - 'browser/data-browser/src/chunks/AppPage/ProxyConnectReturn*'
+      - 'browser/e2e/scripts/local-e2e.mjs'
+      - 'browser/e2e/tests/syncables-apps.spec.ts'
+      - 'browser/e2e/tests/fixtures/syncablesProxy.ts'
+      - 'browser/e2e/tests/syncables-flat.spec.ts'
       - 'browser/data-browser/scripts/*builtin-syncables*'
       - 'browser/data-browser/package.json'
       - 'browser/data-browser/vite.config.ts'
-      - 'browser/lib/src/plugin-connection*'
-      - 'browser/e2e/tests/syncables-apps.spec.ts'
-      - 'browser/e2e/tests/fixtures/syncablesProxy.ts'
       - 'browser/pnpm-lock.yaml'
-      - 'server/build.rs'
+      - 'browser/data-browser/src/chunks/PluginRuns/fixtures/github-syncables*'
       - 'server/src/handlers/plugin_ui.rs'
       - 'server/src/routes.rs'
       - '.github/workflows/syncables-iframe.yml'
@@ -27,9 +45,6 @@ jobs:
   typescript:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: browser
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -41,14 +56,62 @@ jobs:
           node-version: '26'
           cache: pnpm
           cache-dependency-path: browser/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm -r --filter '@tomic/data-browser^...' build
-      - run: pnpm --filter @tomic/data-browser typecheck
-      - run: pnpm --filter @tomic/e2e typecheck
-      - run: pnpm --filter @tomic/data-browser test:syncables-apps
-      - run: pnpm --filter @tomic/lib exec vitest run src/plugin-connection.test.ts
+      - name: Install workspace dependencies
+        working-directory: browser
+        run: pnpm install --frozen-lockfile
+      - name: Build Data Browser workspace dependencies
+        working-directory: browser
+        run: pnpm -r --filter '@tomic/data-browser^...' build
+      - name: Typecheck Data Browser
+        working-directory: browser
+        run: pnpm --filter @tomic/data-browser typecheck
+      - name: Typecheck Playwright E2E specs
+        working-directory: browser
+        run: pnpm --filter @tomic/e2e typecheck
+      - name: Test built-in Syncables unit specs
+        working-directory: browser
+        run: >-
+          pnpm --filter @tomic/data-browser exec vitest run
+          src/chunks/PluginRuns/syncablePlatform.test.ts
+          src/chunks/PluginRuns/syncableHierarchy.test.ts
+          src/chunks/PluginRuns/syncablesNavigation.test.ts
+          src/chunks/PluginRuns/syncableCollection.test.ts
+          src/chunks/PluginRuns/syncableApiSchema.test.ts
+          src/chunks/PluginRuns/syncableRules.test.ts
+          src/chunks/PluginRuns/syncablePickerSources.test.ts
+          src/chunks/AppPage/builtinApp.test.ts
+          src/chunks/AppPage/builtinAppPage.test.tsx
+          src/chunks/PluginRuns/proxyCatalog.test.ts
+          src/chunks/PluginRuns/builtinSyncablesProfile.test.ts
+          src/chunks/PluginRuns/builtinSyncApp.test.ts
+          src/chunks/PluginRuns/syncableDocument.test.ts
+          scripts/builtin-syncables-bundle.test.mjs
+          src/chunks/PluginRuns/SyncableCollectionView.test.tsx
+          src/chunks/PluginRuns/installIntegrationIcon.test.ts
+          src/chunks/AppPage/AppExecutionRuntime.test.ts
+          src/chunks/AppPage/AppFrameProfile.test.tsx
+          src/chunks/AppPage/hostStoreProfile.test.ts
+          src/chunks/AppPage/hostStore.test.ts
+          src/helpers/proxyConnections.test.ts
+          src/chunks/AppPage/ProxyConnectReturn.test.tsx
+          src/chunks/PluginRuns/builtinSyncIdentity.test.ts
+          src/chunks/PluginRuns/builtinSyncFlatState.test.ts
+          src/chunks/PluginRuns/syncableSource.test.ts
+          src/chunks/PluginRuns/syncableFlatAdoption.test.ts
+          src/chunks/PluginRuns/syncableFlatNavigation.test.ts
+          src/chunks/PluginRuns/useSyncableTableNavigation.test.tsx
+          src/chunks/PluginRuns/syncablePrincipalApp.test.ts
+      - name: Test Sync and Table view tabs
+        working-directory: browser
+        run: pnpm --filter @tomic/table-page exec vitest run src/TablePage/TableViewTabs.test.tsx
+      - name: Test shared bridge client protocol
+        working-directory: browser
+        run: pnpm --filter @tomic/plugin exec vitest run src/store.test.ts src/viewProtocol.test.ts
+      - name: Test shared Store write authority
+        working-directory: browser
+        run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/resource.test.ts
 
-  onboarding-playwright:
+  flat-collections-playwright:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -64,7 +127,7 @@ jobs:
           targets: wasm32-unknown-unknown,wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
         with:
-          key: syncables-onboarding-playwright
+          key: syncables-playwright
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: browser/package.json
@@ -76,11 +139,11 @@ jobs:
           cache-dependency-path: browser/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @tomic/e2e exec playwright install-deps chromium
-      - run: pnpm test-e2e:local tests/syncables-apps.spec.ts --workers=1 --retries=0
+      - run: pnpm test-e2e:local syncables-apps.spec.ts syncables-flat.spec.ts --workers=1 --retries=0
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: syncables-onboarding-playwright
+          name: syncables-flat-playwright
           path: |
             .e2e-runs/*/*.log
             .e2e-runs/*/report.json

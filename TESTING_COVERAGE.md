@@ -3313,3 +3313,12 @@ validation, the scoped iframe bridge, OAuth handoffs, and drive-local App
 registration, including known moved identities and retained Trash conflicts.
 `pnpm test-e2e:local tests/syncables-apps.spec.ts` runs the chooser and repeat
 installation journeys through the real server and a signed proxy fixture.
+
+## Flat Syncables collections
+
+`browser/e2e/tests/syncables-flat.spec.ts` installs a provider from Apps, saves
+a Public input filter, imports typed rows and replays the sync idempotently.
+It checks that Pause disables syncing and ordinary Table keeps the stored data.
+The Syncables unit suites cover typed reconciliation, filter memberships,
+incomplete runs, source authority, scoped storage, and offline navigation from
+imported records. The scoped workflow runs the browser journey independently.

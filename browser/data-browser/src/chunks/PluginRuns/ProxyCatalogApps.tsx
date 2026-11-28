@@ -31,6 +31,15 @@ import {
 
 /** Display names only. Source IDs are always the proxy's own canonical IDs. */
 export function platformDisplayName(id: string): string {
+  if (id === 'gitlab') return 'GitLab';
+  if (id === 'todoist') return 'Todoist';
+  if (id === 'spotify') return 'Spotify';
+  if (id === 'airtable') return 'Airtable';
+  if (id === 'discord') return 'Discord';
+  if (id === 'notion') return 'Notion';
+  if (id === 'moneybird') return 'Moneybird';
+  if (id === 'clockify') return 'Clockify';
+
   return id
     .split('-')
     .map(part =>
@@ -39,11 +48,22 @@ export function platformDisplayName(id: string): string {
     .join(' ');
 }
 
+export function visibleProxyPlatforms(ids: string[], query: string): string[] {
+  const search = query.trim().toLocaleLowerCase();
+
+  return ids.filter(id =>
+    [platformDisplayName(id), id]
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(search),
+  );
+}
+
 /**
  * Discover provider *definitions* from the configured proxy.
  *
  * Installing a supported service creates a provider App whose identities
- * are described by the catalog.
+ * and collections are described by the catalog.
  */
 export function ProxyCatalogApps({
   drive,
@@ -124,12 +144,7 @@ export function ProxyCatalogApps({
     );
   }
 
-  const search = query.trim().toLocaleLowerCase();
-  const visible = catalog.entries.filter(entry =>
-    [entry.name ?? platformDisplayName(entry.id), entry.id].some(value =>
-      value.toLocaleLowerCase().includes(search),
-    ),
-  );
+  const visible = visibleProxyPlatforms(catalog.platforms, query);
 
   const install = (platform: string) => {
     setBusy(platform);
@@ -218,7 +233,8 @@ export function ProxyCatalogApps({
         <h2>Connect a service</h2>
         <p>
           From the configured integration proxy at <code>{catalog.origin}</code>
-          . Add a service and choose an account for this drive.
+          . Add a service to browse its catalog collections and sync data into
+          your drive.
         </p>
         {lookupError && (
           <p role='alert'>
@@ -227,9 +243,9 @@ export function ProxyCatalogApps({
         )}
         {visible.length === 0 && <p>No matching services.</p>}
         <Grid>
-          {visible.map(entry => {
-            const platform = entry.id;
-            const name = entry.name ?? platformDisplayName(platform);
+          {visible.map(platform => {
+            const entry = catalog.entries.find(item => item.id === platform);
+            const name = entry?.name ?? platformDisplayName(platform);
             const subject = existing[platform];
 
             return (
@@ -243,7 +259,7 @@ export function ProxyCatalogApps({
                   </Row>
                   <div>
                     <h3>{name}</h3>
-                    <Description>{entry.description || platform}</Description>
+                    <Description>{entry?.description || platform}</Description>
                   </div>
                   <Row>
                     <Button

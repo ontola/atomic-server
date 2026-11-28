@@ -212,6 +212,14 @@ export class ViewStore {
     };
   }
 
+  /** Start, inspect or cancel the execution selected by the mounting host. */
+  public execution(action: 'start' | 'state' | 'cancel'): Promise<unknown> {
+    if (!['start', 'state', 'cancel'].includes(action))
+      return Promise.reject(new Error('Unknown view execution action'));
+
+    return this.call('execution', { action });
+  }
+
   /**
    * Several writes as one change, in the intent format a plugin's `run()`
    * returns. Refer to a resource created in the same call as

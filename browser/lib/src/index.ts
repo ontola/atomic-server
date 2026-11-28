@@ -233,6 +233,8 @@ export {
   applyHostFromStore,
   type ApplyStore,
   type ApplyHost,
+  type ApplyAuthority,
+  type ApplyWrite,
   type ApplyOptions,
   type ApplyReport,
   type ChangeOutcome,

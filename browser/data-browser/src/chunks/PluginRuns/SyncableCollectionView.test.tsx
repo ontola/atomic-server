@@ -1,0 +1,484 @@
+// @vitest-environment jsdom
+// @wc-ignore-file
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { ThemeProvider } from 'styled-components';
+import { core, dataBrowser, type Collection } from '@tomic/react';
+import { buildTheme } from '../../styling';
+import { SyncableCollectionView } from './SyncableCollectionView';
+
+const state = vi.hoisted(() => ({
+  store: {} as object,
+  navigate: vi.fn(),
+  propertyListeners: new Set<() => void>(),
+  resources: new Map<string, ReturnType<typeof resource>>(),
+  terms: {
+    properties: {
+      'syncable-collection-view': 'https://drive.example/view-descriptor',
+      'syncable-source-config': 'https://drive.example/source-config',
+    },
+  },
+}));
+vi.mock('@tomic/react', async original => {
+  const React = await import('react');
+
+  return {
+    ...(await original<typeof import('@tomic/react')>()),
+    useStore: () => state.store,
+    useResource: (subject: string) => state.resources.get(subject),
+    useResourceSnapshot: (subject: string) => {
+      const stored = state.resources.get(subject)!;
+      const stamp = React.useSyncExternalStore(
+        callback => {
+          state.propertyListeners.add(callback);
+
+          return () => {
+            state.propertyListeners.delete(callback);
+          };
+        },
+        () => JSON.stringify(stored.props),
+        () => JSON.stringify(stored.props),
+      );
+
+      return React.useMemo(
+        () => ({
+          resource: stored,
+          ready: stored.props.loading !== true,
+          error: stored.error,
+          revision: stamp,
+        }),
+        [stored, stamp],
+      );
+    },
+    useValue: (stored: ReturnType<typeof resource>, property: string) => {
+      const value = React.useSyncExternalStore(
+        callback => {
+          state.propertyListeners.add(callback);
+
+          return () => {
+            state.propertyListeners.delete(callback);
+          };
+        },
+        () => stored.get(property),
+        () => stored.get(property),
+      );
+
+      return [value];
+    },
+    findSchema: async () => state.terms,
+  };
+});
+vi.mock('@tomic/lib', async original => ({
+  ...(await original<typeof import('@tomic/lib')>()),
+  findSchema: async () => state.terms,
+}));
+vi.mock('@tomic/resource-ui/components/AtomicLink', () => ({
+  AtomicLink: ({
+    subject,
+    children,
+  }: {
+    subject: string;
+    children: React.ReactNode;
+  }) => <a href={subject}>{children}</a>,
+}));
+vi.mock('@hooks/useNavigateWithTransition', () => ({
+  useNavigateWithTransition: () => state.navigate,
+}));
+
+const rowClass = 'https://boards.example/types/workspace';
+const nameProperty = 'https://boards.example/properties/heading';
+const stateProperty = 'https://boards.example/properties/visibility';
+const countProperty = 'https://boards.example/properties/boards';
+const targetProperty = 'https://boards.example/properties/open-boards';
+const descriptorProperty = 'https://drive.example/view-descriptor';
+const table = location.origin + '/workspaces';
+const child = location.origin + '/boards';
+const descriptor = {
+  version: 1,
+  rowClass,
+  title: 'Saved workspaces',
+  columns: [
+    { property: nameProperty, label: 'Workspace' },
+    {
+      property: stateProperty,
+      label: 'Visibility',
+      format: 'enum',
+      labels: { shared: 'Shared workspace' },
+    },
+    { property: countProperty, label: 'Boards', format: 'count' },
+  ],
+  openTargetProperty: targetProperty,
+};
+
+function resource(subject: string, props: Record<string, unknown>) {
+  return {
+    subject,
+    error: undefined,
+    props,
+    get: (p: string) => props[p],
+    getSubjects: (p: string) => (Array.isArray(props[p]) ? props[p] : []),
+    hasClasses: (...classes: string[]) => {
+      const assigned = props[core.properties.isA];
+
+      return (
+        Array.isArray(assigned) &&
+        classes.every(type => assigned.includes(type))
+      );
+    },
+  };
+}
+
+function row(subject: string, metadata: Record<string, unknown> = {}) {
+  return resource(subject, {
+    [core.properties.parent]: table,
+    [core.properties.isA]: [rowClass],
+    [nameProperty]: subject,
+    ...metadata,
+  });
+}
+
+function collection(subjects: string[]) {
+  return {
+    totalMembers: subjects.length,
+    filters: [],
+    expressionFilters: [],
+    sortDesc: false,
+    getAllMembers: vi.fn(async () => subjects),
+  } as unknown as Collection;
+}
+
+function view(data: Collection, logicalOwnerProperty?: string) {
+  return (
+    <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
+      <SyncableCollectionView
+        table={table}
+        drive='drive'
+        collection={data}
+        ready
+        logicalOwnerProperty={logicalOwnerProperty}
+      />
+    </ThemeProvider>
+  );
+}
+
+beforeEach(() => {
+  state.store = {
+    getAgent: () => ({ subject: 'atomic:agent:viewer' }),
+    getServerUrl: () => location.origin,
+    getResource: async (subject: string) => state.resources.get(subject),
+    isForeignOriginSubject: (subject: string) =>
+      subject.startsWith('http') && new URL(subject).origin !== location.origin,
+  };
+  state.navigate.mockReset();
+  state.resources.clear();
+  state.propertyListeners.clear();
+  state.resources.set(
+    table,
+    resource(table, {
+      [core.properties.parent]: 'drive',
+      [core.properties.isA]: [dataBrowser.classes.table],
+      [core.properties.classtype]: rowClass,
+      [descriptorProperty]: structuredClone(descriptor),
+    }),
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      throw new Error('Browsing must not contact a provider');
+    }),
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe('native stored collections', () => {
+  it('renders a second provider using saved descriptor labels and values, with no iframe or refresh on return', async () => {
+    state.resources.set(
+      'research',
+      row('research', { [stateProperty]: 'shared', [countProperty]: 17 }),
+    );
+    const data = collection(['research']);
+    const mounted = render(view(data));
+    await screen.findByRole('link', { name: 'research' });
+    expect(screen.getByLabelText('Saved workspaces')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Boards' })).toBeTruthy();
+    expect(screen.getByText('Shared workspace')).toBeTruthy();
+    expect(screen.getByText('17')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Sync|Refresh/ })).toBeNull();
+    expect(mounted.container.querySelector('iframe')).toBeNull();
+    mounted.unmount();
+    vi.mocked(data.getAllMembers).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    const returned = render(view(data));
+    expect(screen.getByRole('link', { name: 'research' })).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(returned.container.querySelector('iframe')).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves collection order and separates filtered snapshots', async () => {
+    for (const subject of ['alpha', 'beta'])
+      state.resources.set(subject, row(subject));
+    const descending = collection(['beta', 'alpha']);
+    Object.assign(descending, { sortBy: nameProperty, sortDesc: true });
+    const mounted = render(view(descending));
+    await screen.findByRole('link', { name: 'beta' });
+    expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual([
+      'beta',
+      'alpha',
+    ]);
+    const filtered = collection(['alpha']);
+    Object.assign(filtered, {
+      filters: [{ property: nameProperty, value: 'alpha' }],
+    });
+    mounted.rerender(view(filtered));
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: 'beta' })).toBeNull(),
+    );
+    vi.mocked(descending.getAllMembers).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    mounted.rerender(view(descending));
+    expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual([
+      'beta',
+      'alpha',
+    ]);
+  });
+
+  it('opens a saved child in its installed generic view on the local server', async () => {
+    const research = location.origin + '/research';
+    state.resources.set(
+      research,
+      row(research, {
+        [nameProperty]: 'research',
+        [targetProperty]: child,
+      }),
+    );
+    state.resources.set(
+      child,
+      resource(child, {
+        [core.properties.parent]: research,
+        [core.properties.isA]: [dataBrowser.classes.table],
+        [dataBrowser.properties.tableViews]: [
+          'native-view',
+          'custom-view',
+          'saved-rule',
+        ],
+        [dataBrowser.properties.tableDefaultView]: 'native-view',
+      }),
+    );
+    state.resources.set(
+      'native-view',
+      resource('native-view', {
+        [core.properties.parent]: child,
+        [core.properties.isA]: [dataBrowser.classes.view],
+        [dataBrowser.properties.viewKind]: 'syncable-collection',
+      }),
+    );
+    for (const subject of ['custom-view', 'saved-rule'])
+      state.resources.set(
+        subject,
+        resource(subject, {
+          [core.properties.parent]: child,
+          [core.properties.isA]: [dataBrowser.classes.view],
+          [dataBrowser.properties.viewKind]: 'syncable-collection',
+          ...(subject === 'saved-rule'
+            ? {
+                'https://drive.example/source-config': {
+                  version: 3,
+                  kind: 'rule',
+                },
+              }
+            : {}),
+        }),
+      );
+    render(view(collection([research])));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    await waitFor(() =>
+      expect(state.navigate).toHaveBeenCalledWith('/boards?view=native-view'),
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('excludes rows with another parent, class, or assigned drive', async () => {
+    state.resources.set(
+      'moved',
+      row('moved', { [core.properties.parent]: 'elsewhere' }),
+    );
+    state.resources.set(
+      'other-class',
+      row('other-class', {
+        [core.properties.isA]: ['https://boards.example/types/project'],
+      }),
+    );
+    state.resources.set(
+      'foreign',
+      row('foreign', {
+        'https://atomicdata.dev/properties/drive': 'another-drive',
+      }),
+    );
+    render(view(collection(['moved', 'other-class', 'foreign'])));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('never selects an app iframe or unknown view as the raw Table fallback', async () => {
+    const research = location.origin + '/research';
+    state.resources.set(
+      research,
+      row(research, {
+        [nameProperty]: 'research',
+        [targetProperty]: child,
+      }),
+    );
+    state.resources.set(
+      child,
+      resource(child, {
+        [core.properties.parent]: research,
+        [core.properties.isA]: [dataBrowser.classes.table],
+        [dataBrowser.properties.tableViews]: [
+          'table-view',
+          'app-view',
+          'unknown-view',
+        ],
+      }),
+    );
+    for (const [subject, kind] of [
+      ['table-view', 'table'],
+      ['app-view', 'atomic:some-app'],
+      ['unknown-view', 'unknown'],
+    ])
+      state.resources.set(
+        subject,
+        resource(subject, {
+          [core.properties.parent]: child,
+          [core.properties.isA]: [dataBrowser.classes.view],
+          [dataBrowser.properties.viewKind]: kind,
+        }),
+      );
+    render(view(collection([research])));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    await waitFor(() =>
+      expect(state.navigate).toHaveBeenCalledWith('/boards?view=table-view'),
+    );
+  });
+
+  it('does not let a cached row authorize navigation after its authority changes', async () => {
+    state.resources.set('research', row('research'));
+    const data = collection(['research']);
+    const mounted = render(view(data));
+    await screen.findByRole('button', { name: 'Open' });
+    mounted.unmount();
+    vi.mocked(data.getAllMembers).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    render(view(data));
+    state.resources.get('research')!.props[core.properties.parent] =
+      'elsewhere';
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Open' })).toBeNull(),
+    );
+    expect(state.navigate).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('invalidates a cached descriptor when the table row class changes', async () => {
+    state.resources.set('research', row('research'));
+    const data = collection(['research']);
+    const mounted = render(view(data));
+    await screen.findByRole('link', { name: 'research' });
+    mounted.unmount();
+    state.resources.get(table)!.props[core.properties.classtype] =
+      'https://boards.example/types/project';
+    render(view(data));
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+});
+
+it('updates visible stored fields during background sync without opening a provider', async () => {
+  state.resources.set('research', row('research', { [countProperty]: 3 }));
+  render(view(collection(['research'])));
+  await screen.findByText('3');
+  await act(async () => {
+    state.resources.get('research')!.props[countProperty] = 8;
+    state.propertyListeners.forEach(notify => notify());
+  });
+  await screen.findByText('8');
+  expect(screen.queryByText('3')).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each([table, 'elsewhere'])(
+  'waits for a cached row subject under %s to hydrate before checking its logical owner',
+  async parent => {
+    const ownerProperty = 'https://drive.example/entity-table';
+    const pending = resource('pending', { loading: true });
+    state.resources.set('pending', pending);
+    render(view(collection(['pending']), ownerProperty));
+    await screen.findByRole('columnheader', { name: 'Workspace' });
+    expect(screen.queryByRole('link')).toBeNull();
+    await act(async () => {
+      Object.assign(pending.props, {
+        loading: false,
+        [core.properties.parent]: parent,
+        [ownerProperty]: table,
+        [core.properties.isA]: [rowClass],
+        [nameProperty]: 'Hydrated workspace',
+      });
+      state.propertyListeners.forEach(notify => notify());
+    });
+    await screen.findByRole('link', { name: 'Hydrated workspace' });
+
+    if (parent === 'elsewhere') {
+      await act(async () => {
+        pending.props[ownerProperty] = 'another-table';
+        state.propertyListeners.forEach(notify => notify());
+      });
+      await waitFor(() => expect(screen.queryByRole('link')).toBeNull());
+      await act(async () => {
+        pending.props[ownerProperty] = table;
+        state.propertyListeners.forEach(notify => notify());
+      });
+      await screen.findByRole('link', { name: 'Hydrated workspace' });
+    }
+
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
+
+it('shows a moved row with a matching logical owner and rejects absent or malformed owner values', async () => {
+  const ownerProperty = 'https://drive.example/entity-table';
+  for (const [subject, owner] of [
+    ['moved', table],
+    ['absent', undefined],
+    ['number', 7],
+    ['object', {}],
+  ] as const)
+    state.resources.set(
+      subject,
+      row(subject, {
+        [core.properties.parent]: 'elsewhere',
+        [ownerProperty]: owner,
+      }),
+    );
+  render(
+    view(collection(['moved', 'absent', 'number', 'object']), ownerProperty),
+  );
+  await screen.findByRole('link', { name: 'moved' });
+  expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual([
+    'moved',
+  ]);
+  expect(fetch).not.toHaveBeenCalled();
+});

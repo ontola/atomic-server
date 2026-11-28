@@ -1269,6 +1269,7 @@ msgstr "Dokumen"
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/chunks/PluginRuns/syncablesViews.ts
 msgid "Sync"
 msgstr "Sinkronisasi"
 
@@ -1826,14 +1827,16 @@ msgid "Toggle whether this resource appears in your Favorites."
 msgstr "Atur apakah sumber daya ini muncul di Favorit Anda."
 
 #: ../data-browser/src/actions/resourceActions.tsx
+#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: ../table-page/src/TablePage/Issues/IssueRow.tsx
+#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
-#: ../table-page/src/DashboardPage/blocks/ViewBlock.tsx
-#: ../table-page/src/TablePage/Issues/IssueRow.tsx
-#: ../table-page/src/TablePage/Kanban/KanbanCard.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+#: ../data-browser/src/chunks/PluginRuns/SyncableCollectionView.tsx
+#: ../data-browser/src/chunks/PluginRuns/useSyncableTableNavigation.tsx
 msgid "Open"
 msgstr "Buka"
 
@@ -2018,6 +2021,7 @@ msgstr "Oke"
 #: ../data-browser/src/chunks/FormBuilder/FieldOptions/LinkOptionsDialog.tsx
 #: ../data-browser/src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: ../data-browser/src/views/OntologyPage/Class/NewClassInstanceButton.tsx
+#: ../data-browser/src/chunks/PluginRuns/syncablesViews.ts
 msgid "Table"
 msgstr "Tabel"
 
@@ -3078,6 +3082,7 @@ msgstr "Tampilan"
 #: ../table-page/src/TablePage/TableHeadingMenu.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
 #: ../table-page/src/TablePage/TableViewTabs.tsx
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "Filter"
 msgstr "Filter"
 
@@ -5083,6 +5088,7 @@ msgstr "Teks tombol"
 #: ../data-browser/src/actions/runAction.ts
 #: ../data-browser/src/chunks/PluginRuns/IntegrationActions.tsx
 #: ../table-page/src/TablePage/NewColumnButton.tsx
+#: ../data-browser/src/chunks/PluginRuns/SyncableCollectionView.tsx
 msgid "Action"
 msgstr "Tindakan"
 
@@ -7343,8 +7349,8 @@ msgstr "Belum ada otomatisasi."
 msgid "Connect services to this workspace. Your data and views stay here when sync is paused."
 msgstr "Hubungkan layanan ke ruang kerja ini. Data dan tampilan Anda tetap di sini saat sinkronisasi dijeda."
 
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/chunks/PluginRuns/WorkspaceControls.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Connect a service"
 msgstr "Hubungkan layanan"
 
@@ -7375,8 +7381,8 @@ msgstr "Sepanjang hari"
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr "{0} · Rapat berulang (membuka rangkaian atau pengecualiannya)"
 
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Integration proxy"
 msgstr "Proksi integrasi"
 
@@ -8549,13 +8555,13 @@ msgid "Install {0}"
 msgstr "Instal {0}"
 
 #. 0: app.name
-#. 0: name
 #. 0: driveName
 #. 0: driveName
 #: ../data-browser/src/chunks/PluginRuns/CatalogApps.tsx
+#: ../data-browser/src/components/SideBar/SideBarDrive.tsx
+#: ../data-browser/src/components/SideBar/SideBarDrive.tsx
 #: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-#: ../data-browser/src/components/SideBar/SideBarDrive.tsx
-#: ../data-browser/src/components/SideBar/SideBarDrive.tsx
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "Open {0}"
 msgstr "Buka {0}"
 
@@ -11772,8 +11778,8 @@ msgstr "Pengaturan akun"
 msgid "<0/> asks to use your Atomic data. It has its own key, so your secret stays with you, and you can revoke it at any time."
 msgstr "<0/> meminta untuk menggunakan data Atomic Anda. Aplikasi memiliki kunci sendiri, sehingga kunci rahasia tetap pada Anda, dan Anda dapat mencabut aksesnya kapan saja."
 
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/components/Settings/AccountSettings.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Connected apps"
 msgstr "Aplikasi terhubung"
 
@@ -12970,8 +12976,8 @@ msgstr "Atau jelaskan kebutuhan Anda"
 msgid "Start with"
 msgstr "Mulai dengan"
 
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 #: ../data-browser/src/views/Drive/EmptyDriveStart.tsx
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "Adding…"
 msgstr "Menambahkan…"
 
@@ -13057,6 +13063,7 @@ msgid "Lane options"
 msgstr "Opsi lajur"
 
 #: ../table-page/src/TablePage/TableFilterBar.tsx
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
 msgid "Add filter"
 msgstr "Tambahkan filter"
 
@@ -13984,7 +13991,6 @@ msgstr "<0/> Pengaturan aplikasi"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
 msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuatnya di drive Anda. Bagikan, host marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
-
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Back to the plain link"
 msgstr "Kembali ke tautan biasa"
@@ -14043,13 +14049,124 @@ msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke se
 msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
 msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke OpenRouter. Anda memeriksa hasilnya sebelum apa pun disimpan."
 
-#: ../data-browser/src/chunks/AppPage/AppFrame.tsx
-msgid "This view cannot connect an account"
-msgstr "Tampilan ini tidak dapat menghubungkan akun"
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "GitLab"
+msgstr "GitLab"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Todoist"
+msgstr "Todoist"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Spotify"
+msgstr "Spotify"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Airtable"
+msgstr "Airtable"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Discord"
+msgstr "Discord"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Notion"
+msgstr "Notion"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Moneybird"
+msgstr "Moneybird"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Clockify"
+msgstr "Clockify"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Loading integration proxy catalog…"
+msgstr "Memuat katalog proksi integrasi…"
+
+#. 0: catalog.origin; 1: catalog.message
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not load apps from {0}: {1}"
+msgstr "Tidak dapat memuat aplikasi dari {0}: {1}"
+
+#. 0: lookupError
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Could not determine installed services: {0}"
+msgstr "Tidak dapat menentukan layanan yang terpasang: {0}"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "No matching services."
+msgstr "Tidak ada layanan yang cocok."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add to Drive"
+msgstr "Tambahkan ke Drive"
+
+#. 0: name
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Add {0} to drive"
+msgstr "Tambahkan {0} ke drive"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "Integration proxy apps"
+msgstr "Aplikasi proksi integrasi"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Connected platform tables"
+msgstr "Tabel platform yang terhubung"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
+msgstr "Pemetaan identitas platform ke tabel Atomic yang dikelola drive, terlepas dari jalur induknya."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable platform ID"
+msgstr "ID platform yang dapat disinkronkan"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Platform identifier in the selected integration proxy catalog."
+msgstr "Pengenal platform dalam katalog proksi integrasi yang dipilih."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Integration proxy origin"
+msgstr "Asal proksi integrasi"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "The HTTPS origin of the proxy describing this platform."
+msgstr "Asal HTTPS proksi yang mendeskripsikan platform ini."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Syncable account"
+msgstr "Akun yang dapat disinkronkan"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "A connected account through which remote collection instances can be discovered."
+msgstr "Akun terhubung yang dapat digunakan untuk menemukan instans koleksi jarak jauh."
 
 #: ../data-browser/src/chunks/AppPage/ProxyConnectReturn.tsx
 msgid "Return to the app"
 msgstr "Kembali ke aplikasi"
+
+#: ../data-browser/src/chunks/AppPage/AppFrame.tsx
+msgid "This view cannot connect an account"
+msgstr "Tampilan ini tidak dapat menghubungkan akun"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "Loading stored rows…"
+msgstr "Memuat baris tersimpan…"
+
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Opening Sync…"
+msgstr "Membuka Sinkronisasi…"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "No stored rows yet."
+msgstr "Belum ada baris yang tersimpan."
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableCollectionView.tsx
+msgid "Syncable Collection"
+msgstr "Koleksi yang dapat disinkronkan"
 
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Built-in app"
@@ -14058,14 +14175,6 @@ msgstr "Aplikasi bawaan"
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "A registered app delivered by this Atomic Server release."
 msgstr "Aplikasi terdaftar yang disertakan dalam rilis Atomic Server ini."
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Legacy Accounts container"
-msgstr "Wadah Accounts lama"
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
-msgstr "Data kompatibilitas milik instalasi ini dipertahankan setelah sumber dipindahkan langsung ke bawah aplikasi."
 
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Integration API description"
@@ -14082,6 +14191,98 @@ msgstr "Pilihan API integrasi"
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Public catalog consumer selections for the saved API description."
 msgstr "Pilihan publik klien katalog untuk deskripsi API yang tersimpan."
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "The app is ready, but its icon could not be loaded."
+msgstr "Aplikasi siap, tetapi ikonnya tidak dapat dimuat."
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Legacy Accounts container"
+msgstr "Wadah Accounts lama"
+
+#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
+msgid "Installation-owned compatibility data retained after moving source roots directly under the App."
+msgstr "Data kompatibilitas milik instalasi ini dipertahankan setelah sumber dipindahkan langsung ke bawah aplikasi."
+
+#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
+msgid "Open integration App"
+msgstr "Buka aplikasi integrasi"
+
+#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
+msgid "From the configured integration proxy at <0/> . Add a service to browse its catalog collections and sync data into your drive."
+msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan layanan untuk menjelajahi koleksi katalognya dan menyinkronkan data ke drive Anda."
+
+#: ../data-browser/src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app did not start. Try again."
+msgstr "Aplikasi tidak dimulai. Coba lagi."
+
+#: ../data-browser/src/chunks/AppPage/AppExecutionRuntime.tsx
+msgid "The app could not be prepared"
+msgstr "Aplikasi tidak dapat disiapkan"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved filter"
+msgstr "Filter tersimpan"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Paused"
+msgstr "Dijeda"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Queued"
+msgstr "Dalam antrean"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Syncing"
+msgstr "Menyinkronkan"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Needs attention"
+msgstr "Perlu perhatian"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Partially synced"
+msgstr "Disinkronkan sebagian"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Synced"
+msgstr "Disinkronkan"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Ready to sync"
+msgstr "Siap disinkronkan"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Rename filter"
+msgstr "Ganti nama filter"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Filter name"
+msgstr "Nama filter"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Save name"
+msgstr "Simpan nama"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Sync settings"
+msgstr "Pengaturan sinkronisasi"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Manage sync filters"
+msgstr "Kelola filter sinkronisasi"
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "Saved collection filters"
+msgstr "Filter koleksi tersimpan"
+
+#: ../data-browser/src/chunks/PluginRuns/useSyncableFilters.ts
+msgid "This saved filter is unavailable or no longer belongs to this collection."
+msgstr "Filter tersimpan ini tidak tersedia atau bukan lagi bagian dari koleksi ini."
+
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "All cached rows"
+msgstr "Semua baris dalam cache"
 
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Integration connection manager"
@@ -14124,30 +14325,6 @@ msgid "Native-only registration target retained across same-drive moves."
 msgstr "Tujuan pendaftaran yang hanya dikelola sistem bawaan dan dipertahankan saat dipindahkan dalam drive yang sama."
 
 #: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Connected platform tables"
-msgstr "Tabel platform yang terhubung"
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Drive-owned lookup of platform identity to Atomic table, independent of parent path."
-msgstr "Pemetaan identitas platform ke tabel Atomic yang dikelola drive, terlepas dari jalur induknya."
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Syncable platform ID"
-msgstr "ID platform yang dapat disinkronkan"
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Platform identifier in the selected integration proxy catalog."
-msgstr "Pengenal platform dalam katalog proksi integrasi yang dipilih."
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Integration proxy origin"
-msgstr "Asal proksi integrasi"
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "The HTTPS origin of the proxy describing this platform."
-msgstr "Asal HTTPS proksi yang mendeskripsikan platform ini."
-
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
 msgid "Principal App registration"
 msgstr "Pendaftaran App identitas"
 
@@ -14155,58 +14332,14 @@ msgstr "Pendaftaran App identitas"
 msgid "Native uniqueness registration outside any integration iframe write root."
 msgstr "Pendaftaran keunikan bawaan di luar semua akar penulisan iframe integrasi."
 
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "Syncable account"
-msgstr "Akun yang dapat disinkronkan"
+#: ../data-browser/src/chunks/PluginRuns/SyncableFilterBar.tsx
+msgid "This filter has no completed sync yet. Choose All cached rows to browse data stored by other filters or earlier imports."
+msgstr "Belum ada sinkronisasi yang selesai untuk filter ini. Pilih Semua baris tersimpan untuk melihat data dari filter lain atau impor sebelumnya."
 
-#: ../data-browser/src/chunks/PluginRuns/syncablePlatform.ts
-msgid "A connected account through which remote collection instances can be discovered."
-msgstr "Akun terhubung yang dapat digunakan untuk menemukan instans koleksi jarak jauh."
+#: ../data-browser/src/chunks/PluginRuns/SyncableRecordActions.tsx
+msgid "Related collections"
+msgstr "Koleksi terkait"
 
-#: ../data-browser/src/chunks/AppPage/index.tsx
-msgid "Integration installed in this drive. Manage connected accounts from Apps."
-msgstr "Integrasi terpasang di drive ini. Kelola akun yang terhubung dari Apps."
-
-#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-#: ../data-browser/src/chunks/PluginRuns/BuiltinSyncablesApp.tsx
-msgid "Opening integration…"
-msgstr "Membuka integrasi…"
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Loading integration proxy catalog…"
-msgstr "Memuat katalog proksi integrasi…"
-
-#. 0: catalog.origin; 1: catalog.message
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Could not load apps from {0}: {1}"
-msgstr "Tidak dapat memuat aplikasi dari {0}: {1}"
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "The app is ready, but its icon could not be loaded."
-msgstr "Aplikasi siap, tetapi ikonnya tidak dapat dimuat."
-
-#. 0: lookupError
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Could not determine installed services: {0}"
-msgstr "Tidak dapat menentukan layanan yang terpasang: {0}"
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "No matching services."
-msgstr "Tidak ada layanan yang cocok."
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Add to Drive"
-msgstr "Tambahkan ke Drive"
-
-#. 0: name
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Add {0} to drive"
-msgstr "Tambahkan {0} ke drive"
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "From the configured integration proxy at <0/> . Add a service and choose an account for this drive."
-msgstr "Dari proksi integrasi yang dikonfigurasi di <0/>. Tambahkan layanan dan pilih akun untuk drive ini."
-
-#: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
-msgid "Integration proxy apps"
-msgstr "Aplikasi proksi integrasi"
+#: ../table-page/src/TablePage/TableViewTabs.tsx
+msgid "Syncable Collections"
+msgstr "Koleksi yang dapat disinkronkan"

@@ -9,6 +9,7 @@ import {
   useBoolean,
   useCanWrite,
   useResource,
+  useResources,
   useStore,
   useString,
   useValue,
@@ -23,6 +24,7 @@ import {
   useState,
 } from 'react';
 import { useResourceUIHost } from '@tomic/resource-ui/ResourceUIHost';
+import type { TableExtension, TableTabs } from './TableExtension.js';
 import {
   filterKey,
   parseFilterKey,
@@ -102,6 +104,7 @@ export interface UseTableViewResult {
   renameView: (name: string, subject?: string) => void;
   /** All saved View subjects of the table, in order (the tabs). */
   views: string[];
+  visibleTabs: TableTabs;
   /** The active View subject (undefined until one exists). */
   activeView: string | undefined;
   /** Switch the active view, via the `?view=` search param. */
@@ -244,6 +247,7 @@ export function useTableView(
    * the dashboard itself, which would render itself inside itself.
    */
   embedded = false,
+  selectViews?: TableExtension['selectViews'],
 ): UseTableViewResult {
   const store = useStore();
   const canWrite = useCanWrite(table);
@@ -265,12 +269,22 @@ export function useTableView(
   // first one) once they load.
   const { search, navigate } = useResourceUIHost();
   const activeViewParam = search.view;
-  const activeView =
-    viewOverride ??
-    (embedded ? undefined : activeViewParam) ??
-    defaultViewSubject ??
-    views[0] ??
-    undefined;
+  const explicitView = viewOverride ?? (embedded ? undefined : activeViewParam);
+  const requested = explicitView ?? defaultViewSubject ?? views[0];
+  const viewResources = useResources(selectViews ? views : []);
+  const selection = selectViews?.({
+    views: views as string[],
+    requested,
+    explicit: explicitView,
+    getView: subject =>
+      viewResources.get(subject) ?? store.getResourceLoading(subject),
+  });
+  const activeView = selection ? selection.activeView : requested;
+  const visibleTabs = {
+    views: selection?.views ?? (views as string[]),
+    hidden: selection?.hidden ?? new Set<string>(),
+    activeView: selection ? selection.displayedView : activeView,
+  };
   const view = useResource(activeView ?? unknownSubject);
 
   // The `?view=` the URL carries *now*, rather than as of the render that a
@@ -1270,6 +1284,7 @@ export function useTableView(
     viewName: viewName ?? 'Default View',
     renameView,
     views: views as string[],
+    visibleTabs,
     activeView,
     setActiveView,
     createView,

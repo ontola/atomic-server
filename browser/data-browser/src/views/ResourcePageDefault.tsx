@@ -2,6 +2,7 @@ import {
   useCreatedBy,
   useCreatedAt,
   useCanWrite,
+  useValue,
   dataBrowser,
   core,
   server,
@@ -24,7 +25,13 @@ import { Column, Row } from '@tomic/ui/components/Row';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { editURL } from '../helpers/navigation';
 
-import type { JSX } from 'react';
+import { lazy, Suspense, type JSX } from 'react';
+
+const SyncableRecordActions = lazy(() =>
+  import('../chunks/PluginRuns/SyncableRecordActions').then(module => ({
+    default: module.SyncableRecordActions,
+  })),
+);
 
 /**
  * The properties that are shown in an alternative, custom way in default views.
@@ -63,6 +70,9 @@ export function ResourcePageDefault({
 }: ResourcePageProps): JSX.Element {
   const createdBy = useCreatedBy(resource);
   const createdAt = useCreatedAt(resource);
+  const [localId] = useValue(resource, core.properties.localId);
+  const hasSyncableHint =
+    typeof localId === 'string' && localId.startsWith('syncables:');
 
   return (
     <>
@@ -81,6 +91,11 @@ export function ResourcePageDefault({
             resource={resource}
             propertyURL={core.properties.description}
           />
+          {hasSyncableHint && (
+            <Suspense fallback={null}>
+              <SyncableRecordActions resource={resource} />
+            </Suspense>
+          )}
           <AllProps
             resource={resource}
             except={defaultHiddenProps}

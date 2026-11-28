@@ -321,6 +321,59 @@ it('has the host send the proxy request it signed with its own key', async () =>
   expect(sent[0].headers['x-atomic-public-key']).toBe(publicKey);
 });
 
+it('uses a host-selected proxy transport for anonymous requests without minting frame capabilities', async () => {
+  const f = frame();
+  const store = generatedStore(f);
+  const directFetch = vi.fn();
+  vi.stubGlobal('fetch', directFetch);
+  const context = store.getContext();
+  const initial = f.parent.postMessage.mock.calls[0][0];
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: initial.id,
+    result: { subject: 'https://node.test/table', proxyTransport: 'host' },
+  });
+  await context;
+
+  const pending = store.proxy.request({
+    platform: 'public-provider',
+    path: '/items',
+    query: { page: 2 },
+  });
+  const request = f.parent.postMessage.mock.calls.at(-1)![0];
+  expect(isViewRequest(request)).toBe(true);
+  expect(request).toMatchObject({
+    op: 'proxyFetch',
+    args: {
+      platform: 'public-provider',
+      path: '/items',
+      method: 'GET',
+      query: { page: 2 },
+    },
+  });
+  expect(request.args.connectionId).toBeUndefined();
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: request.id,
+    result: {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      text: '[{"id":1}]',
+    },
+  });
+  expect(await pending).toEqual({
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    body: [{ id: 1 }],
+  });
+  expect(
+    f.parent.postMessage.mock.calls.map(([message]) => message.op),
+  ).toEqual(['context', 'proxyFetch']);
+  expect(directFetch).not.toHaveBeenCalled();
+});
+
 it('refuses a path that would leave the connection, before asking anything', async () => {
   const f = frame();
   const store = generatedStore(f);
