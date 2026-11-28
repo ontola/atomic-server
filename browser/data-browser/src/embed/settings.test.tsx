@@ -152,7 +152,7 @@ it('shows every section outside the embed', () => {
     'notifications',
     'virtualDrive',
     'ai',
-    'integration',
+    'apps',
   ];
 
   for (const id of ids) expect(showSettingsSection(id, false)).toBe(true);
@@ -172,7 +172,7 @@ it('shows only the allow-listed sections and options in the embed', () => {
     'notifications',
     'virtualDrive',
     'ai',
-    'integration',
+    'apps',
   ] as const) {
     expect(showSettingsSection(id, true)).toBe(false);
   }

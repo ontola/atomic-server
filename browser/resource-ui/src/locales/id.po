@@ -2135,7 +2135,6 @@ msgstr "<0/> Catatan"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Baru"
@@ -7406,10 +7405,6 @@ msgstr "Kesalahan penyiapan tidak dikenal"
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr "Terbitkan ke toko integrasi"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integrasi"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
@@ -12812,6 +12807,7 @@ msgstr "Memuat aplikasi…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Temukan aplikasi"
 
@@ -13327,10 +13323,6 @@ msgid "Models, providers and voice."
 msgstr "Model, penyedia, dan suara."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Pengaturan integrasi"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proksi, katalog, dan plugin eksperimental."
 
@@ -13429,18 +13421,6 @@ msgstr "Panduan: menerbitkan aplikasi"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Aplikasi tidak ada? Buat sendiri dengan AI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuat aplikasi di drive Anda. Lalu bagikan ke drive Anda, jalankan marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Ini adalah fitur baru. Anda melihat aplikasi eksperimental untuk dicoba."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Ini adalah fitur baru. Aplikasi akan segera muncul di sini untuk Anda coba."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13985,6 +13965,18 @@ msgstr "Kamu bisa mengubah semuanya sebelum menyimpan. Belum ada yang disimpan."
 msgid "This page was imported before. Saving updates it instead of making a copy."
 msgstr "Halaman ini pernah diimpor. Menyimpan akan memperbaruinya, bukan membuat salinan."
 
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr "Pengaturan aplikasi"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr "<0/> Pengaturan aplikasi"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuatnya di drive Anda. Bagikan, host marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Back to the plain link"
 msgstr "Kembali ke tautan biasa"

@@ -23,6 +23,10 @@ vi.mock('./SettingsSection', () => ({
   SettingsSection: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
+vi.mock('./SettingCheckbox', () => ({
+  SettingCheckbox: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 

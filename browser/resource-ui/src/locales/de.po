@@ -2135,7 +2135,6 @@ msgstr "<0/> Hinweis"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Neu"
@@ -7405,10 +7404,6 @@ msgstr "Unbekannter Einrichtungsfehler"
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 msgid "Publish to integration store"
 msgstr "Im Integrationsstore veröffentlichen"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integration"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
@@ -12812,6 +12807,7 @@ msgstr "Apps werden geladen …"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Apps entdecken"
 
@@ -13335,10 +13331,6 @@ msgid "Models, providers and voice."
 msgstr "Modelle, Anbieter und Sprache."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Integrationseinstellungen"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, Katalog und experimentelle Plugins."
 
@@ -13437,18 +13429,6 @@ msgstr "Anleitung: App veröffentlichen"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Eine App fehlt? Erstelle sie selbst mit KI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Beschreibe, was du möchtest, und der Assistent erstellt die App in deinem Drive. Teile sie anschließend mit deinem Drive, betreibe deinen eigenen Marktplatz oder reiche sie beim Community-Marktplatz ein."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Dies ist eine neue Funktion. Du siehst experimentelle Apps zum Ausprobieren."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Dies ist eine neue Funktion. Bald erscheinen hier Apps zum Ausprobieren."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13993,6 +13973,18 @@ msgstr "Du kannst alles vor dem Speichern bearbeiten. Es wurde noch nichts gespe
 msgid "This page was imported before. Saving updates it instead of making a copy."
 msgstr "Diese Seite wurde schon früher importiert. Beim Speichern wird sie aktualisiert, statt eine Kopie anzulegen."
 
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr "App-Einstellungen"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr "<0/> App-Einstellungen"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr "Beschreibe, was du möchtest, und der Assistent baut es in deinem Drive. Teile es, hoste deinen eigenen Marktplatz oder reiche es beim Community-Marktplatz ein."
 #: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Back to the plain link"
 msgstr "Zurück zum einfachen Link"
