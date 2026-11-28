@@ -148,9 +148,34 @@ function NavigationCell({
   const navigate = useNavigateWithTransition();
   const snapshot = useResourceSnapshot(subject);
   const row = snapshot.resource;
+  const parent = row.get(core.properties.parent);
+  // A committed snapshot refresh can reach this cell while Open saves its
+  // filter. Track the target, while the native action revalidates its evidence
+  // and access before completing.
+  const target = useMemo(
+    () => ({
+      row,
+      parent,
+      ready: snapshot.ready,
+      error: snapshot.error,
+      table,
+      drive,
+      activeRule,
+      store,
+    }),
+    [
+      row,
+      parent,
+      snapshot.ready,
+      snapshot.error,
+      table,
+      drive,
+      activeRule,
+      store,
+    ],
+  );
   const [status, setStatus] = useState<{
-    subject: string;
-    snapshot: typeof snapshot;
+    target: typeof target;
     pending: boolean;
     error?: string;
   }>();
@@ -159,9 +184,9 @@ function NavigationCell({
     () => () => {
       generation.current++;
     },
-    [subject, snapshot],
+    [target],
   );
-  const currentStatus = status?.snapshot === snapshot ? status : undefined;
+  const currentStatus = status?.target === target ? status : undefined;
   const busy = currentStatus?.pending;
   const error = currentStatus?.error;
   if (!snapshot.ready || snapshot.error) return <CellBox />;
@@ -169,7 +194,7 @@ function NavigationCell({
   const open = (event: React.MouseEvent) => {
     event.stopPropagation();
     const token = ++generation.current;
-    setStatus({ subject, snapshot, pending: true });
+    setStatus({ target, pending: true });
     void syncableRowDestination(store, drive, table, row, activeRule)
       .then(path => {
         if (generation.current === token) return navigate(path);
@@ -177,13 +202,12 @@ function NavigationCell({
       .then(
         () => {
           if (generation.current === token)
-            setStatus({ subject, snapshot, pending: false });
+            setStatus({ target, pending: false });
         },
         reason => {
           if (generation.current === token)
             setStatus({
-              subject,
-              snapshot,
+              target,
               pending: false,
               error: String(reason?.message ?? reason),
             });

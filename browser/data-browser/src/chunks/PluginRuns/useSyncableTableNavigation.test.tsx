@@ -471,6 +471,30 @@ it('does not navigate after a pending Open cell unmounts', async () => {
   expect(state.navigate).not.toHaveBeenCalled();
 });
 
+it('keeps a pending Open action across unrelated row updates', async () => {
+  let resolve!: (value: { subject: string }) => void;
+  state.open.mockImplementationOnce(
+    () =>
+      new Promise(done => {
+        resolve = done;
+      }),
+  );
+  show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  await act(async () => {
+    state.values.get(ROW)![core.properties.name] = 'Updated row title';
+    notify();
+  });
+  expect(
+    (screen.getByRole('button', { name: 'Open' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  await act(async () => {
+    resolve({ subject: 'atomic:children' });
+  });
+  expect(state.navigate).toHaveBeenCalledOnce();
+});
+
 it('suppresses pending navigation when the same row resource moves', async () => {
   let resolve!: (value: { subject: string }) => void;
   state.open.mockImplementationOnce(
