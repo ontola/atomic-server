@@ -489,9 +489,22 @@ export type VaultDriveSummary =
       backed_up_by: string | null;
     };
 
+/**
+ * A bare drive subject: `atomic:` or `did:ad:` plus a genesis signature, and
+ * nothing after it. The control plane decodes that suffix and answers anything
+ * else (an agent, an item inside a drive, a legacy https drive) with an error.
+ */
+export function isVaultDriveSubject(subject: string): boolean {
+  return /^(atomic|did:ad):[A-Za-z0-9_+/-]{86}={0,2}$/.test(subject);
+}
+
 export async function getVaultDriveSummary(
   driveSubject: string,
 ): Promise<VaultDriveSummary> {
+  // Not a drive, so nothing is backed up under it. Asking would be an error
+  // response per render of a page that shows an arbitrary resource.
+  if (!isVaultDriveSubject(driveSubject)) return { enabled: false };
+
   return api<VaultDriveSummary>(
     `/cloud-vault/drive-status?${new URLSearchParams({ drive: driveSubject })}`,
   );

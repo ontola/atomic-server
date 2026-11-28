@@ -1,12 +1,27 @@
 import { FaRotateLeft } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '@tomic/ui/components/Button';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
 
 import type { JSX } from 'react';
+
+/**
+ * Subjects an automatic restore already ran for, per agent. Module state on
+ * purpose: a restore ends by reloading the drive, which clears its error and
+ * unmounts the error page this component sits in. If that reload fails the
+ * same way, the page comes back as a new instance, and an instance-level
+ * "started" flag started over: restore, reload, remount, restore, about twice
+ * a second. The button stays the way to try again.
+ */
+const autoStarted = new Set<string>();
+
+/** Only in tests. */
+export function forgetAutoStartedRestores(): void {
+  autoStarted.clear();
+}
 
 /**
  * "Restore from Cloud Vault", for a drive this device cannot open.
@@ -41,22 +56,35 @@ export function VaultRestoreAction({
   // A caller that passed its own vault does not need a second one.
   const own = useDriveVault(given ? null : subject);
   const vault = given ?? own;
-  const startedFor = useRef<string | null>(null);
   const canRestore = canRestoreFromVault(vault);
   const signedIn = !!store.getAgent();
   const { busy, error, restore } = vault;
 
   // Someone who lands on a drive with a backup wants the drive, not a choice.
-  // Once per subject: after a failure the button below offers the retry, so a
-  // persistent failure cannot become a loop.
+  // Once per subject and agent, however often this remounts: after a failure
+  // the button below offers the retry, so a persistent failure cannot become
+  // a loop.
+  const agentSubject = store.getAgent()?.subject;
+
   useEffect(() => {
     if (!autoStart || !canRestore || !signedIn || busy || error) return;
 
-    if (startedFor.current === subject) return;
+    const key = `${agentSubject}\n${subject}`;
 
-    startedFor.current = subject;
+    if (autoStarted.has(key)) return;
+
+    autoStarted.add(key);
     void restore();
-  }, [autoStart, canRestore, signedIn, busy, error, restore, subject]);
+  }, [
+    autoStart,
+    canRestore,
+    signedIn,
+    busy,
+    error,
+    restore,
+    subject,
+    agentSubject,
+  ]);
 
   if (!canRestore) return null;
 
