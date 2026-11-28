@@ -3279,6 +3279,19 @@ export class AtomicServer {
         `ssh-keyscan -H ${remoteHost} >> /root/.ssh/known_hosts`,
       ]);
 
+    // Checked on the host before the new binary replaces the running one, so a
+    // transfer cut short (a full disk, a dropped connection) is never installed.
+    // On 2026-11-27 staging crash-looped on a truncated binary.
+    const binarySha = (
+      await deployContainer
+        .withExec([
+          'sh',
+          '-c',
+          'sha256sum /atomic-server-binary | cut -d" " -f1',
+        ])
+        .stdout()
+    ).trim();
+
     // Transfer binary using rsync
     const transferResult = await sshContainer
       .withSecretVariable('REMOTE_USER', remoteUser)
@@ -3306,6 +3319,7 @@ export class AtomicServer {
           if [ "$free_kb" -lt "$need_kb" ]; then
             echo "Not enough disk for the store backup: $free_kb KB free, $need_kb KB needed. Nothing was changed." >&2; false;
           fi &&
+          echo "${binarySha}  $HOME/atomic-server-x86_64-unknown-linux-musl" | sha256sum -c - &&
           mv ~/atomic-server-x86_64-unknown-linux-musl ~/atomic-server &&
           cp ~/atomic-server ~/atomic-server-$(date +"%Y-%m-%dT%H:%M:%S") &&
           systemctl stop atomic &&
