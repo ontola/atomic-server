@@ -450,7 +450,34 @@ it('keeps pending cells mounted across an equivalent managed-table state refresh
   expect(state.navigate).toHaveBeenCalledOnce();
 });
 
-it('does not navigate after a pending Open cell unmounts', async () => {
+it('keeps navigation in progress when the table recreates its Open column', async () => {
+  let resolve!: (value: { subject: string }) => void;
+  state.open.mockImplementationOnce(
+    () =>
+      new Promise(done => {
+        resolve = done;
+      }),
+  );
+  const page = show();
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+  const initialFilters = filters;
+
+  for (const next of [{ ...initialFilters, ready: false }, initialFilters]) {
+    filters = next;
+    page.rerender(
+      <ThemeProvider theme={buildTheme(false, '#1b50d8')}>
+        <Grid />
+      </ThemeProvider>,
+    );
+  }
+
+  await act(async () => {
+    resolve({ subject: 'atomic:children' });
+  });
+  expect(state.navigate).toHaveBeenCalledOnce();
+});
+
+it('does not navigate after a pending table unmounts', async () => {
   let resolve!: (value: {
     subject: string;
     view?: string;

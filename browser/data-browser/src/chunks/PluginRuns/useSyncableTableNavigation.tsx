@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+} from 'react';
 import {
   core,
   unknownSubject,
@@ -18,6 +25,12 @@ import { openFlatSyncableRow } from './syncableFlatNavigation';
 import { parseSyncableCollectionView } from './syncableCollection';
 import type { useSyncableFilters } from './useSyncableFilters';
 
+type OpenRow = (
+  row: Resource,
+  navigate: (path: string) => void | Promise<unknown>,
+  activeRule?: string,
+) => Promise<void>;
+
 /** Native data navigation only; this virtual column neither runs nor refreshes an app. */
 export function useSyncableTableNavigation(
   table: Resource,
@@ -32,6 +45,40 @@ export function useSyncableTableNavigation(
   );
   const [rowClass] = useValue(table, core.properties.classtype);
   const drive = getTableDrive(store, table) ?? store.getDrive();
+  const openGeneration = useRef(0);
+
+  // The table owns a click through cell recreation and row virtualization.
+  // Leaving its scope, moving the row or making a newer click supersedes it.
+  useEffect(
+    () => () => {
+      openGeneration.current++;
+    },
+    [store, drive, table],
+  );
+  const openRow: OpenRow = useCallback(
+    async (row, navigate, activeRule) => {
+      if (!drive) return;
+      const generation = ++openGeneration.current;
+      const location = window.location.href;
+      const parent = row.get(core.properties.parent);
+      const path = await syncableRowDestination(
+        store,
+        drive,
+        table,
+        row,
+        activeRule,
+      );
+
+      if (
+        openGeneration.current === generation &&
+        window.location.href === location &&
+        !row.error &&
+        row.get(core.properties.parent) === parent
+      )
+        await navigate(path);
+    },
+    [store, drive, table],
+  );
   const signature = useMemo(
     () =>
       JSON.stringify({
@@ -40,18 +87,9 @@ export function useSyncableTableNavigation(
             ? rawDescriptor
             : undefined,
         rowClass,
-        source: state.source,
-        properties: state.properties,
         activeRule: state.selected?.resource.subject,
       }),
-    [
-      tableSnapshot,
-      rawDescriptor,
-      rowClass,
-      state.source,
-      state.properties,
-      state.selected?.resource.subject,
-    ],
+    [tableSnapshot, rawDescriptor, rowClass, state.selected?.resource.subject],
   );
   const ready =
     enabled &&
@@ -79,8 +117,7 @@ export function useSyncableTableNavigation(
     const Cell = ({ subject }: { subject: string }): JSX.Element => (
       <NavigationCell
         subject={subject}
-        table={table}
-        drive={drive}
+        openRow={openRow}
         activeRule={saved.activeRule}
       />
     );
@@ -91,7 +128,7 @@ export function useSyncableTableNavigation(
         virtual: { label: 'Open', width: 110, Cell },
       },
     ];
-  }, [ready, drive, table, signature]);
+  }, [ready, drive, openRow, signature]);
 }
 
 // @wc-ignore
@@ -135,57 +172,33 @@ export async function syncableRowDestination(
 
 function NavigationCell({
   subject,
-  table,
-  drive,
+  openRow,
   activeRule,
 }: {
   subject: string;
-  table: Resource;
-  drive: string;
+  openRow: OpenRow;
   activeRule?: string;
 }): JSX.Element {
-  const store = useStore();
   const navigate = useNavigateWithTransition();
   const snapshot = useResourceSnapshot(subject);
   const row = snapshot.resource;
   const parent = row.get(core.properties.parent);
-  // A committed snapshot refresh can reach this cell while Open saves its
-  // filter. Track the target, while the native action revalidates its evidence
-  // and access before completing.
   const target = useMemo(
     () => ({
       row,
       parent,
       ready: snapshot.ready,
       error: snapshot.error,
-      table,
-      drive,
+      openRow,
       activeRule,
-      store,
     }),
-    [
-      row,
-      parent,
-      snapshot.ready,
-      snapshot.error,
-      table,
-      drive,
-      activeRule,
-      store,
-    ],
+    [row, parent, snapshot.ready, snapshot.error, openRow, activeRule],
   );
   const [status, setStatus] = useState<{
     target: typeof target;
     pending: boolean;
     error?: string;
   }>();
-  const generation = useRef(0);
-  useEffect(
-    () => () => {
-      generation.current++;
-    },
-    [target],
-  );
   const currentStatus = status?.target === target ? status : undefined;
   const busy = currentStatus?.pending;
   const error = currentStatus?.error;
@@ -193,26 +206,18 @@ function NavigationCell({
 
   const open = (event: React.MouseEvent) => {
     event.stopPropagation();
-    const token = ++generation.current;
-    setStatus({ target, pending: true });
-    void syncableRowDestination(store, drive, table, row, activeRule)
-      .then(path => {
-        if (generation.current === token) return navigate(path);
-      })
-      .then(
-        () => {
-          if (generation.current === token)
-            setStatus({ target, pending: false });
-        },
-        reason => {
-          if (generation.current === token)
-            setStatus({
-              target,
-              pending: false,
-              error: String(reason?.message ?? reason),
-            });
-        },
+    const request = { target, pending: true };
+    setStatus(request);
+    const finish = (message?: string) =>
+      setStatus(current =>
+        current === request
+          ? { target, pending: false, error: message }
+          : current,
       );
+    void openRow(row, navigate, activeRule).then(
+      () => finish(),
+      reason => finish(String(reason?.message ?? reason)),
+    );
   };
 
   return (

@@ -1597,8 +1597,8 @@ This does not yet prove restoration of the user's private staging workspace.
   the TypeScript entry point, the embedded Syncables reader and the existing
   shell-provided bridge. The targeted workflow also runs the scope and adapter
   tests and the Table view tabs test from its owning package. The native Table
-  Open test covers a store snapshot refresh during a pending navigation and
-  invalidation when the row moves or the cell unmounts.
+  Open test covers a store snapshot refresh and cell recreation during a
+  pending navigation, plus invalidation when the row moves or the table closes.
 
 - `browser/data-browser/scripts/check-translations.test.ts` audits every
   supported UI catalog, including the Syncables Apps and OAuth strings, for
