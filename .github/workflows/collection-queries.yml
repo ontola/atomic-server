@@ -1,0 +1,69 @@
+name: Collection queries
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - '.github/workflows/collection-queries.yml'
+      - '.cargo/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - 'lib/Cargo.toml'
+      - 'lib/src/db.rs'
+      - 'lib/src/db/**'
+      - 'lib/src/storelike.rs'
+      - 'lib/src/trash/**'
+      - 'tools/cargo-bin/**'
+      - 'wasm/**'
+      - 'browser/package.json'
+      - 'browser/pnpm-lock.yaml'
+      - 'browser/pnpm-workspace.yaml'
+      - 'browser/lib/**'
+      - 'browser/data-browser/scripts/build-wasm.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collection-queries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust query and Trash regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --locked -p atomic_lib --features db-redb --lib -- db::test
+      - run: "cargo test --locked -p atomic_lib --features db-redb --lib -- trash::"
+
+  browser:
+    name: SDK collections and local WASM query
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: browser/pnpm-lock.yaml
+      - name: Install SDK dependencies
+        run: pnpm --dir browser --filter @tomic/lib... install --frozen-lockfile
+      - name: Build SDK package dependencies
+        run: pnpm --dir browser --filter '@tomic/lib^...' build
+      - name: Verify SDK collection behavior
+        working-directory: browser/lib
+        run: |
+          pnpm typecheck
+          pnpm exec vitest run src/collection --maxWorkers=2
+      - name: Build the local query engine
+        run: |
+          rustup target add wasm32-unknown-unknown
+          node browser/data-browser/scripts/build-wasm.mjs
+      - name: Verify drive scope in the local WASM index
+        run: pnpm --dir browser/lib test:integration tests/collection-drive-scope.integration.test.ts
