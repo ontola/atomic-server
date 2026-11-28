@@ -3511,6 +3511,10 @@ test.describe('catalog-driven built-in Syncables', () => {
     await expect(
       discovery.getByText('No integrations match your search.'),
     ).toHaveCount(0);
+    await testInfo.attach('apps-discovery-with-proxy', {
+      body: await page.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
     await addNotebook.click();
     const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
     await expect(
