@@ -14,6 +14,7 @@ on:
       - 'browser/data-browser/src/chunks/AppPage/index.tsx'
       - 'browser/data-browser/src/views/FolderPage/**'
       - 'browser/data-browser/src/chunks/AppPage/AppFrame*'
+      - 'browser/data-browser/src/chunks/AppPage/AppVerifierContext.tsx'
       - 'browser/data-browser/src/chunks/AppPage/AppExecution*'
       - 'browser/data-browser/src/chunks/AppPage/hostStore*'
       - 'browser/data-browser/src/chunks/AppPage/viewClient.js'
@@ -90,6 +91,7 @@ jobs:
           src/chunks/PluginRuns/SyncableCollectionView.test.tsx
           src/chunks/PluginRuns/installIntegrationIcon.test.ts
           src/chunks/AppPage/AppExecutionRuntime.test.ts
+          src/chunks/AppPage/noServerApp.test.tsx
           src/chunks/AppPage/AppFrameProfile.test.tsx
           src/chunks/AppPage/hostStoreProfile.test.ts
           src/chunks/AppPage/hostStore.test.ts
