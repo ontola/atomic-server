@@ -269,6 +269,14 @@ share one Store watch per resource. The managed adapter supplies document and
 file evidence from the same Vault scope. The existing wire formats, durable
 observations, save checkpoints, and scope invalidation rules are preserved.
 
+The copy API review reproduced three observer issues. Editing attachment
+references released the native peer watch and discarded its current proof.
+A native poll notified the combined copy view before applying its file rows.
+A peer could display a newer timestamp from a receipt that did not cover the
+displayed version. The peer watch now survives dependency rebinding, the Store
+coalesces copy notifications from one update, and all destinations use the
+registry's shared status and timestamp projection for metadata.
+
 Merge acceptance applies to the exact published commit. Run the full public
 DigitalOcean suite with `supplemental_profile: pr2621-native-private-v1` and
 the paired `atomic-saas` source. It requires executed browser Vault backup and

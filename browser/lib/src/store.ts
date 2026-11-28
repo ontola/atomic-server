@@ -6789,15 +6789,24 @@ export class Store {
 
     if (!watch) {
       const listeners = new Set<() => void>();
+      let queued = false;
 
       const changed = () => {
-        for (const listener of listeners) {
-          try {
-            listener();
-          } catch {
-            // An observer must not interrupt evidence collection or saving.
+        if (queued || !listeners.size) return;
+        queued = true;
+        // A native reply updates metadata and file evidence separately in the
+        // same turn. Let both updates settle before notifying copy observers.
+        queueMicrotask(() => {
+          queued = false;
+
+          for (const listener of listeners) {
+            try {
+              listener();
+            } catch {
+              // An observer must not interrupt evidence collection or saving.
+            }
           }
-        }
+        });
       };
 
       const stopMetadata = this.subscribeResourceSyncStatus(target, changed);

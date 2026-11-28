@@ -364,41 +364,29 @@ export class ResourceSyncStatusTracker {
     const entry = this.evidence.get(subject);
     const localError = input.localError ?? entry?.localError;
     const target = resourcePersistenceVersion(resource);
-    const localReceipt = this.local.latest(subject, 'stored');
-    const acceptedReceipt = this.server.latest(subject, 'accepted');
+    const localProof = this.local.readMetadata(subject, 'stored', target);
+    const accepted = this.server.readMetadata(subject, 'accepted', target);
     const serverStore = this.serverStores.get(
       this.serverSubjects.get(subject) ?? '',
     );
-    const storedReceipt = serverStore?.scope.latest(subject, 'stored');
-    const accepted = this.server.covering(subject, 'accepted', target)
-      ? 'confirmed'
-      : acceptedReceipt
-        ? 'pending'
-        : 'unknown';
-    const stored = serverStore?.scope.covering(subject, 'stored', target)
-      ? 'confirmed'
-      : storedReceipt
-        ? 'pending'
-        : 'unknown';
+    const stored = serverStore?.scope.readMetadata(subject, 'stored', target);
     const local: ResourceSyncStatus['local'] = {
       state: localError
         ? 'error'
         : !input.localAvailable
           ? 'unavailable'
-          : this.local.covering(subject, 'stored', target)
-            ? 'confirmed'
-            : entry?.pendingWrites || localReceipt
-              ? 'pending'
-              : 'unknown',
-      confirmedAt: localReceipt?.confirmedAt,
+          : localProof.state === 'unknown' && entry?.pendingWrites
+            ? 'pending'
+            : localProof.state,
+      confirmedAt: localProof.confirmedAt,
       error: localError,
     };
     const server: ResourceSyncStatus['server'] = {
-      state: !input.serverUrl ? 'not-configured' : accepted,
+      state: !input.serverUrl ? 'not-configured' : accepted.state,
       url: input.serverUrl,
-      confirmedAt: storedReceipt?.confirmedAt ?? acceptedReceipt?.confirmedAt,
-      accepted,
-      stored,
+      confirmedAt: stored?.confirmedAt ?? accepted.confirmedAt,
+      accepted: accepted.state,
+      stored: stored?.state ?? 'unknown',
       ...serverStore?.replica,
     };
     const previous = this.snapshots.get(resource);

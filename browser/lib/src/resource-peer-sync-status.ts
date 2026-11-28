@@ -256,6 +256,7 @@ export class ResourcePeerSyncStatusTracker {
   ): ResourcePeerSyncStatus {
     let connectedCount = 0;
     const copies = new Map<string, ResourcePeerCopy>();
+    const target = resourcePersistenceVersion(resource);
 
     for (const [connectionId, connection] of [
       ...this.connections,
@@ -266,22 +267,14 @@ export class ResourcePeerSyncStatusTracker {
       const { replica, source } = connection;
       // A second tab or a byte-cloned DB is not another independent copy.
       if (replica && replica.storageId === source?.storageId) continue;
-      const receipt = connection.receipts.latest(subject, 'stored');
-      const state = receipt
-        ? connection.receipts.covering(
-            subject,
-            'stored',
-            resourcePersistenceVersion(resource),
-          )
-          ? 'confirmed'
-          : 'pending'
-        : 'unknown';
+      const proof = connection.receipts.readMetadata(subject, 'stored', target);
+      const { state, confirmedAt } = proof;
       const copy: ResourcePeerCopy = Object.freeze({
         connectionId,
         peerAgent: connection.peerAgent,
         connected: connection.connected !== false,
         state,
-        ...(receipt ? { confirmedAt: receipt.confirmedAt } : {}),
+        ...(confirmedAt !== undefined ? { confirmedAt } : {}),
         ...(replica ? replica : {}),
       });
       const key = replica

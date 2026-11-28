@@ -50,7 +50,7 @@ function database(put = vi.fn(async () => {})) {
 }
 
 describe('resource copy evidence', () => {
-  it('shares one copy watch and keeps it until the last observer leaves', () => {
+  it('shares one copy watch and batches updates until the last observer leaves', async () => {
     const store = new Store({
       serverUrl: 'https://example.com',
       connect: false,
@@ -72,16 +72,23 @@ describe('resource copy evidence', () => {
     expect(attachments).toHaveBeenCalledTimes(1);
     const changed = metadata.mock.calls[0][1];
     changed();
+    attachments.mock.calls[0][1]();
+    expect(callback).not.toHaveBeenCalled();
+    await Promise.resolve();
     expect(callback).toHaveBeenCalledTimes(2);
 
     stopFirst();
     stopFirst();
     changed();
+    await Promise.resolve();
     expect(callback).toHaveBeenCalledTimes(3);
     expect(stopMetadata).not.toHaveBeenCalled();
     expect(stopAttachments).not.toHaveBeenCalled();
 
+    changed();
     stopSecond();
+    await Promise.resolve();
+    expect(callback).toHaveBeenCalledTimes(3);
     expect(stopMetadata).toHaveBeenCalledOnce();
     expect(stopAttachments).toHaveBeenCalledOnce();
   });

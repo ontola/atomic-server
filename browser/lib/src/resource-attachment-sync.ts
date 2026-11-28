@@ -29,7 +29,8 @@ export interface AttachmentPeerReceipt {
 type Watch = {
   resource: Resource;
   callbacks: Set<() => void>;
-  subscriptions: (() => void)[];
+  stopPeer: () => void;
+  dependencySubscriptions: (() => void)[];
   dependencies: string[];
   boundResources?: (Resource | undefined)[];
   token: object;
@@ -113,16 +114,16 @@ export class ResourceAttachmentSync {
       this.store.resources.get(subject),
     );
     if (
-      JSON.stringify(descriptor.dependencies) ===
-        JSON.stringify(watch.dependencies) &&
-      watch.subscriptions.length &&
-      boundResources.every(
-        (resource, index) => resource === watch.boundResources?.[index],
+      descriptor.dependencies.length === watch.dependencies.length &&
+      descriptor.dependencies.every(
+        (subject, index) =>
+          subject === watch.dependencies[index] &&
+          boundResources[index] === watch.boundResources?.[index],
       )
     )
       return;
     watch.boundResources = boundResources;
-    watch.subscriptions.forEach(off => off());
+    watch.dependencySubscriptions.forEach(off => off());
     watch.dependencies = descriptor.dependencies;
 
     const changed = () => {
@@ -131,17 +132,15 @@ export class ResourceAttachmentSync {
       this.schedule();
     };
 
-    watch.subscriptions = [
-      this.store.subscribeResourcePeerSyncStatus(watch.resource, () =>
-        this.notify(watch.resource.subject),
-      ),
-    ];
+    watch.dependencySubscriptions = [];
 
     for (const subject of watch.dependencies) {
-      watch.subscriptions.push(this.store.subscribe(subject, changed));
+      watch.dependencySubscriptions.push(
+        this.store.subscribe(subject, changed),
+      );
       const resource = this.store.resources.get(subject);
       if (resource)
-        watch.subscriptions.push(
+        watch.dependencySubscriptions.push(
           resource.on(ResourceEvents.LocalChange, changed),
         );
     }
@@ -158,10 +157,15 @@ export class ResourceAttachmentSync {
     let watch = this.watches.get(resource);
 
     if (!watch) {
+      // Dependency changes only rebind file observers. Releasing the peer
+      // observer would discard native metadata and cancel its evidence read.
       watch = {
         resource,
         callbacks: new Set(),
-        subscriptions: [],
+        stopPeer: this.store.subscribeResourcePeerSyncStatus(resource, () =>
+          this.notify(resource.subject),
+        ),
+        dependencySubscriptions: [],
         dependencies: [],
         token: {},
       };
@@ -189,8 +193,9 @@ export class ResourceAttachmentSync {
       watch!.callbacks.delete(callback);
 
       if (!watch!.callbacks.size) {
-        watch!.subscriptions.forEach(off => off());
+        watch!.dependencySubscriptions.forEach(off => off());
         this.watches.delete(resource);
+        watch!.stopPeer();
       }
 
       if (!this.watches.size) {

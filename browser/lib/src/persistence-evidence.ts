@@ -297,6 +297,22 @@ export class PersistenceEvidenceScope {
     );
   }
 
+  /** Display the time of the observation that proves the requested version. */
+  readMetadata(
+    subject: string,
+    boundary: PersistenceBoundary,
+    target: PersistenceVersion | undefined,
+  ) {
+    const receipts = this.receipts(subject, boundary);
+    const covering = receipts.find(receipt =>
+      persistenceVersionCovers(receipt.version, target),
+    );
+    const observed = covering ?? receipts.at(-1);
+    const state = covering ? 'confirmed' : observed ? 'pending' : 'unknown';
+
+    return { state, confirmedAt: observed?.confirmedAt } as const;
+  }
+
   latest(
     subject: string,
     boundary: PersistenceBoundary,

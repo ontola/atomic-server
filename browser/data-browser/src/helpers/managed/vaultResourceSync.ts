@@ -397,12 +397,11 @@ export function getResourceVaultCopies(
   if (!context || !contextCurrent(store, ledger, context, ledger.epoch))
     return UNKNOWN_COPIES;
   const subject = store.normalizeSubject(resource.subject);
-  const covering = context.receipts.covering(
+  const document = context.receipts.readMetadata(
     subject,
     'stored',
     resourcePersistenceVersion(resource),
   );
-  const document = covering ?? context.receipts.latest(subject, 'stored');
   const contents = context.receipts.content(subject);
   const manifest =
     contents && resourceAttachmentDescriptor(store, resource).manifest;
@@ -411,11 +410,6 @@ export function getResourceVaultCopies(
     contents &&
     attachmentManifestKey(manifest) ===
       attachmentManifestKey(contents.manifest);
-  const documentState = covering
-    ? 'confirmed'
-    : document
-      ? 'pending'
-      : 'unknown';
   const contentsState = matchingContents
     ? 'confirmed'
     : contents
@@ -424,16 +418,15 @@ export function getResourceVaultCopies(
   const previous = ledger.snapshots.get(resource);
   if (
     previous?.document.scope === context.scope &&
-    previous.document.state === documentState &&
-    previous.document.confirmedAt === document?.confirmedAt &&
+    previous.document.state === document.state &&
+    previous.document.confirmedAt === document.confirmedAt &&
     previous.contents.state === contentsState &&
     previous.contents.confirmedAt === contents?.confirmedAt
   )
     return previous;
   const snapshot = Object.freeze({
     document: Object.freeze({
-      state: documentState,
-      confirmedAt: document?.confirmedAt,
+      ...document,
       scope: context.scope,
     }),
     contents: Object.freeze({

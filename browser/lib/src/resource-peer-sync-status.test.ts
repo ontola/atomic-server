@@ -4,6 +4,7 @@ import { Resource } from './resource.js';
 import { Agent } from './agent.js';
 import { core } from './ontologies/core.js';
 import { encodeB64 } from './base64.js';
+import { LoroLoader } from './loro-loader.js';
 import type { ClientDbWorker } from './client-db.js';
 import type { BrowserReplicaReceipt } from './peer-receipts.js';
 
@@ -84,6 +85,25 @@ describe('live resource peer copies', () => {
     h.store.acknowledgeResourcePeerReceipt(old);
     expect(h.get().peers[0].confirmedAt).toBe(20);
     expect(h.get().state).toBe('confirmed');
+  });
+
+  it('uses the timestamp of the receipt covering the displayed version', () => {
+    const h = setup();
+    h.open();
+    h.store.acknowledgeResourcePeerReceipt(h.receipt());
+    const peer = h.resource.getLoroDoc()!.peerIdStr === '1' ? '2' : '1';
+    const unrelated = new LoroLoader.Loro.VersionVector(new Map([[peer, 1]]));
+    h.store.acknowledgeResourcePeerReceipt(
+      h.receipt({
+        version: encodeB64(unrelated.encode()),
+        confirmedAt: 20,
+      }),
+    );
+
+    expect(h.get().peers[0]).toMatchObject({
+      state: 'confirmed',
+      confirmedAt: 10,
+    });
   });
 
   it('deduplicates connections sharing remote storage and excludes the source database', () => {

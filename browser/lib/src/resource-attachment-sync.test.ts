@@ -167,6 +167,23 @@ async function fixture({ serverEnabled = false } = {}) {
 }
 
 describe('exact resource attachment evidence', () => {
+  it('keeps the peer watch when an attachment dependency changes', async () => {
+    const h = await fixture();
+    const child = await h.add('atomic:attached-file');
+    const peerWatch = vi.spyOn(h.store, 'subscribeResourcePeerSyncStatus');
+    const stop = h.store.subscribeResourceCopies(h.resource, () => {});
+    cleanups.push(stop);
+    expect(peerWatch).toHaveBeenCalledOnce();
+
+    await h.resource.set(server.properties.attachments, [child.subject], false);
+    h.resource.sealPendingEdits();
+
+    expect(
+      h.store.getResourceCopies(h.resource).contents.manifest?.files,
+    ).toHaveLength(2);
+    expect(peerWatch).toHaveBeenCalledOnce();
+  });
+
   it('does no I/O in a read and keeps byte proof separate from resource details', async () => {
     const h = await fixture();
     expect(h.get().required).toBe(true);

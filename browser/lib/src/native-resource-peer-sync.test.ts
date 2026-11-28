@@ -374,6 +374,16 @@ describe.each(['iroh', 'webrtc'] as const)(
       ];
       const contents = () =>
         h.store.getResourceAttachmentSyncStatus(h.resource);
+      const observations: Array<[string, string | undefined]> = [];
+      cleanup.push(
+        h.store.subscribeResourceCopies(h.resource, () => {
+          const copies = h.store.getResourceCopies(h.resource);
+          observations.push([
+            copies.peers.state,
+            copies.contents.peers[0]?.state,
+          ]);
+        }),
+      );
       h.respond(data);
       h.watch();
       await vi.advanceTimersByTimeAsync(0);
@@ -382,11 +392,14 @@ describe.each(['iroh', 'webrtc'] as const)(
         required: true,
         peers: [{ state: 'confirmed' }],
       });
+      observations.length = 0;
       delete data.connections[0].attachmentReceipts;
       h.respond(data);
       await h.poll();
       expect(h.get().state).toBe('confirmed');
       expect(contents().peers[0].state).toBe('unknown');
+      expect(observations.length).toBeGreaterThan(0);
+      expect(observations).not.toContainEqual(['confirmed', 'confirmed']);
       data.connections[0].connectionId = 'untrusted:session';
       h.respond(data);
       await h.poll();
