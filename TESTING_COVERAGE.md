@@ -1592,6 +1592,240 @@ This does not yet prove restoration of the user's private staging workspace.
 
 ## Plugin UI sandbox and private assets
 
+- The Data Browser typecheck covers the built-in Sync iframe entry point and its
+  shared identity, observation and reference helpers. The bundle test verifies
+  the TypeScript entry point, the embedded Syncables reader and the existing
+  shell-provided bridge. The targeted workflow also runs the scope and adapter
+  tests and the Table view tabs test from its owning package. The native Table
+  Open test covers a store snapshot refresh and cell recreation during a
+  pending navigation, plus invalidation when the row moves or the table closes.
+
+- `browser/data-browser/scripts/check-translations.test.ts` audits every
+  supported UI catalog, including the Syncables Apps and OAuth strings, for
+  missing entries, empty translations and invalid placeholders/markup.
+
+- `browser/e2e/tests/syncables-github.spec.ts` exercises the real built app and
+  Atomic Server against a protocol-checking proxy/provider fixture. The GitHub
+  journeys cover drive-level principal/Public Apps and catalog collection
+  navigation, Organizations without synthetic owners, scoped organization →
+  repositories → Issues/pull requests response Links, public owner/name setup
+  resolved to canonical repository IDs, typed/idempotent updates, pagination,
+  background workers, pause/cancellation/reconnect, stable moved identities,
+  native views without provider reads, and desktop/mobile layouts. A separate
+  journey discovers an unrelated Notebook provider through the shared Apps
+  search after opting in, then imports its records through the same runtime.
+  These fixtures do not exercise live GitHub OAuth. Separately, the existing
+  live localhost connection completed a 1,274-repository import on 2026-11-20;
+  signed stored rows and the ordinary Table were verified. The new Trash
+  regression retains the trashed App and blocks duplicate allocation before
+  provider or iframe writes, with explicit restore guidance.
+- `browser/lib/src/collection-snapshot-refresh.test.ts` uses real Store HTTP
+  responses and independent Loro documents to verify query pages refresh from
+  empty to additions to removals and back to empty. Generated query snapshots
+  replace previous pages; ordinary user documents still merge their CRDT fields.
+  Seven pagination regressions also cover existing off-page updates, genuine
+  additions, removals and moves, optimistic rows racing partial server answers,
+  stale empty answers, partial local caches and a complete local query replacing
+  server paging. Unknown identities in a partial page trigger revalidation
+  instead of inflating its authoritative total.
+- `browser/lib/src/collection-include-trashed.test.ts` covers live query
+  visibility after direct reads of retained descendants, ancestor-only moves,
+  explicit Trash inclusion, and unknown cached ancestry. Structural metadata
+  changes revalidate the same Drive query without fetching foreign ancestors.
+  The native Trash journey checks the empty Table again after signed retained-row
+  reads and identity queries, while preserving resources and excluding writes,
+  provider requests and iframe activation.
+- Flat collection regressions in `builtinSyncFlatState.test.ts`,
+  `syncableRules.test.ts`, `syncableFlatNavigation.test.ts` and
+  `useSyncableFilters.test.tsx` cover typed canonical identities, shared rows,
+  independent saved-rule membership, latest explicit value/null evidence,
+  partial/cancelled read retention, immutable observation replay, constrained
+  relationship fanout and invalid saved filters failing closed. Native Open saves
+  a View under an existing sibling entity table without a provider request.
+  Cold row placeholders hydrate in place before ownership comparisons; moved-row
+  owners are type checked and eligibility follows immutable resource snapshots.
+  Stored-cell subscriptions update visible values during background synchronization,
+  and cold entry observes immutable View readiness rather than caching a mutable
+  resource handle. Worker queue tests cover independent cancellation and serial whole-table
+  materialization, with parallel execution for unrelated tables.
+- `syncableFlatAdoption.test.ts` verifies source pages use the existing Store
+  batch reader for cold records, retain read-only ancestry/identity checks, and
+  refuse foreign/commit subjects, duplicate or incomplete pages, returned errors
+  and allocations beyond the resource budget before import authority is created.
+- `syncableCollection.test.ts` and `SyncableCollectionView.test.tsx` verify native
+  stored-data rendering with unrelated schema subjects, typed/enum values,
+  cache isolation and navigation checks. The view never creates child collections
+  or refreshes a provider; Open revalidates the saved row/target and drive.
+- `syncableReferenceRecords.test.ts` covers native projection of catalog-declared
+  supplied/identity references from host observations, canonical reuse, partial
+  records, raw/custom field preservation and guarded same-drive target writes.
+  New reference labels prefer human-readable text over URI fields and preserve
+  existing names.
+  `builtinSyncApp.test.ts` covers source links, whole-field invalidation, omitted
+  versus null fields and later partial-record enrichment without new identities.
+  Authenticated pagination covers reads beyond the old 20-request limit and
+  confirms the 128-request bound still retains only the accepted prefix.
+  Timed bridge responses cover valid reads beyond two minutes and five-minute
+  exhaustion retaining accepted observations and memberships.
+  Native response-journal callbacks are covered by `builtinSyncablesProfile.test.ts`.
+- `hostStoreProfile.test.ts` covers signed child paging through the existing
+  bridge, including 5,518- and 10,734-record journals, bulk cold hydration,
+  current parent/Drive checks and bounded pagination metadata. Truncated pages,
+  duplicate IDs, changed totals, scope changes and cancellation fail closed.
+  Complete identity scans and retained Trash matches keep their existing path.
+- `syncableApiSchema.test.ts` and `syncableApiSchemaViews.test.ts` cover resource-
+  specific link datatypes, retained immutable JSON properties, optional unresolved
+  links, custom class requirements, and positional column/order migration without
+  rewriting filters, sorting or widths. `useSyncableTableNavigation.test.tsx`
+  covers ordinary Table Open, read-only/partial/cold rows, stored-data navigation,
+  stable cell identity and stale async navigation. The native GitHub journey
+  verifies reused owner/author IDs and ordinary Table navigation without another
+  provider request for supplied linked data.
+  Its 390px viewport assertion keeps the native Open control visible before
+  wide API columns; explicitly saved column order still takes precedence.
+- `syncableFlatNavigation.test.ts`, `SyncableRecordActions.test.tsx` and
+  `ResourcePageDefault.test.tsx` cover shared native record/Table navigation,
+  multiple declared actions, bounded two-hop relationships, exact-filter reuse
+  without source write access, logical ownership across moves, stale actions
+  and absent/ambiguous/foreign stored targets. Ordinary resources do not load
+  the integration action module or perform schema lookups.
+- `syncableCollectionCompatibility.test.ts` covers entity-only native Table
+  rendering of old Collection links, preserving saved configuration and scope,
+  hiding only unconfigured duplicate tabs, retaining custom views and hidden
+  definitions during reorder, and keeping principal App directory navigation.
+  The browser test covers a signed old default with genesis and owner metadata:
+  bare links use Table settings and explicit legacy links keep their scope.
+  `builtinSyncApp.test.ts` and `syncableReferenceRecords.test.ts` check new
+  entity views are Table/Sync. App directories retain Collection, and successful
+  history stays on its exact saved rule.
+  `syncableApiSchema.test.ts` preserves a user-renamed column label and identity
+  when the catalog schema is reopened.
+  `BuiltinSyncablesApp.test.ts` holds unrelated adoption/legacy scans pending:
+  canonical collection controls still prepare, with and without a saved filter,
+  while worker preparation continues to wait for the complete migration proof.
+- The native GitHub journey covers the OAuth return opening the new drive
+  sidebar App, the first empty Organizations Table triggering its eligible
+  saved filter, and the Sync tab selecting that filter. Frame tests cover the
+  scoped connection handoff and the chooser fallback. They also verify the
+  page status updates in place, including a valid Last link and an unknown
+  total. Reference projector tests cover duplicate legacy and canonical writer
+  IDs during and after server acknowledgement, reordered grants, and rejection
+  of actual grant additions and removals.
+- Host tests verify source ACL changes stop delayed native observation writes
+  and unproven preview sources retain their data. Page progress tests require
+  a catalog-declared page field before deriving a total from a Last link.
+- Authenticated source pickers use same-principal, same-drive catalog root
+  filters. Unit coverage verifies readable moved tables and the Public fallback,
+  selection through a typed group link, and saving a related rule without a
+  remote lookup. The GitHub Chromium journey verifies Organizations and
+  Repositories begin syncing when the empty Issues Table opens, and a stored
+  repository can be chosen in Sync. Adding a second filter stays on Sync and
+  opens the picker even when an existing filter would normally be selected.
+- Principal App tests cover a same-drive Public reinstall after confirmed
+  permanent deletion and preserve the previous registration on a live
+  target, failed signed read, pending delete, or competing source. The Chromium
+  reinstall journey uses the Trash and Apps menus and checks that a second
+  chooser visit reuses the new App.
+- The Public Issues Chromium journey fills repository owner and name directly
+  on the collection's Sync tab, saves a filter within that table, and syncs an
+  issue. The authenticated journey checks that stored repository choices
+  appear before any Issues request and that the empty saved-filter selector
+  stays hidden.
+  Frame and transport tests verify that opening setup does no provider read and
+  that catalog entrypoint reads cannot reach unrelated collections or fetch rows
+  before the filter exists. Tab tests cover Syncable Collections labels for
+  existing and new directories, preserving custom titles and view records.
+- `embed/flutterHost.test.ts` covers native-host precedence, locked Flutter
+  channel tokens and lazy standalone fixtures. The production embed size check
+  keeps its existing first-use and total budgets; the main Data Browser build
+  remains independent of the standalone mock fallback.
+- `syncablesNavigation.test.ts` and `useSyncablesNavigation.test.tsx` verify that
+  canonical collection metadata takes precedence over retained legacy local IDs.
+  Adopted collections remain leaves in the sidebar and AI tree; metadata updates
+  react in place, and ordinary tables incur no Syncables schema lookup.
+- Browser storage assertions query complete signed canonical row sets independently
+  of the active filter and the browser's partially materialized resource cache.
+- A browser journey imports repositories before any Organizations read, opens the
+  embedded organization through native Related collections, and syncs its saved
+  repository filter. It checks no provider/catalog request on navigation, stable
+  identity, and no invented originating read or organization membership.
+  Reference projector, navigation and rule tests cover catalog-derived intents,
+  older summary compatibility, missing route fields and current-origin validation.
+  Child reads reuse proved active origin links without rewriting their raw data,
+  context or intents. Source dependency invalidation cancels preparing and active
+  executions immediately; invalid visible controls are replaced using fresh proof.
+- `syncablePrincipalApp.test.ts` verifies one App per typed principal/Public,
+  authoritative drive lookup, native registration outside iframe write roots,
+  collision/interruption recovery, moved Apps, preserved subjects/local IDs and
+  refusal of conflicting, forged or foreign-drive sources.
+- Principal-App browser regressions reinstall Public after reload and reconnect
+  an authenticated principal through a new OAuth slot after rename/move. They
+  preserve cached table/row IDs, switch child sync to the new binding, retain the
+  binding on later chooser entry and isolate another principal's tables/rows.
+- A two-drive browser journey uses the same agent and populated OPFS database,
+  installs the same principal in both drives and verifies separate Apps, tables
+  and row identities. Syncing either drive preserves the other's accepted rows.
+- Rust paging regressions verify constant visible totals and exact once-only
+  page unions with unreadable, trashed and stale-index hits before, within and
+  after each page. Both basic and indexed queries, nested/subjects-only reads,
+  Public/Sudo callers and early-stop `query_page` retain visible offsets.
+- Populated two-drive Rust, Collection and real-WASM regressions cover repeated
+  source/local IDs, explicit-drive queries, counts and pagination. Built-in host
+  regressions reject cross-drive direct reads/search, ignore frame-supplied scope,
+  and refuse identity allocation from stale, incomplete or failed cache results.
+- Outbox tests preserve identity-conflicting genesis/edit data for review, stop
+  sustained automatic retries and allow unrelated writes to continue.
+- Save-filter adoption migrates proven legacy rows before navigation remounts the
+  Sync profile; runtime tests cover both discovery and direct filter creation.
+- App page and setup-visibility tests verify native principal-App browsing without
+  an iframe, validated setup-only hiding, metadata installed after drive entry,
+  reactive role changes and rejection of external editable-index URLs.
+- `syncablePlatform.test.ts`, App resolver and sidebar tests cover direct App
+  mounting, idempotent installation, preserved icons, verified legacy Accounts
+  relocation and hiding, interrupted migration and user-moved resources.
+- `builtinSyncApp.test.ts`, `builtinSyncIdentity.test.ts` and
+  `syncableSource.test.ts` use the actual `syncables/browser` library and composed
+  IAP fixtures. They cover typed principal identity, canonical source keys,
+  catalog selection/navigation, public entrypoints, managed-field reconciliation,
+  compact parent-key hashes across deep nesting under the unchanged bridge limit,
+  incomplete-read retention, no eager descendant reads and legacy alias reuse.
+- `builtinSyncablesProfile.test.ts` and `proxyConnections.test.ts` cover fresh
+  catalog authority, exact selected-instance/pagination routes, replayed response
+  Links, principal verification, anonymous-only Public reads, unchanged fixed
+  queries/bodies, reconnect identity checks and cancellation/source-change guards.
+  A paused Sync view can mount its Resume controls while provider reads and
+  execution starts remain blocked; pause is rechecked after pending reads.
+  Host-held connection keys and user signing reuse the existing AppFrame bridge.
+  Root recovery validates the requested owned slot and rechecks source/session
+  authority. Legacy reconnect eligibility is read-only; explicit reconnect alone
+  prepares cached identity proof, and the OAuth return must verify a fresh typed
+  identity before replacing the logical slot's credential.
+- `builtinSyncApp.test.ts` covers genuinely empty accounts, expired orphan slots
+  alongside saved principals, per-slot recovery, retained historical data and
+  visibility of unrelated failures. The browser regression checks actual signed
+  slot replacement and cached collection navigation after a principal 401.
+- `TableViewTabs.test.tsx` covers Collection tabs and historical Browse labels
+  without rewriting stored or custom view names; screenshots verify its distinct icon.
+- `syncableApiSchema.test.ts` covers catalog-derived Atomic class/property
+  provisioning, stable schema identities across branding changes, safe immutable
+  datatype changes, read-only lookup and delayed bootstrap cancellation.
+- Existing AppFrame/hostStore and AppExecutionRuntime tests cover shared bridge
+  write boundaries, worker lifetime, deduplication and stale completions. Accepted
+  executions acknowledge and publish preparing state before asynchronous authority
+  checks complete, including preparation beyond the bridge deadline; cancellation,
+  replacement and failed preparation still release serialized destinations safely. The
+  real-Store `plugin-run.integration.test.ts` cancels a delayed property fetch
+  before Loro mutation. Same-drive moves retain identity; crossing the selected
+  drive boundary revokes authority, including stale descendant drive stamps.
+- `syncableDocument.test.ts` covers fixed unsigned metadata endpoints, bounded
+  YAML, optional selections, unsafe origins, cancellation and moved-source lookup.
+  `installIntegrationIcon.test.ts` checks safe public image loading, File uploads
+  and preserving a chosen icon. `scripts/builtin-syncables-bundle.test.mjs` proves
+  real library inclusion without external runtime imports or provider code.
+- Translation checks audit every supported catalog, including Apps/OAuth strings.
+  Local build/browser evidence and exact-commit shared CI are reported separately
+  in the PR; passing fixture tests does not certify a live OAuth deployment.
+
 - `browser/e2e/tests/plugin.spec.ts`: private plugin assets load through signed parent requests; custom rendering and RPC still work.
 - The bootstrap test opens the shell directly and verifies its server-enforced opaque origin, independently of iframe attributes.
 - `signout-signin-data.spec.ts` uses fresh persistent profiles on macOS WebKit because ephemeral contexts reject OPFS; these remain browser tests, not native Tauri acceptance.
@@ -1655,6 +1889,17 @@ the Dagger container gate. Queue storage prevents loss; it does not imply
 cross-system exactly-once execution or automatic reconciliation of uncertain writes.
 
 ### Live connector query snapshots
+
+Built-in Syncables Trash activation (2026-11-20): native profile tests reject
+trashed setup roots and descendants before bootstrap/provider reads, and reject
+provider-response writes after an ancestor is moved to Trash. Platform/principal
+tests reject reinstall or promotion of retained trashed identities, including a
+missing drive index hint. SDK/host tests distinguish exact retained-identity
+queries from ordinary listings and reject iframe attempts to opt into Trash.
+The reported localhost Dev drive failure was verified against signed live reads:
+the retained manager and its canonical collections were all under Trash, rather
+than missing from the query index. The user chose to leave them there. No live
+resource was restored or deleted, and failed queued drafts remain retained.
 
 Moved to atomic-plugins with `integrations/github-issues` (its live tests
 and fixture suites). `uuid_paths_are_single_canonical_segments` still
@@ -3305,10 +3550,9 @@ Nov27 focused native validation of the seven affected/current regression journey
 retries, skips, or global errors. This is targeted evidence, not a full CI result;
 the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.
 
-### Catalog-backed principal Apps
+## Catalog-backed principal Apps
 
-Run `pnpm --filter @tomic/data-browser test:syncables-apps` from `browser`
-after building the workspace dependencies. The focused suites cover catalog
+The scoped Syncables iframe workflow runs the focused suites for catalog
 validation, the scoped iframe bridge, OAuth handoffs, and drive-local App
 registration, including known moved identities and retained Trash conflicts.
 `pnpm test-e2e:local tests/syncables-apps.spec.ts` runs the chooser and repeat
@@ -3332,3 +3576,12 @@ changes, navigation from embedded records, refresh of a shared entity from
 multiple filters, preserved user fields and identities, paused sync,
 reconnection, Trash, and unrelated-provider coverage. The browser fixture
 records every provider request and verifies the native host's signed requests.
+
+## Local date-formula test limitation
+
+`derivedColumns.test.ts` includes a July local-midnight fixture, while
+`formulaEngine.ts` obtains the UTC offset from the current date. In a
+Europe/Amsterdam November run, the summer/winter offset mismatch fails
+“counts a date stamped today as today, in any time zone”. It passes with
+`TZ=UTC`, matching CI. This existing case does not establish correctness
+across seasonal UTC-offset changes.
