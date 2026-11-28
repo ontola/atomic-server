@@ -34,6 +34,7 @@ import {
   commitSubject,
   currentAgentSubject,
   canonicalizeScheme,
+  sameAgent,
 } from './subject.js';
 import { checkResourceConstraints } from './class-constraints.js';
 import { perfSpan } from './perf-trace.js';
@@ -1751,13 +1752,20 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Agents can always edit their own resource (e.g. their profile)
-    if (agent === this.subject) {
+    if (sameAgent(agent, this.subject)) {
       return [true, undefined];
     }
 
     const writeArray = this.get(core.properties.write);
 
-    if (writeArray && valToArray(writeArray).includes(agent)) {
+    // Compare by key, not by string: a pre-DID grant names the same Agent as
+    // `https://server/agents/{pubkey}`. The server already accepts it.
+    if (
+      writeArray &&
+      valToArray(writeArray).some(
+        granted => typeof granted === 'string' && sameAgent(granted, agent),
+      )
+    ) {
       return [true, undefined];
     }
 
@@ -1772,7 +1780,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Agents can always edit themselves
-    if (parentSubject === agent) {
+    if (sameAgent(parentSubject, agent)) {
       return [true, undefined];
     }
 

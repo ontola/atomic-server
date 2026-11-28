@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createFromCatalog, before } from './test-utils';
-import { unlockPluginPreview } from './integration-settings-utils';
 
 test.beforeEach(before);
 
@@ -22,10 +21,16 @@ async function enableCatalogEntries(page: Page, shortnames: string[]) {
   });
 }
 
-test('experimental plugins default off, behind an unlock, and the preference survives reload', async ({
+test('experimental plugins default off and the preference survives reload', async ({
   page,
 }) => {
   const catalogRequests: string[] = [];
+  await page.route('**/catalog/apps', route =>
+    route.fulfill({
+      headers: { 'access-control-allow-origin': '*' },
+      json: { version: 1, platforms: [] },
+    }),
+  );
   await enableCatalogEntries(page, ['fixture-experimental', 'fixture-api']);
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());
@@ -60,14 +65,6 @@ test('experimental plugins default off, behind an unlock, and the preference sur
   const experimentalToggle = page.getByRole('checkbox', {
     name: 'Show experimental apps',
   });
-  // Plugins are handed out in user-testing sessions: an ordinary user sees
-  // that the feature is new, and no toggle.
-  await expect(
-    page.getByRole('note').filter({ hasText: 'This is a new feature.' }),
-  ).toBeVisible();
-  await expect(experimentalToggle).toHaveCount(0);
-
-  await unlockPluginPreview(page);
   await expect(experimentalToggle).toBeVisible();
   await expect(apiToggle).toHaveCount(0);
   await expect(experimentalToggle).not.toBeChecked();
@@ -145,10 +142,6 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('region', { name: 'Your integrations' })
       .getByRole('link', { name: 'New app', exact: true }),
   ).toBeVisible();
-  // Ordinary users are not offered the experimental toggle at all.
-  await expect(
-    page.getByRole('checkbox', { name: 'Show experimental apps' }),
-  ).toHaveCount(0);
 });
 
 test('visibility toggles are hidden when the catalog enables nothing behind them', async ({
@@ -166,13 +159,12 @@ test('visibility toggles are hidden when the catalog enables nothing behind them
   ).toHaveCount(0);
 });
 
-test('a user who is not unlocked has no experimental toggle in Settings', async ({
+test('Settings offers the experimental toggle to everyone', async ({
   page,
 }) => {
   await page.goto(new URL('/app/settings', page.url()).href);
-  await page.getByPlaceholder('Search settings...').fill('marketplaces');
-  await expect(page.getByLabel('Add marketplace URL')).toBeVisible();
+  await page.getByPlaceholder('Search settings...').fill('experimental');
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental apps' }),
-  ).toHaveCount(0);
+  ).toBeVisible();
 });

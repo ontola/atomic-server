@@ -786,11 +786,6 @@ msgstr "Tidak ada hasil yang cocok."
 msgid "Click to enlarge"
 msgstr "Klik untuk memperbesar"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Masuk / Pengguna baru"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1274,7 +1269,6 @@ msgstr "Dokumen"
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/chunks/PluginRuns/syncablesViews.ts
 msgid "Sync"
 msgstr "Sinkronisasi"
@@ -1449,16 +1443,8 @@ msgid "Data for"
 msgstr "Data untuk"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "subjek:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "URL sumber daya"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "genesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1901,6 +1887,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} bukan subjek yang valid."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "subjek"
 
@@ -1909,6 +1896,8 @@ msgid "Edit value"
 msgstr "Sunting nilai"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2151,7 +2140,6 @@ msgstr "<0/> Catatan"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "Baru"
@@ -2778,9 +2766,11 @@ msgstr "Sumber daya ini memiliki <0/> turunan"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "Sunting {0}"
 
@@ -7426,10 +7416,6 @@ msgid "Publish to integration store"
 msgstr "Terbitkan ke toko integrasi"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integrasi"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr "Preferensi ini disimpan di drive Atomic pribadi Anda. Koneksi yang ada tetap tersedia."
 
@@ -9256,6 +9242,7 @@ msgstr "Dipilih terlebih dahulu saat formulir dibuka. Biarkan pada \"Tanpa bawaa
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Pratinjau"
 
@@ -11845,6 +11832,7 @@ msgstr "Menyiapkan"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Alamat web"
 
@@ -12221,10 +12209,12 @@ msgid "Activity will show up here"
 msgstr "Aktivitas akan muncul di sini"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Tampilkan lebih sedikit"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Tampilkan semua"
 
@@ -12829,6 +12819,7 @@ msgstr "Memuat aplikasi…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Temukan aplikasi"
 
@@ -13346,10 +13337,6 @@ msgid "Models, providers and voice."
 msgstr "Model, penyedia, dan suara."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Pengaturan integrasi"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proksi, katalog, dan plugin eksperimental."
 
@@ -13410,15 +13397,9 @@ msgstr "Untuk lebih banyak orang, gunakan Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Hanya browser ini yang dapat membuka pekerjaanmu. Masuk atau daftar dengan emailmu, atau hubungkan perangkat lain, agar kamu bisa membukanya di tempat lain dan tidak kehilangan akses."
 
-#~ msgid "Save your work"
-#~ msgstr "Simpan pekerjaanmu"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Daftarkan emailmu atau hubungkan perangkat untuk membukanya di tempat lain"
-
-#~ msgid "Save your work here"
-#~ msgstr "Simpan pekerjaanmu di sini"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13454,18 +13435,6 @@ msgstr "Panduan: menerbitkan aplikasi"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Aplikasi tidak ada? Buat sendiri dengan AI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuat aplikasi di drive Anda. Lalu bagikan ke drive Anda, jalankan marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "Ini adalah fitur baru. Anda melihat aplikasi eksperimental untuk dicoba."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "Ini adalah fitur baru. Aplikasi akan segera muncul di sini untuk Anda coba."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13939,6 +13908,146 @@ msgstr "Pembaruan tersedia"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Mulai ulang untuk memakai versi {0}"
+
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Sumber impor"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Halaman web atau teks"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Tambahkan alamat web atau tempel teks atau sumber halaman."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Tempel teks atau HTML halaman..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Teks atau sumber halaman"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Simpan di"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "Folder atau drive tempat hasil ditambahkan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Tempel alamat halaman, teksnya, atau sumbernya. Atomic Server tidak mengambil halaman untukmu: buka halaman, salin yang ingin disimpan, lalu tempel di sini."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "Data {0} ditemukan di halaman."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Judul dan deskripsi halaman ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Tidak ada data terstruktur, jadi ini menjadi tautan biasa."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Hanya teks yang ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Hanya alamat yang ditemukan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Menyiapkan..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "Kamu bisa mengubah semuanya sebelum menyimpan. Belum ada yang disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "Halaman ini pernah diimpor. Menyimpan akan memperbaruinya, bukan membuat salinan."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr "Pengaturan aplikasi"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr "<0/> Pengaturan aplikasi"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr "Jelaskan apa yang Anda inginkan dan asisten akan membuatnya di drive Anda. Bagikan, host marketplace Anda sendiri, atau kirimkan ke marketplace komunitas."
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Back to the plain link"
+msgstr "Kembali ke tautan biasa"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI can read this page and file it under a better kind of item. Set up a model first."
+msgstr "AI dapat membaca halaman ini dan menyimpannya sebagai jenis item yang lebih sesuai. Siapkan model terlebih dahulu."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+msgstr "AI dimatikan. Nyalakan di pengaturan agar AI dapat membaca halaman ini dan menyimpannya sebagai jenis item yang lebih sesuai."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Set up AI"
+msgstr "Siapkan AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The AI could not read this page."
+msgstr "AI tidak dapat membaca halaman ini."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Reading the page..."
+msgstr "Membaca halaman..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Extract with AI"
+msgstr "Ekstrak dengan AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+msgstr "Impor biasa menemukan sedikit informasi. AI dapat membaca halaman dan memilih salah satu jenis item yang sudah Anda miliki."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI read the page and filled in this item."
+msgstr "AI telah membaca halaman dan mengisi item ini."
+
+#. 0: ai.dropped.map(d => d.property).join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Left out because they did not fit: {0}"
+msgstr "Dilewati karena tidak cocok: {0}"
+
+#. 0: ai.missing.join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Still to fill in: {0}"
+msgstr "Masih harus diisi: {0}"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) melalui Atomic ke penyedia AI-nya. Anda memeriksa hasilnya sebelum apa pun disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke server Ollama Anda. Anda memeriksa hasilnya sebelum apa pun disimpan."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+msgstr "Mengirim judul halaman dan teks utamanya (maksimal 8.000 karakter) ke OpenRouter. Anda memeriksa hasilnya sebelum apa pun disimpan."
 
 #: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "GitLab"

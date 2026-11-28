@@ -786,11 +786,6 @@ msgstr "No matching results."
 msgid "Click to enlarge"
 msgstr "Click to enlarge"
 
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
-msgid "Login / New User"
-msgstr "Login / New User"
-
 #: ../data-browser/src/chunks/FormBuilder/FormBuilderPage.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/MetaSetter.tsx
@@ -1274,7 +1269,6 @@ msgstr "Document"
 #: ../data-browser/src/chunks/PluginRuns/IntegrationConnection.tsx
 #: ../data-browser/src/chunks/PluginRuns/PluginPage.tsx
 #: ../data-browser/src/components/SideBar/AccountMenu.tsx
-#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/chunks/PluginRuns/syncablesViews.ts
 msgid "Sync"
 msgstr "Sync"
@@ -1449,16 +1443,8 @@ msgid "Data for"
 msgstr "Data for"
 
 #: ../data-browser/src/routes/DataRoute.tsx
-msgid "subject:"
-msgstr "subject:"
-
-#: ../data-browser/src/routes/DataRoute.tsx
 msgid "The URL of the resource"
 msgstr "The URL of the resource"
-
-#: ../data-browser/src/routes/DataRoute.tsx
-msgid "genesis:"
-msgstr "genesis:"
 
 #: ../data-browser/src/routes/DataRoute.tsx
 msgid "Creator and creation time, derived from the signed genesis commit (the resource identity). For DID resources the subject above IS the genesis signature."
@@ -1901,6 +1887,7 @@ msgid "{0} is not a valid subject."
 msgstr "{0} is not a valid subject."
 
 #: ../data-browser/src/components/Table.tsx
+#: ../data-browser/src/routes/DataRoute.tsx
 msgid "subject"
 msgstr "subject"
 
@@ -1909,6 +1896,8 @@ msgid "Edit value"
 msgstr "Edit value"
 
 #: ../data-browser/src/chunks/AI/RealAIChat.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
+#: ../data-browser/src/components/SideBar/AccountMenu.tsx
 #: ../data-browser/src/components/SignInButton.tsx
 #: ../data-browser/src/helpers/managed/cloudSync.ts
 #: ../data-browser/src/routes/AuthorizeMcpRoute.tsx
@@ -2151,7 +2140,6 @@ msgstr "<0/> Note"
 #: ../data-browser/src/actions/appMenuItems.tsx
 #: ../data-browser/src/components/NewInstanceButton/QuickCreateRow.tsx
 #: ../data-browser/src/components/Settings/DriveSettings.tsx
-#: ../data-browser/src/routes/IntegrationStore.tsx
 #: ../data-browser/src/views/Drive/DriveHome.tsx
 msgid "New"
 msgstr "New"
@@ -2779,9 +2767,11 @@ msgstr "This resource has <0/> children"
 #. 0: label
 #. 0: label
 #. 0: title
+#. 0: property.shortname
 #: ../table-page/src/TablePage/EditorCells/JSONCell.tsx
 #: ../table-page/src/TablePage/EditorCells/MarkdownCell.tsx
 #: src/components/forms/EditFormDialog.tsx
+#: src/components/forms/ValueForm/ValueForm.tsx
 msgid "Edit {0}"
 msgstr "Edit {0}"
 
@@ -7428,10 +7418,6 @@ msgid "Publish to integration store"
 msgstr "Publish to integration store"
 
 #: ../data-browser/src/components/Settings/IntegrationSettings.tsx
-msgid "Integration"
-msgstr "Integration"
-
-#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr "These preferences are saved in your private Atomic drive. Existing connections remain available."
 
@@ -9259,6 +9245,7 @@ msgstr "Pre-selected when the form opens. Leave on \"No default\" to make the vi
 
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
 #: ../data-browser/src/chunks/FormBuilder/FormPreviewDialog.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Preview"
 msgstr "Preview"
 
@@ -11848,6 +11835,7 @@ msgstr "Setting up"
 
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
 #: ../data-browser/src/components/Cloud/DriveAddress.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
 msgid "Web address"
 msgstr "Web address"
 
@@ -12224,10 +12212,12 @@ msgid "Activity will show up here"
 msgstr "Activity will show up here"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show less"
 msgstr "Show less"
 
 #: ../data-browser/src/views/Drive/DriveHome.tsx
+#: src/components/ValueComp.tsx
 msgid "Show all"
 msgstr "Show all"
 
@@ -12832,6 +12822,7 @@ msgstr "Loading apps…"
 
 #: ../data-browser/src/components/SideBar/AppsPanel.tsx
 #: ../data-browser/src/routes/IntegrationStore.tsx
+#: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Discover apps"
 msgstr "Discover apps"
 
@@ -13357,10 +13348,6 @@ msgid "Models, providers and voice."
 msgstr "Models, providers and voice."
 
 #: ../data-browser/src/actions/appActions.ts
-msgid "Integration settings"
-msgstr "Integration settings"
-
-#: ../data-browser/src/actions/appActions.ts
 msgid "Proxy, catalog and experimental plugins."
 msgstr "Proxy, catalog and experimental plugins."
 
@@ -13421,15 +13408,9 @@ msgstr "For more people, use a Cloud Server"
 msgid "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 msgstr "Only this browser can open your work. Sign in or register with your email, or connect another device, so you can open it elsewhere and don't lose access."
 
-#~ msgid "Save your work"
-#~ msgstr "Save your work"
-
 #: ../data-browser/src/components/SideBar/GettingStartedPanel.tsx
 msgid "Register your email or connect a device to open it elsewhere"
 msgstr "Register your email or connect a device to open it elsewhere"
-
-#~ msgid "Save your work here"
-#~ msgstr "Save your work here"
 
 #. 0: host
 #: ../data-browser/src/components/SaveWork/SaveWorkDialog.tsx
@@ -13465,18 +13446,6 @@ msgstr "Guide: publishing an app"
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "Missing an app? Build it yourself with AI"
 msgstr "Missing an app? Build it yourself with AI"
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-msgstr "Describe what you want and the assistant builds the app in your drive. Then share it with your drive, host your own marketplace, or submit it to the community marketplace."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. You are seeing experimental apps to try out."
-msgstr "This is a new feature. You are seeing experimental apps to try out."
-
-#: ../data-browser/src/routes/IntegrationStore.tsx
-msgid "This is a new feature. Apps will show up here soon for you to try out."
-msgstr "This is a new feature. Apps will show up here soon for you to try out."
 
 #: ../data-browser/src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental apps"
@@ -13950,6 +13919,146 @@ msgstr "Update available"
 #: ../data-browser/src/components/Notifications/DesktopUpdateNotice.tsx
 msgid "Restart to use version {0}"
 msgstr "Restart to use version {0}"
+
+#: ../data-browser/src/routes/DataRoute.tsx
+msgid "genesis"
+msgstr "genesis"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Import source"
+msgstr "Import source"
+
+#: ../data-browser/src/views/ImporterPage.tsx
+msgid "Web page or text"
+msgstr "Web page or text"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Add a web address or paste some text or page source."
+msgstr "Add a web address or paste some text or page source."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste text, or the HTML of the page..."
+msgstr "Paste text, or the HTML of the page..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Text or page source"
+msgstr "Text or page source"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Save in"
+msgstr "Save in"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The folder or drive the result is added to."
+msgstr "The folder or drive the result is added to."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+msgstr "Paste the address of a page, its text, or its source. Atomic Server does not fetch pages for you: open the page, copy what you want to keep and paste it here."
+
+#. 0: schemaType
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found {0} data on the page."
+msgstr "Found {0} data on the page."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found the page title and description."
+msgstr "Found the page title and description."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found no structured data, so this is a plain link."
+msgstr "Found no structured data, so this is a plain link."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only text."
+msgstr "Found only text."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Found only an address."
+msgstr "Found only an address."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Preparing..."
+msgstr "Preparing..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "You can edit everything before saving. Nothing is saved yet."
+msgstr "You can edit everything before saving. Nothing is saved yet."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "This page was imported before. Saving updates it instead of making a copy."
+msgstr "This page was imported before. Saving updates it instead of making a copy."
+
+#: ../data-browser/src/actions/appActions.ts
+#: ../data-browser/src/components/Settings/IntegrationSettings.tsx
+msgid "App settings"
+msgstr "App settings"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "<0/> App settings"
+msgstr "<0/> App settings"
+
+#: ../data-browser/src/routes/IntegrationStore.tsx
+msgid "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+msgstr "Describe what you want and the assistant builds it in your drive. Share it, host your own marketplace, or submit it to the community marketplace."
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Back to the plain link"
+msgstr "Back to the plain link"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI can read this page and file it under a better kind of item. Set up a model first."
+msgstr "AI can read this page and file it under a better kind of item. Set up a model first."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+msgstr "AI is turned off. Turn it on in the settings to let it read this page and file it under a better kind of item."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Set up AI"
+msgstr "Set up AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The AI could not read this page."
+msgstr "The AI could not read this page."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Reading the page..."
+msgstr "Reading the page..."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Extract with AI"
+msgstr "Extract with AI"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+msgstr "The plain import found little to go on. AI can read the page and choose one of the kinds of item you already have."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "AI read the page and filled in this item."
+msgstr "AI read the page and filled in this item."
+
+#. 0: ai.dropped.map(d => d.property).join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Left out because they did not fit: {0}"
+msgstr "Left out because they did not fit: {0}"
+
+#. 0: ai.missing.join(', ')
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Still to fill in: {0}"
+msgstr "Still to fill in: {0}"
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+msgstr "Sends the page title and its main text (at most 8,000 characters) through Atomic to its AI providers. You review the result before anything is saved."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+msgstr "Sends the page title and its main text (at most 8,000 characters) to your Ollama server. You review the result before anything is saved."
+
+#: ../data-browser/src/views/Importer/WebImport.tsx
+msgid "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
+msgstr "Sends the page title and its main text (at most 8,000 characters) to OpenRouter. You review the result before anything is saved."
 
 #: ../data-browser/src/chunks/PluginRuns/ProxyCatalogApps.tsx
 msgid "GitLab"

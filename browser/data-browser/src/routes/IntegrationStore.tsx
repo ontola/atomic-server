@@ -13,14 +13,13 @@ import {
 import { AddMarketplaceDialog } from '../chunks/PluginRuns/AddMarketplaceDialog';
 import { useMarketplaceUrls } from '@helpers/pluginCatalogUrl';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
-import { PLUGIN_PREVIEW_PARAM } from '@helpers/integrationVisibility';
 import { driveHasServer } from '@helpers/driveData';
 import { parseListings, type Listing } from '@helpers/pluginListings';
 import { isOriginWithoutNode } from '@helpers/originNode';
 import { createRoute, redirect } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
-import { FaPlug } from 'react-icons/fa6';
+import { FaGear, FaPlug } from 'react-icons/fa6';
 import {
   useStore,
   core,
@@ -61,9 +60,6 @@ function validateAppsSearch(search: Record<string, unknown>) {
   return {
     workspace:
       typeof search.workspace === 'string' ? search.workspace : undefined,
-    // `?preview=plugins` unlocks the experimental toggle on this device, for
-    // user-testing sessions.
-    preview: typeof search.preview === 'string' ? search.preview : undefined,
     // A shared app link: `?app=<shortname>[&marketplace=<catalog url>]`.
     app: typeof search.app === 'string' ? search.app : undefined,
     marketplace:
@@ -95,17 +91,10 @@ function IntegrationStore(): React.JSX.Element {
   const store = useStore();
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
-  const { workspace, preview, app, marketplace } =
-    IntegrationStoreRoute.useSearch();
+  const { workspace, app, marketplace } = IntegrationStoreRoute.useSearch();
   const marketplaceUrls = useMarketplaceUrls();
-  const {
-    showExperimentalPlugins,
-    showApiPlugins,
-    experimentalToggleVisible,
-    setVisibility,
-  } = useIntegrationVisibility({
-    unlockToggle: preview === PLUGIN_PREVIEW_PARAM,
-  });
+  const { showExperimentalPlugins, showApiPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -322,7 +311,9 @@ function IntegrationStore(): React.JSX.Element {
     showExperimental: showExperimentalPlugins,
     showApi: showApiPlugins,
   }).length;
-  const nothingToDiscover = catalogReady && !visible?.length && !appsShown;
+  const proxyAppDrive = showExperimentalPlugins ? drive : undefined;
+  const nothingToDiscover =
+    catalogReady && !visible?.length && !appsShown && !proxyAppDrive;
 
   return (
     <Main>
@@ -330,47 +321,170 @@ function IntegrationStore(): React.JSX.Element {
         <AddMarketplaceDialog url={marketplace} />
       )}
       <ContainerWide>
-        <Column gap='1.5rem'>
+        <Column gap='2rem'>
           <Header>
-            <Icon>
-              <FaPlug aria-hidden />
-            </Icon>
-            <h1>Apps</h1>
-            <p>
-              Install apps into your drive, connect integrations and keep your
-              work in sync. Add automations when you need them.
-            </p>
-            <Card>
-              <Column gap='0.75rem' align='start'>
-                <h2>Missing an app? Build it yourself with AI</h2>
-                <p>
-                  Describe what you want and the assistant builds the app in
-                  your drive. Then share it with your drive, host your own
-                  marketplace, or submit it to the community marketplace.
-                </p>
-                <Row center gap='1rem' wrapItems>
-                  <Button onClick={() => askAI({ prompt: BUILD_APP_PROMPT })}>
-                    Build an app with AI
-                  </Button>
-                  <a
-                    href='https://docs.atomicdata.dev/plugins/publishing-apps'
-                    target='_blank'
-                    rel='noreferrer'
-                  >
-                    Guide: publishing an app
-                  </a>
-                </Row>
-              </Column>
-            </Card>
-            <NewFeatureNote role='note'>
-              <NewBadge>New</NewBadge>
-              <span>
-                {showExperimentalPlugins
-                  ? 'This is a new feature. You are seeing experimental apps to try out.'
-                  : 'This is a new feature. Apps will show up here soon for you to try out.'}
-              </span>
-            </NewFeatureNote>
+            <div>
+              <Icon>
+                <FaPlug aria-hidden />
+              </Icon>
+              <h1>Apps</h1>
+              <p>
+                Install apps into your drive, connect integrations and keep your
+                work in sync. Add automations when you need them.
+              </p>
+            </div>
+            <Button
+              subtle
+              onClick={() => navigate(`${paths.appSettings}?section=apps`)}
+            >
+              <FaGear aria-hidden />
+              App settings
+            </Button>
           </Header>
+          <section aria-label='Discover apps'>
+            <Column gap='1rem'>
+              <h2>Discover apps</h2>
+              <Input
+                aria-label='Search apps'
+                placeholder='Search apps, integrations, domains or standards'
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+              />
+              {error && <Card role='alert'>{error}</Card>}
+              {catalogEntriesErrors.map(message => (
+                <Card key={message} role='alert'>
+                  {message}
+                </Card>
+              ))}
+              {!catalogReady && <p>Loading apps…</p>}
+              {showExperimentalPlugins && catalogError && (
+                <Card role='alert'>{catalogError}</Card>
+              )}
+              {showExperimentalPlugins && !listings && !catalogError && (
+                <p>Loading integrations…</p>
+              )}
+              {hasExperimentalPlugins && (
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showExperimentalPlugins}
+                    onChange={value =>
+                      setVisibility('show-experimental-plugins', value)
+                    }
+                  />
+                  Show experimental apps
+                </CheckboxLabel>
+              )}
+              {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
+              {proxyAppDrive && (
+                <ProxyCatalogApps drive={proxyAppDrive} query={query} />
+              )}
+              {drive && (
+                <CatalogApps
+                  entries={catalogEntries}
+                  drive={drive}
+                  query={query}
+                  showExperimental={showExperimentalPlugins}
+                  showApi={showApiPlugins}
+                  highlight={app}
+                />
+              )}
+              <Column gap='0.75rem'>
+                {visible && visible.length > 0 && (
+                  <>
+                    <h2>Community apps</h2>
+                    <p>
+                      Published releases. Open one to review what it can do
+                      before installing it into this drive, or create a draft to
+                      adapt its code.
+                    </p>
+                  </>
+                )}
+              </Column>
+              <Grid>
+                {visible?.map(entry => (
+                  <Card key={entry.subject} data-release={entry.releaseId}>
+                    <Column gap='1rem'>
+                      <Row justify='space-between' center>
+                        <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
+                        <Badge>Unverified</Badge>
+                      </Row>
+                      <div>
+                        <h2>{entry.name}</h2>
+                        <Description>{entry.description}</Description>
+                      </div>
+                      <Row wrapItems gap='0.4rem'>
+                        {entry.domains.map(domain => (
+                          <Tag key={domain}>{domain}</Tag>
+                        ))}
+                      </Row>
+                      {entry.standards.length > 0 && (
+                        <details>
+                          <summary>Linked standards</summary>
+                          <ul>
+                            {entry.standards
+                              .filter(standard =>
+                                /^https?:\/\//i.test(standard),
+                              )
+                              .map(standard => (
+                                <li key={standard}>
+                                  <a
+                                    href={standard}
+                                    target='_blank'
+                                    rel='noreferrer'
+                                  >
+                                    {standard}
+                                  </a>
+                                </li>
+                              ))}
+                          </ul>
+                        </details>
+                      )}
+                      <details>
+                        <summary>Publisher and release</summary>
+                        <Identity>
+                          {entry.publisher}
+                          <br />
+                          {entry.release}
+                        </Identity>
+                      </details>
+                      <Button
+                        disabled={!drive || creating !== undefined}
+                        onClick={() => openReview(entry)}
+                      >
+                        {creating === entry.releaseId ? 'Opening…' : 'Open'}
+                      </Button>
+                    </Column>
+                  </Card>
+                ))}
+              </Grid>
+              <Card>
+                <Row center justify='space-between' gap='1rem' wrapItems>
+                  <div>
+                    <BuildTitle>
+                      Missing an app? Build it yourself with AI
+                    </BuildTitle>
+                    <Description>
+                      Describe what you want and the assistant builds it in your
+                      drive. Share it, host your own marketplace, or submit it
+                      to the community marketplace.
+                    </Description>
+                  </div>
+                  <Row center gap='1rem' wrapItems>
+                    <Button onClick={() => askAI({ prompt: BUILD_APP_PROMPT })}>
+                      Build an app with AI
+                    </Button>
+                    <a
+                      href='https://docs.atomicdata.dev/plugins/publishing-apps'
+                      target='_blank'
+                      rel='noreferrer'
+                    >
+                      Guide: publishing an app
+                    </a>
+                  </Row>
+                </Row>
+              </Card>
+            </Column>
+          </section>
           {(installed.length > 0 || installations.length > 0) && (
             <section aria-label='Your integrations'>
               <h2>Your connections</h2>
@@ -410,120 +524,6 @@ function IntegrationStore(): React.JSX.Element {
               </Grid>
             </section>
           )}
-          <h2>Discover apps</h2>
-          <Input
-            aria-label='Search apps'
-            placeholder='Search apps, integrations, domains or standards'
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-          />
-          {error && <Card role='alert'>{error}</Card>}
-          {catalogEntriesErrors.map(message => (
-            <Card key={message} role='alert'>
-              {message}
-            </Card>
-          ))}
-          {!catalogReady && <p>Loading apps…</p>}
-          {showExperimentalPlugins && catalogError && (
-            <Card role='alert'>{catalogError}</Card>
-          )}
-          {showExperimentalPlugins && !listings && !catalogError && (
-            <p>Loading integrations…</p>
-          )}
-          {hasExperimentalPlugins && experimentalToggleVisible && (
-            <CheckboxLabel>
-              <Checkbox
-                checked={showExperimentalPlugins}
-                onChange={value =>
-                  setVisibility('show-experimental-plugins', value)
-                }
-              />
-              Show experimental apps
-            </CheckboxLabel>
-          )}
-          {nothingToDiscover && !showExperimentalPlugins && (
-            <DiscoverEmptyState searching={!!query} />
-          )}
-          {drive && showExperimentalPlugins && (
-            <ProxyCatalogApps drive={drive} query={query} />
-          )}
-          {drive && (
-            <CatalogApps
-              entries={catalogEntries}
-              drive={drive}
-              query={query}
-              showExperimental={showExperimentalPlugins}
-              showApi={showApiPlugins}
-              highlight={app}
-            />
-          )}
-          <Column gap='0.75rem'>
-            {visible && visible.length > 0 && (
-              <>
-                <h2>Community apps</h2>
-                <p>
-                  Published releases. Open one to review what it can do before
-                  installing it into this drive, or create a draft to adapt its
-                  code.
-                </p>
-              </>
-            )}
-          </Column>
-          <Grid>
-            {visible?.map(entry => (
-              <Card key={entry.subject} data-release={entry.releaseId}>
-                <Column gap='1rem'>
-                  <Row justify='space-between' center>
-                    <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
-                    <Badge>Unverified</Badge>
-                  </Row>
-                  <div>
-                    <h2>{entry.name}</h2>
-                    <Description>{entry.description}</Description>
-                  </div>
-                  <Row wrapItems gap='0.4rem'>
-                    {entry.domains.map(domain => (
-                      <Tag key={domain}>{domain}</Tag>
-                    ))}
-                  </Row>
-                  {entry.standards.length > 0 && (
-                    <details>
-                      <summary>Linked standards</summary>
-                      <ul>
-                        {entry.standards
-                          .filter(standard => /^https?:\/\//i.test(standard))
-                          .map(standard => (
-                            <li key={standard}>
-                              <a
-                                href={standard}
-                                target='_blank'
-                                rel='noreferrer'
-                              >
-                                {standard}
-                              </a>
-                            </li>
-                          ))}
-                      </ul>
-                    </details>
-                  )}
-                  <details>
-                    <summary>Publisher and release</summary>
-                    <Identity>
-                      {entry.publisher}
-                      <br />
-                      {entry.release}
-                    </Identity>
-                  </details>
-                  <Button
-                    disabled={!drive || creating !== undefined}
-                    onClick={() => openReview(entry)}
-                  >
-                    {creating === entry.releaseId ? 'Opening…' : 'Open'}
-                  </Button>
-                </Column>
-              </Card>
-            ))}
-          </Grid>
         </Column>
       </ContainerWide>
       <InstallationReviewDialog
@@ -544,32 +544,30 @@ function IntegrationStore(): React.JSX.Element {
 }
 
 const Header = styled.header`
-  padding: 2rem 0 1rem;
-  max-width: 42rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 2rem 0 0;
+  > div {
+    flex: 1 1 20rem;
+  }
+  > button {
+    flex: none;
+    white-space: nowrap;
+  }
   h1 {
     margin: 0.8rem 0;
   }
   p {
+    max-width: 42rem;
     color: ${p => p.theme.colors.textLight};
   }
 `;
-const NewFeatureNote = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  margin: 1rem 0 0;
-  padding: 0.75rem 1rem;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.bg1};
-`;
-const NewBadge = styled.span`
-  flex-shrink: 0;
-  padding: 0.1rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.main};
-  color: ${p => p.theme.colors.bg};
-  font-size: 0.75rem;
-  font-weight: 650;
+const BuildTitle = styled.h3`
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
 `;
 const Icon = styled.div`
   color: ${p => p.theme.colors.main};

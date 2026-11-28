@@ -11,7 +11,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'virtualDrive'
   | 'ai'
-  | 'integration';
+  | 'apps';
 
 /**
  * The settings sections the Flutter embed shows. An allow-list, so a section

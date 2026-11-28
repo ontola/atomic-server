@@ -12,6 +12,11 @@ links use the ordinary Table settings.
   The browser host supplies Syncables table behavior through an optional
   extension to the shared TablePage package. The catalog controls provider
   identity, schema, collection topology, relations and transport.
+- [x] Integrate develop `02eb7c0be`. Keep its Apps layout and settings link.
+  The integration proxy uses the existing experimental opt-in and search
+  under Discover apps. Keep develop's independent default-store bootstrap fix.
+- [ ] Maintainer review still covers the handwritten iframe module, adapter
+  boundaries and how to split the change for review.
 - [ ] Trekmeester runs full shared Main/server CI on the final integration
   candidate, reviews and merges. Remove this handoff after acceptance.
 - [x] Signed-in Chrome verification on `fa9cb95f4` completed 25 November.

@@ -1604,7 +1604,8 @@ This does not yet prove restoration of the user's private staging workspace.
   resolved to canonical repository IDs, typed/idempotent updates, pagination,
   background workers, pause/cancellation/reconnect, stable moved identities,
   native views without provider reads, and desktop/mobile layouts. A separate
-  journey imports an unrelated Notebook provider through the same runtime.
+  journey discovers an unrelated Notebook provider through the shared Apps
+  search after opting in, then imports its records through the same runtime.
   These fixtures do not exercise live GitHub OAuth. Separately, the existing
   live localhost connection completed a 1,274-repository import on 2026-11-20;
   signed stored rows and the ordinary Table were verified. The new Trash

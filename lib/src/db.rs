@@ -2385,6 +2385,20 @@ impl Db {
         origin: &str,
     ) -> AtomicResult<ResolvedTarget> {
         let full_subject = format!("{}{}", origin.trim_end_matches('/'), subject_string);
+        // On atomicdata.dev itself, `/properties/name` is the shared
+        // vocabulary, stored under its absolute URL (see
+        // `Subject::is_canonical_vocabulary`), never as `internal:/...`.
+        // Without this the request path became `internal:/properties/name`,
+        // missed, and fell through to fetching the absolute URL: the server
+        // requesting its own public address, which answered 502.
+        if Subject::is_canonical_vocabulary(&full_subject) {
+            if let Ok(url) = url::Url::parse(&full_subject) {
+                return Ok(ResolvedTarget {
+                    subject: Subject::External(url),
+                    alias_subject: None,
+                });
+            }
+        }
         match self
             .map_request_subject(subject, host, subject_string)
             .await
@@ -2491,6 +2505,19 @@ impl Db {
 
     /// Whether `url` is served from this store's own authority (scheme
     /// ignored), i.e. a miss must not be answered by fetching it.
+    /// The `internal:` key a store migrated before the vocabulary exemption
+    /// used for one of this server's own canonical vocabulary URLs.
+    fn legacy_vocabulary_key(&self, subject: &Subject) -> Option<String> {
+        let Subject::External(url) = subject else {
+            return None;
+        };
+        let raw = url.as_str();
+        if !Subject::is_canonical_vocabulary(raw) || !self.is_own_authority(raw) {
+            return None;
+        }
+        Some(format!("internal:{}", url.path()))
+    }
+
     fn is_own_authority(&self, url: &str) -> bool {
         let strip = |s: &str| {
             s.trim_start_matches("https://")
@@ -5567,7 +5594,16 @@ impl Storelike for Db {
             .fetch_add(1, Ordering::Relaxed);
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
-        if let Ok((subject_str, propvals)) = self.get_propvals_canonical(&subject_str) {
+        let found = self.get_propvals_canonical(&subject_str).or_else(|e| {
+            // A store localized before the shared vocabulary was exempted
+            // keeps atomicdata.dev's own `/properties/*` under
+            // `internal:/properties/*`. Read that row for the absolute URL.
+            match self.legacy_vocabulary_key(&normalized) {
+                Some(legacy) => self.get_propvals(&legacy).map(|pv| (legacy, pv)),
+                None => Err(e),
+            }
+        });
+        if let Ok((subject_str, propvals)) = found {
             let mut res_subject = normalized.clone();
 
             // If it's a DID and we don't have a hint in the requested subject,
@@ -5792,6 +5828,9 @@ impl Storelike for Db {
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
         self.get_propvals(&normalized.pure_id()).is_ok()
+            || self
+                .legacy_vocabulary_key(&normalized)
+                .is_some_and(|legacy| self.get_propvals(&legacy).is_ok())
     }
 
     fn lens_index(&self) -> Option<Arc<crate::lens::LensIndex>> {
@@ -6111,6 +6150,78 @@ impl std::fmt::Debug for Db {
 mod resolver_tests {
     use super::*;
     use crate::{test_utils::setup_test_env, urls, Resource, Storelike, Value};
+
+    /// atomicdata.dev serves the vocabulary every server refers to. A GET for
+    /// `/properties/name` there must find the stored absolute-URL resource,
+    /// not look up `internal:/properties/name` and then fetch itself.
+    #[tokio::test]
+    async fn vocabulary_paths_on_atomicdata_dev_resolve_locally() {
+        let id = "resolver_vocabulary";
+        let tmp_dir_path = format!(".temp/db/{id}");
+        let uploads_path = format!(".temp/db/{id}/uploads");
+        let _ = std::fs::remove_dir_all(&tmp_dir_path);
+        std::fs::create_dir_all(&uploads_path).unwrap();
+        let store = Db::init_redb_file(
+            std::path::Path::new(&tmp_dir_path),
+            Some("https://atomicdata.dev".into()),
+            std::path::Path::new(&uploads_path),
+        )
+        .await
+        .unwrap();
+
+        let path = "/properties/name";
+        let resolved = store
+            .resolve_request_target(
+                &Subject::from_raw(path, None),
+                "atomicdata.dev",
+                path,
+                "https://atomicdata.dev",
+            )
+            .await
+            .unwrap();
+        assert_eq!(resolved.subject.as_str(), urls::NAME);
+        let resource = store.get_resource(&resolved.subject).await.unwrap();
+        assert_eq!(resource.get_subject().as_str(), urls::NAME);
+
+        // A term only present under the pre-exemption `internal:` key is
+        // still found under its absolute URL.
+        let legacy_url = "https://atomicdata.dev/properties/legacy-only-term";
+        let mut legacy = Resource::new("internal:/properties/legacy-only-term".into());
+        legacy
+            .set_unsafe(
+                urls::SHORTNAME.into(),
+                Value::Slug("legacy-only-term".into()),
+            )
+            .unwrap();
+        store
+            .add_resource_opts(&legacy, false, true, true)
+            .await
+            .unwrap();
+        assert!(store
+            .get_propvals("internal:/properties/legacy-only-term")
+            .is_ok());
+        let found = store.get_resource(&legacy_url.into()).await.unwrap();
+        assert_eq!(
+            found.get(urls::SHORTNAME).unwrap().to_string(),
+            "legacy-only-term"
+        );
+
+        // A term this server does not have is a quick not-found, never a
+        // fetch of its own public URL.
+        let started = std::time::Instant::now();
+        let missing = store
+            .get_resource(&"https://atomicdata.dev/properties/does-not-exist".into())
+            .await;
+        assert!(missing.is_err());
+        assert!(
+            !missing
+                .unwrap_err()
+                .to_string()
+                .contains("Upstream unreachable"),
+            "must not fetch itself"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
 
     #[tokio::test]
     async fn resolves_root_to_drive_subject() {

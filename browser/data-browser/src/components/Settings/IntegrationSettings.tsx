@@ -27,20 +27,14 @@ import { settingsKeywords } from './settingsKeywords';
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
-  const {
-    showExperimentalPlugins,
-    experimentalToggleVisible,
-    ready,
-    pending,
-    error,
-    setVisibility,
-  } = useIntegrationVisibility();
+  const { showExperimentalPlugins, ready, pending, error, setVisibility } =
+    useIntegrationVisibility();
 
   return (
     <SettingsSection
-      label='Integration'
-      id='integration'
-      childSearchKeywords={settingsKeywords.integration}
+      label='App settings'
+      id='apps'
+      childSearchKeywords={settingsKeywords.apps}
     >
       <Column
         gap='1rem'
@@ -48,22 +42,16 @@ export function IntegrationSettings() {
         data-ready={ready}
         aria-busy={pending}
       >
-        {experimentalToggleVisible && (
-          <>
-            <SettingCheckbox
-              checked={showExperimentalPlugins}
-              onChange={value =>
-                setVisibility('show-experimental-plugins', value)
-              }
-            >
-              Show experimental apps
-            </SettingCheckbox>
-            <Description>
-              These preferences are saved in your private Atomic drive. Existing
-              connections remain available.
-            </Description>
-          </>
-        )}
+        <SettingCheckbox
+          checked={showExperimentalPlugins}
+          onChange={value => setVisibility('show-experimental-plugins', value)}
+        >
+          Show experimental apps
+        </SettingCheckbox>
+        <Description>
+          These preferences are saved in your private Atomic drive. Existing
+          connections remain available.
+        </Description>
         {error && <ErrMessage role='alert'>{error}</ErrMessage>}
         <ProxyForm key={proxy} proxy={proxy} />
         <MarketplacesForm />

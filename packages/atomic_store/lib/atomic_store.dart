@@ -9,6 +9,7 @@ export 'src/backend.dart';
 export 'src/external_app.dart';
 export 'src/exceptions.dart';
 export 'src/notifications.dart';
+export 'src/ontology_bundle.dart';
 export 'src/resource.dart';
 export 'src/store.dart';
 export 'src/urls.dart';

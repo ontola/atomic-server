@@ -74,6 +74,9 @@ const nonEssentialProps: string[] = [
   core.properties.parent,
   core.properties.write,
   core.properties.read,
+  // Set by the app (drive membership, import identity), not by the user.
+  'https://atomicdata.dev/properties/drive',
+  core.properties.localId,
   commits.properties.lastCommit,
   dataBrowser.properties.subResources,
 ];

@@ -1,3 +1,7 @@
+import {
+  installOntologyBundle,
+  type InstallOntologyReport,
+} from './ontology-bundle.js';
 import { randomUUID } from './uuid.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
@@ -2502,6 +2506,11 @@ export class Store {
 
       if (subject !== drive && parent !== drive) continue;
 
+      // A draft nobody has saved (the new-resource form's) is not ours to
+      // announce: the server would ask for it and the drive would gain a
+      // resource the user never created. It joins the drive on `save()`.
+      if (resource.new) continue;
+
       const doc = resource.getLoroDoc?.();
 
       if (!doc) continue;
@@ -2531,7 +2540,7 @@ export class Store {
       // an empty VV so the server knows we have it (even if we can't diff).
       // This happens when Loro state was clobbered by a merge from server
       // JSON-AD that doesn't include the snapshot.
-      if (!allVVs[subject] && !resource.new) {
+      if (!allVVs[subject]) {
         allVVs[subject] = {};
       }
     }
@@ -5801,6 +5810,17 @@ export class Store {
         ? 'Local resource database is unavailable'
         : `Resource ${subjectRaw} is not available locally`,
     );
+  }
+
+  /**
+   * Store an app's ontology bundle (Ontology, Classes and Properties at fixed
+   * `https://` subjects) in this store as if it had been fetched: no network
+   * request and no commit, so it works offline and nothing syncs. Idempotent;
+   * refuses a bundle that changes what an already stored term means.
+   * See {@link installOntologyBundle}.
+   */
+  public installOntology(bundle: unknown): Promise<InstallOntologyReport> {
+    return installOntologyBundle(this, bundle);
   }
 
   /** Gets a property by URL. */

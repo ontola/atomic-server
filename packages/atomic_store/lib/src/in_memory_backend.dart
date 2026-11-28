@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'backend.dart';
 import 'exceptions.dart';
@@ -100,6 +101,30 @@ class InMemoryBackend implements StoreBackend {
     }
     resources.remove(subject);
     _emit(subject, ResourceEventKind.destroyed);
+  }
+
+  /// Stores each resource of the bundle under its `@id`, converting JSON
+  /// values with [Value.of]. It validates nothing: the real backend refuses a
+  /// changed meaning (`atomic_lib::ontology_bundle`); a resource that is
+  /// already here is reported unchanged.
+  @override
+  Future<OntologyInstall> installOntology(String bundleJson) async {
+    _enter('installOntology');
+    final created = <String>[];
+    final unchanged = <String>[];
+    for (final item in jsonDecode(bundleJson) as List<dynamic>) {
+      final raw = Map<String, dynamic>.from(item as Map);
+      final subject = raw.remove('@id') as String;
+      if (resources.containsKey(subject)) {
+        unchanged.add(subject);
+        continue;
+      }
+      resources[subject] = {
+        for (final e in raw.entries) e.key: Value.of(e.value as Object),
+      };
+      created.add(subject);
+    }
+    return OntologyInstall(created: created, unchanged: unchanged);
   }
 
   @override

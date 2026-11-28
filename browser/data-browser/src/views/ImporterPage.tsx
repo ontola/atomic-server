@@ -14,22 +14,54 @@ import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { Title } from '@tomic/resource-ui/components/Title';
 import toast from 'react-hot-toast';
 import { Main } from '@components/Main';
+import { Tabs } from '../components/Tabs';
+import { WebImport } from './Importer/WebImport';
 
 type ImporterPageProps = {
   resource?: Resource;
 };
 
-/** Importer Resource for uploading JSON-AD * */
+/** Importer: paste a web page or text, or upload JSON-AD. */
 export function ImporterPage({ resource }: ImporterPageProps) {
-  const parentFieldId = useId();
-  const [overwriteOutside, setOverwriteOutside] = useState(false);
   const [parent, setParent] = useCurrentSubject();
   const resourceByS = useResource(parent);
-  const [isImporting, setIsImporting] = useState(false);
-  const [imported, setImported] = useState(false);
 
   resource = resourceByS || resource;
 
+  return (
+    <Main>
+      <ContainerNarrow>
+        <Title resource={resource} prefix='Import to' link />
+        <Tabs
+          label='Import source'
+          tabs={[
+            { label: 'Web page or text', value: 'web' },
+            { label: 'JSON-AD', value: 'jsonad' },
+          ]}
+        >
+          <Tabs.Panel value='web'>
+            <WebImport parent={parent ?? ''} />
+          </Tabs.Panel>
+          <Tabs.Panel value='jsonad'>
+            <JsonAdImport parent={parent} setParent={setParent} />
+          </Tabs.Panel>
+        </Tabs>
+      </ContainerNarrow>
+    </Main>
+  );
+}
+
+function JsonAdImport({
+  parent,
+  setParent,
+}: {
+  parent: string | undefined;
+  setParent: (subject: string) => void;
+}) {
+  const parentFieldId = useId();
+  const [overwriteOutside, setOverwriteOutside] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [imported, setImported] = useState(false);
   const store = useStore();
   const [jsonAd, setJsonAd] = useState('');
 
@@ -56,67 +88,64 @@ export function ImporterPage({ resource }: ImporterPageProps) {
   );
 
   return (
-    <Main>
-      <ContainerNarrow>
-        <Title resource={resource} prefix='Import to' link />
-        <p>
-          Read more about how importing Atomic Data works{' '}
-          <a href='https://docs.atomicdata.dev/create-json-ad.html'>
-            in the docs
-          </a>
-          .
-        </p>
-        <Column>
-          <Field label='JSON-AD'>
+    <>
+      <p>
+        Read more about how importing Atomic Data works{' '}
+        <a href='https://docs.atomicdata.dev/create-json-ad.html'>
+          in the docs
+        </a>
+        .
+      </p>
+      <Column>
+        <Field label='JSON-AD'>
+          <InputWrapper>
+            <TextAreaStyled
+              rows={15}
+              placeholder='Paste your JSON-AD...'
+              value={jsonAd}
+              onChange={e => setJsonAd(e.target.value)}
+            >
+              {jsonAd}
+            </TextAreaStyled>
+          </InputWrapper>
+        </Field>
+        <Header>Options</Header>
+        <Group>
+          <Label>
+            <input
+              type='checkbox'
+              checked={overwriteOutside}
+              onChange={e => setOverwriteOutside(e.target.checked)}
+            />
+            {`Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data.`}
+          </Label>
+          <Field
+            label='Target parent'
+            helper='This URL will be used as the default Parent for imported resources.'
+            required
+            fieldId={parentFieldId}
+          >
             <InputWrapper>
-              <TextAreaStyled
-                rows={15}
-                placeholder='Paste your JSON-AD...'
-                value={jsonAd}
-                onChange={e => setJsonAd(e.target.value)}
-              >
-                {jsonAd}
-              </TextAreaStyled>
+              <InputStyled
+                id={parentFieldId}
+                required
+                placeholder='Enter subject'
+                value={parent}
+                onChange={e => setParent(e.target.value)}
+              />
             </InputWrapper>
           </Field>
-          <Header>Options</Header>
-          <Group>
-            <Label>
-              <input
-                type='checkbox'
-                checked={overwriteOutside}
-                onChange={e => setOverwriteOutside(e.target.checked)}
-              />
-              {`Overwrite resources that are outside the scope of the parent. Do this only if you trust the imported data.`}
-            </Label>
-            <Field
-              label='Target parent'
-              helper='This URL will be used as the default Parent for imported resources.'
-              required
-              fieldId={parentFieldId}
-            >
-              <InputWrapper>
-                <InputStyled
-                  id={parentFieldId}
-                  required
-                  placeholder='Enter subject'
-                  value={parent}
-                  onChange={e => setParent(e.target.value)}
-                />
-              </InputWrapper>
-            </Field>
-          </Group>
-          <Button
-            data-test='import-post'
-            disabled={disableImportButton}
-            onClick={handleImport}
-          >
-            {isImporting ? 'Importing...' : 'Import'}
-          </Button>
-          {imported && <p role='status'>Imported.</p>}
-        </Column>
-      </ContainerNarrow>
-    </Main>
+        </Group>
+        <Button
+          data-test='import-post'
+          disabled={disableImportButton}
+          onClick={handleImport}
+        >
+          {isImporting ? 'Importing...' : 'Import'}
+        </Button>
+        {imported && <p role='status'>Imported.</p>}
+      </Column>
+    </>
   );
 }
 

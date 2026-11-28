@@ -3492,9 +3492,26 @@ test.describe('catalog-driven built-in Syncables', () => {
     // Finish signed setup writes before the settings helper deliberately reloads.
     await waitForSynced(page);
     await waitForDriveSettled(page);
-    await enableIntegrationDiscovery(page);
     await clickAccountMenuItem(page, 'Apps');
-    await page.getByRole('button', { name: 'Add Notebook to drive' }).click();
+    const discovery = page.getByRole('region', { name: 'Discover apps' });
+    const addNotebook = discovery.getByRole('button', {
+      name: 'Add Notebook to drive',
+    });
+    await expect(discovery).toBeVisible();
+    await expect(addNotebook).toHaveCount(0);
+
+    await enableIntegrationDiscovery(page);
+    await expect(addNotebook).toBeVisible();
+    const search = discovery.getByRole('textbox', { name: 'Search apps' });
+    await search.fill('not a catalog entry');
+    await expect(discovery.getByText('No matching services.')).toBeVisible();
+    await expect(addNotebook).toHaveCount(0);
+    await search.fill('Notebook');
+    await expect(addNotebook).toBeVisible();
+    await expect(
+      discovery.getByText('No integrations match your search.'),
+    ).toHaveCount(0);
+    await addNotebook.click();
     const iframe = page.locator('iframe[title="App"]:visible').contentFrame();
     await expect(
       iframe.getByRole('button', { name: 'Public', exact: true }),

@@ -9,6 +9,7 @@ import type { Store } from './store.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import { isCommitSubject } from './commit.js';
+import { canonicalizeScheme } from './subject.js';
 import { core } from './ontologies/core.js';
 import { withDeadline } from './withDeadline.js';
 
@@ -93,7 +94,9 @@ function valueMatches(
     case 'contains':
       return actual.includes(query);
     default:
-      return actual === query;
+      // `atomic:` and the legacy `did:ad:` name the same resource, and the
+      // server answers `parent=` for both.
+      return canonicalizeScheme(actual) === canonicalizeScheme(query);
   }
 }
 

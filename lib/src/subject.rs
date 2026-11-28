@@ -415,7 +415,7 @@ impl Subject {
 
     /// Whether `s` is part of the shared atomicdata.dev vocabulary and so must
     /// keep its absolute URL. See [Self::CANONICAL_VOCABULARY_PREFIXES].
-    fn is_canonical_vocabulary(s: &str) -> bool {
+    pub fn is_canonical_vocabulary(s: &str) -> bool {
         let bare = s
             .trim_start_matches("https://")
             .trim_start_matches("http://");

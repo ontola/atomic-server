@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   carryOverLegacyOptIn,
-  readPreviewUnlocked,
   visibilityLocalKey,
-  writePreviewUnlocked,
 } from './integrationVisibility';
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
@@ -72,21 +70,5 @@ describe('carrying over a legacy opt-in', () => {
     expect(() =>
       carryOverLegacyOptIn('did:ad:alice', 'show-api-plugins', blocked),
     ).not.toThrow();
-  });
-});
-
-describe('Atomic integration preview unlock', () => {
-  it('is locked until unlocked, per agent', () => {
-    const storage = fakeStorage();
-
-    expect(readPreviewUnlocked('did:ad:alice', storage)).toBe(false);
-    writePreviewUnlocked('did:ad:alice', storage);
-    expect(readPreviewUnlocked('did:ad:alice', storage)).toBe(true);
-    expect(readPreviewUnlocked('did:ad:bob', storage)).toBe(false);
-  });
-
-  it('survives storage that is unavailable', () => {
-    expect(readPreviewUnlocked('did:ad:alice', blocked)).toBe(false);
-    expect(() => writePreviewUnlocked('did:ad:alice', blocked)).not.toThrow();
   });
 });

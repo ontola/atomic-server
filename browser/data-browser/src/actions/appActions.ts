@@ -156,8 +156,8 @@ export const appActions: ActionDefinition[] = [
     () => 'Models, providers and voice.',
   ),
   settingsAction(
-    'integration',
-    () => 'Integration settings',
+    'apps',
+    () => 'App settings',
     () => 'Proxy, catalog and experimental plugins.',
   ),
 ];

@@ -112,6 +112,13 @@ void main() {
       expect(api.waitedStoreMs, 3000);
     });
 
+    test('installOntology hands the bundle to the bridge and maps the report',
+        () async {
+      final done = await backend.installOntology('[]');
+      expect(api.installedBundle, '[]');
+      expect(done.created, ['https://atomicdata.dev/shop/v1']);
+    });
+
     test('a destroy error is a StoreException with the subject', () {
       api.error = const bridge.AtomicError(
           kind: bridge.ErrorKind.notFound, message: 'gone');
@@ -159,6 +166,7 @@ class _FakeApi implements BridgeResourceApi {
   bridge.StoreEvent storeEvent = const bridge.StoreEvent(
       kind: bridge.ResourceEvent.timeout, subject: '');
   int? waitedStoreMs;
+  String? installedBundle;
 
   Future<T> _run<T>(T Function() f) async {
     final e = error;
@@ -205,5 +213,14 @@ class _FakeApi implements BridgeResourceApi {
   Future<bridge.StoreEvent> waitForStoreEvent(int timeoutMs) => _run(() {
         waitedStoreMs = timeoutMs;
         return storeEvent;
+      });
+  @override
+  Future<bridge.OntologyInstall> installOntologyBundle(String bundle) =>
+      _run(() {
+        installedBundle = bundle;
+        return const bridge.OntologyInstall(
+            created: ['https://atomicdata.dev/shop/v1'],
+            updated: [],
+            unchanged: []);
       });
 }
