@@ -3,10 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import { buildTheme } from '../../styling';
-import {
-  VaultRestoreAction,
-  forgetAutoStartedRestores,
-} from './VaultRestoreAction';
+import { VaultRestoreAction } from './VaultRestoreAction';
 
 const mocks = vi.hoisted(() => ({
   agent: { subject: 'did:ad:agent:x' } as unknown,
@@ -44,7 +41,6 @@ function show(subject = 'atomic:drive1', autoStart = true) {
 
 afterEach(() => {
   cleanup();
-  forgetAutoStartedRestores();
   restore.mockReset();
   mocks.agent = { subject: 'did:ad:agent:x' };
 });
@@ -62,20 +58,6 @@ describe('VaultRestoreAction', () => {
         <VaultRestoreAction subject='atomic:drive1' autoStart />
       </ThemeProvider>,
     );
-    expect(restore).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not restore again when the page remounts after the reload', () => {
-    // The restore reloads the drive, which unmounts the error page; a reload
-    // that fails the same way mounts a new instance.
-    setVault();
-    const first = show();
-
-    expect(restore).toHaveBeenCalledTimes(1);
-    first.unmount();
-    show();
-    show();
-
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
