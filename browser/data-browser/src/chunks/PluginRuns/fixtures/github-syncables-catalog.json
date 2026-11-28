@@ -1,0 +1,1786 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "GitHub",
+    "version": "1.1.4",
+    "description": "A narrowed subset of the GitHub REST API (api.github.com 1.1.4) covering just what Reflector needs to reflect issues and their comments between two repositories: list/create/read/update of issues, and list/create/read/ update/delete of issue comments. The full document lives in GitHub's rest-api-description; only the paths and schemas used here are vendored. The completing overlays (auth / pagination / crud-causality) are applied from spec/github/overlays at startup.\n",
+    "x-logo": {
+      "url": "https://ontola.github.io/atomic-plugins/overlays/assets/github-mark-1.svg"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.github.com"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "githubToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A GitHub personal-access or installation token, sent as `Authorization: Bearer <token>`. Supplied to Reflector as config, not obtained through an interactive OAuth flow.\n"
+      },
+      "githubOAuth": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://github.com/login/oauth/authorize",
+            "tokenUrl": "https://github.com/login/oauth/access_token",
+            "scopes": {
+              "repo": "Access public and private repositories, including issues and comments.",
+              "read:org": "List organizations visible to the authenticated user."
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "issue": {
+        "type": "object",
+        "description": "A repository issue or pull request returned by GitHub's REST Issues API. A present pull_request object distinguishes a pull request; this collection includes both kinds without filtering.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Globally-unique database id (not the URL identity)."
+          },
+          "number": {
+            "type": "integer",
+            "description": "Per-repository issue number; the URL identity."
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": ["open", "closed"]
+          },
+          "state_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "html_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The issue's page on github.com — its source URL."
+          },
+          "user": {
+            "$ref": "#/components/schemas/user"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/label"
+            }
+          },
+          "pull_request": {
+            "type": "object",
+            "title": "Pull request",
+            "description": "Present when this Issues API row represents a pull request. Absent for an ordinary issue.",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "html_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "diff_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "patch_url": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        },
+        "title": "Issues and pull requests"
+      },
+      "issue-comment": {
+        "type": "object",
+        "description": "A comment on an issue.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Globally-unique comment id; the URL identity."
+          },
+          "body": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "$ref": "#/components/schemas/user"
+          }
+        }
+      },
+      "user": {
+        "type": "object",
+        "description": "The GitHub user that authored an issue or comment.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "login": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "html_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "label": {
+        "type": "object",
+        "description": "A label attached to an issue.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "repository": {
+        "type": "object",
+        "description": "A repository as the picker reads it; GitHub's full payload carries many more fields.",
+        "required": ["id", "full_name"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string",
+            "description": "`owner/name`, the value the app stores as its repository."
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "login": {
+                "type": "string"
+              }
+            }
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "has_issues": {
+            "type": "boolean",
+            "description": "Repositories with issues turned off cannot be chosen."
+          },
+          "open_issues_count": {
+            "type": "integer",
+            "description": "GitHub's count, which includes open pull requests."
+          },
+          "html_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "builtinGithubOrganization": {
+        "type": "object",
+        "title": "Owner namespaces",
+        "required": ["id", "login"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "login": {
+            "type": "string",
+            "title": "Owner namespace"
+          },
+          "type": {
+            "type": "string",
+            "title": "Kind",
+            "oneOf": [
+              {
+                "enum": ["Organization"],
+                "title": "Organization"
+              },
+              {
+                "enum": ["User"],
+                "title": "Personal owner"
+              }
+            ]
+          }
+        }
+      },
+      "builtinGithubRepository": {
+        "type": "object",
+        "title": "Repositories",
+        "required": ["id", "name", "owner"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "title": "Repository"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Kind",
+            "oneOf": [
+              {
+                "enum": [true],
+                "title": "Private"
+              },
+              {
+                "enum": [false],
+                "title": "Public"
+              }
+            ]
+          },
+          "has_issues": {
+            "type": "boolean",
+            "title": "Issues",
+            "oneOf": [
+              {
+                "enum": [true],
+                "title": "Available"
+              },
+              {
+                "enum": [false],
+                "title": "Disabled in GitHub"
+              }
+            ]
+          },
+          "open_issues_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Open issues + PRs"
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "login": {
+                "type": "string",
+                "title": "Owner"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "catalogGithubOrganization": {
+        "type": "object",
+        "title": "Organizations",
+        "description": "An organization returned by GitHub organization reads. Its numeric id is the canonical identity; login is its current transport address.",
+        "required": ["id", "login"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "title": "ID"
+          },
+          "login": {
+            "type": "string",
+            "title": "Organization"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Avatar"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          }
+        }
+      },
+      "catalogGithubUser": {
+        "type": "object",
+        "title": "Users",
+        "description": "Fields supplied in GitHub user summaries. An embedded summary may be partial; omitted fields are not invented or deleted.",
+        "required": ["id", "login"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "title": "ID"
+          },
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "type": {
+            "type": "string",
+            "title": "Account type"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Avatar"
+          },
+          "html_url": {
+            "type": "string",
+            "format": "uri",
+            "title": "Profile"
+          }
+        }
+      }
+    },
+    "paginationSchemes": {
+      "nextLink": {
+        "type": "nextLink",
+        "request": {
+          "queryParameters": {
+            "per_page": {
+              "role": "pageSize",
+              "description": "Results per page (max 100)."
+            }
+          }
+        },
+        "response": {
+          "headers": {
+            "Link": {
+              "role": "nextLink",
+              "description": "RFC 8288 Link header; the rel=\"next\" URL is followed."
+            }
+          }
+        }
+      },
+      "builtinGithubNextLink": {
+        "type": "nextLink",
+        "request": {
+          "queryParameters": {
+            "per_page": {
+              "role": "pageSize"
+            }
+          }
+        },
+        "response": {
+          "headers": {
+            "Link": {
+              "role": "nextLink"
+            }
+          }
+        }
+      }
+    },
+    "crudResources": {
+      "githubOrganization": {
+        "schema": {
+          "$ref": "#/components/schemas/catalogGithubOrganization"
+        },
+        "identity": {
+          "urlTemplate": "/organizations/{organization_id}",
+          "bindings": {
+            "organization_id": {
+              "field": "id"
+            }
+          }
+        },
+        "collections": {
+          "githubOrganizations": {
+            "urlTemplate": "/user/orgs",
+            "envelope": {
+              "itemsField": ""
+            }
+          }
+        },
+        "references": {
+          "byLogin": {
+            "resource": "githubOrganizationAddress",
+            "bindings": {
+              "org": {
+                "field": "login"
+              }
+            }
+          }
+        }
+      },
+      "githubRepository": {
+        "schema": {
+          "$ref": "#/components/schemas/builtinGithubRepository"
+        },
+        "identity": {
+          "urlTemplate": "/repositories/{repository_id}",
+          "bindings": {
+            "repository_id": {
+              "field": "id"
+            }
+          }
+        },
+        "collections": {
+          "githubRepositories": {
+            "urlTemplate": "/user/repos",
+            "envelope": {
+              "itemsField": ""
+            }
+          },
+          "organizationRepositories": {
+            "urlTemplate": "/orgs/{org}/repos",
+            "listQuery": {
+              "type": "all"
+            },
+            "envelope": {
+              "itemsField": ""
+            }
+          }
+        },
+        "x-embeddedResources": {
+          "owner": {
+            "representation": "object",
+            "cardinality": "one",
+            "discriminator": {
+              "field": "type",
+              "mapping": {
+                "User": "githubUser",
+                "Organization": "githubOrganization"
+              }
+            }
+          }
+        }
+      },
+      "issue": {
+        "collections": {
+          "repositoryIssues": {
+            "urlTemplate": "/repositories/{repository_id}/issues",
+            "listQuery": {
+              "state": "all"
+            },
+            "envelope": {
+              "itemsField": ""
+            },
+            "description": "Issues and pull requests for one repository, including open and closed rows."
+          }
+        },
+        "schema": {
+          "$ref": "#/components/schemas/issue"
+        },
+        "identity": {
+          "urlTemplate": "/repositories/{repository_id}/issues/{issue_number}",
+          "bindings": {
+            "issue_number": {
+              "field": "number"
+            }
+          }
+        },
+        "description": "A repository issue or pull request from the REST Issues API, identified by its per-repository number. This collection includes both issues and pull requests; pull_request marks the latter.",
+        "x-embeddedResources": {
+          "user": {
+            "representation": "object",
+            "resource": "githubUser",
+            "cardinality": "one"
+          }
+        }
+      },
+      "githubOrganizationAddress": {
+        "description": "A mutable transport address for an existing organization. Not an enumerable entity or a separate stored parent. The canonical organization identity remains its numeric id.",
+        "identity": {
+          "urlTemplate": "/orgs/{org}",
+          "bindings": {
+            "org": {
+              "field": "login"
+            }
+          }
+        }
+      },
+      "githubRepositoryAddress": {
+        "description": "An owner/name transport address for public repository navigation; not an enumerable entity or another stored repository.",
+        "identity": {
+          "urlTemplate": "/repos/{owner}/{repo}",
+          "bindings": {
+            "owner": {
+              "field": "owner.login"
+            },
+            "repo": {
+              "field": "name"
+            }
+          }
+        }
+      },
+      "issueComment": {
+        "schema": {
+          "$ref": "#/components/schemas/issue-comment"
+        },
+        "identity": {
+          "urlTemplate": "/repositories/{repository_id}/issues/comments/{comment_id}",
+          "bindings": {
+            "comment_id": {
+              "field": "id"
+            }
+          }
+        },
+        "collections": {
+          "issueComments": {
+            "urlTemplate": "/repositories/{repository_id}/issues/{issue_number}/comments",
+            "envelope": {
+              "itemsField": ""
+            }
+          }
+        },
+        "x-embeddedResources": {
+          "user": {
+            "representation": "object",
+            "resource": "githubUser",
+            "cardinality": "one"
+          }
+        }
+      },
+      "githubUser": {
+        "description": "A supplied GitHub user representation identified by its durable numeric account id. Login is mutable. This declaration establishes no enumerable collection, target fetch, or completeness of embedded data.",
+        "schema": {
+          "$ref": "#/components/schemas/catalogGithubUser"
+        },
+        "identity": {
+          "urlTemplate": "/user/{account_id}",
+          "bindings": {
+            "account_id": {
+              "field": "id"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/repos/{owner}/{repo}/issues": {
+      "get": {
+        "operationId": "issues-list-for-repo",
+        "summary": "List repository issues",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of issues (a top-level array).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/issue"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "x-pagination": [
+          {
+            "scheme": "nextLink"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "issues-create",
+        "summary": "Create an issue",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created issue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}": {
+      "get": {
+        "operationId": "issues-get",
+        "summary": "Get an issue",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The issue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ]
+      },
+      "patch": {
+        "operationId": "issues-update",
+        "summary": "Update an issue (e.g. open/close)",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": ["open", "closed"]
+                  },
+                  "state_reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated issue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/comments": {
+      "get": {
+        "operationId": "issue-comments-list",
+        "summary": "List comments on an issue",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of comments (a top-level array).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/issue-comment"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "x-pagination": [
+          {
+            "scheme": "nextLink"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "issue-comments-create",
+        "summary": "Create a comment on an issue",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["body"],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created comment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue-comment"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ]
+      }
+    },
+    "/repos/{owner}/{repo}/issues/comments/{comment_id}": {
+      "get": {
+        "operationId": "issue-comment-get",
+        "summary": "Get a single issue comment",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The comment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue-comment"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ]
+      },
+      "patch": {
+        "operationId": "issue-comment-update",
+        "summary": "Update an issue comment",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["body"],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated comment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue-comment"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "issue-comment-delete",
+        "summary": "Delete an issue comment",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ]
+      }
+    },
+    "/user/repos": {
+      "get": {
+        "operationId": "repos-list-for-authenticated-user",
+        "summary": "List repositories for the authenticated user",
+        "description": "Repositories the authenticated user can access (owned, collaborator, organization member). Paginated with the RFC 8288 `Link` header (rel=\"next\"); at most 100 per page.",
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          }
+        ],
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["created", "updated", "pushed", "full_name"],
+              "default": "full_name"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of GitHub records.",
+            "headers": {
+              "Link": {
+                "description": "RFC 8288 pagination links; absent on the only page.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/builtinGithubRepository"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not modified."
+          },
+          "401": {
+            "description": "Requires authentication."
+          },
+          "403": {
+            "description": "Forbidden."
+          }
+        },
+        "x-crud": {
+          "action": "list",
+          "resource": "githubRepository",
+          "collection": "githubRepositories"
+        }
+      }
+    },
+    "/repositories/{repository_id}/issues": {
+      "get": {
+        "operationId": "issues-list-for-repo-by-repository-id",
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["open", "closed", "all"]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/issue"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "A page of GitHub records.",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "summary": "List issues and pull requests for a repository",
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "x-crud": {
+          "action": "list",
+          "resource": "issue",
+          "collection": "repositoryIssues"
+        }
+      }
+    },
+    "/repositories/{repository_id}/issues/comments/{comment_id}": {
+      "get": {
+        "operationId": "issue-comment-get-by-repository-id",
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The stable numeric repository ID used by canonical pagination links."
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue-comment"
+                }
+              }
+            },
+            "description": "The comment."
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "summary": "Get a single issue comment",
+        "x-crud": {
+          "action": "read",
+          "resource": "issueComment"
+        }
+      }
+    },
+    "/repositories/{repository_id}/issues/{issue_number}": {
+      "get": {
+        "operationId": "issues-get-by-repository-id",
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The stable numeric repository ID used by canonical pagination links."
+          },
+          {
+            "in": "path",
+            "name": "issue_number",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/issue"
+                }
+              }
+            },
+            "description": "The issue."
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "summary": "Get an issue",
+        "x-crud": {
+          "action": "read",
+          "resource": "issue"
+        }
+      }
+    },
+    "/repositories/{repository_id}/issues/{issue_number}/comments": {
+      "get": {
+        "operationId": "issue-comments-list-by-repository-id",
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The stable numeric repository ID used by canonical pagination links."
+          },
+          {
+            "in": "path",
+            "name": "issue_number",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/issue-comment"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "A page of comments (a top-level array)."
+          }
+        },
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "summary": "List comments on an issue",
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "x-crud": {
+          "action": "list",
+          "resource": "issueComment",
+          "collection": "issueComments"
+        }
+      }
+    },
+    "/user": {
+      "get": {
+        "operationId": "getGitHubAuthenticatedPrincipal",
+        "summary": "Get the authenticated GitHub user",
+        "security": [
+          {
+            "githubOAuth": []
+          }
+        ],
+        "x-authenticated-principal": {
+          "kind": "user",
+          "namespace": "https://github.com",
+          "subject": "$response.body#/id",
+          "identifier": {
+            "scope": "provider",
+            "stable": true,
+            "reassigned": false
+          },
+          "claims": {
+            "name": "$response.body#/name",
+            "email": "$response.body#/email",
+            "picture": "$response.body#/avatar_url"
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The authenticated GitHub user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id"],
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "name": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "email": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "avatar_url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/orgs": {
+      "get": {
+        "operationId": "orgs-list-for-authenticated-user",
+        "summary": "List organizations for the authenticated user",
+        "security": [
+          {
+            "githubOAuth": ["read:org"]
+          }
+        ],
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of GitHub records.",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "login"],
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "login": {
+                        "type": "string"
+                      }
+                    },
+                    "$ref": "#/components/schemas/catalogGithubOrganization"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-crud": {
+          "action": "list",
+          "resource": "githubOrganization",
+          "collection": "githubOrganizations"
+        }
+      }
+    },
+    "/orgs/{org}": {
+      "get": {
+        "operationId": "orgs-get-for-collection-navigation",
+        "summary": "Get an organization by its current login",
+        "security": [
+          {
+            "githubOAuth": ["read:org"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organization login; mutable transport address, not its numeric identity."
+          }
+        ],
+        "x-crud": {
+          "action": "read",
+          "resource": "githubOrganizationAddress"
+        },
+        "responses": {
+          "200": {
+            "description": "An organization, including its current login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/catalogGithubOrganization"
+                }
+              }
+            },
+            "links": {
+              "repositories": {
+                "operationId": "repos-list-for-org",
+                "parameters": {
+                  "org": "$response.body#/login"
+                },
+                "description": "List repositories using the organization login returned by this actual response."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orgs/{org}/repos": {
+      "get": {
+        "operationId": "repos-list-for-org",
+        "summary": "List organization repositories",
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organization login; mutable transport address, not its numeric identity."
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "public",
+                "private",
+                "forks",
+                "sources",
+                "member"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "x-crud": {
+          "action": "list",
+          "resource": "githubRepository",
+          "collection": "organizationRepositories"
+        },
+        "x-pagination": [
+          {
+            "scheme": "builtinGithubNextLink"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of repositories visible to the credentials for this organization.",
+            "headers": {
+              "Link": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/builtinGithubRepository"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}": {
+      "get": {
+        "operationId": "repos-get-for-collection-navigation",
+        "summary": "Get a repository by owner and name",
+        "security": [
+          {
+            "githubOAuth": ["repo"]
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repository owner"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repository name"
+            }
+          }
+        ],
+        "x-crud": {
+          "action": "read",
+          "resource": "githubRepositoryAddress"
+        },
+        "responses": {
+          "200": {
+            "description": "The repository, including its stable numeric id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/builtinGithubRepository"
+                }
+              }
+            },
+            "links": {
+              "issues": {
+                "operationId": "issues-list-for-repo-by-repository-id",
+                "parameters": {
+                  "repository_id": "$response.body#/id"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

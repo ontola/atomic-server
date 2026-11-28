@@ -27,3 +27,15 @@ It is then one more way to look at rows you already have.
 - **Apps only get what you approve.** They are installed with grants, and can be paused or removed at any time.
 - **Your data stays yours.** An app writes to your drive, not to the server of its author.
 - **You can build your own** in plain JavaScript (a module that exports a `view` function and draws into the frame), or extend the server with WebAssembly [plugins](../plugins.md). See [custom views](../plugins/custom-views.md).
+
+## Connect a service
+
+Turn on **Show experimental apps** in **Settings → Integrations**, then open
+**Apps** to see services from the configured integration proxy. Select
+**Add to Drive** and connect an account. After authorization, the account's App
+appears in the selected drive. A service that offers Public access lets you
+install a separate Public App.
+
+Open the service again from **Apps** to manage connections. Reconnecting the
+same account opens its existing App in that drive. The integration proxy
+holds the provider credentials.

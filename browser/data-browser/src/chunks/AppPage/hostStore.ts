@@ -32,6 +32,7 @@ export interface HostRequest {
   id: number | string;
   op: string;
   subject?: string;
+  principalChoice?: unknown;
   property?: string;
   value?: string;
   parent?: string;

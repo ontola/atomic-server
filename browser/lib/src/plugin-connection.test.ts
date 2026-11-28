@@ -107,6 +107,27 @@ describe('connection recovery transport', () => {
 });
 
 describe('strict connection queries', () => {
+  it('includes retained identities only when the caller explicitly requests Trash', async () => {
+    const store = {
+      getServerUrl: () => 'https://atomic.test',
+      fetchResourceFromServer: vi.fn().mockResolvedValue({
+        getLoroDoc: () => undefined,
+        get: (property: string) => (property.endsWith('totalMembers') ? 0 : []),
+      }),
+    };
+    await readConnectionSubjects(store, 'drive', 'property', 'value');
+    expect(
+      new URL(store.fetchResourceFromServer.mock.calls[0][0]).searchParams.has(
+        'include_trashed',
+      ),
+    ).toBe(false);
+    await readConnectionSubjects(store, 'drive', 'property', 'value', {
+      includeTrashed: true,
+    });
+    const url = new URL(store.fetchResourceFromServer.mock.calls[1][0]);
+    expect(url.searchParams.get('include_trashed')).toBe('true');
+    expect(url.searchParams.get('drive')).toBe('drive');
+  });
   it('refuses a failed query instead of treating it as empty', async () => {
     const store = {
       getServerUrl: () => 'https://atomic.test',

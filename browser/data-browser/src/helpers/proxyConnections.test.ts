@@ -1,15 +1,22 @@
 // @wc-ignore-file
 import { describe, expect, it, vi } from 'vitest';
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import {
   AGENT_VAULT_PROOF_MESSAGE,
   Agent,
   JSCryptoProvider,
   decodeB64,
 } from '@tomic/react';
-import { deriveConnectionKey, fromBase64url } from './connectionKeys';
+import {
+  deriveConnectionKey,
+  fromBase64url,
+  rawConnectionKey,
+} from './connectionKeys';
 import {
   CAPABILITY_TTL_SECONDS,
   ProxyConnections,
+  base64url,
   canonicalAgent,
   capabilityClaims,
 } from './proxyConnections';
@@ -84,8 +91,11 @@ async function sha256Hex(text: string) {
  * A proxy that checks every call's v2 signature the way the real one does,
  * and keeps connections and delegations.
  */
-function fakeProxy() {
+function fakeProxy(platform = 'pets') {
   const calls: { method: string; url: string; body?: string }[] = [];
+  const sealedWith = new Map<string, string>();
+  const providerUsers = new Map<string, string | number>();
+  let providerUser: string | number = 100;
   const connections: {
     connection_id: string;
     platform: string;
@@ -104,6 +114,7 @@ function fakeProxy() {
     const body = init.body as string | undefined;
     const h = (init.headers ?? {}) as Record<string, string>;
     calls.push({ method, url, body });
+    const key = h['x-connection-key'];
 
     // Public and unsigned.
     if (new URL(url).pathname === '/connection-key-grants/key')
@@ -120,6 +131,7 @@ function fakeProxy() {
       url,
       h['x-atomic-timestamp'],
       await sha256Hex(body ?? ''),
+      ...(key !== undefined ? [await sha256Hex(key)] : []),
     ].join('\n');
 
     if (
@@ -150,22 +162,55 @@ function fakeProxy() {
           { status: 400 },
         );
 
+      sealedWith.set(connection_id, connection_key);
+      providerUsers.set(connection_id, providerUser);
       connections.push({
         connection_id,
-        platform: 'pets',
+        platform,
         owner: h['x-atomic-agent'],
         delegations: [],
       });
 
       return Response.json({
         connection_id,
-        platform: 'pets',
+        platform,
         owner: h['x-atomic-agent'],
       });
     }
 
     if (path === '/connections' && method === 'GET')
       return Response.json({ owner: USER, connections, runtimes: [] });
+
+    const source =
+      /^\/proxy\/([^/]+)\/(pets\/feed|[a-z0-9-]+\/principal)$/.exec(path);
+
+    if (source && (method === 'GET' || method === 'POST')) {
+      if (
+        !key ||
+        sealedWith.get(source[1]) !== key ||
+        !connections.some(
+          row =>
+            row.connection_id === source[1] &&
+            row.owner === h['x-atomic-agent'],
+        )
+      )
+        return Response.json(
+          { error: 'connection_key_required' },
+          { status: 401 },
+        );
+      if (source[2].endsWith('/principal'))
+        return Response.json({
+          id: providerUsers.get(source[1]),
+          login: 'fixture',
+        });
+
+      return Response.json([{ id: 9, name: 'Max' }], {
+        headers: {
+          link: '</feed?page=2>; rel="next"',
+          'x-private-test': 'discard',
+        },
+      });
+    }
 
     const agents = /^\/connections\/([^/]+)\/agents$/.exec(path);
 
@@ -176,13 +221,44 @@ function fakeProxy() {
       return Response.json({ ok: true });
     }
 
+    const connection = /^\/connections\/([^/]+)$/.exec(path);
+
+    if (connection && method === 'DELETE') {
+      const index = connections.findIndex(
+        row =>
+          row.connection_id === connection[1] &&
+          row.owner === h['x-atomic-agent'],
+      );
+
+      if (index !== -1) {
+        connections.splice(index, 1);
+
+        return new Response(null, { status: 204 });
+      }
+    }
+
     return Response.json(
       { error: 'not_found', message: path },
       { status: 404 },
     );
   });
 
-  return { http: http as unknown as typeof fetch, calls, connections };
+  return {
+    http: http as unknown as typeof fetch,
+    calls,
+    connections,
+    sealedWith,
+    authorizeProviderUser(id: string | number) {
+      providerUser = id;
+    },
+  };
+}
+
+function callback(handoff: string) {
+  const redirect = new URL(new URL(handoff).searchParams.get('redirect_uri')!);
+  redirect.searchParams.set('connection_code', 'handoff');
+
+  return redirect.searchParams;
 }
 
 async function connected(storage = new MemoryStorage()) {
@@ -399,7 +475,7 @@ describe('ProxyConnections', () => {
       user,
       fakeProxy().http,
     );
-    await expect(connections.revoke('old')).rejects.toMatchObject({
+    await expect(connections.revoke('unknown')).rejects.toMatchObject({
       status: 404,
       code: 'not_found',
     });
@@ -421,6 +497,398 @@ describe('ProxyConnections', () => {
     expect(proxy.calls).toEqual([]);
     expect(storage.length).toBe(0);
   });
+
+  it('redeems a keyed connection and authorizes signed reads after a reload', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy();
+    const first = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const url = new URL(
+      await first.startKeyed(
+        SCOPE,
+        'pets',
+        `${PAGE}/app/show?subject=x`,
+        'Pets',
+        PAGE,
+      ),
+    );
+    const back = new URL(url.searchParams.get('redirect_uri')!);
+    back.searchParams.set('connection_code', 'handoff');
+    const reloaded = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const finished = await reloaded.finish(back.searchParams);
+    const redemption = JSON.parse(proxy.calls[0].body!);
+    const id = finished.connectionId!;
+
+    expect(finished).toEqual({
+      returnTo: `${PAGE}/app/show?subject=x`,
+      connected: true,
+      connectionId: id,
+    });
+    expect(id).toEqual(redemption.connection_id);
+    const proof = new Uint8Array(
+      decodeB64(await user().signBytes(AGENT_VAULT_PROOF_MESSAGE)),
+    );
+    expect(redemption.connection_key).toBe(
+      rawConnectionKey(deriveConnectionKey(proof, ORIGIN, id)),
+    );
+    expect(proxy.calls).toHaveLength(1);
+    expect(reloaded.isReturn(back.searchParams)).toBe(false);
+    const verifierDigest = new Uint8Array(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(redemption.code_verifier),
+      ),
+    );
+    expect(url.searchParams.get('code_challenge')).toBe(
+      base64url(verifierDigest),
+    );
+    expect(url.href).not.toContain(redemption.connection_key);
+    expect(storage.values()).not.toContain(redemption.connection_key);
+    expect(await reloaded.listKeyed('pets')).toMatchObject([
+      { connection_id: id, platform: 'pets', delegations: [] },
+    ]);
+
+    const destination = new URL(`/proxy/${id}/pets/feed`, ORIGIN);
+    const read = await reloaded.readKeyed(destination);
+    expect(read).toMatchObject({
+      status: 200,
+      body: [{ id: 9, name: 'Max' }],
+      headers: { link: '</feed?page=2>; rel="next"' },
+    });
+    const call = vi.mocked(proxy.http).mock.calls.at(-1)!;
+    expect(call[1]).toMatchObject({
+      method: 'GET',
+      redirect: 'error',
+      credentials: 'omit',
+    });
+    expect(read.headers['x-private-test']).toBeUndefined();
+    await expect(
+      reloaded.readKeyed(new URL(destination.pathname, 'https://other.test')),
+    ).rejects.toThrow('proxy origin');
+    await expect(
+      reloaded.readKeyed(new URL(destination.href + '#fragment')),
+    ).rejects.toThrow('proxy origin');
+    await expect(
+      reloaded.readKeyed(
+        new URL(destination.pathname.replace('/pets/', '/github/'), ORIGIN),
+      ),
+    ).rejects.toThrow('Reconnect');
+    expect(proxy.calls).toHaveLength(3);
+  });
+
+  it('signs the body and method of catalog-declared POST list reads', async () => {
+    const fixture = fakeProxy();
+    const connections = new ProxyConnections(
+      new MemoryStorage(),
+      ORIGIN,
+      user,
+      fixture.http,
+    );
+    const started = await connections.startKeyed(
+      SCOPE,
+      'pets',
+      `${PAGE}/x`,
+      'Pets',
+      PAGE,
+    );
+    const slot = (await connections.finish(callback(started))).connectionId!;
+    const body = JSON.stringify({ filter: { kind: 'pet' }, cursor: 'next' });
+    expect(
+      await connections.readKeyed(
+        new URL(`/proxy/${slot}/pets/feed`, ORIGIN),
+        undefined,
+        { method: 'POST', body },
+      ),
+    ).toMatchObject({ status: 200, body: [{ id: 9, name: 'Max' }] });
+    expect(fixture.calls.at(-1)).toMatchObject({ method: 'POST', body });
+    expect(vi.mocked(fixture.http).mock.calls.at(-1)?.[1]).toMatchObject({
+      credentials: 'omit',
+      redirect: 'error',
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+
+  it('does not redeem a keyed handoff as a different Atomic agent', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy();
+    const first = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const url = new URL(
+      await first.startKeyed(SCOPE, 'pets', `${PAGE}/x`, 'Pets', PAGE),
+    );
+    const back = new URL(url.searchParams.get('redirect_uri')!);
+    back.searchParams.set('connection_code', 'handoff');
+    const different = new ProxyConnections(
+      storage,
+      ORIGIN,
+      () => new Agent(new JSCryptoProvider('B'.repeat(42) + 'E')),
+      proxy.http,
+    );
+    await expect(different.finish(back.searchParams)).rejects.toThrow(
+      'Atomic account',
+    );
+    expect(proxy.calls).toEqual([]);
+  });
+
+  it('permits a keyed retry link only for the saved same-origin return', async () => {
+    const storage = new MemoryStorage();
+    const proxy = fakeProxy();
+    const connections = new ProxyConnections(storage, ORIGIN, user, proxy.http);
+    const returnTo = `${PAGE}/app/show?subject=mirror`;
+    const handoff = callback(
+      await connections.startKeyed(SCOPE, 'pets', returnTo, 'Pets', PAGE),
+    );
+    expect(connections.keyedReturnTo(handoff, PAGE)).toBe(returnTo);
+    expect(
+      connections.keyedReturnTo(handoff, 'https://other.test'),
+    ).toBeUndefined();
+    expect(
+      connections.keyedReturnTo(new URLSearchParams(), PAGE),
+    ).toBeUndefined();
+    const key = storage.key(0)!;
+    storage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(storage.getItem(key)!),
+        returnTo: 'https://other.test/app/show',
+      }),
+    );
+    expect(connections.keyedReturnTo(handoff, PAGE)).toBeUndefined();
+  });
+
+  it('retains the derived key and typed identity of an existing preview connection', async () => {
+    const storage = new MemoryStorage();
+    const fixture = fakeProxy();
+    const id = 'A'.repeat(43);
+    const principal = {
+      kind: 'authenticated' as const,
+      namespace: 'https://identity.example',
+      subject: 100,
+    };
+    storage.setItem(
+      'atomic-proxy-keyed-v1:' + JSON.stringify([ORIGIN, USER, id]),
+      JSON.stringify({
+        platform: 'pets',
+        principal,
+        operationId: 'currentPrincipal',
+      }),
+    );
+    fixture.connections.push({
+      connection_id: id,
+      platform: 'pets',
+      owner: USER,
+      delegations: [],
+    });
+    const proof = new Uint8Array(
+      decodeB64(await user().signBytes(AGENT_VAULT_PROOF_MESSAGE)),
+    );
+    const previewInfo = new TextEncoder().encode(
+      JSON.stringify(['atomic-integration-proxy-key-v1', ORIGIN, 'pets', id]),
+    );
+    fixture.sealedWith.set(
+      id,
+      rawConnectionKey(hkdf(sha256, proof, undefined, previewInfo, 32)),
+    );
+    const connections = new ProxyConnections(
+      storage,
+      ORIGIN,
+      user,
+      fixture.http,
+    );
+
+    expect(await connections.keyedPrincipalProvenance('pets', id)).toEqual({
+      principal,
+    });
+    expect(await connections.canReconnectKeyed('pets', id)).toBe(true);
+    expect(
+      await connections.readKeyed(
+        new URL('/proxy/' + id + '/pets/feed', ORIGIN),
+      ),
+    ).toMatchObject({ status: 200, body: [{ id: 9, name: 'Max' }] });
+  });
+
+  it('keeps string principal provenance typed and owner scoped', async () => {
+    const storage = new MemoryStorage();
+    const fixture = fakeProxy();
+    const connections = new ProxyConnections(
+      storage,
+      ORIGIN,
+      user,
+      fixture.http,
+    );
+    const slot = (
+      await connections.finish(
+        callback(
+          await connections.startKeyed(
+            SCOPE,
+            'pets',
+            `${PAGE}/x`,
+            'Pets',
+            PAGE,
+          ),
+        ),
+      )
+    ).connectionId!;
+    const principal = {
+      kind: 'authenticated' as const,
+      namespace: 'https://identity.example',
+      subject: '100',
+    };
+    await connections.rememberKeyedPrincipal(
+      'pets',
+      slot,
+      principal,
+      'currentPrincipal',
+    );
+    const before = storage.values();
+    expect(await connections.keyedPrincipalProvenance('pets', slot)).toEqual({
+      principal,
+    });
+    const other = new ProxyConnections(
+      storage,
+      ORIGIN,
+      () => new Agent(new JSCryptoProvider('B'.repeat(42) + 'E')),
+      fixture.http,
+    );
+    expect(await other.keyedPrincipalProvenance('pets', slot)).toBeUndefined();
+    expect(storage.values()).toBe(before);
+  });
+
+  it.each(['calendar-service', 'inventory'])(
+    'keeps the original slot through generic %s reconnect and preserves typed identities',
+    async platform => {
+      const storage = new MemoryStorage();
+      const proxy = fakeProxy(platform);
+      const namespace = 'https://identities.example/' + platform;
+      const principal = {
+        kind: 'authenticated' as const,
+        namespace,
+        subject: 100,
+      };
+      const document = {
+        openapi: '3.0.3',
+        info: { title: 'Fixture', version: '1' },
+        servers: [{ url: 'https://provider.example' }],
+        paths: {
+          '/principal': {
+            get: {
+              operationId: 'currentPrincipal',
+              security: [{ oauth: [] }],
+              'x-authenticated-principal': {
+                kind: 'user',
+                namespace,
+                subject: '$response.body#/id',
+                identifier: {
+                  scope: 'provider',
+                  stable: true,
+                  reassigned: false,
+                },
+              },
+              responses: { '200': { description: 'Current identity' } },
+            },
+          },
+        },
+      };
+      const catalog = vi.fn(async () => document);
+      const connections = new ProxyConnections(
+        storage,
+        ORIGIN,
+        user,
+        proxy.http,
+        Date.now,
+        catalog,
+      );
+      const returnTo = `${PAGE}/app/show?subject=mirror`;
+      const slot = (
+        await connections.finish(
+          callback(
+            await connections.startKeyed(
+              SCOPE,
+              platform,
+              returnTo,
+              'Provider',
+              PAGE,
+            ),
+          ),
+        )
+      ).connectionId!;
+      const reconnect = () =>
+        connections.startKeyedReconnect(
+          SCOPE,
+          platform,
+          slot,
+          returnTo,
+          'Provider',
+          PAGE,
+        );
+      expect(await connections.canReconnectKeyed(platform, slot)).toBe(false);
+      await expect(reconnect()).rejects.toThrow('verified account');
+      await connections.rememberKeyedPrincipal(
+        platform,
+        slot,
+        principal,
+        'currentPrincipal',
+      );
+      await expect(
+        connections.rememberKeyedPrincipal(
+          platform,
+          slot,
+          { ...principal, subject: '100' },
+          'currentPrincipal',
+        ),
+      ).rejects.toThrow('different authenticated principal');
+      await expect(
+        connections.rememberKeyedPrincipal(
+          platform,
+          slot,
+          { ...principal, clientContext: 'other-client' },
+          'currentPrincipal',
+        ),
+      ).rejects.toThrow('different authenticated principal');
+      expect(await connections.canReconnectKeyed(platform, slot)).toBe(true);
+      await connections.revoke(slot);
+      expect(await connections.listKeyed(platform)).toMatchObject([
+        { connection_id: slot, platform },
+      ]);
+      proxy.authorizeProviderUser('100');
+      await expect(
+        connections.finish(callback(await reconnect())),
+      ).rejects.toThrow('same authenticated account');
+      expect(await connections.activeKeyedConnection(platform, slot)).toBe(
+        slot,
+      );
+      expect(
+        proxy.connections.filter(row => row.platform === platform),
+      ).toHaveLength(0);
+      proxy.authorizeProviderUser(100);
+      const reloaded = new ProxyConnections(
+        storage,
+        ORIGIN,
+        user,
+        proxy.http,
+        Date.now,
+        catalog,
+      );
+      expect(await reloaded.finish(callback(await reconnect()))).toEqual({
+        returnTo,
+        connected: true,
+        connectionId: slot,
+      });
+      const active = await reloaded.activeKeyedConnection(platform, slot);
+      expect(active).not.toBe(slot);
+      expect(await reloaded.listKeyed(platform)).toMatchObject([
+        { connection_id: slot, platform, delegations: [] },
+      ]);
+      expect(catalog).toHaveBeenCalledWith(
+        ORIGIN,
+        platform,
+        expect.any(AbortSignal),
+      );
+      expect(
+        proxy.calls.filter(({ url }) => url.endsWith('/agents')),
+      ).toHaveLength(0);
+      expect(storage.values()).toContain('"namespace":"' + namespace + '"');
+      expect(storage.values()).not.toContain('connection_key');
+    },
+  );
 });
 
 describe('canonicalAgent', () => {
@@ -463,4 +931,60 @@ describe('capability vector', () => {
       `"eyJ2IjoyLCJjb25uZWN0aW9uX2lkIjoiY18xMjMiLCJwbGF0Zm9ybSI6Imdvb2dsZS1jYWxlbmRhciIsImF1ZCI6Imh0dHBzOi8vcHJveHkuZXhhbXBsZSIsImFwcCI6ImF0b21pYzphZ2VudDpBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFFIiwiY25mIjoiYXRvbWljOmFnZW50OkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkUiLCJleHAiOjE3OTAwMDA2MDB9.mKOEe3SnRDDRYFZ94kAqkXl_RnRy-pS-B5KdEzpdQVDPNE3PEHZq1e7aT9dL0GKhv00uZ2WiWmftEvto09xRDw"`,
     );
   });
+});
+
+it('keeps a successful keyed OAuth selection scoped to the owner, drive, setup and platform until consumed', async () => {
+  const storage = new MemoryStorage();
+  const fixture = fakeProxy();
+  let now = 1_790_000_000_000;
+  const proxy = new ProxyConnections(
+    storage,
+    ORIGIN,
+    user,
+    fixture.http,
+    () => now,
+  );
+  const connect = async () =>
+    proxy.finish(
+      callback(
+        await proxy.startKeyed(SCOPE, 'pets', `${PAGE}/x`, 'Pets', PAGE),
+      ),
+    );
+  const first = (await connect()).connectionId!;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(first);
+  const calls = fixture.calls.length;
+  expect(
+    await proxy.preferredKeyedConnection(
+      { ...SCOPE, drive: 'atomic:other-drive' },
+      'pets',
+    ),
+  ).toBeUndefined();
+  expect(
+    await proxy.preferredKeyedConnection(
+      { ...SCOPE, app: 'atomic:other-app' },
+      'pets',
+    ),
+  ).toBeUndefined();
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'other')).toBeUndefined();
+  const anotherUser = new Agent(
+    new JSCryptoProvider('AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+  );
+  const other = new ProxyConnections(
+    storage,
+    ORIGIN,
+    () => anotherUser,
+    fixture.http,
+    () => now,
+  );
+  expect(await other.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
+  expect(fixture.calls).toHaveLength(calls);
+  const second = (await connect()).connectionId!;
+  await proxy.consumePreferredKeyedConnection(SCOPE, 'pets', first);
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(second);
+  await proxy.consumePreferredKeyedConnection(SCOPE, 'pets', second);
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
+  const third = (await connect()).connectionId!;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBe(third);
+  now += 600_001;
+  expect(await proxy.preferredKeyedConnection(SCOPE, 'pets')).toBeUndefined();
 });

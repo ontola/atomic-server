@@ -85,6 +85,7 @@ fn main() -> std::io::Result<()> {
                 // WalkDir yields a plain file as a single entry, so listing
                 // files here works the same as listing directories.
                 PathBuf::from("../browser/data-browser/vite.config.ts"),
+                PathBuf::from("../browser/data-browser/scripts/build-builtin-syncables.mjs"),
                 PathBuf::from("../browser/data-browser/package.json"),
                 PathBuf::from("../browser/pnpm-lock.yaml"),
                 PathBuf::from("../browser/form-renderer/src"),

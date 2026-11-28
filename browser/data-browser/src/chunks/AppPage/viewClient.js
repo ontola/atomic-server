@@ -444,8 +444,8 @@ export const store = {
     },
 
     /** Opens `subject` in the host, leaving this view. */
-    async openResource(subject) {
-      return send('openResource', { subject });
+    async openResource(subject, principalChoice) {
+      return send('openResource', { subject, principalChoice });
     },
 
     /**
@@ -520,8 +520,8 @@ export const store = {
      * one, the page goes to the proxy and back, reloading this view, so the
      * promise does not settle; if they cancel, `{ status: 'cancelled' }`.
      */
-    async connect({ platform }) {
-      return send('proxyConnect', { platform });
+    async connect({ platform, connectionId }) {
+      return send('proxyConnect', { platform, connectionId });
     },
   },
 };
