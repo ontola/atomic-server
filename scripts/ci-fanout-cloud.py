@@ -438,6 +438,10 @@ class PrivateEvidenceError(ValueError):
     """Only private material is excluded; integrity errors remain fatal."""
 
 
+class SourceEvidenceChanged(ValueError):
+    """A concurrently retrieved source needs another complete verified pass."""
+
+
 def evidence_signature(path):
     info = path.stat()
     value = [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
@@ -456,7 +460,7 @@ def owned_evidence_file(path, device=None):
     return info
 
 
-def scan_evidence(path, private, output=None):
+def scan_evidence(path, private, output=None, *, retry_source_change=False):
     """Hash and privacy-scan exact stable bytes, including chunk boundaries."""
     owned_evidence_file(path)
     before = evidence_signature(path)
@@ -470,8 +474,10 @@ def scan_evidence(path, private, output=None):
             if output is not None:
                 output.write(chunk)
             tail = block[-max(map(len, private)):]
+    owned_evidence_file(path)
     if evidence_signature(path) != before:
-        raise ValueError('evidence changed during verified read')
+        error = SourceEvidenceChanged if retry_source_change else ValueError
+        raise error('evidence changed during verified read')
     return digest.hexdigest()
 
 
@@ -498,10 +504,26 @@ def persist_evidence(config, final=False):
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
             raise ValueError('evidence lock must be an owned unshared regular file')
         fcntl.flock(lock, fcntl.LOCK_EX)
-        return _persist_evidence_locked(config, final)
+        for attempt in range(3):
+            try:
+                if attempt:
+                    guard_evidence_retry_deadline(config)
+                    return _persist_evidence_locked(config, final, retrying=True)
+                return _persist_evidence_locked(config, final)
+            except SourceEvidenceChanged:
+                if attempt == 2:
+                    raise
 
 
-def _persist_evidence_locked(config, final=False):
+def guard_evidence_retry_deadline(config):
+    # Additional preservation attempts may use only the already-budgeted cleanup
+    # reserve. Never change the work deadline or block an original late reaper pass.
+    cutoff = timestamp(config['deadline']) + dt.timedelta(seconds=config['cleanup_reserve_seconds'])
+    if utcnow() >= cutoff:
+        raise TimeoutError('original evidence cleanup window reached')
+
+
+def _persist_evidence_locked(config, final=False, retrying=False):
     mount = verify_mount(config)
     destination = mount / 'runs' / config['batch_key']
     if any(path.is_symlink() for path in (destination, destination.parent, mount)):
@@ -554,7 +576,7 @@ def _persist_evidence_locked(config, final=False):
         try:
             content = prior.get('content_sha256') if unchanged and attachment else None
             if attachment and not content:
-                content = scan_evidence(source, private)
+                content = scan_evidence(source, private, retry_source_change=True)
             candidate = attachments.get((observed[2], content)) if attachment else None
             if candidate:
                 other, proof = candidate
@@ -582,7 +604,7 @@ def _persist_evidence_locked(config, final=False):
                     unchanged = True
                 else:
                     with temporary.open('xb') as out:
-                        copied_hash = scan_evidence(source, private, out)
+                        copied_hash = scan_evidence(source, private, out, retry_source_change=True)
                     if content is not None and copied_hash != content:
                         raise ValueError('attachment changed between verified reads')
                     temporary.replace(target)
@@ -629,12 +651,14 @@ def _persist_evidence_locked(config, final=False):
             record['destination'] = current
         else:
             copy_state.pop(relative)
+    caches = validate_cached_bundles(config, force=final)
+    if retrying:
+        guard_evidence_retry_deadline(config)
     write_json(copy_path, copy_state)
     for name in ('cloud-status.json', 'cleanup-proof.json'):
         value = read_json(Path(config['root']) / name)
         if value is not None:
             write_json(destination / name, value)
-    caches = validate_cached_bundles(config, force=final)
     receipt = {'source_commit': config['source_commit'], 'copied_files': copied, 'excluded_private_files': excluded,
                'validated_caches': caches, 'cache_preserved_for_source': any(item['source_commit'] == config['source_commit'] for item in caches),
                'preserved_at': utcnow().isoformat(), 'retained_volume_id': config['volume']['id']}

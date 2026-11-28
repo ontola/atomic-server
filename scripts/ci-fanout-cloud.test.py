@@ -586,6 +586,129 @@ class CloudTests(unittest.TestCase):
         self.assertTrue(all(record['destination']==cloud.evidence_signature(path)
                             for record,path in zip(state.values(),targets)))
 
+    def replacing_attachment_reader(self, path, limit):
+        """Replace a real source after bytes are read, without timing or threads."""
+        original_open = Path.open
+        changes = []
+
+        class Reader:
+            def __init__(self, handle):
+                self.handle, self.changed = handle, False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.handle.close()
+
+            def read(self, size):
+                data = self.handle.read(size)
+                if data and not self.changed and (limit is None or len(changes) < limit):
+                    self.changed = True
+                    replacement = path.with_name(path.name + '.replacement')
+                    replacement.write_bytes(data + b' replacement ' + str(len(changes)).encode())
+                    replacement.replace(path)
+                    changes.append(path.stat().st_ino)
+                return data
+
+        def opening(candidate, mode='r', *args, **kwargs):
+            handle = original_open(candidate, mode, *args, **kwargs)
+            return Reader(handle) if candidate == path and mode == 'rb' else handle
+
+        return changes, opening
+
+    def test_concurrent_source_replacement_retries_a_whole_verified_pass(self):
+        sources, targets, data = self.attachment_sources()
+        changes, opening = self.replacing_attachment_reader(sources[1], 1)
+        body = cloud._persist_evidence_locked
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(Path, 'open', opening), \
+                mock.patch.object(cloud, '_persist_evidence_locked', wraps=body) as passes:
+            receipt = cloud.persist_evidence(self.config)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(passes.call_count, 2)
+        self.assertEqual(targets[0].read_bytes(), data)
+        self.assertEqual(targets[1].read_bytes(), sources[1].read_bytes())
+        self.assertEqual(len(receipt['copied_files']), 2)
+        destination = Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key']
+        self.assertFalse(list(destination.rglob('*.tmp')))
+
+    def test_persistently_replaced_source_stops_after_three_passes_without_receipts(self):
+        sources, targets, _ = self.attachment_sources()
+        changes, opening = self.replacing_attachment_reader(sources[1], None)
+        body = cloud._persist_evidence_locked
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(Path, 'open', opening), \
+                mock.patch.object(cloud, '_persist_evidence_locked', wraps=body) as passes, \
+                self.assertRaisesRegex(ValueError, 'evidence changed during verified read'):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(len(changes), 3)
+        self.assertEqual(passes.call_count, 3)
+        self.assertFalse((Path(self.config['root']) / 'evidence-copy-state.json').exists())
+        destination = Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key']
+        self.assertFalse((destination / 'evidence.json').exists())
+        self.assertFalse((destination / 'cloud-summary.json').exists())
+        self.assertFalse(list(destination.rglob('*.tmp')))
+
+    def test_retained_target_change_remains_fatal_without_retry(self):
+        sources, targets, data = self.attachment_sources()
+        # One source forces the retained-target scan before any alias candidate
+        # exists, independently of filesystem directory enumeration order.
+        sources[1].unlink()
+        for target in targets[:1]:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        changes, opening = self.replacing_attachment_reader(targets[0], 1)
+        body = cloud._persist_evidence_locked
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(Path, 'open', opening), \
+                mock.patch.object(cloud, '_persist_evidence_locked', wraps=body) as passes, \
+                self.assertRaisesRegex(ValueError, 'evidence changed during verified read') as failure:
+            cloud.persist_evidence(self.config)
+        self.assertNotIsInstance(failure.exception, cloud.SourceEvidenceChanged)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(passes.call_count, 1)
+
+    def test_ordinary_integrity_error_is_not_retried(self):
+        self.attachment_sources()
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(cloud, 'scan_evidence', side_effect=ValueError('integrity failure')) as scans, \
+                self.assertRaisesRegex(ValueError, '^integrity failure$'):
+            cloud.persist_evidence(self.config)
+        self.assertEqual(scans.call_count, 1)
+
+    def test_cleanup_cutoff_blocks_only_additional_evidence_attempts(self):
+        cutoff = DEADLINE + dt.timedelta(seconds=self.config['cleanup_reserve_seconds'])
+        body = cloud._persist_evidence_locked
+        with mock.patch.object(cloud, 'utcnow', return_value=cutoff), \
+                mock.patch.object(cloud, '_persist_evidence_locked', return_value={'stable': True}) as passes:
+            self.assertEqual(cloud.persist_evidence(self.config, final=True), {'stable': True})
+        self.assertEqual(passes.call_count, 1)
+        with mock.patch.object(cloud, 'utcnow', return_value=cutoff), \
+                mock.patch.object(cloud, '_persist_evidence_locked', side_effect=cloud.SourceEvidenceChanged('changed')) as passes, \
+                self.assertRaisesRegex(TimeoutError, 'original evidence cleanup window'):
+            cloud.persist_evidence(self.config, final=True)
+        self.assertEqual(passes.call_count, 1)
+
+    def test_retry_crossing_cleanup_cutoff_publishes_no_receipt_or_copy_state(self):
+        sources, targets, _ = self.attachment_sources()
+        changes, opening = self.replacing_attachment_reader(sources[1], 1)
+        cutoff = DEADLINE + dt.timedelta(seconds=self.config['cleanup_reserve_seconds'])
+        def cache_validation(*args, **kwargs):
+            clock.return_value = cutoff
+            return []
+        with mock.patch.object(cloud, 'verify_mount', return_value=Path(self.config['volume']['mount_path'])), \
+                mock.patch.object(Path, 'open', opening), \
+                mock.patch.object(cloud, 'utcnow', return_value=NOW) as clock, \
+                mock.patch.object(cloud, 'validate_cached_bundles', side_effect=cache_validation), \
+                self.assertRaisesRegex(TimeoutError, 'original evidence cleanup window'):
+            cloud.persist_evidence(self.config, final=True)
+        self.assertEqual(len(changes), 1)
+        self.assertFalse((Path(self.config['root']) / 'evidence-copy-state.json').exists())
+        destination = Path(self.config['volume']['mount_path']) / 'runs' / self.config['batch_key']
+        self.assertFalse((destination / 'evidence.json').exists())
+        self.assertFalse((destination / 'cloud-summary.json').exists())
+
     def test_changed_source_breaks_sharing_without_mutating_its_old_alias(self):
         sources,targets,data=self.attachment_sources()
         changed=b'changed source trace bytes' * 5000
