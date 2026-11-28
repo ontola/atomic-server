@@ -352,8 +352,9 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
   }
 
   await page
+    // The Integration section is called "App settings" since #2689.
     .getByRole('main')
-    .getByText('Integration', { exact: true })
+    .getByText('App settings', { exact: true })
     .scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/tmp/atomic-settings-uniform.png' });
 });
