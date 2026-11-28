@@ -6,6 +6,8 @@ import {
   FaStopwatch,
   FaChartPie,
   FaRegCircleDot,
+  FaPlug,
+  FaLayerGroup,
 } from 'react-icons/fa6';
 
 /**
@@ -27,6 +29,8 @@ export const VIEW_KINDS = [
   'timer',
   'dashboard',
   'issues',
+  'syncables',
+  'syncable-collection',
 ] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
@@ -38,6 +42,17 @@ export function normalizeViewKind(kind: string | undefined): ViewKind {
   return (VIEW_KINDS as readonly string[]).includes(kind ?? '')
     ? (kind as ViewKind)
     : DEFAULT_VIEW_KIND;
+}
+
+const defaultCollectionNames = new Set([
+  'Collection',
+  'Browse',
+  'Syncable Collection',
+  'Syncable Collections',
+]);
+
+export function isDefaultSyncableCollectionName(name: unknown): boolean {
+  return typeof name === 'string' && defaultCollectionNames.has(name);
 }
 
 /**
@@ -65,6 +80,8 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   timer: 'Timer',
   dashboard: 'Dashboard',
   issues: 'Issues',
+  syncables: 'Sync',
+  'syncable-collection': 'Syncable Collections',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -74,4 +91,6 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   timer: FaStopwatch,
   dashboard: FaChartPie,
   issues: FaRegCircleDot,
+  syncables: FaPlug,
+  'syncable-collection': FaLayerGroup,
 };

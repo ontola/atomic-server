@@ -2516,6 +2516,14 @@ export class AtomicServer {
           '/app/data-browser/src/chunks/AppPage/viewClient.js',
           this.source.file('browser/data-browser/src/chunks/AppPage/viewClient.js'),
         )
+        // Syncables shares the composed catalog, selection and logo fixtures
+        // with browser unit tests. Playwright reads them directly from disk.
+        .withDirectory(
+          '/app/data-browser/src/chunks/PluginRuns/fixtures',
+          this.source.directory(
+            'browser/data-browser/src/chunks/PluginRuns/fixtures',
+          ),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])

@@ -21,10 +21,16 @@ async function enableCatalogEntries(page: Page, shortnames: string[]) {
   });
 }
 
-test('experimental plugins default off, behind an unlock, and the preference survives reload', async ({
+test('experimental plugins default off and the preference survives reload', async ({
   page,
 }) => {
   const catalogRequests: string[] = [];
+  await page.route('**/catalog/apps', route =>
+    route.fulfill({
+      headers: { 'access-control-allow-origin': '*' },
+      json: { version: 1, platforms: [] },
+    }),
+  );
   await enableCatalogEntries(page, ['fixture-experimental', 'fixture-api']);
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());

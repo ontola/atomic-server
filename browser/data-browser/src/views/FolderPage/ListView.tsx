@@ -1,10 +1,10 @@
 import {
   core,
   Resource,
+  useArray,
   useCreatedBy,
   useCreatedAt,
   useResource,
-  useString,
   useTitle,
 } from '@tomic/react';
 
@@ -12,7 +12,7 @@ import { styled } from 'styled-components';
 import { AtomicLink } from '@tomic/resource-ui/components/AtomicLink';
 import { CommitDetail } from '../../components/CommitDetail';
 import { ViewProps } from './FolderDisplayStyle';
-import { getIconForClass } from '../../helpers/iconMap';
+import { ResourceGlyph } from '../../components/ResourceGlyph';
 import { QuickCreateRow } from '../../components/NewInstanceButton';
 import { CommentCountBadge } from '../../components/CommentCountBadge';
 
@@ -71,13 +71,11 @@ interface CellProps {
 
 function Title({ resource }: CellProps): JSX.Element {
   const [title] = useTitle(resource);
-  const [classType] = useString(resource, core.properties.isA);
-  const Icon = getIconForClass(classType ?? '');
 
   return (
     <TitleWrapper>
       <IconWrapper>
-        <Icon />
+        <ResourceGlyph resource={resource} />
       </IconWrapper>
       <AtomicLink subject={resource.subject}>{title}</AtomicLink>
       <CommentCountBadge subject={resource.subject} />
@@ -97,11 +95,11 @@ function Created({ resource }: CellProps): JSX.Element {
 }
 
 function ClassType({ resource }: CellProps): JSX.Element {
-  const [classType] = useString(resource, core.properties.isA);
+  const [[classType]] = useArray(resource, core.properties.isA);
   const classTypeResource = useResource(classType);
   const [title] = useTitle(classTypeResource);
 
-  if (resource.loading) {
+  if (resource.loading || !classType) {
     return <LinkWrapper></LinkWrapper>;
   }
 

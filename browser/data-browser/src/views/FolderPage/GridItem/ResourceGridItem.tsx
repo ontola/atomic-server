@@ -2,14 +2,14 @@ import {
   core,
   dataBrowser,
   server,
+  useArray,
   useResource,
-  useString,
   useTitle,
 } from '@tomic/react';
 import { useCallback, useMemo, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../../helpers/navigation';
-import { getIconForClass } from '../../../helpers/iconMap';
+import { ResourceGlyph } from '../../../components/ResourceGlyph';
 import { BasicGridItem } from './BasicGridItem';
 import { GridCard, GridItemTitle, GridItemWrapper } from './components';
 import { DefaultGridItem } from './DefaultGridItem';
@@ -52,11 +52,9 @@ export function ResourceGridItem({
   const resource = useResource(subject);
   const [title] = useTitle(resource);
 
-  const [classTypeSubject] = useString(resource, core.properties.isA);
+  const [[classTypeSubject]] = useArray(resource, core.properties.isA);
   const classType = useResource(classTypeSubject);
   const [classTypeName] = useTitle(classType);
-
-  const Icon = getIconForClass(classTypeSubject ?? '');
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -71,7 +69,7 @@ export function ResourceGridItem({
     return getResourceRenderer(classTypeSubject ?? '');
   }, [classTypeSubject]);
 
-  if (classTypeSubject === undefined) {
+  if (resource.loading && classTypeSubject === undefined) {
     return <Loader />;
   }
 
@@ -88,8 +86,8 @@ export function ResourceGridItem({
       ) : (
         <GridCard subject={transitionSubject}>
           <ClassBanner>
-            <Icon />
-            <span>{classTypeName}</span>
+            <ResourceGlyph resource={resource} />
+            {classTypeSubject && <span>{classTypeName}</span>}
           </ClassBanner>
           <ErrorBoundary FallBackComponent={GridItemError}>
             <Resource resource={resource} />

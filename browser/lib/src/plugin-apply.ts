@@ -2,6 +2,7 @@ import { randomUUID } from './uuid.js';
 import { IMPORT_BASELINE } from './import-records.js';
 import type { PlannedChange, RunPlan } from './plugin-plan.js';
 import type { JSONValue } from './value.js';
+import type { Datatype } from './datatypes.js';
 
 /**
  * Applies an approved {@link RunPlan}.
@@ -37,48 +38,104 @@ export interface ApplyStore {
     propVals: Record<string, JSONValue>;
   }): Promise<{ subject: string; save(): Promise<unknown> }>;
   getResource(subject: string): Promise<{
-    set(prop: string, value: JSONValue): Promise<void>;
+    set(
+      prop: string,
+      value: JSONValue,
+      validate?: boolean,
+      knownDatatype?: Datatype,
+      beforeMutation?: () => void,
+    ): Promise<void>;
     remove(prop: string): void;
     save(): Promise<unknown>;
     destroy(): Promise<void>;
   }>;
 }
 
+/** A write's authority comes from its native host, never from the plan. */
+export type ApplyWrite =
+  | ({ op: 'create' } & CreateRequest)
+  | { op: 'set'; subject: string; propVals: Record<string, JSONValue> }
+  | { op: 'remove'; subject: string; properties: string[] }
+  | { op: 'destroy'; subject: string };
+
+export interface ApplyAuthority {
+  authorize(write: ApplyWrite): Promise<void>;
+  /** Checks actor, source and cancellation immediately before a mutation. */
+  assertCurrent(write?: ApplyWrite): void;
+}
+
 /** Adapts a `Store` to an {@link ApplyHost}. */
-export function applyHostFromStore(store: ApplyStore): ApplyHost {
+export function applyHostFromStore(
+  store: ApplyStore,
+  authority?: ApplyAuthority,
+): ApplyHost {
+  const assertCurrent = () => authority?.assertCurrent();
+
+  const authorize = async (write: ApplyWrite) => {
+    assertCurrent();
+    await authority?.authorize(write);
+    const guard = () => authority?.assertCurrent(write);
+    guard();
+
+    return guard;
+  };
+
   return {
     create: async request => {
+      const guard = await authorize({ op: 'create', ...request });
       const resource = await store.newResource({
         ...request,
         propVals: stampImportApproval(request.propVals),
       });
+      guard();
       await resource.save();
+      guard();
 
       // Read the subject after saving: for a DID agent the store mints it from
       // a genesis certificate during creation, so it is not knowable before.
       return resource.subject;
     },
     set: async (subject, propVals) => {
+      const guard = await authorize({ op: 'set', subject, propVals });
       const resource = await store.getResource(subject);
+      guard();
 
       for (const [property, value] of Object.entries(
         stampImportApproval(propVals),
       )) {
         // Validation stays on: the planner already fetched every property, so
         // this reads the store cache rather than the network.
-        await resource.set(property, value);
+        guard();
+        if (authority)
+          await resource.set(property, value, true, undefined, guard);
+        else await resource.set(property, value);
+        guard();
       }
 
+      guard();
       await resource.save();
+      guard();
     },
     remove: async (subject, properties) => {
+      const guard = await authorize({ op: 'remove', subject, properties });
       const resource = await store.getResource(subject);
-      properties.forEach(property => resource.remove(property));
+      guard();
+
+      for (const property of properties) {
+        guard();
+        resource.remove(property);
+      }
+
+      guard();
       await resource.save();
+      guard();
     },
     destroy: async subject => {
+      const guard = await authorize({ op: 'destroy', subject });
       const resource = await store.getResource(subject);
+      guard();
       await resource.destroy();
+      guard();
     },
   };
 }

@@ -67,11 +67,10 @@ import { goToFirstEntry } from './resetHistory';
 import { actionPages } from './actionPages';
 import { styled } from 'styled-components';
 import {
-  createFlutterHost,
+  selectEmbedHost,
   flutterChannel,
   lockFlutterChannel,
 } from './flutterHost';
-import { createMockHost } from './mockHost';
 import { createFlush } from './flush';
 import {
   adoptDriveOf,
@@ -212,9 +211,7 @@ declare global {
 // the app's token from here on.
 lockFlutterChannel();
 
-const channel: NativeChannel =
-  window.atomicHost ??
-  (flutterChannel() ? createFlutterHost(flutterChannel()!) : createMockHost());
+const channel = await selectEmbedHost(window.atomicHost, flutterChannel());
 // Only the app can open its own screens; the mock host answers nothing to that.
 setActionsHost(window.atomicHost || window.AtomicFlutter ? channel : undefined);
 

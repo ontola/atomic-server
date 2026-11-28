@@ -4262,7 +4262,8 @@ impl Db {
     ///
     /// Returns `None` when the member must be hidden (auth-denied or
     /// unresolvable), `Some(None)` when it's included subjects-only, and
-    /// `Some(Some(resource))` when the query asked for nested bodies.
+    /// `Some(Some(resource))` when `include_nested` asks for a selected member's
+    /// body. Count-only members never load their snapshots or run extenders.
     ///
     /// Bodies are built from the row plus the resource's *raw* snapshot bytes
     /// attached as `loroUpdate` — byte-for-byte what the old full-decode path
@@ -4276,6 +4277,7 @@ impl Db {
         q: &Query,
         rights_cache: &std::sync::Mutex<RightsCache>,
         trash: Option<&std::sync::Mutex<crate::trash::TrashLookup<'_>>>,
+        include_nested: bool,
     ) -> Option<Option<Resource>> {
         let mut resource = match self.get_resource_shallow(subject) {
             Ok(resource) => resource,
@@ -4286,7 +4288,7 @@ impl Db {
                     .await
                 {
                     Ok(response) => {
-                        if q.include_nested {
+                        if include_nested {
                             Some(Some(response.to_single()))
                         } else {
                             Some(None)
@@ -4322,7 +4324,7 @@ impl Db {
             }
         }
 
-        if !q.include_nested {
+        if !include_nested {
             return Some(None);
         }
 
@@ -4408,45 +4410,28 @@ impl Db {
                 continue;
             }
             let subject = Subject::from_raw(&identity, base_domain.as_deref());
-            let index = seen.len() - 1;
-
-            total_count += 1;
-
-            if q.offset > index {
+            let in_selection =
+                total_count >= q.offset && q.limit.is_none_or(|limit| subjects.len() < limit);
+            // Visibility precedes both the count and the offset. Bodies are
+            // needed only for selected members, even though an exact visible
+            // total requires checking every candidate's rights/Trash/existence.
+            let Some(body) = self
+                .resolve_query_member(
+                    &subject,
+                    q,
+                    &rights_cache,
+                    trash.as_ref(),
+                    in_selection && q.include_nested,
+                )
+                .await
+            else {
                 continue;
-            }
-
-            // Denied members do not grow `subjects`, so we keep resolving
-            // until the page is full of *authorized* hits — a private streak
-            // must not hide a later readable row.
-            if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
-                // Sudo without nested bodies needs no per-member work at all.
-                if q.for_agent == ForAgent::Sudo && !q.include_nested && trash.is_none() {
-                    subjects.push(subject);
-                    continue;
-                }
-
-                match self
-                    .resolve_query_member(&subject, q, &rights_cache, trash.as_ref())
-                    .await
-                {
-                    Some(body) => {
-                        subjects.push(subject);
-                        if let Some(resource) = body {
-                            resources.push(resource);
-                        }
-                    }
-                    None => {
-                        // The index has an entry for this subject but the
-                        // requesting agent can't resolve it — auth-filtered,
-                        // destroyed-with-stale-index, or otherwise invisible.
-                        // Roll back the count bump so it doesn't outrun the
-                        // returned subjects and produce a
-                        // `totalMembers: N, members: []` drift. We only do
-                        // this for in-page hits; entries past the limit stay
-                        // counted blindly (issue #286).
-                        total_count -= 1;
-                    }
+            };
+            total_count += 1;
+            if in_selection {
+                subjects.push(subject);
+                if let Some(resource) = body {
+                    resources.push(resource);
                 }
             }
         }
@@ -4468,12 +4453,9 @@ impl Db {
     /// it claims to summarize.
     /// Every row the query matches, unpaged and in order.
     ///
-    /// Subjects, not a count: these are the rows that actually resolved for this
-    /// agent. `QueryResult::count` deliberately counts raw index hits (including
-    /// unauthorized and stale-index entries, see issue #286), so a `count`
-    /// aggregate can legitimately come out lower than `totalMembers` — it counts
-    /// what the reader can see, which is the only number a sum over the same rows
-    /// can agree with.
+    /// These are the rows that actually resolve for this agent.
+    /// `QueryResult::count` uses that same visible set, including rights,
+    /// Trash and existence filtering, independently of the requested page.
     ///
     /// Shared by the paging path and the aggregation pass, so a total can never
     /// summarize a different set than the rows on screen.

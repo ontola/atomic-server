@@ -58,7 +58,10 @@ export interface ResourceUIHost {
   isRunningInTauri: () => boolean;
   reportError: (error: unknown) => void;
   loadAtomicWasm: () => Promise<AtomicWasmModule>;
-  DriveApps: ComponentType<{ children: (apps: DriveApps) => ReactNode }>;
+  DriveApps: ComponentType<{
+    drive?: string;
+    children: (apps: DriveApps) => ReactNode;
+  }>;
   AppFrame: ComponentType<{ app: string; drive: string; table?: string }>;
   WorkspaceControls: ComponentType<{
     workspace: string;

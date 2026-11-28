@@ -348,57 +348,32 @@ async fn query_sorted_indexed_inner(
         if !seen.insert(subject.pure_id()) {
             continue;
         }
-        let index = seen.len() - 1;
-        // The user's maximum amount of results has not yet been reached
-        // and
-        // The users minimum starting distance (offset) has been reached.
-        // Denied members do not grow `subjects`, so we keep resolving until
-        // the page is full of *authorized* hits — a private streak must not
-        // hide a later readable row.
-        let in_selection = subjects.len() < limit && index >= q.offset;
-        // Tracks whether this iter step should bump the visible count.
-        // Defaults to true so entries past the page limit still count
-        // (preserving the cheap-pagination behavior). Flipped to false
-        // for in-page entries that don't survive include_external /
-        // auth filtering, so count stays consistent with subjects.len()
-        // for the page the client just received — eliminates the
-        // `totalMembers: N, members: []` drift (issue #286).
-        let mut should_count = true;
+        if !q.include_external && !subject.is_local() {
+            continue;
+        }
+        // Count and skip only members visible to this agent. Resolving just
+        // the requested page made totals page-dependent and let hidden hits
+        // consume offsets, duplicating or omitting later visible members.
+        let in_selection = count >= q.offset && subjects.len() < limit;
+        let Some(body) = store
+            .resolve_query_member(
+                &subject,
+                q,
+                &rights_cache,
+                trash.as_ref(),
+                in_selection && q.include_nested,
+            )
+            .await
+        else {
+            continue;
+        };
+        count += 1;
         if in_selection {
-            if !q.include_external && !subject.is_local() {
-                should_count = false;
-            } else if q.for_agent != crate::agents::ForAgent::Sudo
-                || q.include_nested
-                || trash.is_some()
-            {
-                match store
-                    .resolve_query_member(&subject, q, &rights_cache, trash.as_ref())
-                    .await
-                {
-                    Some(body) => {
-                        subjects.push(subject);
-                        if let Some(resource) = body {
-                            resources.push(resource);
-                        }
-                    }
-                    None => {
-                        // Index hit that doesn't resolve for this agent
-                        // (auth-filtered or destroyed-with-stale-index).
-                        should_count = false;
-                    }
-                }
-            } else {
-                subjects.push(subject);
+            subjects.push(subject);
+            if let Some(resource) = body {
+                resources.push(resource);
             }
         }
-
-        // We iterate over every single resource, even if we don't perform any computation on the items.
-        // This helps with pagination, but it comes at a serious performance cost. We might need to change how this works later on.
-        // Also, this count does not take into account the `include_external` filter.
-        if should_count {
-            count += 1;
-        }
-        // https://github.com/atomicdata-dev/atomic-server/issues/290
     }
 
     Ok((subjects, resources, count))
@@ -758,7 +733,10 @@ pub(crate) fn parse_members_key_id_subject(bytes: &[u8]) -> Option<(Vec<u8>, Str
 }
 
 pub fn requires_query_index(query: &Query) -> bool {
-    query.sort_by.is_some()
+    // The basic prop/value index is global. Even an unsorted, single-property
+    // query needs the scoped index when the caller selected a Drive.
+    query.drive.is_some()
+        || query.sort_by.is_some()
         || query.start_val.is_some()
         || query.end_val.is_some()
         // Multi-property (AND) filters can only be answered by the combined

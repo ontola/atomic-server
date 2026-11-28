@@ -37,11 +37,17 @@ import {
 import { TableNewRow, TableRow } from './TableRow.js';
 import { hasUserContent, isSavedDraft, isUnsavedDraft } from './draftRow.js';
 import type { TableColumn } from './useTableColumns.js';
+import {
+  retainHiddenViews,
+  TableExtensionContext,
+  type TableExtension,
+} from './TableExtension.js';
 import { useTableData } from './useTableData.js';
 import {
   useId,
   useState,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -110,6 +116,7 @@ const columnToKey = (column: TableColumn) => column.key;
 const DRAFT_POOL_SIZE = 2;
 
 const NO_ROWS: string[] = [];
+const NO_COLUMNS: TableColumn[] = [];
 
 /**
  * Which rows a query asks for, as one comparable string — so the collection in
@@ -129,11 +136,21 @@ const queryIdentity = (
     s: [sortBy ?? null, !!sortDesc],
   });
 
-export const TableResource: React.FC<TableResourceProps> = ({
-  resource,
-  viewSubject,
-  embedded,
-}) => {
+export const TableResource: React.FC<TableResourceProps> = props => {
+  const Extension = useContext(TableExtensionContext);
+
+  return Extension ? (
+    <Extension table={props.resource} embedded={!!props.embedded}>
+      {extension => <TableResourceContent {...props} extension={extension} />}
+    </Extension>
+  ) : (
+    <TableResourceContent {...props} />
+  );
+};
+
+const TableResourceContent: React.FC<
+  TableResourceProps & { extension?: TableExtension }
+> = ({ resource, viewSubject, embedded, extension }) => {
   const { AppFrame, reportError } = useResourceUIHost();
   const store = useStore();
   const titleId = useId();
@@ -152,7 +169,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
     viewName,
     renameView,
     views,
+    visibleTabs,
     activeView,
+    view,
     setActiveView,
     createView,
     setViewKind,
@@ -189,6 +208,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     setViewQuickAdd,
     queryFilters,
     queryExpressionFilters,
+    queryProperty,
     queryValue,
     queryAggregation,
     unresolvedFilters,
@@ -197,7 +217,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     allColumns,
     hideColumn,
     showColumn,
-  } = useTableData(resource, viewSubject, embedded);
+  } = useTableData(resource, viewSubject, embedded, extension);
 
   const calendarRow = useTableCalendarRow(tableClass, allColumns);
 
@@ -216,7 +236,10 @@ export const TableResource: React.FC<TableResourceProps> = ({
   );
 
   // A dashboard or an app shows no rows of its own, so there's nothing to narrow.
-  const showsRows = appView === undefined && viewKind !== 'dashboard';
+  const showsRows =
+    appView === undefined &&
+    viewKind !== 'dashboard' &&
+    viewKind !== 'syncables';
 
   // The visible stored columns, each language of a split column on its own:
   // what the quick filter reads a row's text from.
@@ -239,6 +262,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
     showsRows && !unresolvedFilters ? quickFilterText : '',
   );
   const rowCollection = quickFilter.collection;
+  const extensionView = extension?.renderView?.({
+    kind: viewKind,
+    collection: rowCollection,
+    ready,
+  });
   const quickFilterQuery = quickFilterText.trim();
 
   // The rendered column's property, per grid index (split columns repeat
@@ -419,6 +447,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // Configured row-action buttons. Hidden entirely from a viewer who cannot
   // write: a button that is going to be rejected is worse than no button.
   const actionColumns = useRowActions(viewRowActions, allColumns, !canWrite);
+  const navigationColumns =
+    viewKind === 'table' ? (extension?.columns ?? NO_COLUMNS) : NO_COLUMNS;
 
   const addRowAction = useCallback(
     (spec: RowActionSpec) =>
@@ -459,23 +489,33 @@ export const TableResource: React.FC<TableResourceProps> = ({
   const virtualColumns = useMemo(
     () =>
       isTimer
-        ? [...derivedColumns, ...actionColumns, ...timer.columns]
-        : [...derivedColumns, ...actionColumns],
-    [isTimer, derivedColumns, actionColumns, timer.columns],
+        ? [
+            ...derivedColumns,
+            ...actionColumns,
+            ...navigationColumns,
+            ...timer.columns,
+          ]
+        : [...derivedColumns, ...actionColumns, ...navigationColumns],
+    [isTimer, derivedColumns, actionColumns, navigationColumns, timer.columns],
   );
 
-  // The default order: stored columns, then the ones the view adds — except in a
-  // timer view, where its Duration and Start/Stop lead. Timing something is the
-  // point of that view, so its controls belong where the eye starts, not past
-  // four columns of data.
+  // Navigation leads so Open remains reachable before a wide API schema on a
+  // small screen. Other view-added columns follow stored properties, except
+  // the timer's Duration and Start/Stop, which lead their view as before.
   const defaultOrder = useMemo(
     () =>
       virtualColumns.length === 0
         ? columns
         : isTimer
           ? [...virtualColumns, ...columns]
-          : [...columns, ...virtualColumns],
-    [isTimer, columns, virtualColumns],
+          : [
+              ...navigationColumns,
+              ...columns,
+              ...virtualColumns.filter(
+                column => !navigationColumns.includes(column),
+              ),
+            ],
+    [isTimer, columns, virtualColumns, navigationColumns],
   );
 
   // A saved order (from dragging a heading) wins over that default, for every
@@ -520,7 +560,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // Totals ride their own query so they can be re-read on every edit without
   // clearing the grid's pages. See `useTableAggregates`.
   const viewAggregateOutcomes = useTableAggregates({
-    property: core.properties.parent,
+    property: queryProperty,
     value: queryValue,
     filters: queryFilters,
     expressionFilters: queryExpressionFilters,
@@ -1507,14 +1547,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
           {!embedded && (
             <TableViewTabs
               rowClass={tableClass.subject}
-              views={views}
-              activeView={activeView}
+              drive={getTableDrive(store, resource) ?? store.getDrive()}
+              views={visibleTabs.views}
+              activeView={visibleTabs.activeView}
+              builtinKinds={extension?.builtinKinds}
+              refreshViews={extension?.refreshViews}
               setActiveView={setActiveView}
               createView={createView}
               setViewKind={setViewKind}
               duplicateView={duplicateView}
               deleteView={deleteView}
-              reorderViews={reorderViews}
+              reorderViews={next =>
+                reorderViews(retainHiddenViews(next, views, visibleTabs.hidden))
+              }
               viewName={viewName}
               renameView={renameView}
               allColumns={allColumns}
@@ -1534,6 +1579,17 @@ export const TableResource: React.FC<TableResourceProps> = ({
               }
             />
           )}
+          {!embedded &&
+            extension?.renderToolbar?.({
+              kind: viewKind,
+              tableView:
+                viewKind === 'table' &&
+                !appView &&
+                !!activeView &&
+                !view.loading &&
+                !view.error,
+              empty: ready && collection.totalMembers === 0,
+            })}
           {/* Above the view switch, not inside the table branch: the filter
            * dropdown in the tab bar is offered for every view kind, so a kanban /
            * calendar / timer view could add a filter that then had nowhere to
@@ -1570,7 +1626,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
               A total is unavailable. Check its column.
             </NoMatches>
           )}
-          {showsRows && unresolvedFilters ? (
+          {extension?.error ? (
+            <p role='alert'>{extension.error}</p>
+          ) : showsRows && unresolvedFilters ? (
             <NoMatches role='status'>
               A filter is unavailable. Edit or remove it to see rows.
             </NoMatches>
@@ -1585,6 +1643,12 @@ export const TableResource: React.FC<TableResourceProps> = ({
                 table={resource.subject}
               />
             </AppViewWrapper>
+          ) : extensionView !== undefined ? (
+            viewKind === 'syncables' ? (
+              <AppViewWrapper>{extensionView}</AppViewWrapper>
+            ) : (
+              extensionView
+            )
           ) : viewKind === 'dashboard' && embedded ? (
             // A dashboard inside a dashboard block would render itself again,
             // forever. Say so instead of hanging the page.

@@ -50,7 +50,9 @@ export type ViewOperation =
   /** Several writes as one change, in the intent format `run()` returns. */
   | 'apply'
   /** Reverts the view's latest `apply`. */
-  | 'undo';
+  | 'undo'
+  /** Host-selected foreground execution of this view's bound resource. */
+  | 'execution';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -121,6 +123,7 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'form',
       'apply',
       'undo',
+      'execution',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

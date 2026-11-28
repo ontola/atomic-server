@@ -130,6 +130,74 @@ A plugin whose view edits schema (a form builder, a table editor) can declare th
 
 Drive apps follow a stricter rule: they read what the signed-in person can read, and write only under their own app resource, signed by the app's own agent.
 
+### Built-in service apps
+
+Atomic builds the built-in Sync app from TypeScript into one browser module.
+The module uses the same frame, request protocol and Store APIs as other apps.
+Their native host selects a fixed server source and a single collection root.
+Writes use the signed-in person's existing rights, limited to that root and its
+children. The frame cannot choose a wider destination or receive connection keys.
+The host limits proxy reads to the selected service, account and collection.
+
+For hosts that provide execution control, `store.execution('start' | 'state' |
+'cancel')` manages the selected saved filter's run. A run continues across navigation
+inside the app and stops on pause, source or identity changes, or closing the app.
+Hosts without this capability reject execution requests. Account connection still
+requires the native confirmation dialog.
+
+The built-in Syncable Collection view is a native view of stored Atomic data.
+It uses no frame or provider connection. The separate Sync app saves its schema
+labels, fields and declared relationship navigation. Refreshing a provider belongs
+to that Sync app; stored fields remain browsable and update during a background run.
+
+A built-in integration uses one drive-level App per typed principal (or Public).
+The existing principal resource keeps its Table capabilities and stored views,
+so opening the App renders native collections. The provider's account chooser is
+reached through Apps rather than another folder in the drive tree. Installing or
+reconnecting the same principal reuses its App after renaming or moving it.
+A native preparation step on the existing `openResource` bridge validates the
+host's identity proof and provisions the App without expanding iframe writes to
+the drive. Connection-slot changes preserve the App's collection and row IDs.
+
+Built-in Sync reads and writes stay within the selected drive, including when
+another drive is active or cached. Its host queries verify complete server
+results before allocating identities; direct resource reads also validate drive
+ancestry. The existing bridge selects these checks natively. Frame arguments
+cannot choose a different drive or relax the checks. Ordinary native Collection
+and Table browsing continues to use stored data.
+
+Sync and account setup do not execute when their App, table or an ancestor is
+in the selected drive's Trash. They show a restore explanation instead. Exact
+identity checks include retained trashed resources, so hiding them cannot cause
+replacement Apps or collections to be allocated. Restoring is explicit; stored
+rows, rules, identities and queued changes are retained.
+
+Built-in Syncables store one entity table per drive, proxy, platform, typed
+principal and exact catalog CRUD resource. Rows use the catalog's typed canonical
+identity, independently of discovery paths or physical location. A saved filter is
+a View under that table, with a validated `ReadSelection` from `syncables/browser`
+(`bound`, `related` or constrained `fanout`). Following a relationship saves a scope
+under an existing sibling table. The native Open action does this local write;
+the source frame only saves navigation intent inside its own root. It receives no
+sibling-table or Drive-root write grant.
+
+The native Collection and raw Table renderers share `syncFilter` selection in the
+resource URL. The raw Table keeps the API-derived row schema. Relationship scope
+is recorded as `syncable-rule-memberships`, rather than invented provider fields.
+Each filter has separate status, pause state and run generation. Complete reads
+replace membership only for that filter; incomplete reads retain previous members
+and accepted observations. Canonical rows and user fields are retained. Immutable
+observations record explicit values, nulls and absent fields; absent fields do not
+erase richer data. Runs sharing a destination table queue locally for reconciliation.
+
+The host compiles requests from the current trusted catalog and saved source
+identities. Only actual matching provider responses unlock dependent reads.
+Public mode remains credential-free. The actual npm Syncables library owns API
+reading, paging and typed projection; Atomic owns permissions, storage and views.
+Migration preserves proven historical subjects and local IDs. Ambiguous or
+unprovable sources are reported before competing destinations can be allocated;
+rows moved outside the worker's root are retained and protected from refresh.
+
 ### Host UI
 
 Some things a frame cannot do well on its own: a menu is cut off at the frame's edge, and a share dialog or a confirmation should look like the rest of Atomic. `store.ui` asks the Data Browser to draw them with its own components. Each one names your plugin to the person, so a prompt can never pass as the Data Browser's own. One question is open at a time: asking a new one answers the open one as cancelled.

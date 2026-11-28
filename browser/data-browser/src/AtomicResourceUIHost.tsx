@@ -15,6 +15,12 @@ import { holdBootSplash } from './helpers/bootSplash';
 import { isEmbedded } from './helpers/embedMode';
 import { loadAtomicWasm } from './helpers/managed/recovery';
 import { useDriveApps } from './chunks/AppPage/useDriveApps';
+import { TableExtensionContext } from '@tomic/table-page/TablePage/TableExtension';
+const SyncableTableExtension = lazy(() =>
+  import('./chunks/PluginRuns/SyncableTableExtension').then(m => ({
+    default: m.SyncableTableExtension,
+  })),
+);
 const LazyAppFrame = lazy(() =>
   import('./chunks/AppPage/AppFrame').then(m => ({ default: m.AppFrame })),
 );
@@ -49,11 +55,14 @@ function AppFrame(props: { app: string; drive: string; table?: string }) {
 }
 
 function DriveApps({
+  drive,
   children,
 }: {
+  drive?: string;
   children: (apps: DriveAppsData) => React.ReactNode;
 }) {
-  const apps = useDriveApps(useStore().getDrive());
+  const store = useStore();
+  const apps = useDriveApps(drive ?? store.getDrive());
 
   return children(apps);
 }
@@ -135,6 +144,10 @@ export function AtomicResourceUIHost({ children }: PropsWithChildren) {
   );
 
   return (
-    <ResourceUIHostProvider value={value}>{children}</ResourceUIHostProvider>
+    <ResourceUIHostProvider value={value}>
+      <TableExtensionContext value={SyncableTableExtension}>
+        {children}
+      </TableExtensionContext>
+    </ResourceUIHostProvider>
   );
 }

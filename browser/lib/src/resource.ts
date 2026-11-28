@@ -4268,10 +4268,13 @@ export class Resource<C extends OptionalClass = any> {
     validate = true,
     /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
     knownDatatype?: Datatype,
+    /** A host may revoke an awaited edit before it reaches the live document. */
+    beforeMutation?: () => void,
   ): Promise<void> {
     prop = canonicalPropKey(prop) as Prop;
 
     if (value === undefined) {
+      beforeMutation?.();
       // Removal is not a value to validate or a reason to fetch Property metadata.
       // `remove` emits the `LocalChange` for this property.
       this.remove(prop);
@@ -4324,6 +4327,7 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
+    beforeMutation?.();
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
 
