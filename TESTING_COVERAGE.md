@@ -3305,10 +3305,9 @@ Nov27 focused native validation of the seven affected/current regression journey
 retries, skips, or global errors. This is targeted evidence, not a full CI result;
 the isolated upstream Actix HTTP408 patch is not yet an Atomic dependency.
 
-### Catalog-backed principal Apps
+## Catalog-backed principal Apps
 
-Run `pnpm --filter @tomic/data-browser test:syncables-apps` from `browser`
-after building the workspace dependencies. The focused suites cover catalog
+The scoped Syncables iframe workflow runs the focused suites for catalog
 validation, the scoped iframe bridge, OAuth handoffs, and drive-local App
 registration, including known moved identities and retained Trash conflicts.
 `pnpm test-e2e:local tests/syncables-apps.spec.ts` runs the chooser and repeat
