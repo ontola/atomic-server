@@ -30,6 +30,7 @@ on:
       - 'browser/e2e/tests/syncables-apps.spec.ts'
       - 'browser/e2e/tests/fixtures/syncablesProxy.ts'
       - 'browser/e2e/tests/syncables-flat.spec.ts'
+      - 'browser/e2e/tests/syncables-github.spec.ts'
       - 'browser/data-browser/scripts/*builtin-syncables*'
       - 'browser/data-browser/package.json'
       - 'browser/data-browser/vite.config.ts'
@@ -102,6 +103,8 @@ jobs:
           src/chunks/PluginRuns/syncableSource.test.ts
           src/chunks/PluginRuns/syncableFlatAdoption.test.ts
           src/chunks/PluginRuns/syncableFlatNavigation.test.ts
+          src/chunks/PluginRuns/syncableReferenceRecords.test.ts
+          src/chunks/PluginRuns/syncableApiSchemaViews.test.ts
           src/chunks/PluginRuns/useSyncableTableNavigation.test.tsx
           src/chunks/PluginRuns/syncablePrincipalApp.test.ts
       - name: Test Sync and Table view tabs
@@ -114,7 +117,7 @@ jobs:
         working-directory: browser
         run: pnpm --filter @tomic/lib exec vitest run src/plugin-run.integration.test.ts src/plugin-apply.test.ts src/plugin-connection.test.ts src/resource.test.ts
 
-  flat-collections-playwright:
+  catalog-playwright:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -142,11 +145,11 @@ jobs:
           cache-dependency-path: browser/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @tomic/e2e exec playwright install-deps chromium
-      - run: pnpm test-e2e:local syncables-apps.spec.ts syncables-flat.spec.ts --workers=1 --retries=0
+      - run: pnpm test-e2e:local syncables-apps.spec.ts syncables-flat.spec.ts syncables-github.spec.ts --workers=1 --retries=0
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: syncables-flat-playwright
+          name: syncables-catalog-playwright
           path: |
             .e2e-runs/*/*.log
             .e2e-runs/*/report.json

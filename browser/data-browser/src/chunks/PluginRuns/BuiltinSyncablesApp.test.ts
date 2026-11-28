@@ -9,7 +9,9 @@ import type { SyncablePrincipalAppRef } from './syncablePrincipalApp';
 import { prepareDocument } from 'syncables/browser';
 import { fetchSyncableDocument } from './syncableDocument';
 import { collectSyncableFlatAdoption } from './syncableFlatAdoption';
+import { migrateSyncableApiViews } from './syncableApiSchemaViews';
 import { syncableApiSchema } from './syncableApiSchema';
+import { materializeSyncableReferences } from './syncableReferenceRecords';
 import {
   syncProxyTransport,
   subscribeSyncAppContext,
@@ -124,8 +126,14 @@ vi.mock('./syncableFlatAdoption', async importActual => ({
     warnings: [],
   })),
 }));
+vi.mock('./syncableApiSchemaViews', () => ({
+  migrateSyncableApiViews: vi.fn(async () => undefined),
+}));
 vi.mock('./syncableApiSchema', () => ({
   syncableApiSchema: vi.fn(async () => ({ classes: {}, properties: {} })),
+}));
+vi.mock('./syncableReferenceRecords', () => ({
+  materializeSyncableReferences: vi.fn(),
 }));
 vi.mock('./builtinSyncablesProfile', () => ({
   assertSyncAppDrive: vi.fn(),
@@ -138,6 +146,7 @@ vi.mock('./builtinSyncablesProfile', () => ({
 
     return vi.fn();
   }),
+  syncAppOriginEntityKeys: vi.fn(() => []),
   syncAppContext: vi.fn(async () => ({
     subject: 'atomic:source',
     drive: 'drive',
@@ -239,6 +248,7 @@ beforeEach(() => {
     warnings: [],
     rules: [],
   });
+  vi.mocked(migrateSyncableApiViews).mockResolvedValue(undefined);
   vi.stubGlobal('location', { href: 'https://node.example/current' });
   vi.stubGlobal('localStorage', {});
   state.actor = { subject: 'atomic:agent:person' };
@@ -938,6 +948,7 @@ it.each([undefined, 'atomic:selected-rule'])(
     state.ruleSubject = ruleSubject;
     const blocked = new Promise<never>(() => undefined);
     vi.mocked(collectSyncableFlatAdoption).mockReturnValue(blocked);
+    vi.mocked(migrateSyncableApiViews).mockReturnValue(blocked);
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     try {
@@ -959,6 +970,7 @@ it.each([undefined, 'atomic:selected-rule'])(
       expect(spec.profile.proxy).toBeDefined();
       expect(spec.profile.execution).toBeDefined();
       expect(collectSyncableFlatAdoption).not.toHaveBeenCalled();
+      expect(migrateSyncableApiViews).not.toHaveBeenCalled();
       expect(syncableApiSchema).toHaveBeenCalled();
       expect(state.resource.set).not.toHaveBeenCalled();
       expect(state.ruleResource.set).not.toHaveBeenCalled();
@@ -1058,7 +1070,20 @@ it('still waits for complete adoption evidence when the actual canonical worker 
   expect(state.ruleResource.set).toHaveBeenCalled();
 });
 
-it('retains setup adoption for noncanonical collection contexts', async () => {
+it('rejects delayed native observations when the source write scope is revoked', async () => {
+  state.kind = 'collection';
+  state.flat = true;
+  state.ruleSubject = 'atomic:rule';
+  await open(true, state.ruleSubject);
+  const observe = vi.mocked(syncProxyTransport).mock.lastCall?.[6];
+  expect(observe).toBeDefined();
+
+  state.writeScopeActive = false;
+  await expect(observe!([])).rejects.toThrow('Sync write scope revoked');
+  expect(materializeSyncableReferences).not.toHaveBeenCalled();
+});
+
+it('retains setup adoption and view migration for noncanonical collection contexts', async () => {
   state.kind = 'collection';
   state.flat = false;
   const spec = await open();
@@ -1067,4 +1092,5 @@ it('retains setup adoption for noncanonical collection contexts', async () => {
     worker: false,
   });
   expect(collectSyncableFlatAdoption).toHaveBeenCalled();
+  expect(migrateSyncableApiViews).toHaveBeenCalled();
 });

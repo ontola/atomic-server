@@ -145,6 +145,7 @@ browser flow; standalone recovery remains self-managed.
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`api-plugins.md`](./api-plugins.md) | **Exploratory; providers moved to atomic-plugins (PR #1549).** Rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. The WASM Syncables path is removed (#1618), so LocalThought connect/sync is broken until its proxy calls move into the plugin iframe. |
+| [`builtin-syncables-apps.md`](./builtin-syncables-apps.md) | **Flat collections, Trash protection, record links and native Table Open locally accepted; shared CI pending.** PR #2522 uses published `syncables@0.31.2`; 17 native journeys pass. Trekmeester owns conflict resolution, full shared Main CI and merge. |
 | [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Does not wait on #1310; remote auth is the #1275 AS shape. |
 
 ### Explorations with no code

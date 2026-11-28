@@ -3,7 +3,9 @@ import { CollectionBuilder, core, dataBrowser, type Store } from '@tomic/lib';
 import {
   readSelectionKey,
   resolveEntityIdentity,
+  compileReadSelection,
   type ReadSelection,
+  type OpenApiDocument,
 } from 'syncables/browser';
 import {
   entitySourceKey,
@@ -203,153 +205,226 @@ it('rechecks definition changes before a delayed write without requiring a provi
   expect(() => resolved.assertCurrent()).toThrow('definition changed');
 });
 
-it('replaces origin snapshots with current stored rows and revokes changed provenance', async () => {
-  const { records, store, options, listeners } = fixture();
-  const entity = resolveEntityIdentity(
-    {
-      openapi: '3.0.3',
-      info: { title: 'Fixture', version: '1' },
-      paths: {},
-      components: {
-        crudResources: {
-          event: {
-            identity: {
-              urlTemplate: '/events/{id}',
-              bindings: { id: { field: 'id' } },
+it.each([true, false])(
+  'replaces origin snapshots with current stored rows (own read: %s) and revokes changed provenance',
+  async hasRead => {
+    const { records, store, options, listeners } = fixture();
+    const entity = resolveEntityIdentity(
+      {
+        openapi: '3.0.3',
+        info: { title: 'Fixture', version: '1' },
+        paths: {},
+        components: {
+          crudResources: {
+            event: {
+              identity: {
+                urlTemplate: '/events/{id}',
+                bindings: { id: { field: 'id' } },
+              },
             },
           },
         },
       },
-    },
-    { resource: 'event', record: { id: 7 } },
-  );
-  const definition: ReadSelection = {
-    version: 1,
-    resource: 'task',
-    source: {
-      kind: 'related',
-      origin: {
-        entity,
-        record: { id: 7, label: 'forged old label' },
-        context: {},
-        read,
+      { resource: 'event', record: { id: 7 } },
+    );
+    const definition: ReadSelection = {
+      version: 1,
+      resource: 'task',
+      source: {
+        kind: 'related',
+        origin: {
+          entity,
+          record: { id: 7, label: 'forged old label' },
+          context: {},
+          read,
+        },
+        via: { collection: 'tasks', kind: 'identity' },
       },
-      via: { collection: 'tasks', kind: 'identity' },
-    },
-  };
-  const targetTableKey = entityTableKey({ ...options, resource: 'task' });
-  const targetViewKey = ruleSourceKey(
-    targetTableKey,
-    readSelectionKey(definition),
-  );
-  records.get('atomic:table')![properties['syncable-source-key']] =
-    targetTableKey;
-  records.get('atomic:rule')![properties['syncable-source-key']] =
-    targetViewKey;
-  records.get('atomic:rule')![core.properties.localId] =
-    'syncables:node:' + encodeURIComponent(targetViewKey);
-  records.get('atomic:rule')![properties['syncable-source-config']] =
-    config(definition);
-  const source = {
-    version: 3,
-    kind: 'record',
-    proxyOrigin: options.proxyOrigin,
-    platform: options.platform,
-    principal,
-    resource: 'event',
-    entityIdentity: entity,
-    record: { id: 7, label: 'actual stored record' },
-    context: {},
-    read,
-  };
-  const key = entitySourceKey({ ...options, entityIdentity: entity });
-  records.set('atomic:source', {
-    [core.properties.parent]: 'atomic:drive',
-    [properties['syncable-source-key']]: key,
-    [properties['syncable-source-config']]: source,
-  });
-  const answer = {
-    totalMembers: 1,
-    waitForReady: async () => undefined,
-    getMemberWithIndex: async () => 'atomic:source',
-  };
-  vi.spyOn(CollectionBuilder.prototype, 'build').mockReturnValue(
-    answer as never,
-  );
-  const resolved = await resolveSyncableRule(store, {
-    ...options,
-    resource: 'task',
-  });
-  expect(resolved.origins[0].record).toEqual(source.record);
-  expect(Object.hasOwn(resolved.origins[0], 'read')).toBe(true);
-  const invalidated = vi.fn();
-  const unsubscribe = resolved.subscribe(invalidated);
+    };
+    const targetTableKey = entityTableKey({ ...options, resource: 'task' });
+    const targetViewKey = ruleSourceKey(
+      targetTableKey,
+      readSelectionKey(definition),
+    );
+    records.get('atomic:table')![properties['syncable-source-key']] =
+      targetTableKey;
+    records.get('atomic:rule')![properties['syncable-source-key']] =
+      targetViewKey;
+    records.get('atomic:rule')![core.properties.localId] =
+      'syncables:node:' + encodeURIComponent(targetViewKey);
+    records.get('atomic:rule')![properties['syncable-source-config']] =
+      config(definition);
+    const source = {
+      version: 3,
+      kind: 'record',
+      proxyOrigin: options.proxyOrigin,
+      platform: options.platform,
+      principal,
+      resource: 'event',
+      entityIdentity: entity,
+      record: { id: 7, label: 'actual stored record' },
+      context: {},
+      ...(hasRead ? { read } : {}),
+    };
+    const key = entitySourceKey({ ...options, entityIdentity: entity });
+    records.set('atomic:source', {
+      [core.properties.parent]: 'atomic:drive',
+      [properties['syncable-source-key']]: key,
+      [properties['syncable-source-config']]: source,
+    });
+    const answer = {
+      totalMembers: 1,
+      waitForReady: async () => undefined,
+      getMemberWithIndex: async () => 'atomic:source',
+    };
+    vi.spyOn(CollectionBuilder.prototype, 'build').mockReturnValue(
+      answer as never,
+    );
+    const resolved = await resolveSyncableRule(store, {
+      ...options,
+      resource: 'task',
+    });
+    expect(resolved.origins[0].record).toEqual(source.record);
+    expect(Object.hasOwn(resolved.origins[0], 'read')).toBe(hasRead);
+    const invalidated = vi.fn();
+    const unsubscribe = resolved.subscribe(invalidated);
 
-  const notify = () => {
-    for (const callback of [...(listeners.get('atomic:source') ?? [])])
+    const notify = () => {
+      for (const callback of [...(listeners.get('atomic:source') ?? [])])
+        callback();
+    };
+
+    notify();
+    expect(invalidated).not.toHaveBeenCalled();
+
+    if (!hasRead) {
+      const document: OpenApiDocument = {
+        openapi: '3.0.3',
+        info: { title: 'Stored reference routes', version: '1' },
+        servers: [{ url: 'https://provider.example' }],
+        components: {
+          crudResources: {
+            event: {
+              identity: {
+                urlTemplate: '/events/{id}',
+                bindings: { id: { field: 'id' } },
+              },
+            },
+            task: {
+              identity: {
+                urlTemplate: '/tasks/{task_id}',
+                bindings: { task_id: { field: 'id' } },
+              },
+              collections: { tasks: { urlTemplate: '/events/{id}/tasks' } },
+            },
+          },
+        },
+        paths: {
+          '/events/{id}/tasks': {
+            get: {
+              operationId: 'tasks',
+              parameters: [
+                {
+                  name: 'id',
+                  in: 'path',
+                  required: true,
+                  schema: { type: 'integer' },
+                },
+              ],
+              'x-crud': { action: 'list', resource: 'task' },
+              responses: {
+                '200': {
+                  description: 'Tasks',
+                  content: {
+                    'application/json': {
+                      schema: { type: 'array', items: { type: 'object' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      };
+      expect(() =>
+        compileReadSelection(document, resolved.definition, {
+          origins: resolved.origins,
+        }),
+      ).not.toThrow();
+      // Reusing an existing filter never trusts its old raw snapshot over storage.
+      source.record = { id: 99, label: 'mismatched stored identity' };
+      const tampered = await resolveSyncableRule(store, {
+        ...options,
+        resource: 'task',
+      });
+      expect(() =>
+        compileReadSelection(document, tampered.definition, {
+          origins: tampered.origins,
+        }),
+      ).toThrow(/identity/);
+      source.record = { id: 7, label: 'actual stored record' };
+    }
+
+    records.get('atomic:source')![properties['syncable-source-config']] = {
+      ...source,
+      record: { id: 7, label: 'changed during response' },
+    };
+    expect(() => resolved.assertCurrent()).toThrow('source entity changed');
+    notify();
+    notify();
+    expect(invalidated).toHaveBeenCalledOnce();
+    unsubscribe();
+    unsubscribe();
+    expect(listeners.get('atomic:source')?.size).toBe(0);
+    const alreadyStale = vi.fn();
+    const removeStale = resolved.subscribe(alreadyStale);
+    expect(alreadyStale).toHaveBeenCalledOnce();
+    removeStale();
+    expect(listeners.get('atomic:source')?.size).toBe(0);
+    records.get('atomic:source')![properties['syncable-source-config']] =
+      source;
+    records.set('atomic:folder', { [core.properties.parent]: 'atomic:drive' });
+    records.set('atomic:second-folder', {
+      [core.properties.parent]: 'atomic:drive',
+    });
+    await store.getResource('atomic:folder');
+    await store.getResource('atomic:second-folder');
+    const reads = vi.mocked(store.getResource).mock.calls.length;
+    const ancestorInvalidated = vi.fn();
+    const removeAncestors = resolved.subscribe(ancestorInvalidated);
+    records.get('atomic:source')![core.properties.parent] = 'atomic:folder';
+    notify();
+    expect(ancestorInvalidated).not.toHaveBeenCalled();
+    expect(listeners.get('atomic:folder')?.size).toBe(1);
+    records.get('atomic:folder')![core.properties.parent] =
+      'atomic:second-folder';
+    for (const callback of [...(listeners.get('atomic:folder') ?? [])])
       callback();
-  };
-
-  notify();
-  expect(invalidated).not.toHaveBeenCalled();
-
-  records.get('atomic:source')![properties['syncable-source-config']] = {
-    ...source,
-    record: { id: 7, label: 'changed during response' },
-  };
-  expect(() => resolved.assertCurrent()).toThrow('source entity changed');
-  notify();
-  notify();
-  expect(invalidated).toHaveBeenCalledOnce();
-  unsubscribe();
-  unsubscribe();
-  expect(listeners.get('atomic:source')?.size).toBe(0);
-  const alreadyStale = vi.fn();
-  const removeStale = resolved.subscribe(alreadyStale);
-  expect(alreadyStale).toHaveBeenCalledOnce();
-  removeStale();
-  expect(listeners.get('atomic:source')?.size).toBe(0);
-  records.get('atomic:source')![properties['syncable-source-config']] = source;
-  records.set('atomic:folder', { [core.properties.parent]: 'atomic:drive' });
-  records.set('atomic:second-folder', {
-    [core.properties.parent]: 'atomic:drive',
-  });
-  await store.getResource('atomic:folder');
-  await store.getResource('atomic:second-folder');
-  const reads = vi.mocked(store.getResource).mock.calls.length;
-  const ancestorInvalidated = vi.fn();
-  const removeAncestors = resolved.subscribe(ancestorInvalidated);
-  records.get('atomic:source')![core.properties.parent] = 'atomic:folder';
-  notify();
-  expect(ancestorInvalidated).not.toHaveBeenCalled();
-  expect(listeners.get('atomic:folder')?.size).toBe(1);
-  records.get('atomic:folder')![core.properties.parent] =
-    'atomic:second-folder';
-  for (const callback of [...(listeners.get('atomic:folder') ?? [])])
-    callback();
-  expect(ancestorInvalidated).not.toHaveBeenCalled();
-  expect(listeners.get('atomic:second-folder')?.size).toBe(1);
-  // A Drive Trash-pointer change must revoke the source without a source-row event.
-  records.get('atomic:drive')![dataBrowser.properties.trashFolder] =
-    'atomic:second-folder';
-  for (const callback of [...(listeners.get('atomic:drive') ?? [])]) callback();
-  expect(ancestorInvalidated).toHaveBeenCalledOnce();
-  removeAncestors();
-  removeAncestors();
-  expect([...listeners.values()].every(set => set.size === 0)).toBe(true);
-  expect(vi.mocked(store.getResource).mock.calls).toHaveLength(reads);
-  delete records.get('atomic:drive')![dataBrowser.properties.trashFolder];
-  const movedAncestor = vi.fn();
-  const removeMoved = resolved.subscribe(movedAncestor);
-  records.get('atomic:second-folder')![core.properties.parent] =
-    'atomic:other-drive';
-  for (const callback of [...(listeners.get('atomic:second-folder') ?? [])])
-    callback();
-  expect(movedAncestor).toHaveBeenCalledOnce();
-  removeMoved();
-  records.get('atomic:source')![core.properties.parent] = 'atomic:drive';
-  answer.totalMembers = 2;
-  await expect(
-    resolveSyncableRule(store, { ...options, resource: 'task' }),
-  ).rejects.toThrow('ambiguous');
-});
+    expect(ancestorInvalidated).not.toHaveBeenCalled();
+    expect(listeners.get('atomic:second-folder')?.size).toBe(1);
+    // A Drive Trash-pointer change must revoke the source without a source-row event.
+    records.get('atomic:drive')![dataBrowser.properties.trashFolder] =
+      'atomic:second-folder';
+    for (const callback of [...(listeners.get('atomic:drive') ?? [])])
+      callback();
+    expect(ancestorInvalidated).toHaveBeenCalledOnce();
+    removeAncestors();
+    removeAncestors();
+    expect([...listeners.values()].every(set => set.size === 0)).toBe(true);
+    expect(vi.mocked(store.getResource).mock.calls).toHaveLength(reads);
+    delete records.get('atomic:drive')![dataBrowser.properties.trashFolder];
+    const movedAncestor = vi.fn();
+    const removeMoved = resolved.subscribe(movedAncestor);
+    records.get('atomic:second-folder')![core.properties.parent] =
+      'atomic:other-drive';
+    for (const callback of [...(listeners.get('atomic:second-folder') ?? [])])
+      callback();
+    expect(movedAncestor).toHaveBeenCalledOnce();
+    removeMoved();
+    records.get('atomic:source')![core.properties.parent] = 'atomic:drive';
+    answer.totalMembers = 2;
+    await expect(
+      resolveSyncableRule(store, { ...options, resource: 'task' }),
+    ).rejects.toThrow('ambiguous');
+  },
+);

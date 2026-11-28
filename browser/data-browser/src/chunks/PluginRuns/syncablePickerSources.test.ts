@@ -158,7 +158,7 @@ function fixture() {
 describe('catalog-backed sync picker sources', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('prepares the typed repository root filter within the selected drive', async () => {
+  it('prepares the typed repository and organization root filters within the selected drive', async () => {
     const { store, add, put } = fixture();
     put('atomic:folder', { [core.properties.parent]: scope.drive });
     const repo = add(
@@ -167,6 +167,7 @@ describe('catalog-backed sync picker sources', () => {
       'githubRepositories',
       'atomic:folder',
     );
+    const org = add('atomic:orgs', 'githubOrganization', 'githubOrganizations');
     put('atomic:manual-filter', {
       [core.properties.parent]: 'atomic:repos',
       [keyProperty]: 'not-a-catalog-root-rule',
@@ -190,6 +191,15 @@ describe('catalog-backed sync picker sources', () => {
         table: 'atomic:repos',
         ruleSubjects: [repo.ruleSubject],
         collections: ['repositoryIssues'],
+        groups: [
+          {
+            resource: 'githubOrganization',
+            title: 'Organizations',
+            table: 'atomic:orgs',
+            property: owner,
+            ruleSubjects: [org.ruleSubject],
+          },
+        ],
       },
     ]);
   });

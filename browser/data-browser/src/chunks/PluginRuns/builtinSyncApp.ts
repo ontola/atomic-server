@@ -12,6 +12,9 @@ import {
   readSelection,
   resolveAuthenticatedPrincipal,
   ontologyShortname,
+  describeResourceFields,
+  resolveResourceField,
+  resolveEntityIdentity,
   type CollectionDescription,
   type CollectionNavigation,
   type EntityObservation,
@@ -19,6 +22,7 @@ import {
   type OpenApiDocument,
   type OriginRecord,
   type ReadSelection,
+  type ResourceFieldDescription,
   type TransportRequest,
   type TransportResponse,
 } from 'syncables/browser';
@@ -39,6 +43,7 @@ import {
   type DurableEntityObservation,
   type DurableSyncRun,
 } from './builtinSyncFlatState.js';
+import { validateSyncableReferenceEvidence } from './builtinSyncReferenceIdentity.js';
 
 import type { ViewQuery } from '@helpers/extensions/viewQuery';
 import type { ConnectionReference } from '@helpers/proxyConnections';
@@ -379,8 +384,56 @@ export function createSyncApp(
     const row = matches[0];
 
     if (row) {
+      const savedConfig = stored<StoredSource>(
+        row,
+        property('syncable-source-config'),
+      );
+      let referenceIdentityProven = false;
+
       if (
-        !row.hasClasses(expectedClass) ||
+        !row.hasClasses(expectedClass) &&
+        savedConfig?.version === 3 &&
+        savedConfig.kind === 'record' &&
+        savedConfig.entityIdentity
+      ) {
+        try {
+          referenceIdentityProven = same(
+            resolveEntityIdentity(readDocument(), {
+              resource: savedConfig.resource,
+              record: savedConfig.record!,
+              context: savedConfig.context,
+            }),
+            savedConfig.entityIdentity,
+          );
+        } catch {
+          /* Scalar references retain their declaring source evidence. */
+        }
+
+        if (
+          !referenceIdentityProven &&
+          context.schema?.properties['syncable-reference-evidence']
+        )
+          referenceIdentityProven = validateSyncableReferenceEvidence(
+            readDocument(),
+            row.get(property('syncable-reference-evidence')),
+            savedConfig.entityIdentity,
+          );
+      }
+
+      const partialReference =
+        kind === 'record' &&
+        context.schema?.classes['syncable-reference'] &&
+        row.hasClasses(context.schema?.classes['syncable-reference']) &&
+        savedConfig?.version === 3 &&
+        savedConfig.kind === 'record' &&
+        savedConfig.entityIdentity &&
+        referenceIdentityProven &&
+        entitySourceKey({
+          ...savedConfig,
+          entityIdentity: savedConfig.entityIdentity,
+        }) === key;
+      if (
+        (!row.hasClasses(expectedClass) && !partialReference) ||
         row.get(property('syncable-node-kind')) !== kind
       )
         throw new Error('The source identity does not match its resource');
@@ -692,6 +745,17 @@ export function createSyncApp(
 
   let types: EntityTypeDescription[] | undefined;
   const entityTypes = () => (types ??= describeEntityTypes(readDocument()));
+  const resourceFields = new Map<string, ResourceFieldDescription[]>();
+
+  const fieldsFor = (resource: string) => {
+    if (!resourceFields.has(resource))
+      resourceFields.set(
+        resource,
+        describeResourceFields(readDocument(), resource),
+      );
+
+    return resourceFields.get(resource)!;
+  };
 
   const entityType = (resource: string) => {
     const found = entityTypes().find(item => item.resource === resource);
@@ -1361,20 +1425,125 @@ export function createSyncApp(
       const item = latest.get(key)?.observation;
       if (!item) continue;
       const old = await findNode(key, fullClass, 'record');
+      const descriptors = fieldsFor(resource);
+      const linkedFields = new Set(descriptors.map(field => field.property));
       const bindings = apiProperties(resource);
       const values = Object.fromEntries(
-        Object.entries(reduced.values).map(([name, value]) => {
-          const subject = bindings[name];
-          if (!subject)
-            throw new Error('The catalog property schema is unavailable');
+        Object.entries(reduced.values)
+          .filter(([name]) => !linkedFields.has(name))
+          .map(([name, value]) => {
+            const subject = bindings[name];
+            if (!subject)
+              throw new Error('The catalog property schema is unavailable');
 
-          return [subject, value];
-        }),
+            return [subject, value];
+          }),
       );
       const removed = reduced.cleared
         .map(name => bindings[name])
         .filter(Boolean);
-      const raw = structuredClone(reduced.raw ?? item.raw);
+      const diagnostics = [];
+      const referenceRecord = structuredClone(reduced.raw ?? item.raw);
+
+      for (const descriptor of descriptors) {
+        const name = descriptor.property;
+        if (
+          !Object.hasOwn(reduced.values, name) &&
+          !reduced.cleared.includes(name)
+        )
+          continue;
+        const path = descriptor.field.split('.');
+        let parent = referenceRecord;
+
+        for (const part of path.slice(0, -1)) {
+          if (
+            !Object.hasOwn(parent, part) ||
+            !parent[part] ||
+            typeof parent[part] !== 'object' ||
+            Array.isArray(parent[part])
+          )
+            Object.defineProperty(parent, part, {
+              value: {},
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            });
+          parent = parent[part] as Values;
+        }
+
+        // The winning explicit field is authoritative. A changed owner must
+        // never inherit a previous discriminator or ID from a merged snapshot.
+        Object.defineProperty(parent, path[path.length - 1], {
+          value: reduced.cleared.includes(name)
+            ? null
+            : structuredClone(reduced.values[name]),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      // Targets are prepared natively from the real response journal. Reading
+      // their exact canonical identities never grants this frame sibling writes.
+      for (const descriptor of descriptors) {
+        const resolution = resolveResourceField(
+          readDocument(),
+          descriptor,
+          referenceRecord,
+          item.context,
+        );
+        if (!resolution.present) continue;
+        const subject = bindings[descriptor.property];
+        if (!subject) throw new Error('The catalog link schema is unavailable');
+
+        if (resolution.status !== 'resolved') {
+          removed.push(subject);
+          diagnostics.push(
+            ...resolution.diagnostics.map(diagnostic => ({
+              field: descriptor.field,
+              ...diagnostic,
+            })),
+          );
+          continue;
+        }
+
+        if (resolution.original === null) {
+          removed.push(subject);
+          continue;
+        }
+
+        const targets = [];
+
+        for (const target of resolution.objects) {
+          const targetKey = entitySourceKey({
+            ...context,
+            principal: requirePrincipal(),
+            entityIdentity: target.entity,
+          });
+          const row = await findNode(
+            targetKey,
+            rowClass({ resource: target.resource }),
+            'record',
+          );
+          if (!row) break;
+          targets.push(row.subject);
+        }
+
+        if (
+          targets.length === resolution.objects.length &&
+          (descriptor.cardinality === 'many' || targets.length === 1)
+        )
+          values[subject] =
+            descriptor.cardinality === 'many' ? targets : targets[0];
+        else {
+          removed.push(subject);
+          diagnostics.push({
+            field: descriptor.field,
+            message: 'The linked record is not available in this drive.',
+          });
+        }
+      }
+
       const recordConfig: StoredRecordSource = {
         version: 3,
         kind: 'record',
@@ -1383,14 +1552,14 @@ export function createSyncApp(
         principal: requirePrincipal(),
         resource: resource,
         entityIdentity: item.entity,
-        record: raw,
+        record: referenceRecord,
         context: item.context,
         read: item.provenance.read,
         managedProperties: Object.keys(values),
       };
       const intents = relatedCollectionReads(readDocument(), {
         resource: resource,
-        record: raw,
+        record: referenceRecord,
         context: item.provenance.read.pathParams,
       }).map(navigation => ({
         version: 1,
@@ -1399,7 +1568,7 @@ export function createSyncApp(
         label: description(navigation.collection).presentation.title,
         definition: relatedSelection(navigation, {
           entity: item.entity,
-          record: raw,
+          record: referenceRecord,
           context: item.context,
           read: item.provenance.read,
         }),
@@ -1422,6 +1591,14 @@ export function createSyncApp(
         [property('syncable-rule-memberships')]: reduced.memberships,
         [property('syncable-source-config')]: recordConfig,
         [property('syncable-navigation-intents')]: intents,
+        ...(context.schema?.properties['syncable-reference-diagnostics']
+          ? {
+              [property('syncable-reference-diagnostics')]: diagnostics.slice(
+                0,
+                100,
+              ),
+            }
+          : {}),
       };
       const complete = required.every(subject => {
         const value = Object.hasOwn(rowValues, subject)
@@ -1432,10 +1609,12 @@ export function createSyncApp(
           !removed.includes(subject) && value !== undefined && value !== null
         );
       });
-
-      // A partial observation remains durable until the required fields arrive.
-      if (!complete && !old) continue;
-      const rowClasses = [fullClass, klass('syncable-record')];
+      const rowClasses = [
+        ...(complete || old?.hasClasses(fullClass)
+          ? [fullClass]
+          : [klass('syncable-reference')]),
+        klass('syncable-record'),
+      ];
 
       if (old) {
         if (!(await withinRoot(old.subject))) {
@@ -1720,6 +1899,10 @@ function mountStoredSourcePicker({
   save: HTMLButtonElement;
   showError: (reason: unknown) => void;
 }) {
+  const groups = (source.groups ?? []).map(group => ({
+    ...group,
+    select: el('select'),
+  }));
   const select = el('select');
   const status = el('p', 'Loading saved sources…', 'muted');
   status.setAttribute('role', 'status');
@@ -1731,6 +1914,7 @@ function mountStoredSourcePicker({
     inputs.append(label);
   };
 
+  for (const group of groups) field(group.title, group.select);
   field(source.title, select);
   inputs.append(status);
 
@@ -1756,19 +1940,44 @@ function mountStoredSourcePicker({
     control.disabled = options.length === 0;
   };
 
-  const ruleSubjects = source.ruleSubjects;
+  const ruleSubjects = [
+    ...new Set([
+      ...source.ruleSubjects,
+      ...groups.flatMap(group => group.ruleSubjects),
+    ]),
+  ];
   let options: PickerRow[] = [];
+  let choices: PickerRow[] = [];
   let disposed = false;
   let changed = false;
   let pending: Promise<void> | undefined;
   const selected = () =>
-    options.find(({ row }) => row.subject === select.value);
+    choices.find(({ row }) => row.subject === select.value);
+
+  const filter = () => {
+    choices = options.filter(({ row }) =>
+      groups.every(group => {
+        if (!group.select.value) return true;
+        const linked = row.get(group.property);
+
+        return Array.isArray(linked)
+          ? linked.includes(group.select.value)
+          : linked === group.select.value;
+      }),
+    );
+    setOptions(select, 'Select one', choices);
+    save.disabled = !selected();
+  };
+
+  for (const group of groups) {
+    setOptions(group.select, 'All', []);
+    group.select.addEventListener('change', filter);
+  }
 
   select.addEventListener('change', () => {
     save.disabled = !selected();
   });
-  setOptions(select, 'Select one', []);
-  save.disabled = true;
+  filter();
 
   const byName = (a: PickerRow, b: PickerRow) => a.name.localeCompare(b.name);
 
@@ -1778,8 +1987,9 @@ function mountStoredSourcePicker({
     pending = (async () => {
       while (changed && !disposed) {
         changed = false;
-        const [rows, rules] = await Promise.all([
+        const [rows, groupRows, rules] = await Promise.all([
           app.pickerRows(source),
+          Promise.all(groups.map(group => app.pickerRows(group))),
           store.getMany(ruleSubjects),
         ]);
         if (disposed) return;
@@ -1789,18 +1999,31 @@ function mountStoredSourcePicker({
         const counts = new Map<string, number>();
         for (const { name } of eligible)
           counts.set(name, (counts.get(name) ?? 0) + 1);
+        const groupNames = new Map(
+          groupRows.flat().map(({ row, name }) => [row.subject, name]),
+        );
         options = eligible
           .map(choice => {
             if (counts.get(choice.name) === 1) return choice;
+            const groupName = groups
+              .map(group => {
+                const subject = choice.row.get(group.property);
+
+                return typeof subject === 'string'
+                  ? groupNames.get(subject)
+                  : undefined;
+              })
+              .find(Boolean);
 
             return {
               ...choice,
-              name: `${choice.name} · ${choice.origin.entityIdentity.path}`,
+              name: `${choice.name} · ${groupName ?? choice.origin.entityIdentity.path}`,
             };
           })
           .sort(byName);
-        setOptions(select, 'Select one', options);
-        save.disabled = !selected();
+        for (const [index, group] of groups.entries())
+          setOptions(group.select, 'All', groupRows[index].sort(byName));
+        filter();
 
         const states = rules.map(rule => {
           if (!readable(rule)) throw new Error(rule.error);

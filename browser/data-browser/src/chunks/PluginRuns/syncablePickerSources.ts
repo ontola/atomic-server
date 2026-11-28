@@ -41,6 +41,7 @@ interface PickerTable {
 
 export interface SyncablePickerSource extends PickerTable {
   collections: string[];
+  groups?: (PickerTable & { property: string })[];
 }
 
 /** Find stored root filters for catalog relations without granting new reads or writes. */
@@ -88,6 +89,7 @@ export async function resolveSyncablePickerSources(
   const properties = context.schema.properties;
   const configProperty = properties['syncable-source-config'];
   const keyProperty = properties['syncable-source-key'];
+  const tables = new Map<string, Promise<PickerTable>>();
 
   const readTable = async (resource: string): Promise<PickerTable> => {
     const type = typesByResource.get(resource)!;
@@ -177,10 +179,50 @@ export async function resolveSyncablePickerSources(
     return { ...plan, table: table.subject, ruleSubjects };
   };
 
+  const tableFor = (resource: string) => {
+    const previous = tables.get(resource);
+    if (previous) return previous;
+    const pending = readTable(resource);
+    tables.set(resource, pending);
+
+    return pending;
+  };
+
   return Promise.all(
-    [...sourceCollections].map(async ([resource, collections]) => ({
-      ...(await readTable(resource)),
-      collections: [...collections],
-    })),
+    [...sourceCollections].map(async ([resource, collections]) => {
+      const source = typesByResource.get(resource)!;
+      const parentResources = new Set(
+        source.collections.flatMap(collection =>
+          collection.relationships.map(relation => relation.parentResource),
+        ),
+      );
+      const groups = Promise.all(
+        [...parentResources].flatMap(parent => {
+          if (parent === resource || !roots.get(parent)?.length) return [];
+          const fields = (source.resourceFields ?? []).filter(
+            field =>
+              field.cardinality === 'one' &&
+              field.targets.some(candidate => candidate.resource === parent),
+          );
+          if (fields.length !== 1) return [];
+          const property =
+            apiSchema.resourceProperties?.[resource]?.[fields[0].property];
+          if (!property) return [];
+
+          return [tableFor(parent).then(table => ({ ...table, property }))];
+        }),
+      );
+      const [table, populatedGroups] = await Promise.all([
+        tableFor(resource),
+        groups,
+      ]);
+      assertCurrent();
+
+      return {
+        ...table,
+        collections: [...collections],
+        ...(populatedGroups.length ? { groups: populatedGroups } : {}),
+      };
+    }),
   );
 }

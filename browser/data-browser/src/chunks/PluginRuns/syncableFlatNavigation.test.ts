@@ -20,6 +20,8 @@ import {
   resolveFlatSyncableRecordActions,
   saveFlatSyncableSelection,
 } from './syncableFlatNavigation';
+import { resolveSyncableRule } from './syncableRules';
+import { assertSyncAppDrive } from './builtinSyncablesProfile';
 
 const p = Object.fromEntries(
   [
@@ -37,6 +39,7 @@ vi.mock('@tomic/lib', async original => ({
   ...(await original<typeof import('@tomic/lib')>()),
   findSchema: async () => ({
     properties: p,
+    classes: { 'syncable-reference': 'atomic:reference' },
   }),
 }));
 afterEach(() => vi.restoreAllMocks());
@@ -312,6 +315,18 @@ it('requires native target write rights before allocating a saved filter', async
   ).rejects.toThrow('Write access');
   expect(store.newResource).not.toHaveBeenCalled();
   expect(JSON.stringify([...values])).toBe(before);
+});
+
+it('opens an embedded summary as stored data without claiming collection-read provenance', async () => {
+  const { store, table, row, values } = fixture();
+  const config = values.get('atomic:row')![
+    p['syncable-source-config']
+  ] as Record<string, unknown>;
+  delete config.read;
+  expect(await openFlatSyncableRow(store, 'atomic:drive', table, row)).toEqual({
+    subject: row.subject,
+  });
+  expect(store.newResource).not.toHaveBeenCalled();
 });
 
 it('retains the selected scope when opening one entity and refuses removed memberships', async () => {
@@ -1031,6 +1046,196 @@ it('reuses a saved filter already attached under its legacy subject alias withou
     values.get('atomic:tasks')![dataBrowser.properties.tableViews],
   ).toEqual(['did:ad:saved-rule']);
 });
+
+it.each(['embedded object', 'scalar reference'])(
+  'offers reference-origin actions only for a %s with stored raw data',
+  async kind => {
+    const { store, row, values, saved } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = ['atomic:reference'];
+    const config = raw[p['syncable-source-config']] as Record<string, unknown>;
+    delete config.read;
+    if (kind === 'scalar reference') config.record = {};
+    const before = JSON.stringify([...values]);
+    const resolved = await resolveFlatSyncableRecordActions(
+      store,
+      'atomic:drive',
+      row,
+    );
+    expect(resolved?.table.subject).toBe('atomic:workspaces');
+    expect(resolved?.actions.map(action => action.label)).toEqual(
+      kind === 'embedded object' ? ['Tasks'] : [],
+    );
+    if (kind === 'embedded object')
+      expect(resolved?.actions[0].definition.source).toMatchObject({
+        kind: 'related',
+        origin: { entity, record: config.record },
+      });
+    expect(JSON.stringify(resolved?.actions)).not.toContain('"read":');
+    expect(JSON.stringify([...values])).toBe(before);
+    expect(store.newResource).not.toHaveBeenCalled();
+    expect(saved).not.toHaveBeenCalled();
+  },
+);
+
+it.each([false, true])(
+  'lazily derives direct and two-hop candidates for existing reference summaries (full API class: %s)',
+  async fullClass => {
+    const { store, row, table, values, session, saved } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = [
+      'atomic:reference',
+      ...(fullClass ? ['atomic:workspace-class'] : []),
+    ];
+    delete (raw[p['syncable-source-config']] as Record<string, unknown>).read;
+    delete raw[p['syncable-navigation-intents']];
+    delete raw[p['syncable-rule-memberships']];
+    const descriptor = values.get('atomic:tasks')![
+      p['syncable-collection-view']
+    ] as { relationships: unknown[] };
+    descriptor.relationships = [
+      {
+        resource: 'note',
+        title: 'Notes',
+        via: { collection: 'taskNotes', kind: 'identity' },
+      },
+    ];
+    addEntityTable(values, 'note');
+    const before = JSON.stringify([...values]);
+    const actions = await resolveFlatSyncableRowActions(
+      store,
+      'atomic:drive',
+      table,
+      row,
+    );
+    expect(actions.map(action => action.label)).toEqual([
+      'Tasks',
+      'Notes (via Tasks)',
+    ]);
+    expect(JSON.stringify(actions)).not.toContain('"read":');
+    expect(JSON.stringify([...values])).toBe(before);
+    expect(saved).not.toHaveBeenCalled();
+    const destination = await openFlatSyncableRow(
+      store,
+      'atomic:drive',
+      table,
+      row,
+      undefined,
+      actions[1].id,
+    );
+    expect(destination?.subject).toBe('atomic:note');
+    if (!destination || !('syncFilter' in destination))
+      throw new Error('Expected a saved navigation filter');
+    const savedDefinition = (
+      values.get('atomic:saved-rule')![p['syncable-source-config']] as {
+        definition: ReadSelection;
+      }
+    ).definition;
+    expect(savedDefinition).toEqual(actions[1].definition);
+    session.writable = false;
+    saved.mockClear();
+    expect(
+      await openFlatSyncableRow(
+        store,
+        'atomic:drive',
+        table,
+        row,
+        undefined,
+        actions[1].id,
+      ),
+    ).toEqual(destination);
+    expect(saved).not.toHaveBeenCalled();
+    const prepared = await resolveSyncableRule(store, {
+      drive: 'atomic:drive',
+      table: destination!.subject,
+      subject: destination.syncFilter,
+      ...scope,
+      resource: 'note',
+      properties: p,
+      assertCurrent: () => {},
+      assertDrive: subject =>
+        assertSyncAppDrive(store, 'atomic:drive', subject),
+    });
+    expect(prepared.definition).toEqual(savedDefinition);
+    expect(prepared.origins).toHaveLength(1);
+    expect(Object.hasOwn(prepared.origins[0], 'read')).toBe(false);
+    expect(prepared.origins[0].record).toEqual(
+      (raw[p['syncable-source-config']] as Record<string, unknown>).record,
+    );
+    expect(raw[p['syncable-rule-memberships']]).toBeUndefined();
+    expect(
+      (raw[p['syncable-source-config']] as Record<string, unknown>).read,
+    ).toBeUndefined();
+    await expect(
+      openFlatSyncableRow(store, 'atomic:drive', table, row, 'atomic:rule'),
+    ).rejects.toThrow('selected filter');
+  },
+);
+
+it.each(['missing', 'ambiguous', 'foreign'])(
+  'withholds reference candidates for a %s target',
+  async kind => {
+    const { store, row, table, values } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = ['atomic:reference'];
+    delete (raw[p['syncable-source-config']] as Record<string, unknown>).read;
+    delete raw[p['syncable-navigation-intents']];
+    if (kind === 'missing') values.delete('atomic:tasks');
+    if (kind === 'ambiguous')
+      values.set('atomic:duplicate', { ...values.get('atomic:tasks') });
+    if (kind === 'foreign')
+      values.get('atomic:tasks')!['https://atomicdata.dev/properties/drive'] =
+        'atomic:other-drive';
+    expect(
+      await resolveFlatSyncableRowActions(store, 'atomic:drive', table, row),
+    ).toEqual([]);
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['empty', 'malformed', 'ordinary'])(
+  'does not replace %s navigation evidence with reference candidates',
+  async kind => {
+    const { store, row, table, values } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] =
+      kind === 'ordinary' ? ['atomic:workspace-class'] : ['atomic:reference'];
+    delete (raw[p['syncable-source-config']] as Record<string, unknown>).read;
+    if (kind === 'ordinary') delete raw[p['syncable-navigation-intents']];
+    else
+      raw[p['syncable-navigation-intents']] = kind === 'empty' ? [] : 'invalid';
+    expect(
+      await resolveFlatSyncableRowActions(store, 'atomic:drive', table, row),
+    ).toEqual([]);
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['principal', 'source key', 'Drive', 'unrelated class'])(
+  'still rejects a reference summary with corrupt %s evidence',
+  async corruption => {
+    const { store, row, values } = fixture();
+    const raw = values.get(row.subject)!;
+    raw[core.properties.isA] = ['atomic:reference'];
+    const config = raw[p['syncable-source-config']] as Record<string, unknown>;
+    delete config.read;
+    if (corruption === 'principal')
+      config.principal = {
+        kind: 'authenticated',
+        namespace: 'https://identity.example',
+        subject: 8,
+      };
+    if (corruption === 'source key') raw[p['syncable-source-key']] = 'invalid';
+    if (corruption === 'Drive')
+      raw['https://atomicdata.dev/properties/drive'] = 'atomic:other-drive';
+    if (corruption === 'unrelated class')
+      raw[core.properties.isA] = ['atomic:unrelated'];
+    await expect(
+      resolveFlatSyncableRecordActions(store, 'atomic:drive', row),
+    ).rejects.toThrow();
+    expect(store.newResource).not.toHaveBeenCalled();
+  },
+);
 
 function addOrdinaryTableView(values: Map<string, Record<string, unknown>>) {
   values.get('atomic:tasks')![dataBrowser.properties.tableViews] = [

@@ -341,6 +341,92 @@ it('preserves opaque inherited localIds through v2 adoption and v3 reentry witho
   ]);
 });
 
+it('accepts identity-only linked summaries only with their declared typed source proof and explicit summary class', async () => {
+  const { rows, store, options, add } = fixture();
+  const doc = structuredClone(document);
+  const defs = doc.components!.crudResources as Record<
+    string,
+    Record<string, unknown>
+  >;
+  defs.person = {
+    identity: {
+      urlTemplate: '/people/{id}',
+      bindings: { id: { field: 'id' } },
+    },
+    schema: { type: 'object', properties: { id: { type: 'integer' } } },
+  };
+  defs.event.references = {
+    owner: { resource: 'person', bindings: { id: { field: 'ownerId' } } },
+  };
+  defs.event['x-embeddedResources'] = {
+    ownerId: {
+      representation: 'identity',
+      cardinality: 'one',
+      reference: 'owner',
+    },
+  };
+  (
+    defs.event.schema as { properties: Record<string, unknown> }
+  ).properties.ownerId = { type: 'integer' };
+  const entityIdentity = resolveEntityIdentity(doc, {
+    resource: 'person',
+    record: { id: 17 },
+  });
+  const table = {
+    ...base,
+    version: 3 as const,
+    kind: 'collection' as const,
+    resource: 'person',
+  };
+  add('atomic:people', 'atomic:principal', entityTableKey(table), table);
+  const config = {
+    ...base,
+    version: 3 as const,
+    kind: 'record' as const,
+    resource: 'person',
+    entityIdentity,
+    record: {},
+    context: {},
+  };
+  add('atomic:summary', 'atomic:people', entitySourceKey(config), config);
+  const evidenceProperty = 'atomic:reference-evidence';
+  const row = rows.get('atomic:summary')!;
+  row[core.properties.isA] = ['atomic:summary-class'];
+  const sourceRecord = { id: 11, ownerId: 17 };
+  row[evidenceProperty] = {
+    version: 1,
+    sourceResource: 'event',
+    sourceEntity: resolveEntityIdentity(doc, {
+      resource: 'event',
+      record: sourceRecord,
+    }),
+    sourceRecord,
+    context: {},
+    field: 'ownerId',
+    index: 0,
+  };
+  const current = {
+    ...options,
+    document: doc,
+    properties: { ...p, 'syncable-reference-evidence': evidenceProperty },
+    referenceClass: 'atomic:summary-class',
+  };
+  expect((await collectSyncableFlatAdoption(store, current)).blocks).toEqual(
+    [],
+  );
+  row[core.properties.isA] = [];
+  expect(
+    (await collectSyncableFlatAdoption(store, current)).blocks,
+  ).toContainEqual(expect.objectContaining({ resource: 'person' }));
+  row[core.properties.isA] = ['atomic:summary-class'];
+  (
+    row[evidenceProperty] as { sourceRecord: Record<string, unknown> }
+  ).sourceRecord.ownerId = '17';
+  expect(
+    (await collectSyncableFlatAdoption(store, current)).blocks,
+  ).toContainEqual(expect.objectContaining({ resource: 'person' }));
+});
+
 it('retains unsupported older formats and only blocks the matching integration', async () => {
   const { add, store, options } = fixture();
   const oldKey = (platform: string) =>
